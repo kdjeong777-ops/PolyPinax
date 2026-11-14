@@ -28,6 +28,19 @@ BLOB_MIN = 4096          # 261101-3(마스터 §4.6.11): 이보다 긴 사진 �
 _BLOB_FIELDS = ("data", "pdf")
 
 
+def _is_pdf_key(k) -> bool:
+    return str(k).lower().endswith(".pdf")
+
+
+# 261115-3(책갈피창·저장 SOT §4.7.16 '회전', 사용자 결정): PDF 의 저장 전 회전은 디스크에 쓰지 않고 **이번 실행 동안만** 여기(폴더 → {키: {쪽: 각도}})에
+#   둔다 — 종전에 `save()` 가 디스크에 쓰던 그 자리. 저장소를 새로 만들 때(폴더 다시 열기·2분할 폴더 오가기) 여기서 돌려받고, 앱을 끄면 사라진다
+_ROT_MEM: dict = {}
+
+
+def _base_key(base) -> str:
+    return os.path.normcase(os.path.abspath(str(base))) if base else ""
+
+
 def _blob_ref(v) -> Optional[str]:
     return v[1:] if isinstance(v, str) and v.startswith("@") and len(v) == 41 else None
 
@@ -214,6 +227,9 @@ class PageMetaStore:
             try:
                 d = json.loads(bg_write.read_text(p))                     # 261108-15: 맡겨 둔 쓰기가 있으면 그 글
                 if isinstance(d, dict) and isinstance(d.get("files"), dict):
+                    for k, fr in d["files"].items():                       # 261115-3: 저장 전 회전은 기억하지 않는다
+                        if isinstance(fr, dict) and fr.get("rotation") and _is_pdf_key(k):
+                            fr["rotation"] = {}
                     self._data = {"version": int(d.get("version", SCHEMA_VERSION)),
                                   "files": d["files"]}
                     for name in PHOTO_VIEW_KEYS:                          # 261104-3·261105-4: 사진 보기 회전·크롭
@@ -221,6 +237,9 @@ class PageMetaStore:
                             self._data[name] = d[name]
             except Exception:
                 pass
+        for k, r in (_ROT_MEM.get(_base_key(self.base)) or {}).items():   # 261115-3: 이번 실행의 저장 전 회전
+            if r and _is_pdf_key(k):
+                self._file(k, create=True)["rotation"] = dict(r)
 
     def _gc_blobs(self) -> None:
         """261101-3: 어느 사진도 가리키지 않는 `blobs` 값을 지운다(저장 때)."""
@@ -241,8 +260,13 @@ class PageMetaStore:
             return False
         self._gc_blobs()
         try:
+            # 261115-3(책갈피창·저장 SOT §4.7.16 '회전', 사용자 결정): PDF 의 저장 전 회전은 디스크에 쓰지 않는다 —
+            #   저장하지 않고 앱을 끄면 남지 않는다(이 저장소 안 값은 이번 실행 동안 그대로). 원본에 들어간 회전은 PDF `/Rotate`
+            files = {k: (dict(fr, rotation={}) if isinstance(fr, dict) and fr.get("rotation") and _is_pdf_key(k) else fr)
+                     for k, fr in self._data["files"].items()}
             # 261108-15(응답성 SOT §6): 쓰기는 배경 줄(`bg_write`) — 메인은 직렬화만
-            bg_write.submit(p, json.dumps(self._data, ensure_ascii=False, indent=2))
+            _ROT_MEM[_base_key(self.base)] = self.pdf_rotations_all()
+            bg_write.submit(p, json.dumps(dict(self._data, files=files), ensure_ascii=False, indent=2))
             return True
         except Exception:
             return False
@@ -441,6 +465,11 @@ class PageMetaStore:
             return True
         except Exception:
             return False
+
+    def pdf_rotations_all(self) -> dict:
+        """261115-3: 이번 실행의 PDF 저장 전 회전 전부 {키: {쪽: 각도}} — 디스크 대신 `_ROT_MEM` 에 둔다."""
+        return {k: dict(fr["rotation"]) for k, fr in self._data["files"].items()
+                if isinstance(fr, dict) and fr.get("rotation") and _is_pdf_key(k)}
 
     def clear_rotation(self, file_path) -> bool:
         key = self._key(file_path)

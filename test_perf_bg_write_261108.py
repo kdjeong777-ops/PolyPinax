@@ -92,7 +92,7 @@ pm, hl = PageMetaStore(folder), HyperlinkStore(folder)
 tags, tf = TagStore(tag_path), TextFixStore(tf_path)
 builtins.open, os.replace, os.fsync = _spy_open, _spy_replace, _spy_fsync
 try:
-    pm.rotate_pages(pdf, [0], 90)
+    pm.set_hidden(pdf, [0], True)          # 261115-3: PDF 회전은 이제 디스크에 쓰지 않는다(§4.7.16) — 쓰이는 값인 숨김으로 본다
     pm.save()
     pm.set_photo_rotation(pdf, 90)
     pm.save_photo_rotation()
@@ -107,7 +107,7 @@ finally:
 chk(not main_writes, "M 저장소 다섯의 저장이 메인에서 파일을 쓰지 않는다", "%d번 %s" % (len(main_writes), main_writes[:6]))
 
 # R — 디스크에 쓰기 전에 새 저장소로 읽어도 새 값
-chk(PageMetaStore(folder).get_rotation(pdf, 0) == 90, "R 쓰기 전에 새 PageMetaStore 가 새 회전을 읽는다")
+chk(0 in PageMetaStore(folder).hidden_pages(pdf), "R 쓰기 전에 새 PageMetaStore 가 새 숨김을 읽는다")
 chk(len(HyperlinkStore(folder).links_for(pdf, 0)) == 1, "R 쓰기 전에 새 HyperlinkStore 가 새 링크를 읽는다")
 chk((settings_store.load().get("preferences") or {}).get("bgw_probe") == 1, "R 쓰기 전에 settings_store.load 가 새 값")
 chk(settings_store.peek_pref("bgw_probe") == 1, "R 쓰기 전에 peek_pref 가 새 값")
@@ -115,7 +115,7 @@ chk(settings_store.peek_pref("bgw_probe") == 1, "R 쓰기 전에 peek_pref 가 �
 # L
 flush()
 d = json.loads(_open(pm_path, encoding="utf-8").read())
-chk(d["files"].get("a.pdf", {}).get("rotation", {}).get("0") == 90 and d.get("photo_rot"), "L flush 뒤 page_meta.json = 마지막 값", str(d)[:200])
+chk(d["files"].get("a.pdf", {}).get("hidden") == [0] and d.get("photo_rot"), "L flush 뒤 page_meta.json = 마지막 값", str(d)[:200])
 chk(json.loads(_open(set_path, encoding="utf-8").read())["preferences"]["bgw_probe"] == 1, "L flush 뒤 settings.json = 마지막 값")
 w0 = bg_write.stats["writes"] if bg_write else 0
 for i in range(20):

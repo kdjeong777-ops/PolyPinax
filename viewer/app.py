@@ -4556,19 +4556,32 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         except Exception:
             pass
 
-    def _page_edits_dirty(self) -> bool:
+    @staticmethod
+    def _pending_sig(path) -> tuple:
+        """저장 전 크롭·회전 대기값의 지문 — 261115-3: 파일을 연 순간과 견준다."""
+        from viewer import page_crop as _pc, page_rotate as _pr
+        return (repr(sorted(_pc.pending(path).items())), repr(sorted(_pr.pending(path).items())))
+
+    def _page_edits_dirty(self, since_open: bool = False) -> bool:
         """260821: 썸네일 페이지 삭제/이동 미저장 여부(💾 저장 통합용).
-        261010-13(§4.7.15): 본문 파일의 **저장 전 크롭**도 — 같은 저장 길로 원본에 들어간다."""
+        261010-13(§4.7.15): 본문 파일의 **저장 전 크롭**도 — 같은 저장 길로 원본에 들어간다.
+        261115-3(§4.7.16, 사용자 결정): `since_open` — 다른 파일로 옮길 때는 **이번에 그 파일을 연 뒤 생긴** 저장 전 크롭·회전만 센다."""
         try:
             from viewer import page_crop as _pc
             cur = self.main_view.current_file() if self.main_view else None
             if cur and not str(cur).lower().endswith(".pdf"):
                 cur = None          # 261103-19(사진 보기 SOT 4.14 G1): 크롭·회전 대기값을 PDF 저장 길로 넘기는 것은 PDF 만
-            if cur and _pc.has_pending(cur):
-                return True
-            from viewer import page_rotate as _pr       # 261011-2(§4.7.16): 저장 전 회전도 같은 저장 길로
-            if cur and _pr.has_pending(cur):
-                return True
+            base = (self.__dict__.get("_open_pending_base") or {}).get(os.path.normcase(str(cur))) if (cur and since_open) else None
+            if base is not None:
+                sig = self._pending_sig(cur)
+                if sig != base and sig != self._pending_sig(None):    # 비었으면(저장·되돌림) 묻지 않는다
+                    return True
+            else:
+                if cur and _pc.has_pending(cur):
+                    return True
+                from viewer import page_rotate as _pr       # 261011-2(§4.7.16): 저장 전 회전도 같은 저장 길로
+                if cur and _pr.has_pending(cur):
+                    return True
         except Exception:
             pass
         try:
@@ -8209,7 +8222,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             #   종전엔 page_meta(_edit_dirty)만 봐서 페이지를 지운 뒤 다른 파일로 가면 그냥
             #   지나가 편집이 버려졌다.
             meta_dirty = self._in_edit() and self._edit_snap is not None and self._edit_dirty
-            page_dirty = self._in_edit() and self._page_edits_dirty()
+            page_dirty = self._in_edit() and self._page_edits_dirty(since_open=True)   # 261115-3: 연 뒤 생긴 것만
             if meta_dirty or page_dirty:
                 cur = self.main_view.current_file() if self.main_view else None
                 tgt = str(Path(item.file_path))
@@ -8262,6 +8275,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 try:
                     from viewer.workers import note_warm
                     note_warm(path)              # 261108-22(§4.9): 연 파일 — 다시 열 때는 데우지 않는다
+                except Exception:
+                    pass
+                try:                             # 261115-3(§4.7.16): 연 순간의 저장 전 크롭·회전 — 옮길 때 이것과 견준다
+                    self.__dict__.setdefault("_open_pending_base", {})[os.path.normcase(str(path))] = self._pending_sig(path)
                 except Exception:
                     pass
                 if quick:

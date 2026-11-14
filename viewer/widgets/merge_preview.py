@@ -207,9 +207,12 @@ def _guide_radios(parent, current, on_change):
 class MergePreviewWidget(QWidget):
     """미리보기 + 여백/간격/크롭 조정(스핀박스+드래그+시트 넘김+전체화면). 임베드용."""
 
-    def __init__(self, settings, sample, parent=None):
+    def __init__(self, settings, sample, parent=None, part_api=None):
         super().__init__(parent)
         self._sample = sample
+        # 261115-5(마스터 §11.10.4): 여백·크롭 스타일 저장소 — 전체 스타일 preset_api 의 get_parts·save_part·move_part·delete_part
+        self._part_api = part_api if (part_api and callable(part_api.get("get_parts"))) else None
+        self._part = {}
         self._base = merge_twoup_settings(settings)
         self.vals = {k: int(self._base.get(k, 0)) for k in _KEYS}
         self._sheet = 0
@@ -238,6 +241,7 @@ class MergePreviewWidget(QWidget):
         side.addLayout(grow)
         self.sp = {}
         gm = QGroupBox(tr("여백 / 간격 (pt)")); fm = QFormLayout(gm)
+        self._build_part_row("margin", fm, tr("여백 스타일:"))
         for key, lab in [("margin_top", tr("상단 여백")), ("margin_bottom", tr("하단 여백")),
                          ("margin_left", tr("좌측 여백")), ("margin_right", tr("우측 여백")),
                          ("gap", tr("가로 간격")), ("gap_v", tr("세로 간격"))]:
@@ -245,11 +249,16 @@ class MergePreviewWidget(QWidget):
             fm.addRow(lab + ":", self.sp[key])
         side.addWidget(gm)
         gc = QGroupBox(tr("원본 크롭 (%)")); fc = QFormLayout(gc)
+        self._build_part_row("crop", fc, tr("크롭 스타일:"))
         for key, lab in [("crop_top", tr("상단")), ("crop_bottom", tr("하단")),
                          ("crop_left", tr("좌측")), ("crop_right", tr("우측"))]:
             self.sp[key] = self._mk_spin(key, 0, 45, " %")
             fc.addRow(lab + ":", self.sp[key])
         side.addWidget(gc)
+        self.cmb_margin_style = self._part["margin"]["cmb"]
+        self.cmb_crop_style = self._part["crop"]["cmb"]
+        for kind in ("margin", "crop"):
+            self._reload_part(kind)
         hint = QLabel(tr("파란선=여백, 초록선=간격, 주황선=크롭.\n"
                       "드래그/숫자로 조정하고 아래 ❮ ❯ 로 페이지를 넘겨 확인하세요."))
         hint.setWordWrap(True); hint.setStyleSheet("color:#888;font-size:11px;")
@@ -260,6 +269,167 @@ class MergePreviewWidget(QWidget):
         self._timer = QTimer(self); self._timer.setSingleShot(True)
         self._timer.setInterval(120); self._timer.timeout.connect(self._recompose)
         self._recompose()
+
+    # ── 261115-5(마스터 §11.10.4): 여백 스타일·크롭 스타일 ──
+    def _build_part_row(self, kind, form, label):
+        cmb = QComboBox()
+        cmb.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+        cmb.setMinimumContentsLength(6)
+        form.addRow(label, cmb)
+        row = QHBoxLayout(); row.setContentsMargins(0, 0, 0, 0)
+        b_up = QPushButton("▲"); b_dn = QPushButton("▼")
+        for b in (b_up, b_dn):
+            b.setFixedWidth(28)
+        b_up.setToolTip(tr("고른 스타일을 목록에서 위로")); b_dn.setToolTip(tr("고른 스타일을 목록에서 아래로"))
+        b_sv = QPushButton(tr("저장")); b_del = QPushButton(tr("삭제"))
+        for b in (b_up, b_dn, b_sv, b_del):
+            row.addWidget(b)
+        form.addRow(row)
+        self._part[kind] = {"cmb": cmb, "btns": (b_up, b_dn, b_sv, b_del), "busy": False}
+        cmb.currentIndexChanged.connect(lambda _i, k=kind: self._on_part_pick(k))
+        b_up.clicked.connect(lambda _c=False, k=kind: self._move_part(k, -1))
+        b_dn.clicked.connect(lambda _c=False, k=kind: self._move_part(k, 1))
+        b_sv.clicked.connect(lambda _c=False, k=kind: self._save_part(k))
+        b_del.clicked.connect(lambda _c=False, k=kind: self._delete_part(k))
+
+    def part_buttons(self, kind):
+        """▲ ▼ 저장 삭제(검사·화면 점검용)."""
+        return list(self._part[kind]["btns"])
+
+    @staticmethod
+    def _part_keys(kind):
+        from viewer.twoup import PART_STYLE_KINDS
+        return PART_STYLE_KINDS[kind][0]
+
+    def _part_list(self, kind):
+        if self._part_api is not None:
+            try:
+                return list(self._part_api["get_parts"](kind) or [])
+            except Exception:
+                return []
+        from viewer.twoup import default_part_styles
+        return default_part_styles(kind)
+
+    def _reload_part(self, kind, select=None):
+        st = self._part[kind]; cmb = st["cmb"]
+        st["busy"] = True
+        try:
+            cmb.clear()
+            for p in self._part_list(kind):
+                cmb.addItem(str(p.get("name", "")), p)
+            cmb.addItem(tr("사용자 지정"), None)
+        finally:
+            st["busy"] = False
+        if select is not None and cmb.findText(select) >= 0:
+            st["busy"] = True
+            cmb.setCurrentIndex(cmb.findText(select))
+            st["busy"] = False
+            self._update_part_buttons(kind)
+        else:
+            self._sync_part(kind)
+
+    def _sync_part(self, kind):
+        """칸 값에 맞는 첫 항목, 없으면 '사용자 지정' 을 보인다."""
+        st = self._part.get(kind)
+        if not st:
+            return
+        cmb = st["cmb"]; keys = self._part_keys(kind)
+        cur = tuple(int(self.vals.get(k, 0)) for k in keys)
+        hit = cmb.count() - 1
+        for i in range(cmb.count() - 1):
+            p = cmb.itemData(i) or {}
+            try:
+                if tuple(int(p.get(k, -1)) for k in keys) == cur:
+                    hit = i; break
+            except (TypeError, ValueError):
+                continue
+        st["busy"] = True
+        try:
+            cmb.setCurrentIndex(hit)
+        finally:
+            st["busy"] = False
+        self._update_part_buttons(kind)
+
+    def _update_part_buttons(self, kind):
+        st = self._part[kind]; cmb = st["cmb"]
+        b_up, b_dn, b_sv, b_del = st["btns"]
+        api = self._part_api is not None
+        i, n = cmb.currentIndex(), cmb.count() - 1          # n = 이름 있는 항목 수('사용자 지정' 제외)
+        named = 0 <= i < n
+        b_sv.setEnabled(api)
+        b_del.setEnabled(api and named)
+        b_up.setEnabled(api and named and i > 0)
+        b_dn.setEnabled(api and named and i < n - 1)
+
+    def _on_part_pick(self, kind):
+        st = self._part[kind]
+        if st["busy"]:
+            return
+        p = st["cmb"].currentData()
+        if isinstance(p, dict):                             # '사용자 지정' 은 칸을 건드리지 않는다
+            for k in self._part_keys(kind):
+                if k in p:
+                    self.vals[k] = int(p[k])
+            self._sync_from_vals()
+        self._update_part_buttons(kind)
+
+    def _save_part(self, kind):
+        if self._part_api is None:
+            return
+        from PyQt6.QtWidgets import QInputDialog, QMessageBox
+        cmb = self._part[kind]["cmb"]
+        cur = cmb.currentText() if isinstance(cmb.currentData(), dict) else ""
+        title = tr("여백 스타일 저장") if kind == "margin" else tr("크롭 스타일 저장")
+        name, ok = QInputDialog.getText(self, title, tr("스타일 이름:"), text=cur)
+        if not ok or not str(name).strip():
+            return
+        name = str(name).strip()
+        if name in [p.get("name") for p in self._part_list(kind)]:
+            if QMessageBox.question(
+                    self, title, tr("'{name}' 스타일이 이미 있습니다. 기존 내용을 업데이트할까요?").format(name=name),
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.Yes) != QMessageBox.StandardButton.Yes:
+                return
+        try:
+            self._part_api["save_part"](kind, name, {k: int(self.vals[k]) for k in self._part_keys(kind)})
+        except Exception:
+            return
+        self._reload_part(kind, select=name)
+
+    def _move_part(self, kind, delta):
+        if self._part_api is None:
+            return
+        cmb = self._part[kind]["cmb"]
+        if not isinstance(cmb.currentData(), dict):
+            return
+        name = cmb.currentText()
+        try:
+            self._part_api["move_part"](kind, name, int(delta))
+        except Exception:
+            return
+        self._reload_part(kind, select=name)                # 옮긴 그 항목을 계속 골라 둔다
+
+    def _delete_part(self, kind):
+        if self._part_api is None:
+            return
+        from PyQt6.QtWidgets import QMessageBox
+        cmb = self._part[kind]["cmb"]
+        if not isinstance(cmb.currentData(), dict):
+            return
+        name = cmb.currentText()
+        title = tr("여백 스타일 삭제") if kind == "margin" else tr("크롭 스타일 삭제")
+        if QMessageBox.question(self, title, tr("'{name}' 스타일을 삭제할까요?").format(name=name)) \
+                != QMessageBox.StandardButton.Yes:
+            return
+        try:
+            self._part_api["delete_part"](kind, name)
+        except Exception:
+            return
+        self._reload_part(kind)                             # 칸은 그대로 — 맞는 다른 이름 또는 사용자 지정
+
+    def _sync_parts_all(self):
+        for kind in self._part:
+            self._sync_part(kind)
 
     def _mk_spin(self, key, lo, hi, suf):
         s = QSpinBox(); s.setRange(lo, hi); s.setSuffix(suf); s.setValue(int(self.vals[key]))
@@ -295,6 +465,7 @@ class MergePreviewWidget(QWidget):
             if sp is not None:
                 sp.blockSignals(True); sp.setValue(int(self.vals[k])); sp.blockSignals(False)
         self.canvas._vals = self.vals
+        self._sync_parts_all()             # 261115-5: 전체 스타일·전체화면에서 바뀐 값 → 맞는 여백·크롭 스타일 이름
         self._timer.start()
 
     def _recompose(self):
@@ -326,6 +497,7 @@ class MergePreviewWidget(QWidget):
     def _on_spin(self, key, val):
         self.vals[key] = int(val)
         self.canvas._vals = self.vals; self.canvas.update()
+        self._sync_parts_all()             # 261115-5: 칸을 바꾸면 맞는 이름 또는 '사용자 지정'
         self._timer.start()
 
     def _on_drag(self, key, val):
@@ -334,6 +506,7 @@ class MergePreviewWidget(QWidget):
         if sp is not None:
             sp.blockSignals(True); sp.setValue(int(val)); sp.blockSignals(False)
         self.canvas.update()
+        self._sync_parts_all()             # 261115-5: 끌어도 같다
         self._timer.start()
 
     def _open_fullscreen(self):

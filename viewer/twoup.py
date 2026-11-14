@@ -78,6 +78,31 @@ DEFAULT_TWOUP = {
 MULTI_FILE_KEYS = ("make_divider", "doc_break", "doc_start_odd")
 
 
+# 261115-5(마스터 §11.10.4, 사용자 결정 ①·크롭 5%): 여백 스타일·크롭 스타일 기본 항목.
+#   설정(`nup_margin_presets`·`nup_crop_presets`)에 목록이 없을 때 한 번만 (그때 화면 언어 이름으로) 심는다.
+MARGIN_STYLE_KEYS = ("margin_top", "margin_bottom", "margin_left", "margin_right", "gap", "gap_v")
+CROP_STYLE_KEYS = ("crop_top", "crop_bottom", "crop_left", "crop_right")
+MARGIN_STYLE_DEFAULTS = (
+    (tr_noop("보통"), (36, 48, 28, 28, 16, 16)),      # = DEFAULT_TWOUP
+    (tr_noop("좁게"), (18, 30, 14, 14, 8, 8)),
+    (tr_noop("넓게"), (54, 66, 42, 42, 24, 24)),
+)
+CROP_STYLE_DEFAULTS = (
+    (tr_noop("없음"), (0, 0, 0, 0)),
+    (tr_noop("상하좌우"), (5, 5, 5, 5)),
+    (tr_noop("상하"), (5, 5, 0, 0)),
+    (tr_noop("좌우"), (0, 0, 5, 5)),
+)
+PART_STYLE_KINDS = {"margin": (MARGIN_STYLE_KEYS, MARGIN_STYLE_DEFAULTS),
+                    "crop": (CROP_STYLE_KEYS, CROP_STYLE_DEFAULTS)}
+
+
+def default_part_styles(kind) -> list:
+    """261115-5: 그 종류의 기본 항목 `[{name, 값…}]` — 이름은 지금 화면 언어."""
+    keys, rows = PART_STYLE_KINDS[kind]
+    return [dict(zip(keys, vals), name=tr(nm)) for nm, vals in rows]
+
+
 DUPLEX_CHOICES = ((tr_noop("단면"), "none"), (tr_noop("양면(긴 쪽)"), "long"), (tr_noop("양면(짧은 쪽)"), "short"))
 
 

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-11-15 00:29+0900\n"
+"POT-Creation-Date: 2026-11-15 01:04+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -330,7 +330,8 @@ msgstr ""
 #: viewer/jobs_controller.py viewer/photo_controller.py viewer/redact.py
 #: viewer/study_controller.py viewer/widgets/bookmark_tree.py
 #: viewer/widgets/ctx_menu.py viewer/widgets/encrypt_dialog.py
-#: viewer/widgets/line_text_settings_dialog.py viewer/widgets/twoup_dialog.py
+#: viewer/widgets/line_text_settings_dialog.py viewer/widgets/merge_preview.py
+#: viewer/widgets/twoup_dialog.py
 msgid "저장"
 msgstr ""
 
@@ -2688,9 +2689,9 @@ msgstr ""
 #: viewer/app.py viewer/photo_controller.py viewer/widgets/favorites_dialog.py
 #: viewer/widgets/hyperlink_dialog.py viewer/widgets/image_to_pdf_dialog.py
 #: viewer/widgets/line_text_settings_dialog.py viewer/widgets/merge_dialog.py
-#: viewer/widgets/strip.py viewer/widgets/thumbs_list.py
-#: viewer/widgets/toc_review_dialog.py viewer/widgets/translate_files_dialog.py
-#: viewer/widgets/twoup_dialog.py
+#: viewer/widgets/merge_preview.py viewer/widgets/strip.py
+#: viewer/widgets/thumbs_list.py viewer/widgets/toc_review_dialog.py
+#: viewer/widgets/translate_files_dialog.py viewer/widgets/twoup_dialog.py
 msgid "삭제"
 msgstr ""
 
@@ -3623,7 +3624,7 @@ msgstr ""
 msgid "있음"
 msgstr ""
 
-#: viewer/doc_info.py viewer/widgets/image_tune_dialog.py
+#: viewer/doc_info.py viewer/twoup.py viewer/widgets/image_tune_dialog.py
 #: viewer/widgets/pres_timer.py viewer/widgets/sign_dialogs.py
 #: viewer/widgets/stamp_dialog.py
 msgid "없음"
@@ -7103,6 +7104,30 @@ msgstr ""
 msgid "쪽 쓰기"
 msgstr ""
 
+#: viewer/twoup.py viewer/widgets/read_aloud.py
+msgid "보통"
+msgstr ""
+
+#: viewer/twoup.py
+msgid "좁게"
+msgstr ""
+
+#: viewer/twoup.py
+msgid "넓게"
+msgstr ""
+
+#: viewer/twoup.py
+msgid "상하좌우"
+msgstr ""
+
+#: viewer/twoup.py
+msgid "상하"
+msgstr ""
+
+#: viewer/twoup.py
+msgid "좌우"
+msgstr ""
+
 #: viewer/twoup.py
 msgid "단면"
 msgstr ""
@@ -9946,13 +9971,49 @@ msgid "여백 / 간격 (pt)"
 msgstr ""
 
 #: viewer/widgets/merge_preview.py
+msgid "여백 스타일:"
+msgstr ""
+
+#: viewer/widgets/merge_preview.py
 msgid "원본 크롭 (%)"
+msgstr ""
+
+#: viewer/widgets/merge_preview.py
+msgid "크롭 스타일:"
 msgstr ""
 
 #: viewer/widgets/merge_preview.py
 msgid ""
 "파란선=여백, 초록선=간격, 주황선=크롭.\n"
 "드래그/숫자로 조정하고 아래 ❮ ❯ 로 페이지를 넘겨 확인하세요."
+msgstr ""
+
+#: viewer/widgets/merge_preview.py viewer/widgets/twoup_dialog.py
+msgid "고른 스타일을 목록에서 위로"
+msgstr ""
+
+#: viewer/widgets/merge_preview.py viewer/widgets/twoup_dialog.py
+msgid "고른 스타일을 목록에서 아래로"
+msgstr ""
+
+#: viewer/widgets/merge_preview.py
+msgid "여백 스타일 저장"
+msgstr ""
+
+#: viewer/widgets/merge_preview.py
+msgid "크롭 스타일 저장"
+msgstr ""
+
+#: viewer/widgets/merge_preview.py viewer/widgets/twoup_dialog.py
+msgid "스타일 이름:"
+msgstr ""
+
+#: viewer/widgets/merge_preview.py
+msgid "여백 스타일 삭제"
+msgstr ""
+
+#: viewer/widgets/merge_preview.py
+msgid "크롭 스타일 삭제"
 msgstr ""
 
 #: viewer/widgets/merge_preview.py
@@ -10001,6 +10062,20 @@ msgstr ""
 
 #: viewer/widgets/merge_preview.py
 msgid "우측"
+msgstr ""
+
+#: viewer/widgets/merge_preview.py viewer/widgets/twoup_dialog.py
+msgid "사용자 지정"
+msgstr ""
+
+#: viewer/widgets/merge_preview.py viewer/widgets/twoup_dialog.py
+#, python-brace-format
+msgid "'{name}' 스타일을 삭제할까요?"
+msgstr ""
+
+#: viewer/widgets/merge_preview.py viewer/widgets/twoup_dialog.py
+#, python-brace-format
+msgid "'{name}' 스타일이 이미 있습니다. 기존 내용을 업데이트할까요?"
 msgstr ""
 
 #: viewer/widgets/nup_preset.py
@@ -10914,10 +10989,6 @@ msgstr ""
 
 #: viewer/widgets/read_aloud.py
 msgid "느림"
-msgstr ""
-
-#: viewer/widgets/read_aloud.py
-msgid "보통"
 msgstr ""
 
 #: viewer/widgets/read_aloud.py
@@ -14153,14 +14224,6 @@ msgid "저장 실패: {name__}: {e}"
 msgstr ""
 
 #: viewer/widgets/twoup_dialog.py
-msgid "고른 스타일을 목록에서 위로"
-msgstr ""
-
-#: viewer/widgets/twoup_dialog.py
-msgid "고른 스타일을 목록에서 아래로"
-msgstr ""
-
-#: viewer/widgets/twoup_dialog.py
 msgid "용지 / 배치"
 msgstr ""
 
@@ -14196,10 +14259,6 @@ msgstr ""
 
 #: viewer/widgets/twoup_dialog.py
 msgid "8장 (8-up)"
-msgstr ""
-
-#: viewer/widgets/twoup_dialog.py
-msgid "사용자 지정"
 msgstr ""
 
 #: viewer/widgets/twoup_dialog.py
@@ -14389,10 +14448,6 @@ msgid "Word 양식 샘플을 저장할 폴더 선택"
 msgstr ""
 
 #: viewer/widgets/twoup_dialog.py
-msgid "스타일 이름:"
-msgstr ""
-
-#: viewer/widgets/twoup_dialog.py
 msgid "다단 생성 설정"
 msgstr ""
 
@@ -14456,16 +14511,6 @@ msgstr ""
 msgid ""
 "다음 Word 양식 파일을 찾을 수 없어 선택에서 제외했습니다:\n"
 "· {join}"
-msgstr ""
-
-#: viewer/widgets/twoup_dialog.py
-#, python-brace-format
-msgid "'{name}' 스타일을 삭제할까요?"
-msgstr ""
-
-#: viewer/widgets/twoup_dialog.py
-#, python-brace-format
-msgid "'{name}' 스타일이 이미 있습니다. 기존 내용을 업데이트할까요?"
 msgstr ""
 
 #: viewer/widgets/twoup_dialog.py

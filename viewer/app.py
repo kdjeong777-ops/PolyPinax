@@ -6252,7 +6252,52 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         return {"get_presets": self._merge_get_presets,
                 "save_preset": self._merge_save_preset,
                 "delete_preset": self._merge_delete_preset,
-                "move_preset": self._merge_move_preset}       # 261008-4: 순서 바꾸기
+                "move_preset": self._merge_move_preset,       # 261008-4: 순서 바꾸기
+                # 261115-5(마스터 §11.10.4): 여백 스타일·크롭 스타일 — kind = margin | crop
+                "get_parts": self._nup_get_parts, "save_part": self._nup_save_part,
+                "move_part": self._nup_move_part, "delete_part": self._nup_delete_part}
+
+    _NUP_PART_KEY = {"margin": "nup_margin_presets", "crop": "nup_crop_presets"}
+
+    def _nup_get_parts(self, kind) -> list:
+        """261115-5: 목록이 설정에 **없을 때만** 기본 항목을 심는다 — 지운 기본 항목·빈 목록은 그대로(사용자 결정 ①)."""
+        key = self._NUP_PART_KEY[kind]
+        if not isinstance(self._prefs.get(key), list):
+            from viewer.twoup import default_part_styles
+            self._prefs[key] = default_part_styles(kind)
+            self._save_settings_now()
+        return [dict(p) for p in self._prefs[key]]
+
+    def _nup_save_part(self, kind, name, vals):
+        name = str(name).strip()
+        if not name:
+            return
+        lst = self._nup_get_parts(kind)
+        cfg = dict(vals); cfg["name"] = name
+        idx = next((i for i, p in enumerate(lst) if p.get("name") == name), None)
+        if idx is None:
+            lst.append(cfg)                    # 새 이름만 끝에(전체 스타일과 같다)
+        else:
+            lst[idx] = cfg                     # 같은 이름은 그 자리에서
+        self._prefs[self._NUP_PART_KEY[kind]] = lst
+        self._save_settings_now()
+
+    def _nup_move_part(self, kind, name, delta) -> int:
+        lst = self._nup_get_parts(kind)
+        i = next((k for k, p in enumerate(lst) if p.get("name") == str(name)), None)
+        if i is None:
+            return -1
+        j = max(0, min(len(lst) - 1, i + int(delta)))
+        if j != i:
+            lst.insert(j, lst.pop(i))
+            self._prefs[self._NUP_PART_KEY[kind]] = lst
+            self._save_settings_now()
+        return j
+
+    def _nup_delete_part(self, kind, name):
+        lst = [p for p in self._nup_get_parts(kind) if p.get("name") != str(name)]
+        self._prefs[self._NUP_PART_KEY[kind]] = lst
+        self._save_settings_now()
 
     def _merge_get_presets(self) -> list:
         return list(self._prefs.get("merge_presets") or [])
@@ -10311,6 +10356,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             # 260611-36: 병합 배치 사용자 스타일(SettingsDialog 미관리 → 보존)
             "merge_presets": list(prefs.get("merge_presets",
                                             old.get("merge_presets", []))),
+            # 261115-5(마스터 §11.10.4): 여백·크롭 스타일 — 없으면(None) 다음에 기본 항목을 심는다, 빈 목록은 빈 채로
+            "nup_margin_presets": prefs.get("nup_margin_presets", old.get("nup_margin_presets")),
+            "nup_crop_presets": prefs.get("nup_crop_presets", old.get("nup_crop_presets")),
             # 260606-13: 화면 스타일(테마)
             "theme": str(prefs.get("theme", old.get("theme", "auto"))),
             # 261008(다국어 SOT §4): 화면 언어 — 허용목록이라 여기 없으면 조용히 사라진다.

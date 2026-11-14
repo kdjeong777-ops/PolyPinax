@@ -31,7 +31,8 @@ class TwoUpSettingsDialog(QDialog):
 
         # ── 본문: 좌=미리보기(여백/간격/크롭) | 우=용지/배치·쪽번호·표지·목차 ──
         body = QHBoxLayout()
-        self.preview = MergePreviewWidget(self._preview_view(s), sample)
+        self.preview = MergePreviewWidget(self._preview_view(s), sample,
+                                          part_api=preset_api)   # 261115-5: 여백·크롭 스타일도 같은 저장소
         body.addWidget(self.preview, 2)
 
         cfg = QWidget(); cv = QVBoxLayout(cfg)

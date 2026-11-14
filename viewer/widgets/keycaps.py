@@ -254,9 +254,11 @@ class KeycapMenuStyle(QProxyStyle):
 
 
 def app_style(base_name: str = "Fusion"):
-    """앱 스타일 — Fusion 을 키캡 메뉴 스타일로 감싼다(테마를 바꿀 때마다 새로)."""
+    """앱 스타일 — Fusion 을 키캡 메뉴 스타일로 감싼다(테마를 바꿀 때마다 새로).
+    261115-2(디자인 SOT §2.5): 다크 스크롤바 화살표도 이 스타일 한 곳 — `scroll_arrows.ScrollArrowStyle`(키캡 메뉴를 이어받음)."""
     from PyQt6.QtWidgets import QStyleFactory
-    return KeycapMenuStyle(QStyleFactory.create(base_name))
+    from viewer.widgets.scroll_arrows import ScrollArrowStyle
+    return ScrollArrowStyle(QStyleFactory.create(base_name))
 
 
 class KeycapLabel(QLabel):

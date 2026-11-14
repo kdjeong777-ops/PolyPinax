@@ -522,6 +522,10 @@ class BookmarkTree(QWidget):
         self._fill_pos = 0
         self._fill_folders: dict = {}
         self._fill_after = None      # 채우기 완료 후 1회 실행(선택 복원 등)
+        # 261115-4(책갈피창·저장 SOT §4.7.24): 목록을 다시 만들어도 본문 파일 줄을 고른다 — 한 곳(_keep_rows/_restore_rows)
+        self._shown_file_fn = None   # 앱: 이 책갈피창의 창 본문에 열린 파일
+        self._row_keep = None        # (지킬 경로, 본문 파일인가, 줄 차례, 목록 출처)
+        self._order_shown: list = [] # 평탄 목록에 마지막으로 늘어놓은 차례(Path) — 없어진 파일의 '다음'
         self._fill_timer = QTimer(self)
         self._fill_timer.setInterval(self.FILL_INTERVAL_MS)
         self._fill_timer.timeout.connect(self._fill_tick)
@@ -924,6 +928,7 @@ class BookmarkTree(QWidget):
         워커 스레드로 넘기고 이 함수는 바로 반환한다 — 즉 큰 폴더에서는 반환 시점에
         트리가 비어 있을 수 있다. 목록에 의존하는 쪽은 `filesListed` 를 기다린다.
         """
+        self._keep_rows()            # 261115-4(§4.7.24): 비우기 전에 지킬 줄
         self._root_dir = Path(folder)
         self._reload_fn = lambda f=Path(folder): self.load_folder(f)   # 260611-9: 취소 재로드
         self._cancel_scan()          # 260906-1: 이전 폴더 스캔 중단(결과 섞임 방지)
@@ -947,6 +952,7 @@ class BookmarkTree(QWidget):
                 f"{data.get('source_pdf', '')} · {data.get('total_pages', '?')}p"
             )
             self._update_mode_button()
+            self._restore_rows()              # 261115-4(§4.7.24)
             self._queue_visible_probes()      # 260906-1: json 모드도 보이는 행부터 표식 검사
             return True
 
@@ -1174,9 +1180,8 @@ class BookmarkTree(QWidget):
             self.btn_view_mode_v.setText(tr("트리") if on else tr("단일"))
             self._update_view_mode_icon()
         if self._mode == "flat":
-            cur = self._current_selected_file()
-            # 260906-1: 행이 다 들어온 뒤에 선택을 되살린다(점진 채우기 — 즉시 부르면 없다).
-            self._render_flat(after=(lambda c=cur: self._select_top_file(c)) if cur else None)
+            # 261115-4(§4.7.24): 선택은 _render_flat 이 한 곳에서 되살린다(종전 after 로 다시 골라 본문을 다시 열었다)
+            self._render_flat()
 
     def _toggle_tree_view(self):
         if self._mode != "flat":
@@ -1199,6 +1204,7 @@ class BookmarkTree(QWidget):
 
         ★ 행이 **나중에** 생기므로, 다 그린 뒤 해야 하는 일(선택 복원 등)은 호출 직후가
         아니라 `after` 로 넘긴다. 검색어 재적용은 완료 시 자동으로 한다."""
+        self._keep_rows()                         # 261115-4(§4.7.24): 비우기 전에 지킬 줄 — 되살리기는 _finish_fill
         self._reset_probe_queue()
         self._cancel_fill()
         self._fill_after = after
@@ -1209,6 +1215,7 @@ class BookmarkTree(QWidget):
         n_pdf = len(pdfs) if self._photo_on() else sum(1 for p in pdfs if not self._is_zip_path(p))
         self._set_count((tr('{n}장') if self._photo_on() else tr('{n}개 PDF')).format(n=n_pdf))
         self._fill_plan = self._build_fill_plan(pdfs)
+        self._order_shown = [p for _parts, p in self._fill_plan]   # 261115-4: 없어진 파일의 '다음' 을 찾을 차례
         self._fill_pos = 0
         self._fill_folders = {}
         if not self._fill_plan:                   # 빈 폴더도 '다 채웠다'로 알린다
@@ -1346,6 +1353,7 @@ class BookmarkTree(QWidget):
         # 채우는 동안 들어온 행에도 현재 검색어를 적용한다(빈 검색어면 전부 보임 = 기본).
         if (self.search_edit.text() or "").strip():
             self._on_filter(self.search_edit.text())
+        self._restore_rows()                      # 261115-4(§4.7.24): 본문 파일 줄을 다시 고른다 — 따로 고를 것(after)은 그다음
         fn, self._fill_after = self._fill_after, None
         if fn is not None:
             try:
@@ -1514,9 +1522,120 @@ class BookmarkTree(QWidget):
             except Exception:
                 pass
 
+    # ----- 261115-4(책갈피창·저장 SOT §4.7.24): 목록을 다시 만든 뒤 선택 되살리기 — 한 곳 -----
+    def set_shown_file_getter(self, fn):
+        """앱이 이 책갈피창의 창(`_pane_idx`) 본문에 열린 파일을 알려 준다."""
+        self._shown_file_fn = fn
+
+    def _shown_file(self) -> str:
+        fn = self._shown_file_fn
+        if not callable(fn):
+            return ""
+        try:
+            return str(fn() or "")
+        except Exception:
+            return ""
+
+    def _list_source(self) -> tuple:
+        """'같은 목록을 다시 읽었나' 를 가르는 열쇠 — 폴더(파일 모드는 모드만)·사진 모드."""
+        from viewer.pathutil import norm_key
+        mode = getattr(self, "_mode", "")
+        root = norm_key(self._root_dir) if (mode != "single" and self._root_dir) else ""
+        return (mode, root, bool(self._photo_on()))
+
+    def _keep_rows(self) -> None:
+        """목록을 비우기 **전에** — 지킬 파일과 지금 줄 차례를 떠 둔다. 지킬 파일은 그 창 본문에 열린 파일,
+        본문이 비었으면(이동·이름 변경이 핸들을 풀었다 등) 고른 줄의 파일 — 이것은 **없어졌을 때 다음 파일**에만 쓴다
+        (있으면 되살리지 않는다 — 폴더 열기가 먼저 본문을 닫은 때 고른 줄만 되살리면 '본문 = 고른 줄' 이 깨진다).
+        비운(채우는 중인) 목록을 다시 비우면(폴더 열기 → 채우기) 앞에 떠 둔 것을 그대로 쓴다.
+        큰 목록에서도 가볍게 — 평탄 목록은 늘어놓은 차례(Path)를 그대로 들고, 비교 키는 없어졌을 때만 만든다."""
+        try:
+            if self._row_keep is not None and (self.tree.topLevelItemCount() == 0 or self._fill_plan):
+                return
+            path = self._shown_file()
+            shown = bool(path)
+            if not shown:
+                it = self.tree.currentItem()
+                node = self._file_node_of(it) if it is not None else None
+                path = str(node.data(0, self.DATA_FILE) or "") if node is not None else ""
+            if not path:
+                self._row_keep = None
+                return
+            if self._mode == "flat" and self._order_shown and not self._fill_plan:
+                order = list(self._order_shown)
+            else:
+                order = [it.data(0, self.DATA_FILE) for it in self._iter_file_nodes()]
+            self._row_keep = (path, shown, order, self._list_source())
+        except RuntimeError:
+            self._row_keep = None
+
+    def _find_file_row(self, path):
+        """파일 줄을 경로로 — 이름 끝을 먼저 견줘(문자열) 큰 목록에서도 가볍다."""
+        from viewer.pathutil import norm_key
+        import os as _os
+        key = norm_key(path)
+        tail = _os.path.basename(str(path)).lower()
+        n = len(tail)
+        for it in self._iter_file_nodes():
+            d = it.data(0, self.DATA_FILE)
+            if d and d[-n:].lower() == tail and norm_key(d) == key:
+                return it
+        return None
+
+    def _restore_rows(self) -> None:
+        """목록이 **다 찬 뒤** — 떠 둔 본문 파일 줄을 고른다(신호 막음 — 본문은 이미 그 파일, 다시 열지 않는다).
+        없어졌으면 같은 목록을 다시 읽은 때만 원래 차례의 다음(마지막이면 이전) 파일을 고르고, 누른 것과 같은 길로 연다."""
+        keep, self._row_keep = self._row_keep, None
+        if not keep:
+            return
+        path, shown, order, src = keep
+        try:
+            target = self._find_file_row(path)
+            nav = False
+            if target is not None and not shown:
+                return                                   # 본문이 빈 채 고른 줄은 그대로 — 앱이 고를 몫
+            if target is None:
+                if src != self._list_source():
+                    return                               # 다른 폴더·파일을 열었다 — 앱이 고른 것이 이긴다
+                from viewer.pathutil import norm_key
+                k = norm_key(path)
+                keys = [norm_key(p) for p in order]      # 없어졌을 때만 만든다
+                if k not in keys:
+                    return                               # 원래 목록에 없던 파일 — 고를 '다음' 이 없다
+                i = keys.index(k)
+                now = {}
+                for it in self._iter_file_nodes():
+                    d = it.data(0, self.DATA_FILE)
+                    if d:
+                        now.setdefault(norm_key(d), it)
+                for ck in keys[i + 1:] + keys[:i][::-1]:
+                    target = now.get(ck)
+                    if target is not None:
+                        break
+                if target is None:
+                    return
+                nav = True                               # 없어졌다 — 다음 파일을 누른 것과 같은 길로 연다(본문 = 고른 줄)
+            par = target.parent()
+            while par is not None:                       # 폴더 줄만 펼친다 — 파일 줄은 그대로(§4.7.3 모두 접기)
+                par.setExpanded(True)
+                par = par.parent()
+            self.tree.blockSignals(True)
+            try:
+                self.tree.clearSelection()
+                self.tree.setCurrentItem(target)
+                target.setSelected(True)
+            finally:
+                self.tree.blockSignals(False)
+            self.tree.scrollToItem(target)
+            if nav:
+                self._emit_nav(target.data(0, self.DATA_FILE), 0)
+        except RuntimeError:
+            return
+
     def load_single_pdf(self, pdf_path: str | Path) -> bool:
         """v1.6.11 I1/I2: 단일 PDF 한 개만 트리에 표시 (내부 TOC lazy load)."""
         p = Path(pdf_path)
+        self._keep_rows()                # 261115-4(§4.7.24)
         self._root_dir = p.parent
         self._single_file = p            # 260822: 파일 모드 → 폴더 모드 전환 기준
         self._file_list = [p]            # 261008-1: 이전 여러 파일 목록이 남지 않게(§4.7.14)
@@ -1545,6 +1664,7 @@ class BookmarkTree(QWidget):
         # 260906-1: 파일 1개뿐이라 표식(암호화·책갈피 ▸)을 바로 확정한다.
         # 261108-17(응답성 SOT §4.9): 단 메인에서 열지 않는다 — 처음 보는 파일은 백신 검사 동안 1초 넘게 섰다. 배경에서 그 하나만.
         self._probe_one_bg(item)
+        self._restore_rows()             # 261115-4(§4.7.24)
         return True
 
     def load_pdf_files(self, paths) -> list:
@@ -1568,6 +1688,7 @@ class BookmarkTree(QWidget):
             if files:
                 self.load_single_pdf(files[0])
             return [str(f) for f in files]
+        self._keep_rows()                # 261115-4(§4.7.24)
         self._root_dir = files[0].parent
         self._single_file = files[0]
         self._file_list = list(files)
@@ -1589,6 +1710,7 @@ class BookmarkTree(QWidget):
         self._set_count(tr('{n}개 파일 (파일 모드)').format(n=len(files)))
         self._update_mode_button()
         self._queue_visible_probes()
+        self._restore_rows()             # 261115-4(§4.7.24)
         return [str(f) for f in files]
 
     def add_pdf_files(self, paths) -> list:
@@ -4317,11 +4439,9 @@ class BookmarkTree(QWidget):
         if self._mode != "flat" or not self._root_dir:
             return
         try:
-            cur = self._current_selected_file()
-            keep = cur if (cur and Path(cur).exists()) else None
             # 260906-1: 목록 재수집도 예산 규칙을 따른다(큰 폴더에서 복사/이동 뒤 멈춤 방지).
-            #   선택 복원은 트리를 다 채운 뒤에(after) — 행이 나중에 생기기 때문.
-            self._scan_pdfs(after=(lambda c=keep: self._select_top_file(c)) if keep else None)
+            # 261115-4(§4.7.24): 선택은 _render_flat 이 한 곳에서 되살린다(옮겨 없어진 파일이면 다음 파일).
+            self._scan_pdfs()
         except Exception:
             pass
 
@@ -4768,6 +4888,7 @@ class BookmarkTree(QWidget):
             self.tree.addTopLevelItem(item)
         if self._mode == "flat" and fp not in self._pdfs_flat:
             self._pdfs_flat.append(fp)
+            self._order_shown.append(fp)             # 261115-4(§4.7.24): 되살리기 차례에도
         self._place_by_sort(item, fp)                # 261019-7: 고른 정렬대로 제자리에(새로 고침 없이)
         if not self.is_collapse_all_mode():          # 261114-12(§4.7.3): 모두 접기 상태면 새 줄도 접힌 채
             item.setExpanded(True)

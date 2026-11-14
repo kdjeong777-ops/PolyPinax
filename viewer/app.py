@@ -2651,6 +2651,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             # 260822: 폴더 모드 → 파일 모드 전환 시 대상 = 현재 본문 파일
             _bt.set_current_file_getter(
                 lambda: (self.main_view.current_file() if self.main_view else None))
+            # 261115-4(책갈피창·저장 SOT §4.7.24): 목록을 다시 만들면 **그 창** 본문 파일 줄을 다시 고른다
+            _bt.set_shown_file_getter(lambda b=_bt: self._mv[getattr(b, "_pane_idx", 0)].current_file())
         # 260611-9: 편집 취소 → 숨김/회전/선긋기/하이퍼링크도 스냅샷으로 되돌리기
         self.bookmark_tree.editCancelled.connect(self._on_edit_cancelled)
         # v1.6.20 K5: 메인 페이지로 책갈피 추가

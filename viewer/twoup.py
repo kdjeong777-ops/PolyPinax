@@ -32,6 +32,9 @@ PAGE_SIZES = {
 DEFAULT_TWOUP = {
     "enabled": False,
     "nup": 2,                          # 260611-36: 한 장에 배치할 원본 쪽 수(1·2·4·6·8 — 1 은 261021-3)
+    # 261115-1(마스터 §11.10.3): 용지 방향 auto|portrait|landscape·가로 쪽수·세로 쪽수(1~6).
+    #   비어 있으면(옛 설정) `nup`·원본 방향으로 종전 규칙 — `grid_spec` 하나가 읽는다.
+    "orient": "", "cols": 0, "rows": 0,
     "page_size": "A4",                 # 출력 용지(PAGE_SIZES)
     "center": True,                    # 셀 안 가운데 정렬
     "fit_mode": "contain",             # 260611-46: 채움 방식 contain|cover|stretch
@@ -302,26 +305,97 @@ def _paper(s):
     return (min(w, h), max(w, h))
 
 
-def _grid_dims(p0, s):
-    """nup·원본 방향으로 (cols, rows, 용지 가로, 용지 세로) 결정.
-    1-up(261021-3): 원본 방향 그대로 1×1(세로 원본→세로 용지, 가로 원본→가로 용지).
-    2-up: 세로 원본→가로 용지 2×1 / 가로 원본→세로 용지 1×2.
-    4·6·8-up: 세로 용지 고정 2열×2·3·4행."""
-    short, long_ = _paper(s)
+GRID_MAX = 6                                      # 261115-1: 가로·세로 쪽수 드롭다운 1~6(사용자 결정)
+
+
+def nup_preset_grid(nup, orient):
+    """261115-1(§11.10.3): '한 장에 배치' 빠른 선택 → 그 방향의 (가로, 세로) 쪽수.
+    세로·자동 방향 칸 모양을 기준으로, 가로 방향은 맞바꾼다(방향 바꾸기 규칙과 같다). 표에 없으면 None."""
+    base = {1: (1, 1), 2: (1, 2), 4: (2, 2), 6: (2, 3), 8: (2, 4)}.get(int(nup or 0))
+    if base is None:
+        return None
+    return (base[1], base[0]) if orient == "landscape" else base
+
+
+def grid_choice(s):
+    """설정 창에 보일 (방향 'auto'|'portrait'|'landscape', 가로, 세로) — 자동은 풀지 않는다.
+    옛 설정(orient 없음)은 종전 규칙과 같은 결과가 나는 칸으로: 1·2-up(원본 방향을 따르던 것) → 자동 1×1·1×2,
+    4·6·8-up(세로 용지 고정) → 세로 2×2·2×3·2×4."""
+    orient = str(s.get("orient") or "")
+    try:
+        cols = int(s.get("cols") or 0); rows = int(s.get("rows") or 0)
+    except (TypeError, ValueError):
+        cols = rows = 0
+    if orient in ("portrait", "landscape", "auto") and cols >= 1 and rows >= 1:
+        return orient, min(cols, GRID_MAX), min(rows, GRID_MAX)
     nup = int(s.get("nup", 2) or 2)
-    portrait_src = p0.height >= p0.width
+    if nup <= 1:
+        return "auto", 1, 1
+    if nup < 4:
+        return "auto", 1, 2
+    return grid_spec(s)
+
+
+def grid_spec(s, p0=None):
+    """261115-1(§11.10.3): 설정 → (방향 'portrait'|'landscape', 가로 쪽수, 세로 쪽수).
+    `orient`·`cols`·`rows` 가 있으면 그 값(1~6 로 자름, 자동은 p0 로 시트 방향을 푼다), 없으면(옛 설정) 종전 규칙 —
+    `nup` 과 원본 첫 쪽 방향(`p0`, 없으면 세로 원본):
+    1-up 원본 방향대로 1×1 · 2-up 세로 원본→가로 용지 2×1 / 가로 원본→세로 용지 1×2 · 4·6·8-up 세로 용지 2열×2·3·4행."""
+    orient = str(s.get("orient") or "")
+    try:
+        cols = int(s.get("cols") or 0); rows = int(s.get("rows") or 0)
+    except (TypeError, ValueError):
+        cols = rows = 0
+    if orient in ("portrait", "landscape", "auto") and cols >= 1 and rows >= 1:
+        cols, rows = min(cols, GRID_MAX), min(rows, GRID_MAX)
+        if orient != "auto":
+            return orient, cols, rows
+        # 261115-1 덧붙임(사용자 지시 '자동·가로·세로 3가지'): 자동 — cols·rows 는 세로 용지 기준,
+        #   시트마다 그 원본 쪽이 더 크게 들어가는 방향(가로면 쪽수 맞바꿈). p0 이 없으면(쪽 수만 셀 때) 세로.
+        if p0 is None or _fit_scale(p0, s, "landscape", rows, cols) <= _fit_scale(p0, s, "portrait", cols, rows) + 1e-9:
+            return "portrait", cols, rows
+        return "landscape", rows, cols
+    nup = int(s.get("nup", 2) or 2)
+    portrait_src = True if p0 is None else p0.height >= p0.width
     if nup >= 8:
-        return 2, 4, short, long_                 # 세로 용지 2×4
+        return "portrait", 2, 4                    # 세로 용지 2×4
     if nup >= 6:
-        return 2, 3, short, long_                 # 세로 용지 2×3
+        return "portrait", 2, 3                    # 세로 용지 2×3
     if nup >= 4:
-        return 2, 2, short, long_                 # 260617-6: 세로 용지 2×2(4-up)
-    if nup <= 1:                                  # 261021-3(§11.10.2): 1-up — 원본 방향대로 한 장에 하나
-        return (1, 1, short, long_) if portrait_src else (1, 1, long_, short)
-    # 2-up
-    if portrait_src:
-        return 2, 1, long_, short                 # 가로 용지, 좌우
-    return 1, 2, short, long_                      # 세로 용지, 상하
+        return "portrait", 2, 2                    # 260617-6: 세로 용지 2×2(4-up)
+    if nup <= 1:                                   # 261021-3(§11.10.2): 1-up — 원본 방향대로 한 장에 하나
+        return ("portrait" if portrait_src else "landscape"), 1, 1
+    if portrait_src:                               # 2-up
+        return "landscape", 2, 1                   # 가로 용지, 좌우
+    return "portrait", 1, 2                        # 세로 용지, 상하
+
+
+def _fit_scale(p0, s, orient, cols, rows) -> float:
+    """자동 방향 판단용 — 그 방향·격자에서 원본 쪽(p0)이 칸에 맞춰 들어가는 배율(여백·간격·쪽번호 높이 반영, 제본 여백 제외)."""
+    short, long_ = _paper(s)
+    ow, oh = (long_, short) if orient == "landscape" else (short, long_)
+    ml = float(s.get("margin_left", 28)); mr = float(s.get("margin_right", 28))
+    mt = float(s.get("margin_top", 36)); mb = float(s.get("margin_bottom", 48))
+    footer_h = float(s.get("footer_size", 11)) + 10.0
+    cw = (ow - ml - mr - float(s.get("gap", 16)) * (cols - 1)) / cols
+    ch = (oh - mt - mb - footer_h - float(s.get("gap_v", 16)) * (rows - 1)) / rows
+    pw, ph = max(1e-6, float(p0.width)), max(1e-6, float(p0.height))
+    return max(0.0, min(cw / pw, ch / ph))
+
+
+def cells_per_sheet(s) -> int:
+    """261115-1: 한 장에 놓는 원본 쪽 수 = 가로×세로(옛 설정은 종전 `nup` 규칙의 칸 수 — 1·2·4·6·8 이면 nup 그대로)."""
+    _o, cols, rows = grid_spec(s)
+    return max(1, cols * rows)
+
+
+def _grid_dims(p0, s):
+    """(cols, rows, 용지 가로, 용지 세로) — `grid_spec` 의 방향으로 용지를 세운다(261115-1, §11.10.3)."""
+    short, long_ = _paper(s)
+    orient, cols, rows = grid_spec(s, p0)
+    if orient == "landscape":
+        return cols, rows, long_, short
+    return cols, rows, short, long_
 
 
 def gutter_edge(s, ow, oh, sheet_no=1) -> str:
@@ -550,7 +624,7 @@ def _impose_item(out_doc, src, s, content_sheet, on_sheet=None):
     n = src.page_count
     if n == 0:
         return 0, content_sheet
-    nup = max(1, int(s.get("nup", 2) or 2))
+    nup = cells_per_sheet(s)                     # 261115-1: 가로×세로 쪽수(옛 설정은 nup)
     start = content_sheet
     sheets = 0
     for i in range(0, n, nup):
@@ -1214,7 +1288,7 @@ def _item_name(it):
 def _merge_slabs(items, s, pc_fn):
     """본문 슬랩(간지/내용) 구성. 렌더링 없이 쪽 수만 사용(가벼움).
     반환: (slabs, file_blocks, page_to_slab)."""
-    nup = max(1, int(s.get("nup", 2) or 2))
+    nup = cells_per_sheet(s)                     # 261115-1: 가로×세로 쪽수(옛 설정은 nup)
     make_divider = bool(s.get("make_divider", False))
     doc_break = bool(s.get("doc_break", False))
     per_file = make_divider or doc_break
@@ -1253,7 +1327,7 @@ def _merge_slabs(items, s, pc_fn):
 def _merge_body_plan(slabs, file_blocks, s, front_pages):
     """본문 페이지 순서/번호/물리위치 계획(렌더링 없음).
     반환: (body_plan[{kind,slab,num,phys}], slab_phys, toc_entries[(name,arabic)])."""
-    nup = max(1, int(s.get("nup", 2) or 2))
+    nup = cells_per_sheet(s)                     # 261115-1: 가로×세로 쪽수(옛 설정은 nup)
     make_divider = bool(s.get("make_divider", False))
     doc_break = bool(s.get("doc_break", False))
     duplex = bool(s.get("duplex", False))
@@ -1316,7 +1390,7 @@ def _assemble(items, s, fast=False, gen_bookmarks_fn=None, tick=None, tmpdir=Non
     양면+홀수시작: 각 문서(간지 포함)를 홀수 페이지에서 시작하도록 빈 페이지 삽입.
     반환: (final_doc, page_infos[{kind,cells}]).  final 에 책갈피 설정 완료."""
     s = merge_twoup_settings(s)
-    nup = max(1, int(s.get("nup", 2) or 2))
+    nup = cells_per_sheet(s)                     # 261115-1: 가로×세로 쪽수(옛 설정은 nup)
     make_divider = bool(s.get("make_divider", False))
     doc_break = bool(s.get("doc_break", False))
     duplex = bool(s.get("duplex", False))
@@ -1588,7 +1662,7 @@ def build_twoup(items, settings, out_path, gen_bookmarks_fn=None, log=None, prog
     tmpdir = Path(tempfile.mkdtemp(prefix="polypdf_2up_"))
 
     # 진행/취소: 총 작업량 ≈ 시트 수 + 표지/목차 + 저장
-    nup = max(1, int(s.get("nup", 2) or 2))
+    nup = cells_per_sheet(s)                     # 261115-1: 가로×세로 쪽수(옛 설정은 nup)
     total_pages_est = 0
     for it in items:
         try:

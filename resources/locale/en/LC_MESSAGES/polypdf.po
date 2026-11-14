@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-14 11:53+0900\n"
+"POT-Creation-Date: 2026-11-15 00:29+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -3710,10 +3710,12 @@ msgid "읽는 중…"
 msgstr "Reading…"
 
 #: viewer/doc_info.py viewer/widgets/print_dialog.py
+#: viewer/widgets/twoup_dialog.py
 msgid "세로"
 msgstr "Portrait"
 
 #: viewer/doc_info.py viewer/widgets/print_dialog.py
+#: viewer/widgets/twoup_dialog.py
 msgid "가로"
 msgstr "Landscape"
 
@@ -8691,7 +8693,7 @@ msgstr "TOC offset (adjust printed TOC page → actual page)"
 
 #: viewer/widgets/bookmarker_dialog.py viewer/widgets/image_tune_dialog.py
 #: viewer/widgets/ocr_options_dialog.py viewer/widgets/sign_dialogs.py
-#: viewer/widgets/stamp_dialog.py
+#: viewer/widgets/stamp_dialog.py viewer/widgets/twoup_dialog.py
 msgid "자동"
 msgstr "Auto"
 
@@ -14519,6 +14521,18 @@ msgid "용지 크기:"
 msgstr "Paper size:"
 
 #: viewer/widgets/twoup_dialog.py
+msgid ""
+"자동: 시트마다 원본 쪽이 더 크게 들어가는 방향.\n"
+"가로·세로 쪽수는 세로 용지 기준이고, 가로 용지가 되면 서로 바꿔 놓는다."
+msgstr ""
+"Auto: for each sheet, the orientation in which the original page fits larger.\n"
+"Across/down counts are for portrait paper and are swapped when the sheet turns landscape."
+
+#: viewer/widgets/twoup_dialog.py
+msgid "용지 방향:"
+msgstr "Orientation:"
+
+#: viewer/widgets/twoup_dialog.py
 msgid "1장 (1-up)"
 msgstr "1 page (1-up)"
 
@@ -14527,20 +14541,32 @@ msgid "2장 (2-up)"
 msgstr "2 pages (2-up)"
 
 #: viewer/widgets/twoup_dialog.py
-msgid "4장 (4-up, 2열×2행)"
-msgstr "4 pages (4-up, 2 cols × 2 rows)"
+msgid "4장 (4-up)"
+msgstr "4 pages (4-up)"
 
 #: viewer/widgets/twoup_dialog.py
-msgid "6장 (6-up, 2열×3행)"
-msgstr "6 pages (6-up, 2 cols × 3 rows)"
+msgid "6장 (6-up)"
+msgstr "6 pages (6-up)"
 
 #: viewer/widgets/twoup_dialog.py
-msgid "8장 (8-up, 2열×4행)"
-msgstr "8 pages (8-up, 2 cols × 4 rows)"
+msgid "8장 (8-up)"
+msgstr "8 pages (8-up)"
+
+#: viewer/widgets/twoup_dialog.py
+msgid "사용자 지정"
+msgstr "Custom"
 
 #: viewer/widgets/twoup_dialog.py
 msgid "한 장에 배치:"
 msgstr "Pages per sheet:"
+
+#: viewer/widgets/twoup_dialog.py
+msgid "가로 쪽수:"
+msgstr "Pages across:"
+
+#: viewer/widgets/twoup_dialog.py
+msgid "세로 쪽수:"
+msgstr "Pages down:"
 
 #: viewer/widgets/twoup_dialog.py
 msgid "맞춤 (비율 유지·여백 생김)"
@@ -16557,4 +16583,13 @@ msgstr "Getting Started"
 # | 고르세요"
 #~ msgid "Windows 기본 앱 화면을 엽니다 — 그 화면에서 사진 확장자(.jpg·.png·.heic 등)를 PolyPinax 로 고르세요"
 #~ msgstr "Opens the Windows Default apps page — choose PolyPinax there for photo extensions (.jpg, .png, .heic, etc.)"
+
+#~ msgid "4장 (4-up, 2열×2행)"
+#~ msgstr "4 pages (4-up, 2 cols × 2 rows)"
+
+#~ msgid "6장 (6-up, 2열×3행)"
+#~ msgstr "6 pages (6-up, 2 cols × 3 rows)"
+
+#~ msgid "8장 (8-up, 2열×4행)"
+#~ msgstr "8 pages (8-up, 2 cols × 4 rows)"
 

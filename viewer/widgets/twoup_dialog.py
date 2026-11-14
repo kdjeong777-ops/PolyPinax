@@ -11,7 +11,7 @@ from PyQt6.QtGui import QFont
 from PyQt6.QtCore import Qt
 
 from viewer.twoup import (merge_twoup_settings, single_file_settings, PAGE_SIZES, DUPLEX_CHOICES,
-                          duplex_choice)
+                          duplex_choice, GRID_MAX, grid_choice, nup_preset_grid)
 from viewer.widgets.merge_preview import MergePreviewWidget
 from viewer.i18n import tr
 
@@ -78,14 +78,34 @@ class TwoUpSettingsDialog(QDialog):
             self.cmb_size.addItem(k, k)
         self._set_combo(self.cmb_size, s.get("page_size", "A4"))
         gf.addRow(tr("용지 크기:"), self.cmb_size)
+        # 261115-1(마스터 §11.10.3, 사용자 지시·결정): 용지 방향(자동/세로/가로) + 가로·세로 쪽수(1~6).
+        #   '한 장에 배치' 는 빠른 선택 — 고르면 지금 방향에 맞춰 두 드롭다운을 채우고, 드롭다운을 직접 바꾸면 '사용자 지정'.
+        self.cmb_orient = QComboBox()
+        self.cmb_orient.addItem(tr("자동"), "auto")
+        self.cmb_orient.addItem(tr("세로"), "portrait")
+        self.cmb_orient.addItem(tr("가로"), "landscape")
+        self.cmb_orient.setToolTip(tr("자동: 시트마다 원본 쪽이 더 크게 들어가는 방향.\n"
+                                      "가로·세로 쪽수는 세로 용지 기준이고, 가로 용지가 되면 서로 바꿔 놓는다."))
+        gf.addRow(tr("용지 방향:"), self.cmb_orient)
         self.cmb_nup = QComboBox()
         self.cmb_nup.addItem(tr("1장 (1-up)"), 1)            # 261021-3(§11.10.2): 1단 — 쪽 하나를 용지 하나에
         self.cmb_nup.addItem(tr("2장 (2-up)"), 2)
-        self.cmb_nup.addItem(tr("4장 (4-up, 2열×2행)"), 4)   # 260617-6
-        self.cmb_nup.addItem(tr("6장 (6-up, 2열×3행)"), 6)
-        self.cmb_nup.addItem(tr("8장 (8-up, 2열×4행)"), 8)
-        self._set_combo(self.cmb_nup, int(s.get("nup", 2)))
+        self.cmb_nup.addItem(tr("4장 (4-up)"), 4)            # 260617-6
+        self.cmb_nup.addItem(tr("6장 (6-up)"), 6)
+        self.cmb_nup.addItem(tr("8장 (8-up)"), 8)
+        self.cmb_nup.addItem(tr("사용자 지정"), 0)            # 261115-1: 드롭다운이 위 표와 다를 때
         gf.addRow(tr("한 장에 배치:"), self.cmb_nup)
+        self.cmb_cols = QComboBox(); self.cmb_rows = QComboBox()
+        for _n in range(1, GRID_MAX + 1):
+            self.cmb_cols.addItem(str(_n), _n); self.cmb_rows.addItem(str(_n), _n)
+        gf.addRow(tr("가로 쪽수:"), self.cmb_cols)
+        gf.addRow(tr("세로 쪽수:"), self.cmb_rows)
+        self._grid_busy = False
+        self._set_grid(s)
+        self.cmb_orient.currentIndexChanged.connect(self._on_orient_changed)
+        self.cmb_nup.currentIndexChanged.connect(self._on_nup_pick)
+        self.cmb_cols.currentIndexChanged.connect(self._on_grid_changed)
+        self.cmb_rows.currentIndexChanged.connect(self._on_grid_changed)
         self.cmb_fit = QComboBox()
         self.cmb_fit.addItem(tr("맞춤 (비율 유지·여백 생김)"), "contain")
         self.cmb_fit.addItem(tr("꽉 채움 (비율 유지·가장자리 잘림)"), "cover")
@@ -238,15 +258,15 @@ class TwoUpSettingsDialog(QDialog):
         root.addWidget(bb)
 
         # 콤보가 가장 긴 항목 폭을 강제하지 않도록 — 라벨이 가려지는 문제 방지
-        for cmb in (self.cmb_size, self.cmb_nup, self.cmb_fit, self.cmb_duplex,
-                    self.cmb_fpos, self.cmb_fshape, self.cmb_ffont):
+        for cmb in (self.cmb_size, self.cmb_orient, self.cmb_nup, self.cmb_cols, self.cmb_rows,
+                    self.cmb_fit, self.cmb_duplex, self.cmb_fpos, self.cmb_fshape, self.cmb_ffont):
             cmb.setSizeAdjustPolicy(
                 QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
             cmb.setMinimumContentsLength(6)
 
         # 용지/배치/쪽번호 변경 → 미리보기 재렌더
-        for w in (self.cmb_size, self.cmb_nup, self.cmb_fit, self.cmb_duplex, self.cmb_fpos):
-            w.currentIndexChanged.connect(self._sync_preview)
+        for w in (self.cmb_size, self.cmb_fit, self.cmb_duplex, self.cmb_fpos):
+            w.currentIndexChanged.connect(self._sync_preview)   # 방향·배치·쪽수는 _on_* 가 다 맞춘 뒤 한 번 그린다
         self.cmb_fshape.currentIndexChanged.connect(self._sync_preview)
         for sp in (self.sp_gutter, self.sp_fsize, self.sp_lwidth,
                    self.sp_fpad, self.sp_falpha):
@@ -301,6 +321,67 @@ class TwoUpSettingsDialog(QDialog):
             if cmb.itemData(i) == data:
                 cmb.setCurrentIndex(i); return
 
+    # ── 261115-1(§11.10.3): 용지 방향·가로/세로 쪽수·빠른 선택 ──
+    def _set_grid(self, s):
+        """설정 → 세 칸. 옛 설정(orient 없음)은 종전 결과와 같은 칸으로(`grid_choice` — 1·2-up 은 자동)."""
+        orient, cols, rows = grid_choice(s)
+        self._grid_busy = True
+        try:
+            self._set_combo(self.cmb_orient, orient)
+            self._orient_prev = orient
+            self._set_combo(self.cmb_cols, cols)
+            self._set_combo(self.cmb_rows, rows)
+            self._sync_nup_combo()
+        finally:
+            self._grid_busy = False
+
+    def _sync_nup_combo(self):
+        """드롭다운이 빠른 선택 표와 같으면 그 항목, 다르면 '사용자 지정'."""
+        orient = self.cmb_orient.currentData()
+        cur = (self.cmb_cols.currentData(), self.cmb_rows.currentData())
+        hit = next((n for n in (1, 2, 4, 6, 8) if nup_preset_grid(n, orient) == cur), 0)
+        self._set_combo(self.cmb_nup, hit)
+
+    def _on_nup_pick(self, *_):
+        if self._grid_busy:
+            return
+        g = nup_preset_grid(self.cmb_nup.currentData(), self.cmb_orient.currentData())
+        if g is not None:                     # '사용자 지정' 은 드롭다운을 건드리지 않는다
+            self._grid_busy = True
+            try:
+                self._set_combo(self.cmb_cols, g[0]); self._set_combo(self.cmb_rows, g[1])
+            finally:
+                self._grid_busy = False
+        self._sync_preview()
+
+    def _on_grid_changed(self, *_):
+        if self._grid_busy:
+            return
+        self._grid_busy = True
+        try:
+            self._sync_nup_combo()
+        finally:
+            self._grid_busy = False
+        self._sync_preview()
+
+    def _on_orient_changed(self, *_):
+        """가로 ↔ 세로·자동으로 바꾸면 가로·세로 쪽수를 맞바꿔(2×3 ↔ 3×2) 칸 모양을 비슷하게 둔다.
+        자동의 쪽수는 세로 용지 기준이라 세로 ↔ 자동은 그대로."""
+        if self._grid_busy:
+            return
+        new = self.cmb_orient.currentData()
+        prev = getattr(self, "_orient_prev", new)
+        self._orient_prev = new
+        self._grid_busy = True
+        try:
+            if (prev == "landscape") != (new == "landscape"):
+                c, r = self.cmb_cols.currentData(), self.cmb_rows.currentData()
+                self._set_combo(self.cmb_cols, r); self._set_combo(self.cmb_rows, c)
+            self._sync_nup_combo()
+        finally:
+            self._grid_busy = False
+        self._sync_preview()
+
     def _update_doc_odd(self, *_):
         on = self.chk_docbreak.isChecked() and self.cmb_duplex.currentData() != "none"
         self.chk_doc_odd.setVisible(on and not self._single)
@@ -333,7 +414,11 @@ class TwoUpSettingsDialog(QDialog):
 
     def _base_settings(self) -> dict:
         return {
-            "nup": self.cmb_nup.currentData(),
+            # 261115-1: 방향·가로·세로가 실제 값, nup 은 곱(참고용 — 옛 판이 읽어도 쪽 수가 맞게)
+            "orient": self.cmb_orient.currentData(),
+            "cols": self.cmb_cols.currentData(),
+            "rows": self.cmb_rows.currentData(),
+            "nup": self.cmb_cols.currentData() * self.cmb_rows.currentData(),
             "page_size": self.cmb_size.currentData(),
             "fit_mode": self.cmb_fit.currentData(),
             "center": self.chk_center.isChecked(),
@@ -482,7 +567,7 @@ class TwoUpSettingsDialog(QDialog):
     def apply_settings(self, p):
         s = merge_twoup_settings(p)
         self._set_combo(self.cmb_size, s.get("page_size", "A4"))
-        self._set_combo(self.cmb_nup, int(s.get("nup", 2)))
+        self._set_grid(s)                     # 261115-1: 방향·가로/세로 쪽수·빠른 선택
         self._set_combo(self.cmb_fit, s.get("fit_mode", "contain"))
         self.chk_center.setChecked(bool(s.get("center", True)))
         self._set_combo(self.cmb_duplex, duplex_choice(s))

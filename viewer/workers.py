@@ -322,6 +322,140 @@ class WarmReadWorker(QObject):
                 self.finished.emit()
 
 
+class ThumbRenderer(QObject):
+    """261115-16(응답성 SOT §4.4): 쪽 썸네일 그림을 **배경 스레드**에서 — 메인은 보이는 칸을 골라 맡기고 받은 그림으로 카드만 합성한다.
+
+    스레드는 **자기** `PdfDocument` 를 연다(저장된 암호까지) — 메인의 문서를 넘기지 않는다. `request` 는 기다리는 줄을
+    **바꾼다**(지나간 칸은 그리지 않는다). `set_document` 는 세대를 올린다 — 늦게 온 앞 문서의 그림은 받는 쪽이 `gen()` 과 견줘 버린다.
+    일이 없으면 `IDLE_EXIT_S` 뒤 문서를 닫고 스레드가 끝난다(다음 `request` 가 새로 띄운다).
+    받는 쪽은 `ready(gen, page, dpi, QImage)` — QImage 는 스레드에서 만들어도 되고, QPixmap 은 메인에서 만든다."""
+    ready = pyqtSignal(int, int, int, object)
+    IDLE_EXIT_S = 5.0
+    YIELD_S = _pacing.MIN_SLEEP_S   # 쪽마다 `pacing.pace` — 점유율 `BG_DUTY`(§4 ⑦)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._cv = _threading.Condition()
+        self._gen = 0
+        self._path = None
+        self._want = []          # [(쪽, dpi)] — 앞부터
+        self._inflight = False   # 하나 그리는 중(검사의 `busy`)
+        self._doc_open = False   # 스레드가 문서를 열어 두었는가 — `wait_released`
+        self._thread = None
+
+    def gen(self) -> int:
+        return self._gen
+
+    def set_document(self, path) -> None:
+        with self._cv:
+            self._gen += 1
+            self._path = str(path) if path else None
+            self._want = []
+            self._cv.notify_all()
+
+    def request(self, pages, dpi: int) -> None:
+        with self._cv:
+            if not self._path:
+                return
+            self._want = [(int(p), int(dpi)) for p in pages]
+            if self._want and (self._thread is None or not self._thread.is_alive()):
+                self._thread = _threading.Thread(target=self._loop, name="polypdf-thumbs", daemon=True)
+                self._thread.start()
+            self._cv.notify_all()
+
+    def wait_released(self, timeout: float = 1.0) -> bool:
+        """`set_document(None)` 뒤 스레드가 문서를 닫을 때까지(길어야 한 장 그리는 동안) 기다린다 — 파일 작업(이름 바꾸기·지우기) 앞 핸들 놓기."""
+        with self._cv:
+            return self._cv.wait_for(lambda: not self._doc_open, timeout)
+
+    def busy(self) -> bool:
+        """검사용 — 맡긴 것이 남았는가."""
+        with self._cv:
+            return bool(self._want) or self._inflight
+
+    def _loop(self):
+        doc, doc_gen = None, -1
+        try:
+            while True:
+                drop = False
+                with self._cv:
+                    if not self._want:
+                        # 문서가 바뀌었으면(닫기·이름 바꾸기 앞 비우기 포함) 쉬는 중에도 곧바로 닫는다 — 열어 둔 채면 Windows 가 그 파일의 이름 바꾸기·지우기를 막는다
+                        if doc is not None and doc_gen != self._gen:
+                            drop = True
+                        else:
+                            woke = self._cv.wait(self.IDLE_EXIT_S)
+                            if not self._want:
+                                if doc is not None and doc_gen != self._gen:
+                                    drop = True
+                                elif not woke:
+                                    if self._thread is _threading.current_thread():
+                                        self._thread = None
+                                    return
+                                else:
+                                    continue
+                    if not drop:
+                        gen, path = self._gen, self._path
+                        page, dpi = self._want.pop(0)
+                        self._inflight = True
+                if drop:
+                    try:
+                        doc.close()
+                    except Exception:
+                        pass
+                    doc, doc_gen = None, -1
+                    self._set_open(False)
+                    continue
+                if doc_gen != gen:
+                    if doc is not None:
+                        try:
+                            doc.close()
+                        except Exception:
+                            pass
+                        self._set_open(False)
+                    doc, doc_gen = None, gen
+                    try:
+                        from viewer.pdf_doc import PdfDocument
+                        doc = PdfDocument(path)
+                        if doc.needs_password:
+                            from viewer import secure_store
+                            pw = secure_store.recall_any(path)
+                            if pw:
+                                doc.authenticate(pw)
+                    except Exception:
+                        doc = None
+                    self._set_open(doc is not None)
+                if doc is None:
+                    self._inflight = False
+                    continue
+                try:
+                    from PyQt6.QtGui import QImage
+                    rp = doc.render_thumbnail(page, dpi=dpi)
+                    img = QImage(rp.samples, rp.width, rp.height, rp.width * 3, QImage.Format.Format_RGB888).copy()
+                except Exception:
+                    self._inflight = False
+                    continue
+                if gen == self._gen:
+                    try:
+                        self.ready.emit(gen, page, dpi, img)
+                    except RuntimeError:             # 받는 쪽이 지워졌다
+                        return
+                self._inflight = False
+                _pacing.pace(self)                   # §4 ⑦ 점유율 — 그린 만큼 쉰다(메인이 GIL 을 받을 틈)
+        finally:
+            if doc is not None:
+                try:
+                    doc.close()
+                except Exception:
+                    pass
+            self._set_open(False)
+
+    def _set_open(self, on: bool) -> None:
+        with self._cv:
+            self._doc_open = bool(on)
+            self._cv.notify_all()
+
+
 class PdfPeekWorker(QObject):
     """261108-17(응답성 SOT §4.9): 책갈피창이 **지금 그 파일 하나**의 표식·목차가 필요할 때(단일 파일 열기·펼치기·
     '모두 펼치기') 메인 대신 여는 배경 읽기. 처음 보는 파일은 백신이 검사하는 동안 `fitz.open` 이 1초 넘게 선다 —

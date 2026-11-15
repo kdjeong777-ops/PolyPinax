@@ -98,14 +98,27 @@ class DocInfoMixin:
             st["info"] = doc_info.cached(path)                  # 지난 값으로 먼저 — 배경 값이 오면 바꾼다
             self._doc_info_gen += 1
             st["gen"] = self._doc_info_gen
-            from viewer.workers import run_in_thread
-            w = doc_info.DocInfoWorker(st["gen"], i, path)
-            w.done.connect(self._doc_info_done)
-            st["worker"] = w
-            run_in_thread(w, self._doc_info_keep)
+            # 261115-16(응답성 SOT §4.4): 연 직후의 본문·썸네일과 겹치지 않게 조금 뒤에 — 쪽마다 글자층 판정이 GIL 을 나눠 쓴다
+            if st.get("info") is None and self.DOC_INFO_DELAY_MS > 0:
+                from PyQt6.QtCore import QTimer
+                QTimer.singleShot(self.DOC_INFO_DELAY_MS, lambda k=i, g=st["gen"]: self._doc_info_start(k, g))
+            else:
+                self._doc_info_start(i, st["gen"])
         st["facts"] = facts
         host.info_line(i).set_info(doc_info.doc_info_line(facts, st.get("info")), _hint())
         self._doc_info_dialog_refresh(i)
+
+    DOC_INFO_DELAY_MS = 1200      # 261115-16: 보통 열기에서 배경 읽기를 늦추는 시간(캐시가 있으면 곧바로) — 검사는 0 으로
+
+    def _doc_info_start(self, i: int, gen: int):
+        st = self._doc_info_state[i] if 0 <= i < len(self._doc_info_state) else {}
+        if st.get("gen") != gen or st.get("worker") is not None or not st.get("path"):
+            return                                              # 그 사이 다른 파일을 열었다 — 그 열기가 제 것을 건다
+        from viewer.workers import run_in_thread
+        w = doc_info.DocInfoWorker(gen, i, st["path"])
+        w.done.connect(self._doc_info_done)
+        st["worker"] = w
+        run_in_thread(w, self._doc_info_keep)
 
     def _doc_info_done(self, gen: int, i: int, path: str, info: dict):
         st = self._doc_info_state[i] if 0 <= i < len(self._doc_info_state) else {}

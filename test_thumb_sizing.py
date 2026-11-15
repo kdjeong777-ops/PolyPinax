@@ -32,6 +32,7 @@ chk(ch_p > ch_l, "세로 카드 높이 > 가로 카드 높이", f"세로={ch_p} 
 pt.load_document(str(tmp / "T.pdf"))
 app.processEvents()
 pt._render_visible(); app.processEvents()
+import test_fixtures; test_fixtures.wait_thumbs(pt)   # 261115-16: 쪽 그림은 배경이 그린다
 
 # 2) 렌더 후 항목 셀 높이: 세로 페이지 > 가로 페이지(간격 적정)
 h0 = pt.list.item(0).sizeHint().height()

@@ -14,6 +14,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from pathlib import Path
 
 import fitz
+import test_fixtures
 from PyQt6.QtCore import QStandardPaths
 QStandardPaths.setTestModeEnabled(True)
 from PyQt6.QtWidgets import QApplication
@@ -33,8 +34,9 @@ def settle(w, n=400):
     for _ in range(n):
         app.processEvents()
         if not w._render_timer.isActive():
+            test_fixtures.wait_thumbs(w)          # 261115-16: 쪽 그림은 배경이 그린다 — 받을 때까지
             app.processEvents()
-            if not w._render_timer.isActive():
+            if not w._render_timer.isActive() and not w.thumbs_busy():
                 return
         w._render_visible()
 

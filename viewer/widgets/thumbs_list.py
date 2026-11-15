@@ -153,6 +153,10 @@ class PageThumbs(QWidget):
         self._render_hold = False
         self._visible_only = False
         self._seed_pix = {}           # {쪽: 본문이 그린 픽스맵} — 그 쪽 썸네일은 그것을 줄여 쓴다(`seed_page`)
+        # 261115-16(응답성 SOT §4.4): 쪽 그림은 배경 스레드 — 메인은 받은 그림으로 카드만 합성
+        from viewer.workers import ThumbRenderer
+        self._bg = ThumbRenderer(self)
+        self._bg.ready.connect(self._on_bg_thumb)
         # 260915-1(마스터 §4.7.7): 목록 순서가 바뀌면(Alt+↑/↓·Delete·끌어 놓기·붙여넣기) 한 번만 알린다.
         #   끌어 놓기는 Qt 가 행을 넣고 지우는 신호로만 알 수 있어 모델 신호를 모은다.
         #   간격 0 타이머는 쓰지 않는다(응답성 SOT §6) — 한 번만 예약하는 깃발로 모은다.
@@ -163,6 +167,7 @@ class PageThumbs(QWidget):
 
     # 260906-7: 한 번에 붙잡는 시간 상한(ms) — 넘기면 남은 썸네일은 다음 틱으로.
     RENDER_SLICE_MS = 30
+    BG_RENDER = True        # 261115-16: 쪽 그림은 배경(`ThumbRenderer`) — 검사가 종전 메인 그리기와 견줄 때 끈다
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
@@ -1156,6 +1161,8 @@ class PageThumbs(QWidget):
         self._seed_pix = {}
         self._doc_path = None
         self._doc_mtime = None
+        self._bg.set_document(None)                 # 261115-16: 배경 스레드의 핸들도 — 파일 작업 앞 비우기라 닫힐 때까지 기다린다
+        self._bg.wait_released(1.0)
 
     def load_document(self, file_path):
         path = Path(file_path)
@@ -1194,6 +1201,7 @@ class PageThumbs(QWidget):
         self._iconed = {}
         self._seed_pix = {}                         # 261114-5: 앞 문서 표지는 버린다
 
+        self._bg.set_document(None)                 # 261115-16: 앞 문서의 늦은 그림은 버린다
         if not path.exists() or path.suffix.lower() != ".pdf":
             self._doc_path = None; self._doc_mtime = None
             return
@@ -1208,6 +1216,7 @@ class PageThumbs(QWidget):
                     self._doc.authenticate(pw)
         except Exception:
             return
+        self._bg.set_document(str(path))            # 261115-16: 배경도 같은 파일을 따로 연다
         self._orig_count = self._doc.page_count      # 260606-22: 페이지 편집 기준
         # 260611-12: 0쪽 종횡비로 기본 셀 높이 산정(대부분 문서는 방향 동일).
         #   혼합 방향(세로 표지+가로 본문 등)은 렌더 시 항목별로 정확히 보정됨.
@@ -1285,6 +1294,10 @@ class PageThumbs(QWidget):
         vr = self.list.viewport().rect()
         viewport = vr if self._visible_only else vr.adjusted(0, -vr.height(), 0, vr.height())
         deadline = _time.monotonic() + self.RENDER_SLICE_MS / 1000.0
+        # 261115-16(응답성 SOT §4.4): 쪽 그림은 배경(`ThumbRenderer`)에 맡긴다 — 메인은 고르기·카드 합성만.
+        #   메인이 그대로 그리는 것: 본문 픽스맵을 쓰는 표지(`seed_page`)·끼운 쪽(외부 PDF).
+        bg = self._bg if self.BG_RENDER else None
+        need = []
         for i in range(self.list.count()):
             item = self.list.item(i)
             rect = self.list.visualItemRect(item)
@@ -1292,18 +1305,26 @@ class PageThumbs(QWidget):
                 continue
             if not item.icon().isNull():
                 continue
+            page_idx = item.data(Qt.ItemDataRole.UserRole)
+            seed = None
+            if not isinstance(page_idx, (tuple, list)) and self._seed_pix:
+                seed = self._seed_pix.get(int(page_idx))
+                if seed is not None and (seed.isNull() or self._rotations.get(int(page_idx), 0)):
+                    seed = None
+            if bg is not None and seed is None and not isinstance(page_idx, (tuple, list)):
+                need.append(int(page_idx))
+                continue
             if _time.monotonic() >= deadline:
                 # 남은 것은 다음 틱에 — 여기서 돌아가야 창이 메시지를 펌프한다.
                 if not self._render_timer.isActive():
                     self._render_timer.start()
-                return
-            page_idx = item.data(Qt.ItemDataRole.UserRole)
+                break
             if isinstance(page_idx, (tuple, list)):     # 260822: 붙여넣기(외부 PDF) 썸네일
                 self._render_ext_item(item, str(page_idx[0]), int(page_idx[1]))
                 continue
             try:
-                seed = self._seed_pix.pop(int(page_idx), None) if self._seed_pix else None
-                if seed is not None and not seed.isNull() and not self._rotations.get(int(page_idx), 0):
+                if seed is not None:
+                    self._seed_pix.pop(int(page_idx), None)
                     pix = QPixmap(seed)                      # 261114-5(응답성 SOT §4.7 ⑤): 본문이 막 그린 표지 — 다시 그리지 않는다
                     pix.setDevicePixelRatio(1.0)
                 else:
@@ -1311,80 +1332,111 @@ class PageThumbs(QWidget):
                     qimg = QImage(rp.samples, rp.width, rp.height,
                                   rp.width * 3, QImage.Format.Format_RGB888)
                     pix = QPixmap.fromImage(qimg)
-                # 260611-18(A5): 삽입 이미지(개체) 베이킹 — 회전 전(정규화 좌표) 합성
-                if self._img_resolver is not None:
-                    bp = QPainter(pix)
-                    bp.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-                    bp.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
-                    self._paint_thumb_images(bp, page_idx, pix.width(), pix.height())
-                    bp.end()
-                rot = self._rotations.get(int(page_idx), 0)   # 260609-15(A1): 회전
-                if rot:
-                    pix = pix.transformed(QTransform().rotate(rot),
-                                          Qt.TransformationMode.SmoothTransformation)
-                pix = pix.scaled(
-                    self._thumb_size,
-                    Qt.AspectRatioMode.KeepAspectRatio,
-                    Qt.TransformationMode.SmoothTransformation,
-                )
-                # 260606-26/29: 썸네일 아래 번호 띠 합성 + 패널 가운데 정렬.
-                #   투명 캔버스(폭=아이콘 가용폭) 중앙에 흰 카드(썸네일+번호)를 배치.
-                band = self.NUM_BAND
-                card_w = pix.width()
-                card_h = pix.height() + band
-                # 260606-30: 캔버스 폭 = 실제 아이콘(=뷰포트 가용) 폭 → 정확한 가운데
-                canvas_w = max(self.list.iconSize().width(), card_w)
-                from PyQt6.QtCore import QRect
-                bordered = QPixmap(canvas_w, card_h)
-                bordered.fill(QColor(0, 0, 0, 0))            # 투명
-                x0 = (canvas_w - card_w) // 2                # 가운데 정렬 오프셋
-                # 260609-21(J4): 테마·꾸밈에 따른 번호 띠 색
-                from viewer import theme as _theme
-                dark = _theme.is_dark()
-                deco = int(page_idx) in self._decorated
-                if deco:
-                    # 260611-18(B1): 다크모드 꾸밈 띠가 너무 진해 구분이 안 돼 → 더 연한 파랑
-                    band_bg = QColor("#4f86c6") if dark else QColor("#cfe3ff")  # 다크: 밝은 파랑
-                    band_fg = QColor("#ffffff") if dark else QColor("#0d3b66")
-                    band_bd = QColor("#7aa8e0") if dark else QColor("#3a6ea5")
-                elif dark:
-                    band_bg = QColor("#000000"); band_fg = QColor("#ffffff"); band_bd = QColor("#888888")
-                else:
-                    band_bg = QColor("#ffffff"); band_fg = QColor("#333333"); band_bd = QColor("#bbbbbb")
-                p = QPainter(bordered)
-                p.fillRect(x0, 0, card_w, pix.height(), QColor("white"))  # 썸네일 영역(흰 종이)
-                p.fillRect(x0, pix.height(), card_w, band, band_bg)       # 번호 띠
-                p.drawPixmap(x0, 0, pix)
-                p.setPen(QPen(band_bd))
-                p.drawRect(x0, 0, card_w - 1, card_h - 1)
-                p.drawLine(x0, pix.height(), x0 + card_w - 1, pix.height())
-                p.setPen(band_fg)
-                p.drawText(QRect(x0, pix.height(), card_w, band),
-                           Qt.AlignmentFlag.AlignCenter,
-                           str(int(page_idx) + 1))
-                # 260609-14(D5): 숨김 페이지 — 흐리게 + 우측 회색 띠 '숨김'
-                if int(page_idx) in self._hidden_pages:
-                    p.fillRect(x0, 0, card_w, pix.height(), QColor(255, 255, 255, 150))
-                    bw = 16
-                    bx = x0 + card_w - bw
-                    p.fillRect(bx, 0, bw, pix.height(), QColor(110, 110, 110, 230))
-                    p.save()
-                    p.translate(bx + bw // 2, pix.height() // 2)
-                    p.rotate(90)
-                    p.setPen(QColor("white"))
-                    p.drawText(QRect(-pix.height() // 2, -bw // 2, pix.height(), bw),
-                               Qt.AlignmentFlag.AlignCenter, tr("숨김"))
-                    p.restore()
-                p.end()
-                item.setIcon(QIcon(bordered))
-                self._iconed[id(item)] = item
-                # 260611-12: 실제 카드 높이로 셀 높이 보정(가로/세로 페이지별 간격 적정)
-                desired_h = bordered.height() + self.ITEM_MARGIN
-                if item.sizeHint().height() != desired_h:
-                    item.setSizeHint(QSize(self.list.iconSize().width(), desired_h))
+                self._set_thumb_icon(item, page_idx, pix)
             except Exception:
                 pass
+        if bg is not None:
+            bg.request(need, self._thumb_dpi())     # 기다리는 줄을 지금 보이는 칸으로 바꾼다(비면 지나간 칸을 버린다)
         self._drop_far_icons(deadline)
+
+    def _on_bg_thumb(self, gen: int, page: int, dpi: int, img) -> None:
+        """261115-16: 배경이 그린 쪽 그림 — 낡은 문서·해상도면 버리고, 아직 빈 칸이면 카드를 합성한다."""
+        if gen != self._bg.gen() or not self._doc or dpi != self._thumb_dpi():
+            return
+        row = self.row_of_page(int(page))
+        if row < 0:
+            return
+        item = self.list.item(row)
+        if item is None or not item.icon().isNull():
+            return
+        h0 = item.sizeHint().height()
+        try:
+            self._set_thumb_icon(item, int(page), QPixmap.fromImage(img))
+        except Exception:
+            return
+        if item.sizeHint().height() != h0 and not self._render_hold:
+            self._render_timer.start()        # 칸 높이가 바뀌면 보이는 칸이 달라진다 — 다시 고른다(16ms 한 번으로 모인다)
+        if len(self._iconed) > self.ICON_KEEP_MAX:
+            import time as _time
+            self._drop_far_icons(_time.monotonic() + self.RENDER_SLICE_MS / 1000.0)
+
+    def thumbs_busy(self) -> bool:
+        """검사용 — 배경에 맡긴 썸네일이 남았는가."""
+        return bool(self.BG_RENDER and self._bg.busy())
+
+    def _set_thumb_icon(self, item, page_idx, pix) -> None:
+        """쪽 그림 → 카드(삽입 그림·회전·크기·번호 띠·숨김) 아이콘. 메인에서만."""
+        # 260611-18(A5): 삽입 이미지(개체) 베이킹 — 회전 전(정규화 좌표) 합성
+        if self._img_resolver is not None:
+            bp = QPainter(pix)
+            bp.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+            bp.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
+            self._paint_thumb_images(bp, page_idx, pix.width(), pix.height())
+            bp.end()
+        rot = self._rotations.get(int(page_idx), 0)   # 260609-15(A1): 회전
+        if rot:
+            pix = pix.transformed(QTransform().rotate(rot),
+                                  Qt.TransformationMode.SmoothTransformation)
+        pix = pix.scaled(
+            self._thumb_size,
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        )
+        # 260606-26/29: 썸네일 아래 번호 띠 합성 + 패널 가운데 정렬.
+        #   투명 캔버스(폭=아이콘 가용폭) 중앙에 흰 카드(썸네일+번호)를 배치.
+        band = self.NUM_BAND
+        card_w = pix.width()
+        card_h = pix.height() + band
+        # 260606-30: 캔버스 폭 = 실제 아이콘(=뷰포트 가용) 폭 → 정확한 가운데
+        canvas_w = max(self.list.iconSize().width(), card_w)
+        from PyQt6.QtCore import QRect
+        bordered = QPixmap(canvas_w, card_h)
+        bordered.fill(QColor(0, 0, 0, 0))            # 투명
+        x0 = (canvas_w - card_w) // 2                # 가운데 정렬 오프셋
+        # 260609-21(J4): 테마·꾸밈에 따른 번호 띠 색
+        from viewer import theme as _theme
+        dark = _theme.is_dark()
+        deco = int(page_idx) in self._decorated
+        if deco:
+            # 260611-18(B1): 다크모드 꾸밈 띠가 너무 진해 구분이 안 돼 → 더 연한 파랑
+            band_bg = QColor("#4f86c6") if dark else QColor("#cfe3ff")  # 다크: 밝은 파랑
+            band_fg = QColor("#ffffff") if dark else QColor("#0d3b66")
+            band_bd = QColor("#7aa8e0") if dark else QColor("#3a6ea5")
+        elif dark:
+            band_bg = QColor("#000000"); band_fg = QColor("#ffffff"); band_bd = QColor("#888888")
+        else:
+            band_bg = QColor("#ffffff"); band_fg = QColor("#333333"); band_bd = QColor("#bbbbbb")
+        p = QPainter(bordered)
+        p.fillRect(x0, 0, card_w, pix.height(), QColor("white"))  # 썸네일 영역(흰 종이)
+        p.fillRect(x0, pix.height(), card_w, band, band_bg)       # 번호 띠
+        p.drawPixmap(x0, 0, pix)
+        p.setPen(QPen(band_bd))
+        p.drawRect(x0, 0, card_w - 1, card_h - 1)
+        p.drawLine(x0, pix.height(), x0 + card_w - 1, pix.height())
+        p.setPen(band_fg)
+        p.drawText(QRect(x0, pix.height(), card_w, band),
+                   Qt.AlignmentFlag.AlignCenter,
+                   str(int(page_idx) + 1))
+        # 260609-14(D5): 숨김 페이지 — 흐리게 + 우측 회색 띠 '숨김'
+        if int(page_idx) in self._hidden_pages:
+            p.fillRect(x0, 0, card_w, pix.height(), QColor(255, 255, 255, 150))
+            bw = 16
+            bx = x0 + card_w - bw
+            p.fillRect(bx, 0, bw, pix.height(), QColor(110, 110, 110, 230))
+            p.save()
+            p.translate(bx + bw // 2, pix.height() // 2)
+            p.rotate(90)
+            p.setPen(QColor("white"))
+            p.drawText(QRect(-pix.height() // 2, -bw // 2, pix.height(), bw),
+                       Qt.AlignmentFlag.AlignCenter, tr("숨김"))
+            p.restore()
+        p.end()
+        item.setIcon(QIcon(bordered))
+        self._iconed[id(item)] = item
+        # 260611-12: 실제 카드 높이로 셀 높이 보정(가로/세로 페이지별 간격 적정)
+        desired_h = bordered.height() + self.ITEM_MARGIN
+        if item.sizeHint().height() != desired_h:
+            item.setSizeHint(QSize(self.list.iconSize().width(), desired_h))
 
     def _drop_far_icons(self, deadline=None) -> int:
         """그린 아이콘이 `ICON_KEEP_MAX` 를 넘으면 보이는 곳 ± `ICON_KEEP_SCREENS` 화면 밖 아이콘을 비운다(돌아오면 다시 그린다).

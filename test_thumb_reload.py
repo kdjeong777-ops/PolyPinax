@@ -60,6 +60,7 @@ chk(pt.list.count() == 3, "⑤ 목록만 비운 경우에도 가드가 걸리지
 
 # 6) 렌더까지 실제로 되는지(빈 아이콘이 아님)
 pt._render_visible(); app.processEvents()
+import test_fixtures; test_fixtures.wait_thumbs(pt)   # 261115-16: 쪽 그림은 배경이 그린다
 chk(not pt.list.item(0).icon().isNull(), "⑥ 복귀 후 썸네일 이미지 렌더됨")
 
 # 7) 앱 경로 검증 — 이미지 분기가 clear_document() 를 쓰는지(상태 초기화 누락 재발 방지)

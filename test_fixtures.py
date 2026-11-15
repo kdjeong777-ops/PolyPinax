@@ -329,6 +329,19 @@ def wait_main_open(mw, timeout: float = 10.0) -> bool:
     return not mw._main_opening()
 
 
+def wait_thumbs(pt, timeout: float = 10.0) -> bool:
+    """261115-16(응답성 SOT §4.4): 쪽 썸네일 그림은 배경(`ThumbRenderer`)이 그린다 — `_render_visible()` 뒤 아이콘을 볼 검사는 이것으로 기다린다."""
+    import time
+    from PyQt6.QtWidgets import QApplication
+    t0 = time.monotonic()
+    while time.monotonic() - t0 < timeout:
+        QApplication.processEvents()
+        if not getattr(pt, "thumbs_busy", lambda: False)():
+            QApplication.processEvents()
+            return True
+        time.sleep(0.01)
+    return False
+
 def autotag_off(mw=None) -> None:
     """261114-19(검사 작성 SOT §14.7.2): 자동 태그와 상관없는 검사에서 PDF 자동 태그를 끈다 — 기본 켬(261113-10)이라
     폴더를 열면 배경 계산이 목록 글(`·#태그` 꼬리)·첫 실행 요약 창을 바꿔 검사가 흔들린다.

@@ -75,6 +75,7 @@ try:
         return _orig(page_idx, dpi=dpi) if dpi is not None else _orig(page_idx)
 
     pt._doc.render_thumbnail = _slow
+    pt.BG_RENDER = False          # 261115-16: 보통은 배경(`ThumbRenderer`)이 그린다 — 여기는 메인이 그리는 길(표지·끼운 쪽)의 시간 예산을 본다
     pt._render_timer.stop()
     t0 = time.time()
     pt._render_visible()
@@ -95,6 +96,7 @@ try:
     chk(done >= min(6, pt.list.count()),
         "③ 미룬 것도 결국 다 그려진다", f"{done}장")
     pt._doc.render_thumbnail = _orig
+    pt.BG_RENDER = True
 
     # ── ④-b 260906-8: 태그 계산도 의무 ①② 를 지킨다 ────────────────────
     #   `extract_features` 는 색인에 없는 파일에서 fitz 로 폴백해 **파일을 연다**.

@@ -380,7 +380,7 @@ def check_profile_support(exe):
 def seed():
     """실제 설정을 **읽어서** 시험 프로필로 복사한다(받아 둔 업데이트·창 기록 제외). 시험 프로필이 있으면 지우고 새로.
     261102-1: MSIX 셸이면 관리 공유로 읽는다(`real_profile` — 섞인 보기를 복사하면 시드 색인이 '손상' 으로 보였다)."""
-    src, ok = real_profile.real_dir()
+    src, ok = real_profile.real_dir(REAL.name)          # 261115-22: 재는 판의 이름(set_exe) — 기본값 'PolyPDF' 는 이사 뒤 옛 폴더였다
     if not ok:
         raise SystemExit(real_profile.MIXED_MSG)
     drop()

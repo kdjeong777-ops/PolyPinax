@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
-"""261102-1: 사용자 **실제** 설정 폴더(`%APPDATA%\\LocalTools\\PolyPDF`)를 읽는 경로 — 마스터 §14.2.1.
+"""261102-1: 사용자 **실제** 설정 폴더(`%APPDATA%\\LocalTools\\<APP_ID>`)를 읽는 경로 — 마스터 §14.2.1.
+261115-22: 폴더 이름은 `viewer.branding` 의 지금 이름(`APP_ID`) — 이사 전 PC(새 폴더가 아직 없음)만 옛 이름(`OLD_ID`)을 본다.
 
 Claude 데스크톱(MSIX 패키지)에서 띄운 셸·파이썬과 그 자식은 `%APPDATA%` 아래를 **파일 단위로** 패키지 복사본과 섞어 본다
 (`%LOCALAPPDATA%\\Packages\\<패키지>\\LocalCache\\Roaming\\…` 에 있는 파일은 복사본, 없는 파일은 실제 것). 2026-11-02 실측:
@@ -17,6 +18,9 @@ import os
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from viewer import branding as _br                      # noqa: E402  이름은 branding 한 곳에서
+
 
 def admin_share(p: Path) -> Path:
     """`C:\\Users\\…` → `\\\\localhost\\C$\\Users\\…`."""
@@ -24,8 +28,9 @@ def admin_share(p: Path) -> Path:
     return Path("\\\\localhost\\%s$%s" % (drive.rstrip(":"), rest))
 
 
-def package_copies(name: str = "PolyPDF") -> list:
+def package_copies(name: str | None = None) -> list:
     """이 폴더의 패키지 복사본(있으면 셸이 섞어 본다)."""
+    name = name or current_name()
     base = Path(os.environ.get("LOCALAPPDATA", "")) / "Packages"
     try:
         return [d for d in base.glob("*/LocalCache/Roaming/LocalTools/" + name) if d.is_dir()]
@@ -33,9 +38,27 @@ def package_copies(name: str = "PolyPDF") -> list:
         return []
 
 
-def real_dir(name: str = "PolyPDF") -> tuple[Path, bool]:
-    """(읽을 경로, 믿을 수 있나). Windows 는 관리 공유가 되면 그것 · 안 되면 그대로(복사본 폴더가 있으면 False)."""
-    p = Path(os.environ["APPDATA"]) / "LocalTools" / name
+def _exists(p: Path) -> bool:
+    try:
+        q = admin_share(p) if sys.platform == "win32" else p
+        return q.is_dir() if q.parent.is_dir() else p.is_dir()
+    except OSError:
+        return p.is_dir()
+
+
+def current_name() -> str:
+    """사용자 실제 설정 폴더 이름 — `branding.APP_ID`. 그 폴더가 없고 옛 이름 폴더만 있으면(이사 전 PC) `OLD_ID`."""
+    lt = Path(os.environ["APPDATA"]) / "LocalTools"
+    if _br.APP_ID != _br.OLD_ID and not _exists(lt / _br.APP_ID) and _exists(lt / _br.OLD_ID):
+        return _br.OLD_ID
+    return _br.APP_ID
+
+
+def real_dir(name: str | None = None) -> tuple[Path, bool]:
+    """(읽을 경로, 믿을 수 있나). Windows 는 관리 공유가 되면 그것 · 안 되면 그대로(복사본 폴더가 있으면 False).
+    `name` 을 주지 않으면 `current_name()`(261115-22 — 종전 기본값 'PolyPDF' 고정은 이사 뒤 옛 폴더를 읽었다)."""
+    name = name or current_name()
+    p =Path(os.environ["APPDATA"]) / "LocalTools" / name
     if sys.platform != "win32":
         return p, True
     q = admin_share(p)

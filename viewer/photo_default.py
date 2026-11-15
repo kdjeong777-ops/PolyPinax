@@ -4,7 +4,8 @@
 PDF(`pdf_default`, 마스터 §14.10)와 같은 길이다 — Windows 는 앱이 기본 앱을 스스로 바꾸지 못하게 막으므로 **후보로 보이게만** 하고
 그 화면을 연다. 다른 점:
 - 설치 프로그램은 사진을 등록하지 않는다(사용자 결정 — `PolyPDF.iss` 그대로) → **설치판에서도 HKCU** 에 쓴다.
-- 이름을 PDF 와 나눈다(ProgID `PolyPDF.photo`·`Software\\PolyPDF\\PhotoCapabilities`·등록 값 `PolyPDFPhoto`) — 설치판의
+- 이름을 PDF 와 나눈다(ProgID `PolyPix.photo`·`Software\\PolyPinax\\PhotoCapabilities`·등록 값 `PolyPixPhoto` — 이름은 branding,
+  이사 전 판은 `PolyPDF.photo`·`Software\\PolyPDF\\…`·`PolyPDFPhoto`) — 설치판의
   `기본 PDF 앱으로 설정` 이 옛 HKCU PDF 키를 지울 때 함께 지워지지 않고, HKLM 의 PDF 등록을 가리지 않는다.
 - 후보 확장자 = 사진 모드가 여는 표 하나(`image_page.PHOTO_EXTS`).
 레지스트리는 `pdf_default.Reg` 하나로만 만진다 — 검사는 가짜를 넘긴다(실제 레지스트리를 건드리지 않는다).

@@ -16,9 +16,17 @@
 import ctypes
 import ctypes.wintypes as wt
 import os
+import sys
 import time
+from pathlib import Path
 
-HEAVY = {"python.exe", "pythonw.exe", "polypdf.exe", "pyinstaller.exe", "iscc.exe", "tesseract.exe", "py-spy.exe"}
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from viewer import branding as _br                      # noqa: E402  앱 실행 파일 이름은 branding 한 곳에서
+
+# 261115-22: 앱 실행 파일은 새 이름·옛 이름 둘 다(`ALL_EXE_NAMES`) — 종전 'polypdf.exe' 고정은 이사 판(PolyPinax.exe)과의 겹침을 못 잡았다.
+#   옛 이름도 남긴다: 기준점·이사 전 판을 재거나 옛 판이 함께 떠 있을 수 있다.
+HEAVY = {"python.exe", "pythonw.exe", *(n.lower() for n in _br.ALL_EXE_NAMES), "pyinstaller.exe", "iscc.exe", "tesseract.exe",
+         "py-spy.exe"}
 OVERLAP_CORES = 0.3        # 다른 무거운 프로세스들이 점검 사이에 평균 이만큼(코어 수) 넘게 쓰면 겹침 — 판정 기준은 이것 하나
 
 k32 = ctypes.WinDLL("kernel32", use_last_error=True)

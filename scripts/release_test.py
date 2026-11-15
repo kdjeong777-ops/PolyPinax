@@ -2,7 +2,7 @@
 """릴리스 전 시험 — **빌드 시험**과 **설치 시험**을 나눠 돌린다 (261009-18, 마스터 §14.5 U19).
 
   빌드 시험(build)   : 빌드된 프로그램을 **설치하지 않고** 그대로 띄워 잰다. UAC 없음.
-                       --source local  이 PC 의 `dist\\PolyPDF\\PolyPDF.exe`(--rebuild 면 build_ci.bat 부터)
+                       --source local  이 PC 의 `dist\\<EXE_STEM>\\<EXE_NAME>`(branding — 지금 PolyPinax, --rebuild 면 build_ci.bat 부터)
                        --source ci     CI 산출물 `PolyPDF-<ref>-full` 의 zip 을 풀어서(사용자에게 가는 것과 같은 빌드)
   설치 시험(install) : 설치 프로그램을 **기존 설치 위에** 돌리고(UAC), 버전·설치 정보를 확인한 뒤 설치본을 잰다.
                        --source ci     CI 산출물 `PolyPDF-<ref>-setup`(설치 프로그램만 — 다른 zip 은 받지 않는다)
@@ -52,6 +52,7 @@ sys.path.insert(0, str(ROOT))
 from viewer import branding as _br                       # noqa: E402 — 261114-8: 이름은 branding 하나에서(이사 스위치 MOVED)
 REPO = _br.UPDATE_REPO
 DEFAULT_EXE = Path(r"C:\Program Files") / _br.EXE_STEM / _br.EXE_NAME
+_PROCS = ",".join(Path(n).stem for n in _br.ALL_EXE_NAMES)   # 261115-22: 닫을 프로세스 — 새 이름·옛 판(종전 'PolyPDF' 고정은 이사 판을 못 닫았다)
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import probe_installed as probe                          # noqa: E402
@@ -151,8 +152,8 @@ def newer_sources(exe: Path) -> list:
 def local_build():
     """build_ci.bat — 절대 경로로, 작업 폴더는 cwd(마스터 §14.2·빌드 메모). 실행 중인 dist 본은 먼저 닫는다."""
     subprocess.run(["powershell", "-NoProfile", "-Command",
-                    "Get-Process PolyPDF -ErrorAction SilentlyContinue | Where-Object { $_.Path -like '%s*' } | Stop-Process -Force"
-                    % (ROOT / "dist")], capture_output=True)
+                    "Get-Process %s -ErrorAction SilentlyContinue | Where-Object { $_.Path -like '%s*' } | Stop-Process -Force"
+                    % (_PROCS, ROOT / "dist")], capture_output=True)
     log = ROOT / "_build.log"
     bat = ROOT / "build_ci.bat"
     say("빌드 중(수 분) — 로그:", log)
@@ -220,7 +221,7 @@ def exe_for_install(a, out: Path, rec: dict) -> Path:
     rec["before"] = {"display_version": before_dv, "app_version": exe_version(before_exe)}
     say("설치 전: 설치 정보 %s · 앱 파일 %s" % (before_dv or "(없음)", rec["before"]["app_version"] or "(없음)"))
     subprocess.run(["powershell", "-NoProfile", "-Command",
-                    "Get-Process PolyPDF -ErrorAction SilentlyContinue | ForEach-Object { $null = $_.CloseMainWindow() }"],
+                    "Get-Process %s -ErrorAction SilentlyContinue | ForEach-Object { $null = $_.CloseMainWindow() }" % _PROCS],
                    capture_output=True)
     time.sleep(3)
     log = out / "setup.log"
@@ -812,12 +813,12 @@ def plan(base_arg, urgent=False) -> int:
     elif is_beta(source_version()) and not urgent:                   # 261113-5(릴리스 SOT §4.1 의 2·3)
         L += ["- 부하 시험(개발 코드, 설치본 전): 조작마다 정지 < 1초 · 색인 중 · 큰 PDF 열기 · 테마 왕복 누수 없음",
               "- 설치 확인(CI 설치본): 설치 종료 코드·버전 · 자가 시험 · 창 뜸 · 정상 종료 · 도우미 남음 0 — 속도 기준점 비교 없음",
-              "- 끝난 뒤 실제 설정 폴더(`%APPDATA%\\LocalTools\\PolyPDF`)를 탐색기로 확인"]
+              "- 끝난 뒤 실제 설정 폴더(`%%APPDATA%%\\LocalTools\\%s`)를 탐색기로 확인" % _br.APP_ID]
     else:
         L += ["- 측정 묶음 전체: 대상마다 1초+ 정지 0 · 닫은 뒤 도우미 0 · 정상 종료",
               "- 기준점 결과와 자동 비교(창·열림 시간, 메모리, 색인한 파일 수 — 20% 넘게 나빠지면 '회귀 의심')",
-              "- 끝난 뒤 실제 설정 폴더(`%APPDATA%\\LocalTools\\PolyPDF`)를 탐색기로 확인"]
-    L += ["", "## 못 하는 것", "", "- 앱 안 업데이트(그 버전에서 다음 버전으로 올릴 때 처음 돈다)"]
+              "- 끝난 뒤 실제 설정 폴더(`%%APPDATA%%\\LocalTools\\%s`)를 탐색기로 확인" % _br.APP_ID]
+    L +=["", "## 못 하는 것", "", "- 앱 안 업데이트(그 버전에서 다음 버전으로 올릴 때 처음 돈다)"]
     if c["level"] != "install":
         L.append("- 설치 프로그램(이번 판은 설치 관련 변경이 없다)")
     txt = "\n".join(L) + "\n"

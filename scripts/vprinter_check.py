@@ -4,7 +4,7 @@ Windows·PowerPoint 가 있는 기계에서 개발 코드(`viewer/vprinter_recv.
 
   python scripts/vprinter_check.py compare             시험 문서를 만들어 PolyPDF 드라이버로 파일 인쇄 → 변환 → PowerPoint 'PDF로 내보내기' 와 대조
   python scripts/vprinter_check.py ps <PS 파일…>         받은 PS 를 변환해 방향·빈 글자 확인(기본: <작업 폴더>/_samples/vprinter/*.ps)
-  python scripts/vprinter_check.py e2e [--dev]         시험 문서를 'PolyPDF' 로 실제 인쇄 → 저장된 PDF·열린 창·빈 스풀 폴더 확인
+  python scripts/vprinter_check.py e2e [--dev]         시험 문서를 'PolyPinax' 프린터로 실제 인쇄 → 저장된 PDF·열린 창·빈 스풀 폴더 확인
                                                        (--dev: 개발 코드 창이 받는다 — 코드만 고쳤을 때 설치본을 다시 받지 않는다)
   python scripts/vprinter_check.py install <설치 파일>   조용히 설치(UAC) → 설치 기록의 프린터 단계·상태·기본 프린터 확인
 
@@ -29,7 +29,9 @@ sys.stdout.reconfigure(encoding="utf-8")
 
 PRINTER = "PolyPinax"          # 261114-6(마스터 §1.1): 보이는 프린터 이름(옛 이름 'PolyPDF' 는 설치 때 바뀐다)
 APP_TITLES = ("PolyPinax", "PolyPDF")   # 창 제목 머리 — 새 이름·옛 판
-INSTALLED_GS = r"C:\Program Files\PolyPDF\_internal\printer\bin\gs\gswin64c.exe"
+from viewer import branding as _br                      # noqa: E402  설치 폴더·실행 파일 이름은 branding 한 곳에서
+INSTALLED_DIR = Path(r"C:\Program Files") / _br.EXE_STEM    # 261115-22: 종전 'Program Files\PolyPDF' 고정 — 이사 판은 PolyPinax
+INSTALLED_GS = str(INSTALLED_DIR / "_internal" / "printer" / "bin" / "gs" / "gswin64c.exe")
 BANNER = "중동 지역 정세 불안 지속 대응과 성능 기반 시공 지침 개정 요구"
 
 
@@ -414,7 +416,7 @@ def cmd_install(args) -> int:
     txt = log.read_text(encoding="utf-8", errors="replace") if log.is_file() else ""
     m = re.search(r"Parameters: --vprinter install.*?Process exit code: (\d+)", txt, re.S)
     rep.check(bool(m) and m.group(1) == "0", "설치 끝 가상 프린터 단계 종료 코드 0", m.group(1) if m else "기록에 없음")
-    exe = r"C:\Program Files\PolyPDF\PolyPDF.exe"
+    exe = str(INSTALLED_DIR / _br.EXE_NAME)
     r = subprocess.run([sys.executable, str(ROOT / "main.py"), "--vprinter", "check"], capture_output=True, timeout=120, cwd=str(ROOT))
     try:
         st = json.loads(r.stdout.decode("utf-8").strip().splitlines()[-1])

@@ -2,12 +2,13 @@
 """정식판 점검 — 크래시 근거·데이터 무결성·새 프로필 첫 실행·업데이트 채널을 한 곳에 모은다 (릴리스 SOT §4.5, 261025-8).
 
     python scripts/stable_check.py snapshot --out <폴더>            # 시작 전: 사용자 실제 폴더 상태(읽기만)와 시작 시각
-    python scripts/stable_check.py fresh --exe <PolyPDF.exe> --out <폴더>   # 빈 시험 프로필로 첫 실행 → 닫기 → 프로필 확인·지우기
+    python scripts/stable_check.py fresh --exe <PolyPinax.exe> --out <폴더>   # 빈 시험 프로필로 첫 실행 → 닫기 → 프로필 확인·지우기
     python scripts/stable_check.py report --out <폴더> [--online]   # 끝난 뒤: 시작 시각 이후의 크래시·예외, 무결성, 실제 폴더 전후
 
-- 사용자 실제 설정 폴더(`%APPDATA%\\LocalTools\\PolyPDF`)는 **읽기만** 한다 — 무결성은 index.db 를 작업 폴더로 **복사해서** 본다
-  (WAL 색인은 읽기 전용으로 열어도 `-shm` 을 건드릴 수 있다). 시험 프로필(`PolyPDF-<이름>`)만 쓰고 지운다(마스터 §14.2.1).
-- 크래시 근거: Windows 이벤트 로그(응용 프로그램 오류 1000·정지 1002 — `PolyPDF.exe`), 시험 프로필들의 `error.log`(처리 안 된 예외·
+- 사용자 실제 설정 폴더(`%APPDATA%\\LocalTools\\<APP_ID>` — 이름은 branding, `real_profile.current_name()`)는 **읽기만** 한다 —
+  무결성은 index.db 를 작업 폴더로 **복사해서** 본다(WAL 색인은 읽기 전용으로 열어도 `-shm` 을 건드릴 수 있다).
+  시험 프로필(`<실행 파일 이름>-<이름>`)만 쓰고 지운다(마스터 §14.2.1).
+- 크래시 근거: Windows 이벤트 로그(응용 프로그램 오류 1000·정지 1002 — `PolyPinax.exe`·옛 판 `PolyPDF.exe`), 시험 프로필들의 `error.log`(처리 안 된 예외·
   설정 읽기 실패·색인 초기화)와 `crash.log`(네이티브 크래시, 마스터 §14.7.3) — 시작 시각 이후 것만 센다.
 종료 코드: 0 통과, 1 실패(report·fresh), 2 사용법.
 """
@@ -30,7 +31,7 @@ LT = Path(os.environ["APPDATA"]) / "LocalTools"
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import real_profile                            # noqa: E402
 # 사용자 실제 설정 — 읽기만. 261102-1: MSIX 셸이면 관리 공유로(복사본과 섞인 보기를 진짜로 믿지 않게, `real_profile`)
-REAL, REAL_OK = real_profile.real_dir()
+REAL, REAL_OK = real_profile.real_dir()        # 261115-22: 이름은 branding(종전 기본값 'PolyPDF' 고정은 이사 뒤 옛 폴더를 보았다)
 WATCH = ("settings.json", "index.db", "index.db-wal", "error.log", "crash.log")
 FRESH_SECONDS = 30                             # 새 프로필 첫 실행을 지켜보는 시간
 ENTRY = re.compile(r"^--- (\d{4}-\d\d-\d\d \d\d:\d\d:\d\d)")
@@ -204,7 +205,7 @@ def cmd_report(out: Path, online: bool) -> int:
     real_noise = crash_entries(REAL / "crash.log", since, fatal=False)
     L = ["## 크래시 근거·데이터 무결성 (%s 이후)" % since, "",
          "| 항목 | 결과 |", "| --- | --- |",
-         "| 이벤트 로그 PolyPDF.exe 오류·정지 | %s |" % ("없음" if not ev else "**%d건**" % len(ev)),
+         "| 이벤트 로그 PolyPinax.exe·PolyPDF.exe 오류·정지 | %s |" % ("없음" if not ev else "**%d건**" % len(ev)),
          "| 사용자 실제 crash.log 치명(`FATAL_CODES`) | %s |" % ("없음" if not real_fatal else "**%d건**" % len(real_fatal)),
          "| 사용자 실제 crash.log 비치명(처리된 첫 기회 SEH — COM/RPC 0x8007xxxx 등, 참고) | %d건%s |" % (
              len(real_noise), (" — " + "; ".join("%s %s" % x for x in real_noise[:3])) if real_noise else ""),
@@ -226,7 +227,7 @@ def cmd_report(out: Path, online: bool) -> int:
         fmt = lambda v: "-" if not v else "%s B · %s" % (format(v["size"], ","), v["mtime"])
         L.append("| %s | %s | %s%s |" % (k, fmt(b), fmt(a), "" if b == a else " ← 바뀜"))
     L.append("")
-    L.append("> 실제 폴더가 바뀌었으면 시험 도구가 아니라 사용자가 그동안 PolyPDF 를 썼는지 먼저 본다(시험은 시험 프로필만 쓴다).")
+    L.append("> 실제 폴더가 바뀌었으면 시험 도구가 아니라 사용자가 그동안 프로그램을 썼는지 먼저 본다(시험은 시험 프로필만 쓴다).")
     if online:
         sys.path.insert(0, str(PUBLIC))
         from viewer import updater

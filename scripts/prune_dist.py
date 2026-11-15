@@ -4,7 +4,7 @@
 `build_ci.bat` 의 `--collect-all PyQt6` 는 Qt 전체(Quick·QML·3D·Designer·블루투스…)를 싣고, wordfreq 는 40여 언어 사전을 싣는다.
 앱이 쓰는 것은 QtCore·Gui·Widgets·Network·Multimedia(+Widgets)·PrintSupport·Svg 와 영어·한국어 사전뿐이다.
 
-    python scripts\\prune_dist.py [dist\\PolyPDF] [--dry-run]
+    python scripts\\prune_dist.py [dist\\PolyPinax] [--dry-run]      # 기본 = dist\\<branding.EXE_STEM>
 
 순서: ① `REMOVE` 목록을 지운다 ② 남은 Qt 플러그인 중 **지운 DLL 을 부르는 것**을 함께 지운다(되풀이)
 ③ 남은 모든 .dll/.pyd 의 가져오기(PE import)가 묶음 안·시스템에서 풀리는지 확인 — 못 풀리면 **실패(종료 코드 1)**.
@@ -151,7 +151,12 @@ def main(argv) -> int:
     except Exception:
         pass
     args = [a for a in argv if not a.startswith("--")]
-    dist = Path(args[0]) if args else Path(__file__).resolve().parent.parent / "dist" / "PolyPDF"
+    if args:
+        dist = Path(args[0])
+    else:                                               # 261115-22: 기본 빌드 폴더 이름은 branding(종전 'PolyPDF' 고정)
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+        from viewer import branding as _br
+        dist = Path(__file__).resolve().parent.parent / "dist" / _br.EXE_STEM
     r = prune(dist, dry_run="--dry-run" in argv)
     print(f"[prune] {len(r['removed'])}개 · {r['freed'] / 1048576:.1f} MB" + (" (dry-run)" if "--dry-run" in argv else ""))
     for f, m in r["broken"].items():

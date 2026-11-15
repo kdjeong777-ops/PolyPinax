@@ -7274,8 +7274,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
     def _build_bookmark_order(self, json_path: Path) -> dict:
         if not json_path.exists():
             return {}
-        try:
-            data = json.loads(json_path.read_text(encoding="utf-8"))
+        try:     # 261115-20(책갈피창·저장 SOT §4.7.25): 새 분할기 형식(큰 version)은 쓰지 않는다 — 읽기 한 곳
+            from viewer.widgets.bookmark_tree import read_bookmarks_json
+            data = read_bookmarks_json(json_path)
         except Exception:
             return {}
         order: dict = {}

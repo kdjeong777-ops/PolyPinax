@@ -53,6 +53,36 @@ def _trash_fn():
         return None
 
 
+# 261115-20(마스터 §8.1 · CLAUDE.md §2 · 책갈피창·저장 SOT §4.7.25): 뷰어가 아는 bookmarks.json 형식.
+# 이보다 큰 `version` 은 쓰지 않는다(로드 거부) — 읽는 곳(책갈피창·검색 '책갈피 순')은 모두 read_bookmarks_json 으로.
+BOOKMARKS_JSON_VERSION = 1
+
+
+class BookmarksJsonTooNew(Exception):
+    """bookmarks.json 의 version 이 뷰어가 아는 것보다 크다(또는 정수가 아니다)."""
+
+    def __init__(self, version):
+        super().__init__(str(version))
+        self.version = version
+
+
+def read_bookmarks_json(path) -> dict:
+    """bookmarks.json 을 읽는다 — version 이 없거나 BOOKMARKS_JSON_VERSION 이하일 때만.
+    크면 BookmarksJsonTooNew, 읽기·JSON 오류는 그대로 올린다."""
+    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError("bookmarks.json is not an object")
+    v = data.get("version")
+    if v is not None:
+        try:
+            ok = isinstance(v, (int, str)) and not isinstance(v, bool) and int(v) <= BOOKMARKS_JSON_VERSION
+        except ValueError:
+            ok = False
+        if not ok:
+            raise BookmarksJsonTooNew(v)
+    return data
+
+
 # 파일명 무효 문자 (Windows 기준)
 _INVALID_FILENAME_RE = re.compile(r'[\\/:*?"<>|\x00-\x1f]')
 
@@ -764,7 +794,7 @@ class BookmarkTree(QWidget):
         self.tree.header().setStretchLastSection(False)
         from PyQt6.QtWidgets import QHeaderView as _QHV
         self.tree.header().setSectionResizeMode(0, _QHV.ResizeMode.ResizeToContents)
-        # 261115-12(응답성 SOT §4.4): 줄 높이는 모두 같다(굵은 글꼴·같은 아이콘) — 줄마다 크기를 묻지 않게.
+        # 261115-12(응답성 SOT §4 ⑥): 줄 높이는 모두 같다(굵은 글꼴·같은 아이콘) — 줄마다 크기를 묻지 않게.
         #   열 폭(ResizeToContents)도 기본은 줄 1000개를 훑는다 — 보이는 줄만(파일 3061개 폴더에서 ↓·스크롤·모두 접기가 1~5초 섰다).
         self.tree.setUniformRowHeights(True)
         self.tree.header().setResizeContentsPrecision(0)
@@ -949,13 +979,20 @@ class BookmarkTree(QWidget):
         self.__dict__["_bm_cache"] = {}     # 261012-10: 다시 읽으면 되돌리기 기준도 새로
 
         json_path = self._root_dir / "bookmarks.json"
+        data = None
         if json_path.exists() and not self._photo_on():     # 사진 모드는 분할 산출물 목록을 쓰지 않는다
             try:
-                data = json.loads(json_path.read_text(encoding="utf-8"))
+                data = read_bookmarks_json(json_path)
+            except BookmarksJsonTooNew as e:   # 261115-20(§4.7.25): 새 분할기 형식 — 쓰지 않고 PDF 목록으로
+                from viewer.branding import APP_NAME   # 화면 문구의 앱 이름은 글자로 박지 않는다(마스터 §1.1)
+                self._notice(tr("이 폴더의 bookmarks.json 은 새 분할기로 만든 형식({v})이라 이 판에서 읽을 수 없습니다"
+                                " — PDF 목록으로 보여 줍니다. {app} 를 업데이트하세요.").format(v=e.version, app=APP_NAME),
+                             self.NOTICE_MS * 3)
             except Exception as e:
                 self._set_count("")
                 self._notice(tr('bookmarks.json 읽기 실패: {e}').format(e=e))
                 return False
+        if data is not None:
             self._mode = "json"          # v1.6.19
             self._pdfs_flat = []
             self._populate_from_json(data)

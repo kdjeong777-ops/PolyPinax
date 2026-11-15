@@ -8355,6 +8355,11 @@ msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format
+msgid "이 폴더의 bookmarks.json 은 새 분할기로 만든 형식({v})이라 이 판에서 읽을 수 없습니다 — PDF 목록으로 보여 줍니다. {app} 를 업데이트하세요."
+msgstr ""
+
+#: viewer/widgets/bookmark_tree.py
+#, python-brace-format
 msgid "bookmarks.json 읽기 실패: {e}"
 msgstr ""
 

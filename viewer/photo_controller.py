@@ -2902,6 +2902,9 @@ class PhotoMixin:
         if extra.get("split"):
             act(extra["split"][0], extra["split"][1])
         elif getattr(self, "_split_on", False):
+            # 261115-28(디자인 SOT §2.9.8, 사용자 지시 '2단보기시 옵션 항목에 1단보기 추가'): PDF 본문·썸네일 메뉴와 같은 길 —
+            #   누른 창의 사진을 1단에서 계속 보인다(261016-2). 보기 탭 [1단](Ctrl+Shift+1)과 하는 일이 달라 키 칸은 두지 않는다(§2.9.2).
+            act(tr("1단 보기"), lambda: self._view_single_keep(self._active_pane))
             act(tr("옆 창에 열기"), lambda: self._copy_pane_to(self._active_pane, 1 - self._active_pane))
         else:
             act(self._kt(tr("2단 보기"), "toggle_split"), self._view_as_split)

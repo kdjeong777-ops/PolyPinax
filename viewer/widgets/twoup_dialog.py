@@ -192,7 +192,7 @@ class TwoUpSettingsDialog(QDialog):
         # 표지
         grp_c = QGroupBox(tr("표지"))
         cf = QFormLayout(grp_c)
-        self.chk_cover = QCheckBox(tr("표지 만들기")); self.chk_cover.setChecked(bool(s.get("make_cover", True)))
+        self.chk_cover = QCheckBox(tr("표지 만들기")); self.chk_cover.setChecked(bool(s["make_cover"]))  # 261115-9: 기본값은 DEFAULT_TWOUP(끔)
         cf.addRow(self.chk_cover)
         cov = s.get("cover", {})
         self.ed_title = QLineEdit(cov.get("title", "")); self.ed_sub = QLineEdit(cov.get("subtitle", ""))
@@ -210,7 +210,7 @@ class TwoUpSettingsDialog(QDialog):
         grp_t = QGroupBox(tr("목차"))
         tf = QFormLayout(grp_t)
         self.chk_toc = QCheckBox(tr("목차 만들기 (책갈피 1단계)") if self._single else tr("목차 만들기"))
-        self.chk_toc.setChecked(bool(s.get("make_toc", True)))
+        self.chk_toc.setChecked(bool(s["make_toc"]))
         tf.addRow(self.chk_toc)
         self.ed_toc_tpl = QLineEdit(s.get("toc_template", ""))
         self.ed_toc_tpl.setPlaceholderText(tr("비우면 기본 양식"))
@@ -579,8 +579,8 @@ class TwoUpSettingsDialog(QDialog):
         self._update_doc_odd()
         self._set_combo(self.cmb_fpos, s.get("footer_pos", "center"))
         self.sp_fsize.setValue(int(s["footer_size"]))
-        self.chk_cover.setChecked(bool(s.get("make_cover", True)))
-        self.chk_toc.setChecked(bool(s.get("make_toc", True)))
+        self.chk_cover.setChecked(bool(s["make_cover"]))   # 261115-9: s 는 DEFAULT_TWOUP 을 씌운 값
+        self.chk_toc.setChecked(bool(s["make_toc"]))
         cov = s.get("cover", {})
         self.ed_title.setText(cov.get("title", "")); self.ed_sub.setText(cov.get("subtitle", ""))
         self.ed_comp.setText(cov.get("company", "")); self.ed_name.setText(cov.get("name", ""))

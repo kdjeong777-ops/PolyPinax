@@ -62,7 +62,9 @@ DEFAULT_TWOUP = {
     "footer_block_alpha": 100,        # 블록 투명도(%) 0~100
     "footer_font": "",                # 쪽번호 글꼴(빈값=기본 Helvetica)
     "footer_bold": False,             # 굵게
-    "make_cover": True, "make_toc": True,
+    # 261115-9(마스터 §11.10.5, 사용자 지시): 표지·목차는 기본 끔(종전 참 — 병합 창·값 없는 스타일이 켜졌다).
+    #   값이 빠졌을 때 읽는 예비값도 이 값(`_COVER_DEFAULT`·`_TOC_DEFAULT`).
+    "make_cover": False, "make_toc": False,
     "cover": {"title": "", "subtitle": "", "company": "", "name": ""},
     "cover_template": "",             # .docx (비우면 기본 생성)
     "toc_template": "",               # .docx (비우면 기본 생성)
@@ -74,6 +76,9 @@ DEFAULT_TWOUP = {
     #   스타일에는 저장하지 않는다(부르는 쪽이 `single_file_settings` 로 씌운다).
     "single_file": False,
 }
+
+_COVER_DEFAULT = DEFAULT_TWOUP["make_cover"]
+_TOC_DEFAULT = DEFAULT_TWOUP["make_toc"]
 
 # 261021-3(§11.10.2): 파일 하나 다단 생성에서 끄는 '여러 파일 병합' 항목
 MULTI_FILE_KEYS = ("make_divider", "doc_break", "doc_start_odd")
@@ -108,8 +113,10 @@ def default_part_styles(kind) -> list:
 
 # 261115-6(마스터 §11.10.5, 사용자 지시): 기본 전체 스타일(`merge_presets`) — 나머지 키는 DEFAULT_TWOUP.
 #   넘기는 쪽은 책처럼 좌우로: 가로 시트(2장) 짧은 쪽, 세로 시트(4·6장) 긴 쪽(§11.10.1 제본 표).
-_M_NARROW = dict(zip(MARGIN_STYLE_KEYS, (18, 30, 14, 14, 8, 8)))
-_M_NONE = dict(zip(MARGIN_STYLE_KEYS, (0, 0, 0, 0, 0, 0)))
+#   261115-9: 표지·목차는 끈 채로 적어 둔다(사용자 지시 — 기본값이 바뀌어도 스타일 뜻은 그대로).
+_NO_FRONT = dict(make_cover=False, make_toc=False)
+_M_NARROW = dict(zip(MARGIN_STYLE_KEYS, (18, 30, 14, 14, 8, 8)), **_NO_FRONT)
+_M_NONE = dict(zip(MARGIN_STYLE_KEYS, (0, 0, 0, 0, 0, 0)), **_NO_FRONT)
 NUP_STYLE_DEFAULTS = (
     (tr_noop("2장·양면·여백좁게"),
      dict(nup=2, orient="auto", cols=1, rows=2, duplex=True, duplex_side="short", **_M_NARROW)),
@@ -853,7 +860,7 @@ def _build_preview_state(items, s):
         raise RuntimeError("배치할 내용이 없습니다.")
     single = bool(s.get("single_file", False)) and len(file_blocks) == 1     # 261021-3(§11.10.2)
     emb = []
-    if single and bool(s.get("make_toc", True)):
+    if single and bool(s.get("make_toc", _TOC_DEFAULT)):
         try:
             emb = _item_toc(file_blocks[0]["it"], _open_item_cached(file_blocks[0]["it"])[0])
         except Exception:
@@ -874,7 +881,7 @@ def _build_preview_state(items, s):
                 break
     if fw is None:
         shp, lop = _paper(s); fw, fh, _b = _grid_layout(fitz.Rect(0, 0, shp, lop), s)
-    make_cover = bool(s.get("make_cover", True)); make_toc = bool(s.get("make_toc", True))
+    make_cover = bool(s.get("make_cover", _COVER_DEFAULT)); make_toc = bool(s.get("make_toc", _TOC_DEFAULT))
     cover_doc = _fitz_cover_doc(s.get("cover", {}), fw, fh) if make_cover else None
     cover_pages = cover_doc.page_count if cover_doc else 0
     names = [fb["name"] for fb in file_blocks]
@@ -1448,8 +1455,8 @@ def _assemble(items, s, fast=False, gen_bookmarks_fn=None, tick=None, tmpdir=Non
     duplex = bool(s.get("duplex", False))
     per_file = make_divider or doc_break
     odd = bool(s.get("doc_start_odd", False)) and duplex and per_file
-    make_cover = bool(s.get("make_cover", True))
-    make_toc = bool(s.get("make_toc", True))
+    make_cover = bool(s.get("make_cover", _COVER_DEFAULT))
+    make_toc = bool(s.get("make_toc", _TOC_DEFAULT))
 
     def _tk(msg):
         if tick:

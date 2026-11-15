@@ -7973,6 +7973,11 @@ msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format
+msgid "스크린샷 {n}개"
+msgstr ""
+
+#: viewer/widgets/bookmark_tree.py
+#, python-brace-format
 msgid "{name} (단일 파일)"
 msgstr ""
 

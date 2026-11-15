@@ -1663,22 +1663,93 @@ class BookmarkTree(QWidget):
                 if target is None:
                     return
                 nav = True                               # 없어졌다 — 다음 파일을 누른 것과 같은 길로 연다(본문 = 고른 줄)
-            par = target.parent()
-            while par is not None:                       # 폴더 줄만 펼친다 — 파일 줄은 그대로(§4.7.3 모두 접기)
-                par.setExpanded(True)
-                par = par.parent()
-            self.tree.blockSignals(True)
-            try:
-                self.tree.clearSelection()
-                self.tree.setCurrentItem(target)
-                target.setSelected(True)
-            finally:
-                self.tree.blockSignals(False)
-            self.tree.scrollToItem(target)
+            self._pick_row(target)
             if nav:
                 self._emit_nav(target.data(0, self.DATA_FILE), 0)
         except RuntimeError:
             return
+
+    def _pick_row(self, target) -> None:
+        """그 파일 줄을 **신호를 막고** 고르고 보이게 — 본문은 이미 그 파일(다시 열지 않는다). §4.7.24·§4.7.26 의 한 고르기."""
+        par = target.parent()
+        while par is not None:                           # 폴더 줄만 펼친다 — 파일 줄은 그대로(§4.7.3 모두 접기)
+            par.setExpanded(True)
+            par = par.parent()
+        self.tree.blockSignals(True)
+        try:
+            self.tree.clearSelection()
+            self.tree.setCurrentItem(target)
+            target.setSelected(True)
+        finally:
+            self.tree.blockSignals(False)
+        self.tree.scrollToItem(target)
+
+    # ----- 261115-27(책갈피창·저장 SOT §4.7.26, 사용자 결정 '컷 목록으로 바꿈'): 스크린샷 컷 목록 -----
+    def in_shot_list(self) -> bool:
+        """지금 목록이 컷 목록인가 — 들어간 뒤 다른 것을 열면(그 길이 `_reload_fn` 을 바꾼다) 아니다."""
+        fn = self.__dict__.get("_shot_reload")
+        return fn is not None and self._reload_fn is fn
+
+    def show_shot_list(self, paths, current=None) -> bool:
+        """컷 목록(파일 모드, 받은 차례 = 스트립 순서)으로 바꾸고 current 줄을 고르기만 한다.
+        같은 목록이면 다시 만들지 않고 줄만 옮긴다. 저장 안 한 편집이 있으면 바꾸지 않는다. 컷이 없으면 원래 목록으로."""
+        files = []
+        for x in paths or []:
+            if x and Path(x).exists() and str(Path(x)) not in files:
+                files.append(str(Path(x)))
+        if not files:
+            self.leave_shot_list()
+            return False
+        if not self.in_shot_list():
+            if getattr(self, "_dirty", False):
+                return False
+            self._shot_prev = self._reload_fn            # 들어가기 전 목록 — 돌아갈 때 이것을 다시 읽는다
+        if not (self.in_shot_list() and self.__dict__.get("_shot_files") == files):
+            self._build_shot_list(files)
+        if current:
+            it = self._find_file_row(current)
+            if it is not None:
+                self._pick_row(it)
+        return True
+
+    def _build_shot_list(self, files) -> None:
+        self._row_keep = None                            # §4.7.24 되살리기는 쓰지 않는다 — 보던 폴더의 '다음 파일' 을 열지 않게
+        self._cancel_scan()
+        self._cancel_fill()
+        self._reset_probe_queue()
+        self._root_dir = Path(files[0]).parent
+        self._single_file = Path(files[0])
+        self._file_list = [Path(f) for f in files]
+        self._mode = "single"
+        self._pdfs_flat = []
+        self._shot_files = list(files)
+        self._shot_reload = lambda: self.show_shot_list(self.__dict__.get("_shot_files") or [])
+        self._reload_fn = self._shot_reload
+        self.tree.clear()
+        self.__dict__["_bm_cache"] = {}
+        for f in files:
+            p = Path(f)
+            item = QTreeWidgetItem([p.stem])
+            item.setData(0, self.DATA_FILE, str(p))
+            item.setData(0, self.DATA_PAGE, 0)
+            item.setToolTip(0, str(p))
+            self.tree.addTopLevelItem(item)
+        self._set_count(tr('스크린샷 {n}개').format(n=len(files)))
+        self._update_mode_button()
+
+    def leave_shot_list(self) -> None:
+        """컷 목록이면 들어가기 전 목록을 다시 읽는다(폴더면 load_folder — §4.7.24 가 본문 파일 줄을 고른다)."""
+        if not self.in_shot_list():
+            return
+        prev = self.__dict__.get("_shot_prev")
+        self._shot_reload = None
+        self._shot_prev = None
+        if callable(prev):
+            prev()
+        else:
+            self._reload_fn = None
+            self.tree.clear()
+            self._set_count("")
 
     def load_single_pdf(self, pdf_path: str | Path) -> bool:
         """v1.6.11 I1/I2: 단일 PDF 한 개만 트리에 표시 (내부 TOC lazy load)."""

@@ -1173,6 +1173,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                     pass
         else:
             self._active_pane = 0
+            try:
+                self.bookmark_tree_right.leave_shot_list()   # 261115-27(§4.7.26): 1단 — 아래 목록은 원래 목록으로
+            except AttributeError:
+                pass
         self._sync_right_layout()                          # 260606-19: 드로어/컬럼 통합 동기화
         self._set_active_pane(self._active_pane if on else 0)
         self._sync_right_pane_bookmark()                   # 260618-19: 우측 다른폴더 파일 표시 갱신
@@ -2923,6 +2927,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self.shot_strip.itemActivated.connect(
             lambda p, pg: self._on_screenshot_activated(p, pg)
         )
+        # 261115-27(책갈피창·저장 SOT §4.7.26): 스트립이 바뀌면(넣기·빼기·옮기기 — 모델 신호 하나) 아래 컷 목록도 따라간다
+        _sm = self.shot_strip.list.model()
+        for _sig in (_sm.rowsInserted, _sm.rowsRemoved, _sm.rowsMoved, _sm.modelReset):
+            _sig.connect(lambda *_a: self._shot_list_follow_strip())
         # (이미지 모드 ◀▶·페이지입력은 _wire_pane_signals 에서 연결)
 
     # ===== 폴더 / 인덱스 =================================================
@@ -8593,6 +8601,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             # 260618-23: 책갈피 트리(상=좌/하=우) 표시/숨김만 갱신. **폴더는 바꾸지 않음** —
             #   상단 트리에서 하위폴더 파일을 클릭해도 그 창의 폴더(=열었던 폴더)는 유지.
             #   폴더 변경은 '폴더/파일 열기'(open_folder/open_pdf)에서만 일어남.
+            if self._active_pane == 1 and getattr(item, "origin", "") != "screenshot":
+                self.bookmark_tree_right.leave_shot_list()   # 261115-27(§4.7.26): 오른쪽 창에 컷이 아닌 것 — 원래 목록으로
             self._sync_right_pane_bookmark()
         finally:
             QApplication.restoreOverrideCursor()
@@ -8606,6 +8616,11 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
 
     def _on_bookmark_activated_right(self, file_path: str, page_index: int):
         """260618-22: 하단 책갈피 → 우측 창에 열기."""
+        if self.bookmark_tree_right.in_shot_list():      # 261115-27(§4.7.26): 컷 목록 줄 = 스트립에서 누른 것과 같은 길
+            i = self.shot_strip.index_of_path(file_path)
+            if i >= 0:
+                self.shot_strip.activate_index(i)
+                return
         self._set_active_pane(1)
         self._load_main(HistoryItem(file_path, page_index, "", "bookmark",
                                     quick=self._quick_wanted(self.bookmark_tree_right, file_path)))
@@ -9223,6 +9238,35 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         n = self.shot_strip.list.count()
         if i >= 0:
             self._mv[1].set_image_position(i + 1, n)
+        self._shot_list_sync(path)                       # 261115-27(책갈피창·저장 SOT §4.7.26): 아래 책갈피창 = 컷 목록
+
+    # ===== 261115-27(책갈피창·저장 SOT §4.7.26, 사용자 결정 '컷 목록으로 바꿈'): 2단 아래 책갈피창의 컷 목록 =====
+    def _shot_list_sync(self, current=None) -> None:
+        """아래 책갈피창을 스트립 순서의 컷 목록으로 — current(띄운 컷) 줄은 고르기만."""
+        try:
+            if not getattr(self, "_split_on", False):
+                return
+            paths = [p for p in self.shot_strip.all_paths() if p]
+            self.bookmark_tree_right.show_shot_list(paths, current)
+        except Exception:
+            pass
+
+    def _shot_list_follow_strip(self) -> None:
+        """스트립 목록이 바뀌었다(새 컷·지우기·옮기기·한도·전체 삭제 — 모델 신호 하나, 한 박자 모아) — 컷 목록이면 다시 맞춘다."""
+        t = self.__dict__.get("_shot_follow_t")
+        if t is None:
+            t = QTimer(self)
+            t.setSingleShot(True)
+            t.setInterval(30)                            # 한 박자 — 넣기 안의 빼기(같은 컷 다시)·여러 줄 지우기를 한 번에
+            t.timeout.connect(self._shot_list_refollow)
+            self._shot_follow_t = t
+        t.start()
+
+    def _shot_list_refollow(self) -> None:
+        rt = getattr(self, "bookmark_tree_right", None)
+        if rt is None or not rt.in_shot_list():
+            return
+        self._shot_list_sync(getattr(self, "_current_shot_path", None))
 
     def _on_image_step(self, direction: int):
         """v1.6.4 C2: 스크린샷 표시 중 ◀▶ → 리스트 인접 카드 (끝에서 멈춤).

@@ -8228,6 +8228,11 @@ msgstr "First select the file to view in file mode."
 
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format
+msgid "스크린샷 {n}개"
+msgstr "{n} screenshots"
+
+#: viewer/widgets/bookmark_tree.py
+#, python-brace-format
 msgid "{name} (단일 파일)"
 msgstr "{name} (single file)"
 

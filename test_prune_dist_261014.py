@@ -33,7 +33,10 @@ src = "\n".join(p.read_text(encoding="utf-8", errors="replace") for p in code)
 
 # A
 removed_mods = [Path(p).stem for p in pd.REMOVE if p.startswith("PyQt6/") and p.endswith(".pyd")]
-used = sorted({m for m in removed_mods if re.search(r"PyQt6\." + m + r"\b|from PyQt6 import [^\n]*\b" + m + r"\b", src)})
+# 261115-26: 패턴('QtQuick*')은 \w* 로 — 'QtQuickControls2' 같은 새 모듈도 import 하면 깨진다
+used = sorted({m for m in removed_mods
+               if re.search(r"PyQt6\." + m.replace("*", r"\w*") + r"\b|from PyQt6 import [^\n]*\b" + m.replace("*", r"\w*") + r"\b", src)})
+chk({"QtQuick*", "QtQml*"} <= set(removed_mods), "A2 Quick·QML 계열 .pyd 는 이름 패턴으로도 뺀다(새 PyQt6 판의 새 .pyd — 261115-26)")
 chk(removed_mods and not used, "A 빼는 Qt 모듈을 앱 코드가 import 하지 않는다", str(used))
 
 # B

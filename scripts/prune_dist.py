@@ -26,6 +26,9 @@ REMOVE = [
         "QtQml", "QtQuick", "QtQuick3D", "QtQuickWidgets", "QtRemoteObjects", "QtSensors", "QtSerialPort",
         "QtSpatialAudio", "QtSql", "QtStateMachine", "QtTest", "QtTextToSpeech", "QtWebChannel", "QtWebSockets",
         "QtXml")],
+    # Quick·QML 계열은 이름 패턴으로도 — 새 PyQt6 판이 새 .pyd(6.12.1 의 QtQuickControls2 등)를 더하면 그 .pyd 가 위 DLL 을 불러
+    # 빌드가 깨진다(261115-26). 앱은 Quick·QML 을 쓰지 않는다(검사 A 가 이 패턴도 본다).
+    "PyQt6/QtQuick*.pyd", "PyQt6/QtQml*.pyd",
     # Qt DLL
     *[f"PyQt6/Qt6/bin/{p}" for p in (
         "Qt6Bluetooth.dll", "Qt6Designer*.dll", "Qt6Help.dll", "Qt6Labs*.dll", "Qt6Nfc.dll", "Qt6Pdf*.dll",

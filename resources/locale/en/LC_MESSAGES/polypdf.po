@@ -218,6 +218,10 @@ msgid "영역 캡처"
 msgstr "Region capture"
 
 #: viewer/app.py
+msgid "스크롤 캡처"
+msgstr "Scrolling capture"
+
+#: viewer/app.py
 msgid "캡쳐 화질 설정"
 msgstr "Capture quality"
 
@@ -946,6 +950,14 @@ msgstr "Screen quality"
 #: viewer/app.py
 msgid "원본 화질"
 msgstr "Original quality"
+
+#: viewer/app.py
+msgid "스크롤 캡처를 찍지 못했습니다."
+msgstr "Could not take the scrolling capture."
+
+#: viewer/app.py
+msgid "스크롤 캡처를 저장하지 못했습니다."
+msgstr "Could not save the scrolling capture."
 
 #: viewer/app.py
 msgid "복사할 스크린샷이 없습니다."
@@ -1856,6 +1868,10 @@ msgid "화면캡처.png"
 msgstr "Screen capture.png"
 
 #: viewer/app.py
+msgid "이 창은 자동 스크롤이 안 됩니다 — 한 화면만 저장했습니다."
+msgstr "This window cannot be scrolled automatically — saved one screen only."
+
+#: viewer/app.py
 msgid "파일 작업"
 msgstr "File Operation"
 
@@ -2353,6 +2369,11 @@ msgstr "Custom{i}"
 #, python-brace-format
 msgid "{n}개 페이지 캡쳐"
 msgstr "Capture {n} pages"
+
+#: viewer/app.py
+#, python-brace-format
+msgid "스크롤 캡처를 멈췄습니다 — 여기까지 {n}장을 이어 저장했습니다."
+msgstr "Scrolling capture stopped — joined and saved {n} screens so far."
 
 #: viewer/app.py
 #, python-brace-format
@@ -2991,6 +3012,11 @@ msgstr "Could not save: {e}"
 
 #: viewer/app.py
 #, python-brace-format
+msgid "겹치는 부분을 찾지 못해 여기까지 {n}장을 이어 저장했습니다."
+msgstr "Could not find the overlap — joined and saved {n} screens so far."
+
+#: viewer/app.py
+#, python-brace-format
 msgid "클립보드에 복사하지 못했습니다 — {name} 프로그램이 클립보드를 쓰고 있습니다."
 msgstr "Could not copy to the clipboard — {name} is using it."
 
@@ -3253,6 +3279,16 @@ msgstr "Failed to start the upgrade. Exiting without upgrading."
 #, python-brace-format
 msgid "'{code}' 언어팩을 찾지 못해 다른 언어로 표시합니다 (설정은 그대로입니다)."
 msgstr "The '{code}' language pack was not found, so another language is shown (your setting is unchanged)."
+
+#: viewer/app.py
+#, python-brace-format
+msgid "스크롤 캡처가 최대 길이에 닿아 멈췄습니다 — {n}장을 이어 저장했습니다."
+msgstr "Scrolling capture reached the maximum length — joined and saved {n} screens."
+
+#: viewer/app.py
+#, python-brace-format
+msgid "스크롤 캡처 저장 — {n}장을 이었습니다."
+msgstr "Scrolling capture saved — joined {n} screens."
 
 #: viewer/app.py
 #, python-brace-format
@@ -6139,6 +6175,19 @@ msgstr "{n} places redacted — new file: {name}"
 #: viewer/redact_controller.py
 msgid "주의: 아래 자리에 글이 남았습니다 — 새 파일을 확인하세요."
 msgstr "Warning: text remains in the places below — check the new file."
+
+#: viewer/scroll_capture.py
+msgid "스크롤 캡처 중 — Esc·[멈춤] = 여기까지 저장"
+msgstr "Scrolling capture — Esc · [Stop] = save up to here"
+
+#: viewer/scroll_capture.py
+msgid "멈춤"
+msgstr "Stop"
+
+#: viewer/scroll_capture.py
+#, python-brace-format
+msgid "스크롤 캡처 중 — {n}장 · 높이 {h}px · Esc·[멈춤] = 여기까지 저장"
+msgstr "Scrolling capture — {n} screens · height {h}px · Esc · [Stop] = save up to here"
 
 #: viewer/share_bundle.py
 msgid "PolyPinax 전달 묶음이 아닙니다."

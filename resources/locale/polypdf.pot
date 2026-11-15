@@ -218,6 +218,10 @@ msgid "영역 캡처"
 msgstr ""
 
 #: viewer/app.py
+msgid "스크롤 캡처"
+msgstr ""
+
+#: viewer/app.py
 msgid "캡쳐 화질 설정"
 msgstr ""
 
@@ -930,6 +934,14 @@ msgstr ""
 
 #: viewer/app.py
 msgid "원본 화질"
+msgstr ""
+
+#: viewer/app.py
+msgid "스크롤 캡처를 찍지 못했습니다."
+msgstr ""
+
+#: viewer/app.py
+msgid "스크롤 캡처를 저장하지 못했습니다."
 msgstr ""
 
 #: viewer/app.py
@@ -1814,6 +1826,10 @@ msgid "화면캡처.png"
 msgstr ""
 
 #: viewer/app.py
+msgid "이 창은 자동 스크롤이 안 됩니다 — 한 화면만 저장했습니다."
+msgstr ""
+
+#: viewer/app.py
 msgid "파일 작업"
 msgstr ""
 
@@ -2288,6 +2304,11 @@ msgstr ""
 #: viewer/app.py
 #, python-brace-format
 msgid "{n}개 페이지 캡쳐"
+msgstr ""
+
+#: viewer/app.py
+#, python-brace-format
+msgid "스크롤 캡처를 멈췄습니다 — 여기까지 {n}장을 이어 저장했습니다."
 msgstr ""
 
 #: viewer/app.py
@@ -2897,6 +2918,11 @@ msgstr ""
 
 #: viewer/app.py
 #, python-brace-format
+msgid "겹치는 부분을 찾지 못해 여기까지 {n}장을 이어 저장했습니다."
+msgstr ""
+
+#: viewer/app.py
+#, python-brace-format
 msgid "클립보드에 복사하지 못했습니다 — {name} 프로그램이 클립보드를 쓰고 있습니다."
 msgstr ""
 
@@ -3140,6 +3166,16 @@ msgstr ""
 #: viewer/app.py
 #, python-brace-format
 msgid "'{code}' 언어팩을 찾지 못해 다른 언어로 표시합니다 (설정은 그대로입니다)."
+msgstr ""
+
+#: viewer/app.py
+#, python-brace-format
+msgid "스크롤 캡처가 최대 길이에 닿아 멈췄습니다 — {n}장을 이어 저장했습니다."
+msgstr ""
+
+#: viewer/app.py
+#, python-brace-format
+msgid "스크롤 캡처 저장 — {n}장을 이었습니다."
 msgstr ""
 
 #: viewer/app.py
@@ -5962,6 +5998,19 @@ msgstr ""
 
 #: viewer/redact_controller.py
 msgid "주의: 아래 자리에 글이 남았습니다 — 새 파일을 확인하세요."
+msgstr ""
+
+#: viewer/scroll_capture.py
+msgid "스크롤 캡처 중 — Esc·[멈춤] = 여기까지 저장"
+msgstr ""
+
+#: viewer/scroll_capture.py
+msgid "멈춤"
+msgstr ""
+
+#: viewer/scroll_capture.py
+#, python-brace-format
+msgid "스크롤 캡처 중 — {n}장 · 높이 {h}px · Esc·[멈춤] = 여기까지 저장"
 msgstr ""
 
 #: viewer/share_bundle.py

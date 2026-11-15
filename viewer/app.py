@@ -698,6 +698,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         m = self._cap_mode
         if m == "region":
             return tr("영역 캡처")          # 261014-18(스크린샷 SOT §3.1, 사용자 결정) — 옛 '지정'
+        if m == "scroll":
+            return tr("스크롤 캡처")        # 261115-14(스크린샷 SOT §3.2)
         if m.startswith("user"):
             i = int(m[4:])
             return self._cap_sizes[i]["name"] if 0 <= i < len(self._cap_sizes) else tr("전체")
@@ -716,6 +718,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             a.triggered.connect(lambda _=False, k=key, i=getattr(dd, "_pane_idx", None): self._set_cap_mode(k, capture_pane=i))
         addmode("full", tr("전체"))
         addmode("region", tr("영역 캡처"))
+        addmode("scroll", tr("스크롤 캡처"))       # 261115-14(스크린샷 SOT §3.2): 영역 캡처 바로 아래
         for i in range(5):
             addmode(f"user{i}", self._cap_sizes[i]["name"])
         m.addSeparator()
@@ -827,6 +830,131 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self.shot_strip.add_item(str(saved), kind="image",
                                  label=Path(name).stem, prepend=False)
         self.status.showMessage(tr("영역 캡쳐 저장"), 4000)
+        self._after_capture()
+
+    # ── 스크롤 캡처 (261115-14, 스크린샷 SOT §3.2) ─────────────────
+    SCROLL_START_MS = 150      # 영역 고르기 화면이 사라진 뒤 첫 찍기까지(다른 프로그램 화면이 다시 그려지게)
+
+    def _capture_scroll(self, view=None, grect=None):
+        """영역을 고르고(§3.1 고르기 그대로) 그 아래 창을 휠로 내리며 찍어 한 장으로 잇는다.
+        grect: 전역 논리 좌표 영역(주면 고르기를 건너뛴다 — 검사·다시 하기)."""
+        if getattr(self, "_scroll_run", None) is not None:
+            return
+        from PyQt6.QtCore import QRect
+        from PyQt6.QtGui import QCursor, QGuiApplication
+        from viewer import scroll_capture as sc
+        screen = None
+        if grect is None:
+            from viewer.widgets.region_capture import RegionCaptureOverlay
+            ov = RegionCaptureOverlay(mode="region", copy_mode=self._cap_copy, parent=self,
+                                      last_region=getattr(self, "_cap_last_region", None))
+            ov.grab()
+            if not ov.region_out:
+                return
+            self._cap_last_region = ov.region_out
+            screen = ov._screen
+            x, y, w, h = (int(v) for v in ov.region_out[:4])
+            g = screen.geometry()
+            grect = QRect(g.x() + x, g.y() + y, w, h)
+        center = grect.center()
+        screen = screen or QGuiApplication.screenAt(center) or QGuiApplication.primaryScreen()
+        panel = sc.ScrollCapturePanel()
+        tgt = sc.own_widget_at(center, exclude=(panel,))
+        self._scroll_cursor = None
+        if tgt is not None:                       # PolyPDF 자기 창 — 앱 안에서 직접
+            win = tgt.window()
+            dpr = float(win.devicePixelRatioF() or 1.0)
+
+            def grab_fn():
+                return sc.app_grab(win, grect)
+
+            def wheel_fn(n):
+                sc.app_wheel(sc.own_widget_at(center, exclude=(panel,)) or tgt, center, n)
+            delay = 0
+        else:                                     # 다른 프로그램 — Windows 휠 + 화면 찍기
+            g = screen.geometry()
+            local = grect.translated(-g.topLeft())
+            dpr = float(screen.devicePixelRatio() or 1.0)
+            self._scroll_cursor = QCursor.pos()
+
+            def grab_fn():
+                return sc.screen_grab(screen, local)
+
+            def wheel_fn(n):
+                QCursor.setPos(screen, center)
+                sc.win_wheel(n)
+            delay = self.SCROLL_START_MS
+        armed = {"on": False}
+
+        def stop_poll():
+            down = sc.stop_keys_down()
+            if not down:
+                armed["on"] = True              # 고르기 때 누른 단추가 떼어진 뒤부터
+                return False
+            return armed["on"]
+        sc.clear_stop_keys()
+        run = sc.ScrollCaptureRun(grab_fn, wheel_fn, dpr=dpr, stop_poll=stop_poll, parent=self)
+        self._scroll_run, self._scroll_panel, self._scroll_dpr = run, panel, dpr
+        cur = view.current_file() if view is not None else None
+        self._scroll_name = Path(cur).name if cur else tr("화면캡처.png")
+        panel.stopRequested.connect(run.stop)
+        run.progress.connect(panel.set_progress)
+        run.finished.connect(self._scroll_finished)
+        panel.place(grect, screen.geometry())
+        panel.show()
+        QTimer.singleShot(delay, run.start)
+
+    def _scroll_finished(self, reason):
+        """진행이 끝났다(끝·멈춤·상한…) — 찍은 것을 배경에서 합성·저장한다."""
+        from viewer import scroll_capture as sc
+        from viewer.workers import run_in_thread
+        run = self._scroll_run
+        try:
+            self._scroll_panel.close()
+            self._scroll_panel.deleteLater()
+        except Exception:
+            pass
+        self._scroll_panel = None
+        if getattr(self, "_scroll_cursor", None) is not None:
+            from PyQt6.QtGui import QCursor
+            QCursor.setPos(self._scroll_cursor)
+            self._scroll_cursor = None
+        if run is None:
+            return
+        self._scroll_reason = reason
+        self._scroll_frames = run.stitcher.frames
+        segs = run.stitcher.segments()
+        run.deleteLater()
+        if not segs:
+            self._scroll_run = None
+            self.status.showMessage(tr("스크롤 캡처를 찍지 못했습니다."), 6000)
+            return
+        dpr = getattr(self, "_scroll_dpr", 1.0)
+        scale = dpr if (self._cap_copy == "visible" and abs(dpr - 1.0) > 1e-3) else 1.0
+        w = sc.ScrollComposeWorker(segs, scale, self._scroll_name)
+        w.done.connect(self._scroll_saved)        # 메인 창의 메서드 → 메인 스레드에서 받는다
+        run_in_thread(w, self._thread_keep)
+
+    def _scroll_saved(self, path, img):
+        self._scroll_run = None
+        if not path:
+            self.status.showMessage(tr("스크롤 캡처를 저장하지 못했습니다."), 6000)
+            return
+        self._copy_image_to_clipboard(img)
+        self.shot_strip.add_item(str(path), kind="image", label=Path(path).stem, prepend=False)
+        n = getattr(self, "_scroll_frames", 1)
+        reason = getattr(self, "_scroll_reason", "end")
+        if reason == "noscroll":
+            msg = tr("이 창은 자동 스크롤이 안 됩니다 — 한 화면만 저장했습니다.")
+        elif reason == "stopped":
+            msg = tr("스크롤 캡처를 멈췄습니다 — 여기까지 {n}장을 이어 저장했습니다.").format(n=n)
+        elif reason == "nomatch":
+            msg = tr("겹치는 부분을 찾지 못해 여기까지 {n}장을 이어 저장했습니다.").format(n=n)
+        elif reason in ("full", "steps"):
+            msg = tr("스크롤 캡처가 최대 길이에 닿아 멈췄습니다 — {n}장을 이어 저장했습니다.").format(n=n)
+        else:
+            msg = tr("스크롤 캡처 저장 — {n}장을 이었습니다.").format(n=n)
+        self.status.showMessage(msg, 8000)
         self._after_capture()
 
     def _after_capture(self):
@@ -989,6 +1117,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 self.action_screenshot(view=view)
         elif m == "region":
             self._capture_region(view, None)
+        elif m == "scroll":
+            self._capture_scroll(view)
         elif m.startswith("user"):
             i = int(m[4:])
             sz = self._cap_sizes[i] if 0 <= i < len(self._cap_sizes) else None
@@ -2499,6 +2629,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             pm = None
             mode = getattr(self, "_cap_mode", "full")
             copy = getattr(self, "_cap_copy", "visible")   # 260611-15: 기존 화질 선택도 반영
+            if mode == "scroll":                           # 261115-14(스크린샷 SOT §3.2): 저장·스트립·클립보드는 그 길이
+                self._capture_scroll(None)
+                return
             if mode == "region":
                 from viewer.widgets.region_capture import RegionCaptureOverlay
                 _ov = RegionCaptureOverlay(mode="region", copy_mode=copy, parent=self,

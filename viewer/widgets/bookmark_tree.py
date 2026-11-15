@@ -984,9 +984,9 @@ class BookmarkTree(QWidget):
             try:
                 data = read_bookmarks_json(json_path)
             except BookmarksJsonTooNew as e:   # 261115-20(§4.7.25): 새 분할기 형식 — 쓰지 않고 PDF 목록으로
-                from viewer.branding import APP_NAME   # 화면 문구의 앱 이름은 글자로 박지 않는다(마스터 §1.1)
+                # 번역 문구 안의 앱 이름은 원문 글자로(branding.py 머리 규칙)
                 self._notice(tr("이 폴더의 bookmarks.json 은 새 분할기로 만든 형식({v})이라 이 판에서 읽을 수 없습니다"
-                                " — PDF 목록으로 보여 줍니다. {app} 를 업데이트하세요.").format(v=e.version, app=APP_NAME),
+                                " — PDF 목록으로 보여 줍니다. PolyPinax 를 업데이트하세요.").format(v=e.version),
                              self.NOTICE_MS * 3)
             except Exception as e:
                 self._set_count("")

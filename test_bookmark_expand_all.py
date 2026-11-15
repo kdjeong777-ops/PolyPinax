@@ -137,7 +137,7 @@ try:
 
     def fake_exec(menu, *a, **k):
         for x in menu.actions():
-            if x.text() == "책갈피 모두 펼치기":
+            if x.text().split("\t")[0] == "책갈피 모두 펼치기":   # 261115-8: 오른쪽 칸에 키
                 seen["checked"] = x.isCheckable() and x.isChecked()
         return None
     QMenu.exec = fake_exec

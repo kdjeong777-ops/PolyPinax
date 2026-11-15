@@ -76,7 +76,7 @@ try:
 
         def fake_exec(menu, *a, **k):
             for x in menu.actions():
-                if x.text() == text:
+                if x.text().split("\t")[0] == text:   # 261115-8: 오른쪽 칸에 키
                     got["a"] = x
             return None
         QMenu.exec = fake_exec
@@ -153,6 +153,8 @@ try:
     chk(ok and row["f1"].isExpanded(), "D 마우스로 누른 파일은 펼친다", f"{cur_file()} exp={row['f1'].isExpanded()}")
 
     # ── E Enter ──
+    if bt.is_collapse_all_mode():                        # 261115-8: 켜진 채 누르면 해제 — 해제한 뒤 다시 켜서 다 접는다
+        menu_action("책갈피 모두 접기", row["f1"]).trigger(); spin(200)
     menu_action("책갈피 모두 접기", row["f1"]).trigger(); spin(200)
     bt.tree.setFocus()
     QTest.keyClick(bt.tree, Qt.Key.Key_Home)            # 목록 첫 줄(f0) — 본문도 따라간다(입력 SOT §3)

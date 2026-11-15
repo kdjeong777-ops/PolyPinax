@@ -2027,6 +2027,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             ("prev_match",    (tr("이전 매치"), "Shift+F3", tr("탐색"))),
             ("option_menu",   (tr("옵션 메뉴(우클릭)"), "Shift+F10", tr("탐색"))),
             ("rename_item",   (tr("파일·책갈피 이름 변경"), "F2", tr("책갈피창"))),
+            # 261115-8(입력 SOT §3.2.4·책갈피창·저장 SOT §4.7.3, 사용자 지시): 우클릭 항목과 같은 토글 — 다시 누르면 해제
+            ("bm_expand_all",   (tr("책갈피 모두 펼치기"), "Ctrl+Shift+]", tr("책갈피창"))),
+            ("bm_collapse_all", (tr("책갈피 모두 접기"), "Ctrl+Shift+[", tr("책갈피창"))),
             # 261025-1(입력 SOT §3.2.1, 사용자 지시): 보기 탭 차례대로 Ctrl+Shift+1~9. toggle_split 은 이제 2단으로만(사용자 결정) — id 는 저장된 키 때문에 그대로
             ("view_single",   (tr("1단 보기"), "Ctrl+Shift+1", tr("보기"))),
             ("toggle_split",  (tr("2단 보기"), "Ctrl+Shift+2", tr("보기"))),
@@ -2096,6 +2099,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             "save_shots_pdf": ("func", self.action_save_screenshot_pdf),
             "clipboard_save": ("func", self._on_clipboard_save),
             "rename_item": ("func", self._sc_rename_item),
+            "bm_expand_all": ("func", lambda: self._sc_bm_expand_all(True)),      # 261115-8
+            "bm_collapse_all": ("func", lambda: self._sc_bm_expand_all(False)),
             "view_single": ("func", lambda: self._view_key("single")),
             "toggle_split": ("func", lambda: self._view_key("split")),
             "view_text": ("func", lambda: self._view_key("text")),
@@ -2165,6 +2170,14 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 return
         from viewer import key_actions as _ka                # 261107-4(입력 SOT §3.2.3): 사진 썸네일 줄·사진 본문에서도
         _ka.rename(self)
+
+    def _sc_bm_expand_all(self, on: bool) -> None:
+        """261115-8(입력 SOT §3.2.4): 책갈피 모두 펼치기/접기 키 — 포커스가 있는 책갈피창(없으면 위 창)의
+        우클릭 항목과 같은 토글. 사진 모드(책갈피 없음)면 아무 일도 하지 않는다."""
+        bt = self._focused_bm_tree()
+        if bt is None or bt._photo_on():
+            return
+        bt.toggle_expand_all(on)
 
     # 260611-3: 선긋기 단축키 — 편집모드의 활성 메인뷰에 적용
     def _draw_sc_pen(self, idx):

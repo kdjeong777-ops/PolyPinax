@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-15 09:13+0900\n"
+"POT-Creation-Date: 2026-11-15 09:42+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -2410,6 +2410,14 @@ msgstr "Rename File/Bookmark"
 #: viewer/app.py
 msgid "책갈피창"
 msgstr "Bookmarks panel"
+
+#: viewer/app.py viewer/widgets/bookmark_tree.py
+msgid "책갈피 모두 펼치기"
+msgstr "Expand All Bookmarks"
+
+#: viewer/app.py viewer/widgets/bookmark_tree.py
+msgid "책갈피 모두 접기"
+msgstr "Collapse All Bookmarks"
 
 #: viewer/app.py
 msgid "보기"
@@ -8059,14 +8067,6 @@ msgstr "Delete File/Bookmark"
 #: viewer/widgets/bookmark_tree.py
 msgid "폴더 삭제"
 msgstr "Delete Folder"
-
-#: viewer/widgets/bookmark_tree.py
-msgid "책갈피 모두 펼치기"
-msgstr "Expand All Bookmarks"
-
-#: viewer/widgets/bookmark_tree.py
-msgid "책갈피 모두 접기"
-msgstr "Collapse All Bookmarks"
 
 #: viewer/widgets/bookmark_tree.py
 msgid "수정한 내용(저장하지 않은 OCR·단어장 포함)이 있습니다. 저장할까요?"

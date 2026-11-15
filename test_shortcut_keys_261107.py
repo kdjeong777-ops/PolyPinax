@@ -91,7 +91,7 @@ try:
     old = {"schema_version": 12, "preferences": {"shortcuts": {"clipboard_save": "Ctrl+Shift+C", "save": "Ctrl+S"}}}
     new = settings_store._migrate(old)
     sc = new["preferences"]["shortcuts"]
-    chk(settings_store.CURRENT_SCHEMA >= 13 and new["schema_version"] == 13 and sc["clipboard_save"] == "Ctrl+Alt+C",
+    chk(settings_store.CURRENT_SCHEMA >= 13 and new["schema_version"] == settings_store.CURRENT_SCHEMA and sc["clipboard_save"] == "Ctrl+Alt+C",
         "B1 옛 기본값 Ctrl+Shift+C 만 Ctrl+Alt+C 로", str(sc))
     mine = settings_store._migrate({"schema_version": 12, "preferences": {"shortcuts": {"clipboard_save": "Ctrl+Shift+Q",
                                                                                       "draw_mode": "Ctrl+B"}}})

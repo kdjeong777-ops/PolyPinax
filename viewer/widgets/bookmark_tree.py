@@ -3592,12 +3592,14 @@ class BookmarkTree(QWidget):
         if _dir_target and not pm:
             self._act(menu, tr("발표보기"), lambda p=_dir_target: self._file_action("present", [p]), key="present")
         if not pm:                                   # 사진에는 책갈피가 없다(4.20) — 260908-1 펼치기/접기
-            act_exp_all = self._act(menu, tr("책갈피 모두 펼치기"), lambda: self._op_expand_all(True),
+            act_exp_all = self._act(menu, tr("책갈피 모두 펼치기"), lambda: self.toggle_expand_all(True),
+                                    key="bm_expand_all",     # 261115-8: 다시 누르면 해제(같은 키도)
                                     tip=tr("책갈피 창에 보이는 파일들의 책갈피를 모두 펼칩니다. "
                                            "스크롤해서 새로 보이는 파일도 펼칩니다('모두 접기' 까지)."))
             act_exp_all.setCheckable(True)           # 261008-6: '모두 펼치기' 는 상태다 — 켜져 있으면 체크
             act_exp_all.setChecked(self._expand_all_mode)
-            act_col_all = self._act(menu, tr("책갈피 모두 접기"), lambda: self._op_expand_all(False),
+            act_col_all = self._act(menu, tr("책갈피 모두 접기"), lambda: self.toggle_expand_all(False),
+                                    key="bm_collapse_all",
                                     tip=tr("모든 파일의 책갈피를 접습니다. 위아래 키로 파일을 옮겨 다녀도 펼치지 않고 표지만 보여 줍니다 — "
                                            "Enter·마우스 누름·→ 키로 그 파일을 펼칩니다('모두 펼치기' 까지)."))
             act_col_all.setCheckable(True)           # 261114-3: '모두 접기' 도 상태다 — 켜져 있으면 체크
@@ -3958,6 +3960,22 @@ class BookmarkTree(QWidget):
 
     def is_collapse_all_mode(self) -> bool:
         return bool(self.__dict__.get("_collapse_all_mode"))
+
+    def toggle_expand_all(self, on: bool) -> None:
+        """261115-8(§4.7.3, 사용자 지시): 메뉴 '책갈피 모두 펼치기/접기' 와 단축키의 한 길 —
+        그 상태가 꺼져 있으면 켜고(`_op_expand_all`), 켜져 있으면 해제한다(평소 상태 — 줄 펼침은 그대로)."""
+        if not (self.is_expand_all_mode() if on else self.is_collapse_all_mode()):
+            self._op_expand_all(on)
+            return
+        self._expand_all_mode = False
+        self._collapse_all_mode = False
+        self._expand_timer.stop()
+        if on:                                   # 다시 켜면 보이는 파일을 처음부터 펼치게 표시를 지운다
+            marked = [n for n in self._iter_file_nodes() if n.data(0, self.DATA_ALL_EXPANDED)]
+            if marked:
+                with self._quiet_tree():
+                    for n in marked:
+                        n.setData(0, self.DATA_ALL_EXPANDED, None)
 
     def _keep_collapsed(self, node) -> bool:
         """261114-3(§4.7.3): '모두 접기' 상태에서 접힌 파일 줄인가 — 본문만 따라가고 줄은 접힌 채 둔다."""

@@ -8,7 +8,7 @@ from typing import Any, Optional
 from PyQt6.QtCore import QStandardPaths
 
 
-CURRENT_SCHEMA = 13
+CURRENT_SCHEMA = 14
 
 # 260611-91: 배포용 기본값 프로파일 — '설정/스타일'만 담고 개인·머신 항목은 제외.
 #   설정 키(이 항목들만 기본값에 포함/초기화 대상):
@@ -382,6 +382,22 @@ def _migrate_v12_to_v13(d: dict) -> dict:
     return d
 
 
+# 261115-8(입력 SOT §3.2.4): v14 에 새로 생긴 단축키 — v13 과 같은 규칙(사용자가 다른 id 에 준 키와 겹치면 비운다)
+NEW_KEYS_V14 = {"bm_expand_all": "Ctrl+Shift+]", "bm_collapse_all": "Ctrl+Shift+["}
+
+
+def _migrate_v13_to_v14(d: dict) -> dict:
+    """261115-8(마스터 §8.2, 입력 SOT §3.2.4): 책갈피 모두 펼치기·접기 키 — 사용자 키를 빼앗지 않는다. idempotent."""
+    sc = (d.get("preferences") or {}).get("shortcuts")
+    if isinstance(sc, dict):
+        used = {_key_norm(v) for k, v in sc.items() if k not in NEW_KEYS_V14 and v}
+        for sid, key in NEW_KEYS_V14.items():
+            if sid not in sc and _key_norm(key) in used:
+                sc[sid] = ""
+    d["schema_version"] = 14
+    return d
+
+
 def _migrate(d: dict) -> dict:
     v = d.get("schema_version", 1)
     if v < 2:
@@ -408,6 +424,8 @@ def _migrate(d: dict) -> dict:
         d = _migrate_v11_to_v12(d)
     if v < 13:
         d = _migrate_v12_to_v13(d)
+    if v < 14:
+        d = _migrate_v13_to_v14(d)
     return d
 
 

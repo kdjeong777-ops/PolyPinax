@@ -78,7 +78,7 @@ try:
 
         def fake_exec(menu, *a, **k):
             for x in menu.actions():
-                if x.text() == text:
+                if x.text().split("\t")[0] == text:   # 261115-8: 오른쪽 칸에 키
                     got["a"] = x
         QMenu.exec = fake_exec
         try:

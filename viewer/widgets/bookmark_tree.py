@@ -797,6 +797,8 @@ class BookmarkTree(QWidget):
             lambda _v: self._schedule_visible_probes())
         self.tree.itemExpanded.connect(lambda _it: self._schedule_visible_probes())
         self.tree.itemCollapsed.connect(lambda _it: self._schedule_visible_probes())
+        # 261115-15(§4.7.3): 고른 줄이 접힌 줄 안으로 숨으면 보이는 조상을 고른다 — 다음 ↓ 가 맨 위로 튀지 않게
+        self.tree.itemCollapsed.connect(lambda _it: self._lift_hidden_current())
         layout.addWidget(self.tree, 1)
         # 261025-4(디자인 SOT §2.8.6): 종전 트리 아래 글 줄(`info`)은 없앴다 — 개수·알림은 창 상태 표시줄.
         #   아래 여백도 0 이라야 트리 아래 끝이 썸네일·본문 아래 끝과 같다.
@@ -2580,6 +2582,7 @@ class BookmarkTree(QWidget):
                     self._set_subtree_expanded(item, True)
             finally:
                 self.tree.setUpdatesEnabled(True)
+            self._anchor_apply()                         # 261115-15: 늦게 단 책갈피도 고른 줄을 밀지 않게
 
     def _fill_toc(self, item: QTreeWidgetItem, ph_idx: int, file_path, toc: list) -> None:
         """placeholder 를 떼고 평탄한 목차(level, title, page1based)를 그 파일 행 아래 나무로 단다."""
@@ -3880,11 +3883,13 @@ class BookmarkTree(QWidget):
         self._expand_all_mode = bool(on)
         self._collapse_all_mode = not on                 # 261114-3: 접기 상태 — ↑↓ 로 와도 펼치지 않는다
         if on:
+            self._anchor_begin()                         # 261115-15: 펼치는 동안 고른 줄을 제 높이에
             self._apply_expand_mode()
             return
         self._expand_timer.stop()
         nodes = [n for n in self._iter_file_nodes()
                  if n.isExpanded() or n.data(0, self.DATA_TOC_LOADED) or n.data(0, self.DATA_ALL_EXPANDED)]
+        self._anchor_begin()                             # 261115-15: 고른 줄의 화면 높이를 기억
         self.tree.setUpdatesEnabled(False)
         try:
             with self._quiet_tree():
@@ -3899,6 +3904,9 @@ class BookmarkTree(QWidget):
                         stack.extend(c.child(k) for k in range(c.childCount()))
         finally:
             self.tree.setUpdatesEnabled(True)
+        self._lift_hidden_current()                      # 신호를 막고 접었으니 직접
+        self._anchor_apply()
+        self._anchor = None
 
     def _set_subtree_expanded(self, node, on: bool) -> None:
         """node 아래 책갈피를 모두 펼치거나 접는다 — **한 번에**(응답성 SOT §4.4).
@@ -3953,6 +3961,7 @@ class BookmarkTree(QWidget):
                         self._set_subtree_expanded(it, True)
                 finally:
                     self.tree.setUpdatesEnabled(True)
+            self._anchor_apply()                     # 261115-15: 고른 줄을 제 높이로 — 그 둘레가 '보이는 파일'
             # 펼친 만큼 보이는 행이 바뀐다 — 다음 바퀴에서 다시 센다
 
     def is_expand_all_mode(self) -> bool:
@@ -3970,12 +3979,76 @@ class BookmarkTree(QWidget):
         self._expand_all_mode = False
         self._collapse_all_mode = False
         self._expand_timer.stop()
+        self._anchor = None
         if on:                                   # 다시 켜면 보이는 파일을 처음부터 펼치게 표시를 지운다
             marked = [n for n in self._iter_file_nodes() if n.data(0, self.DATA_ALL_EXPANDED)]
             if marked:
                 with self._quiet_tree():
                     for n in marked:
                         n.setData(0, self.DATA_ALL_EXPANDED, None)
+
+    ANCHOR_MS = 5000
+
+    def _anchor_begin(self) -> None:
+        """261115-15(§4.7.3): 모두 펼치기·접기 전 고른 줄의 창 안 높이를 기억 — 창 밖이면 기억하지 않는다."""
+        self._anchor = None
+        cur = self.tree.currentItem()
+        if cur is None:
+            return
+        r = self.tree.visualItemRect(cur)
+        if r.height() <= 0 or not self.tree.viewport().rect().intersects(r):
+            return
+        import time as _t
+        self._anchor = (cur, r.top(), None, _t.monotonic())
+
+    def _anchor_apply(self) -> None:
+        """기억한 높이에 고른 줄(숨었으면 보이는 조상)이 오도록 스크롤 — 사용자가 그 사이 스크롤했거나
+        다른 줄을 골랐거나 오래되면 그만둔다. 맞춘 뒤에도 창 밖이면 최소로 보이게(EnsureVisible)."""
+        a = self.__dict__.get("_anchor")
+        if not a:
+            return
+        it, y0, vb, t0 = a
+        import time as _t
+        tree = self.tree
+        sb = tree.verticalScrollBar()
+        cur = tree.currentItem()
+        if ((vb is not None and sb.value() != vb) or (_t.monotonic() - t0) * 1000 > self.ANCHOR_MS
+                or cur is None or (cur is not it and self._visible_anchor(it) is not cur)):
+            self._anchor = None
+            return
+        tgt = self._visible_anchor(cur)
+        r = tree.visualItemRect(tgt)
+        if r.height() > 0 and r.top() != y0:
+            tree.updateGeometries()                  # 펼침·접힘으로 바뀐 스크롤 범위를 지금 반영
+            if tree.verticalScrollMode() == tree.ScrollMode.ScrollPerItem:
+                d = round((r.top() - y0) / r.height())
+            else:
+                d = r.top() - y0
+            if d:
+                sb.setValue(sb.value() + d)
+        tree.scrollToItem(tgt, tree.ScrollHint.EnsureVisible)
+        self._anchor = (it, y0, sb.value(), t0)
+
+    def _visible_anchor(self, it):
+        """it 이 접힌 줄 안에 숨었으면 보이는 가장 가까운 조상(가장 바깥의 접힌 줄), 아니면 it."""
+        vis, p = it, it.parent()
+        while p is not None:
+            if not p.isExpanded():
+                vis = p
+            p = p.parent()
+        return vis
+
+    def _lift_hidden_current(self) -> None:
+        """261115-15(§4.7.3): 고른 줄이 접힌 줄 안으로 숨었으면 보이는 조상을 고른다 — 본문은 옮기지 않는다
+        (신호를 막는다 — 본문은 이미 그 안의 쪽). 숨은 줄이 고른 줄로 남으면 Qt 의 ↓ 가 맨 위 줄로 갔다."""
+        cur = self.tree.currentItem()
+        if cur is None:
+            return
+        vis = self._visible_anchor(cur)
+        if vis is cur:
+            return
+        with self._quiet_tree():
+            self.tree.setCurrentItem(vis)
 
     def _nav_ahead(self, fpk: str, norm_key) -> bool:
         """261115-10(§4.7.3): 이 창이 **아직 내보내지 않은 옮김**(모아 둔 `_quick_pend`·예약한 `_pending_nav`)이 다른 파일인가 —

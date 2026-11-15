@@ -34,6 +34,8 @@ try:
     from viewer.widgets.twoup_dialog import TwoUpSettingsDialog
     mw = MainWindow()
     names = lambda: [p.get("name") for p in mw._prefs.get("merge_presets") or []]
+    from viewer.twoup import NUP_SEED_VER
+    mw._prefs["nup_seed_ver"] = NUP_SEED_VER      # 261115-6 기본 스타일 넣기는 이미 했다고(순서만 본다)
     mw._prefs["merge_presets"] = [{"name": n, "nup": 2} for n in ("가", "나", "다", "라")]
     api = mw._merge_preset_api()
 

@@ -84,8 +84,10 @@ try:
     src = make_src("a.pdf", 4)
 
     # ── ① 2-up 에서 모두 남는다 ─────────────────────────────────────
+    # 261115-6 에 기본 여백이 '좁게' 로 바뀌었다 — ② 계산은 '보통' 값으로 하므로 그 값을 준다
     out1 = build([{"type": "pdf", "path": src, "name": "a"}],
-                 os.path.join(root, "o1.pdf"))
+                 os.path.join(root, "o1.pdf"),
+                 margin_top=36, margin_bottom=48, margin_left=28, margin_right=28, gap=16, gap_v=16)
     L = links_of(out1)
     uri = [e for e in L if e[1] == fitz.LINK_URI]
     goto = [e for e in L if e[1] == fitz.LINK_GOTO]

@@ -8,7 +8,7 @@
 
 A. 다단 설정 창 — 세 갈래, 옛 스타일(duplex: True) 호환, 저장 값
 B. 인쇄 창 미리보기 — 다단을 켜면 시트 수·모양이 **실제 다단 PDF(build_twoup)** 와 같다(범위별)
-C. 단면/양면 — 다단을 켜면 그 설정이 프린터 옵션에 걸리고 잠긴다, 끄면 되돌린다, 설정 창·스타일 고르기도
+C. 단면/양면 — 다단을 켜면 그 설정이 프린터 옵션에 걸린다(261115-7 부터 잠그지 않음), 끄면 되돌린다, 설정 창·스타일 고르기도
 """
 import os, sys, tempfile, shutil, faulthandler
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -107,11 +107,14 @@ try:
         "B 다단을 끄면 원본 쪽 미리보기로 돌아온다", dlg.nav.text())
 
     # ── C. 단면/양면 연동 ─────────────────────────────────────────────
+    dlg._printer_duplex_supported = lambda: True       # 이 PC 프린터의 양면 지원 여부와 무관하게
+    dlg._apply_duplex_support()
     dlg.cmb_duplex.setCurrentText("양면(긴 쪽)")
     dlg._nup_settings = {"duplex": True, "duplex_side": "short"}
     dlg.chk_nup.setChecked(True); app.processEvents()
-    chk(dlg.cmb_duplex.currentText() == "양면(짧은 쪽)" and not dlg.cmb_duplex.isEnabled(),
-        "C 다단을 켜면 그 설정의 면이 프린터 옵션에 걸리고 잠긴다", dlg.cmb_duplex.currentText())
+    # 261115-7(§11.10.1): 처음 값은 다단 설정, 잠그지 않는다(종전 261008-2 는 잠갔다)
+    chk(dlg.cmb_duplex.currentText() == "양면(짧은 쪽)" and dlg.cmb_duplex.isEnabled(),
+        "C 다단을 켜면 그 설정의 면이 프린터 옵션에 걸린다(잠그지 않음)", dlg.cmb_duplex.currentText())
     chk(dlg.duplex_mode() == QPrinter.DuplexMode.DuplexShortSide, "C 프린터에 넘기는 값(duplex_mode)도 짧은 쪽")
     chk("양면(짧은 쪽)" in dlg.preview_cap.text(), "C 미리보기 설명에도 면", dlg.preview_cap.text())
 

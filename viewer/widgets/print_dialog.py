@@ -42,7 +42,9 @@ class PrintScopeDialog(NupPresetMixin, QDialog):
         self._nup_tmpdir = None                # 범위 일부만 담은 임시 PDF(다단 미리보기용)
         self._nup_sub = {}                     # {범위 키: 임시 PDF 경로}
         self._nup_total = 1                    # 다단 미리보기 시트 수
-        self._duplex_before_nup = None         # 다단을 켜기 전 프린터 단면/양면(끄면 되돌린다)
+        # 261115-7(마스터 §11.10.1): 다단을 켜기 전 프린터 옵션(용지·단면/양면·인쇄 크기·방향 자동 — 끄면 되돌린다)
+        self._printer_before_nup = None
+        self._printer_syncing = False
 
         root = QVBoxLayout(self)
         body = QHBoxLayout()
@@ -209,7 +211,10 @@ class PrintScopeDialog(NupPresetMixin, QDialog):
         for _t, _k in DUPLEX_CHOICES:
             self.cmb_duplex.addItem(tr(_t), _k)
         self.cmb_duplex.setCurrentIndex(0)      # 기본 단면
+        self.cmb_duplex.currentIndexChanged.connect(self._on_printer_duplex)
         form.addRow(tr("단면/양면"), self.cmb_duplex)
+        self.cmb_printer.currentIndexChanged.connect(self._apply_duplex_support)
+        self._apply_duplex_support()
 
         self.cmb_include = QComboBox()
         for _t, _k in ((tr("문서 + 주석·꾸미기"), "all"), (tr("문서만"), "doc")):
@@ -364,26 +369,86 @@ class PrintScopeDialog(NupPresetMixin, QDialog):
             self._nup_total = 1
             return None
 
+    def _printer_duplex_supported(self):
+        """고른 프린터가 양면을 하는가 — True / False / None(드라이버가 알리지 않음)."""
+        try:
+            from PyQt6.QtPrintSupport import QPrinterInfo, QPrinter
+            info = QPrinterInfo.printerInfo(self.printer_name())
+            if info.isNull():
+                return None
+            modes = list(info.supportedDuplexModes())
+        except Exception:
+            return None
+        if not modes:
+            return None
+        D = QPrinter.DuplexMode
+        return any(m in (D.DuplexLongSide, D.DuplexShortSide, D.DuplexAuto) for m in modes)
+
+    def _apply_duplex_support(self, *_):
+        """261115-7(§11.10.1 '양면을 못 하는 프린터'): 양면을 못 한다고 알리는 프린터면 양면 항목을 끄고 단면으로."""
+        ok = self._printer_duplex_supported() is not False
+        model = self.cmb_duplex.model()
+        for i in range(self.cmb_duplex.count()):
+            if self.cmb_duplex.itemData(i) != "none":
+                it = model.item(i)
+                if it is not None:
+                    it.setEnabled(ok)
+        if not ok and self.cmb_duplex.currentData() != "none":
+            self.cmb_duplex.setCurrentIndex(self.cmb_duplex.findData("none"))
+        self.cmb_duplex.setToolTip("" if ok else tr("이 프린터는 양면 인쇄를 지원하지 않습니다."))
+
+    def _printer_state(self):
+        return (self.cmb_paper.currentIndex(), self.cmb_duplex.currentIndex(),
+                self.cmb_size.currentIndex(), self.chk_auto_orient.isChecked())
+
     def _sync_nup_to_printer(self):
-        """다단을 켜면 그 설정의 단면/양면(긴 쪽·짧은 쪽)을 프린터 옵션에 건다(사용자 요청).
-        켜져 있는 동안은 프린터 쪽 콤보를 잠근다 — 두 곳 값이 갈라지면 시트 제본 여백·홀수 시작이
-        프린터가 실제로 넘기는 방향과 어긋난다. 끄면 켜기 전 값으로 되돌린다."""
+        """261115-7(마스터 §11.10.1, 사용자 지시): 다단을 켜거나 다단 설정이 바뀌면 프린터 옵션을 다단 설정으로
+        **처음 맞춘다** — 용지(다단 `page_size`, 프린터 목록에 있을 때)·단면/양면·인쇄 크기 '맞춤'·방향 자동 켬.
+        잠그지 않는다(그 뒤 바꾼 값으로 인쇄). 끄면 켜기 전 네 값으로 되돌린다.
+        종전(261008-2)에는 단면/양면만 걸고 잠갔다."""
         from viewer.twoup import duplex_choice
         on = bool(self.chk_nup.isChecked())
-        if on:
-            if self._duplex_before_nup is None:
-                self._duplex_before_nup = self.cmb_duplex.currentIndex()
-            i = self.cmb_duplex.findData(duplex_choice(self.nup_settings()))
-            if i >= 0:
-                self.cmb_duplex.setCurrentIndex(i)
-            self.cmb_duplex.setEnabled(False)
-            self.cmb_duplex.setToolTip(tr("다단 인쇄 설정의 '인쇄 면' 을 따릅니다(다단 설정에서 바꾸세요)."))
-        else:
-            if self._duplex_before_nup is not None:
-                self.cmb_duplex.setCurrentIndex(self._duplex_before_nup)
-            self._duplex_before_nup = None
-            self.cmb_duplex.setEnabled(True)
-            self.cmb_duplex.setToolTip("")
+        self._printer_syncing = True
+        try:
+            if on:
+                if self._printer_before_nup is None:
+                    self._printer_before_nup = self._printer_state()
+                s = self.nup_settings()
+                i = self.cmb_paper.findText(str(s.get("page_size") or ""))
+                if i >= 0:
+                    self.cmb_paper.setCurrentIndex(i)
+                i = self.cmb_duplex.findData(duplex_choice(s))
+                if i >= 0:
+                    self.cmb_duplex.setCurrentIndex(i)
+                self.cmb_size.setCurrentIndex(0)
+                self.chk_auto_orient.setChecked(True)
+                self._apply_duplex_support()       # 양면을 못 하는 프린터면 단면으로
+            elif self._printer_before_nup is not None:
+                pi, di, si, ao = self._printer_before_nup
+                self.cmb_paper.setCurrentIndex(pi)
+                self.cmb_duplex.setCurrentIndex(di)
+                self.cmb_size.setCurrentIndex(si)
+                self.chk_auto_orient.setChecked(ao)
+                self._printer_before_nup = None
+                self._apply_duplex_support()
+        finally:
+            self._printer_syncing = False
+
+    def _on_printer_duplex(self, *_):
+        """261115-7: 다단 중 사용자가 프린터 단면/양면을 바꾸면 다단 설정의 인쇄 면도 같이 —
+        제본 여백·홀수 시작이 실제로 넘기는 방향과 갈리지 않게(종전 잠금의 이유)."""
+        if not hasattr(self, "preview"):          # 창을 만드는 중(양면 지원 확인이 단면으로 바꿀 때)
+            return
+        if self._printer_syncing or not self.chk_nup.isChecked():
+            self._update_preview()
+            return
+        k = self.cmb_duplex.currentData()
+        s = dict(self._nup_settings or {})
+        s["duplex"] = k in ("long", "short")
+        if k in ("long", "short"):
+            s["duplex_side"] = k
+        self._nup_settings = s
+        self._sync_preview_to_scope()
 
     def _nup_changed(self):
         self._sync_nup_to_printer()

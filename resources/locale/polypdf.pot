@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-11-15 01:04+0900\n"
+"POT-Creation-Date: 2026-11-15 09:13+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -7109,11 +7109,11 @@ msgid "보통"
 msgstr ""
 
 #: viewer/twoup.py
-msgid "좁게"
+msgid "넓게"
 msgstr ""
 
 #: viewer/twoup.py
-msgid "넓게"
+msgid "좁게"
 msgstr ""
 
 #: viewer/twoup.py
@@ -7126,6 +7126,18 @@ msgstr ""
 
 #: viewer/twoup.py
 msgid "좌우"
+msgstr ""
+
+#: viewer/twoup.py
+msgid "2장·양면·여백좁게"
+msgstr ""
+
+#: viewer/twoup.py
+msgid "4장·양면·여백좁게"
+msgstr ""
+
+#: viewer/twoup.py
+msgid "6장·양면·여백없음·늘이기"
 msgstr ""
 
 #: viewer/twoup.py
@@ -10938,7 +10950,7 @@ msgid "문서만"
 msgstr ""
 
 #: viewer/widgets/print_dialog.py
-msgid "다단 인쇄 설정의 '인쇄 면' 을 따릅니다(다단 설정에서 바꾸세요)."
+msgid "이 프린터는 양면 인쇄를 지원하지 않습니다."
 msgstr ""
 
 #: viewer/widgets/print_dialog.py

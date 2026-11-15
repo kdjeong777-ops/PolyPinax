@@ -6261,6 +6261,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
 
     def _nup_get_parts(self, kind) -> list:
         """261115-5: 목록이 설정에 **없을 때만** 기본 항목을 심는다 — 지운 기본 항목·빈 목록은 그대로(사용자 결정 ①)."""
+        self._nup_seed_defaults()
         key = self._NUP_PART_KEY[kind]
         if not isinstance(self._prefs.get(key), list):
             from viewer.twoup import default_part_styles
@@ -6299,7 +6300,40 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self._prefs[self._NUP_PART_KEY[kind]] = lst
         self._save_settings_now()
 
+    def _nup_seed_defaults(self):
+        """261115-6(마스터 §11.10.5 '한 번만 넣기'): 설정 `nup_seed_ver` 가 낮으면 그 뒤 판에 새로 생긴 기본 항목 중
+        **같은 이름이 없는 것**만 목록 끝에 넣고 판 번호를 올린다 — 지운 항목은 다시 생기지 않는다.
+        여백·크롭 목록은 이미 있을 때만(없으면 `_nup_get_parts` 가 기본 항목 전체를 심는다)."""
+        from viewer import twoup as _tw
+        try:
+            ver = int(self._prefs.get("nup_seed_ver") or 0)
+        except (TypeError, ValueError):
+            ver = 0
+        if ver >= _tw.NUP_SEED_VER:
+            return
+        pools = {"style": ("merge_presets", _tw.default_nup_styles())}
+        for kind, key in self._NUP_PART_KEY.items():
+            pools[kind] = (key, _tw.default_part_styles(kind))
+        for v in range(ver + 1, _tw.NUP_SEED_VER + 1):
+            for kind, names in _tw.NUP_SEED_ADDED.get(v, {}).items():
+                key, defaults = pools[kind]
+                lst = self._prefs.get(key)
+                if kind == "style" and not isinstance(lst, list):
+                    lst = []
+                if not isinstance(lst, list):
+                    continue
+                lst = list(lst)
+                have = {p.get("name") for p in lst if isinstance(p, dict)}
+                want = {tr(n) for n in names}
+                for p in defaults:
+                    if p["name"] in want and p["name"] not in have:
+                        lst.append(dict(p))
+                self._prefs[key] = lst
+        self._prefs["nup_seed_ver"] = _tw.NUP_SEED_VER
+        self._save_settings_now()
+
     def _merge_get_presets(self) -> list:
+        self._nup_seed_defaults()
         return list(self._prefs.get("merge_presets") or [])
 
     def _merge_save_preset(self, name, cfg):
@@ -10359,6 +10393,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             # 261115-5(마스터 §11.10.4): 여백·크롭 스타일 — 없으면(None) 다음에 기본 항목을 심는다, 빈 목록은 빈 채로
             "nup_margin_presets": prefs.get("nup_margin_presets", old.get("nup_margin_presets")),
             "nup_crop_presets": prefs.get("nup_crop_presets", old.get("nup_crop_presets")),
+            # 261115-6(§11.10.5): 기본 항목을 넣은 판 — 사라지면 지운 기본 스타일이 다시 생긴다
+            "nup_seed_ver": prefs.get("nup_seed_ver", old.get("nup_seed_ver", 0)),
             # 260606-13: 화면 스타일(테마)
             "theme": str(prefs.get("theme", old.get("theme", "auto"))),
             # 261008(다국어 SOT §4): 화면 언어 — 허용목록이라 여기 없으면 조용히 사라진다.

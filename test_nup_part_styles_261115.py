@@ -79,22 +79,27 @@ try:
     pv = dlg.preview
     chk(hasattr(pv, "cmb_margin_style") and hasattr(pv, "cmb_crop_style"), "A0 여백·크롭 스타일 콤보가 있다")
     cm, cc = pv.cmb_margin_style, pv.cmb_crop_style
-    chk(names(cm) == ["보통", "좁게", "넓게", "사용자 지정"], "A1 여백 스타일 기본 항목", str(names(cm)))
+    # 261115-6: 없음 추가·순서 보통·넓게·좁게·없음·기본값 좁게
+    chk(names(cm) == ["보통", "넓게", "좁게", "없음", "사용자 지정"], "A1 여백 스타일 기본 항목", str(names(cm)))
     chk(names(cc) == ["없음", "상하좌우", "상하", "좌우", "사용자 지정"], "A2 크롭 스타일 기본 항목", str(names(cc)))
-    chk(cm.currentText() == "보통" and cc.currentText() == "없음", "A3 처음 값(종전 기본값)에 맞는 이름",
+    chk(cm.currentText() == "좁게" and cc.currentText() == "없음", "A3 처음 값(기본값 = 좁게)에 맞는 이름",
         cm.currentText() + "/" + cc.currentText())
     btns = pv.part_buttons("margin") + pv.part_buttons("crop")
     chk(len(btns) == 8 and not any(b.isEnabled() for b in btns), "A4 preset_api 없으면 ▲▼·저장·삭제 꺼짐")
 
     # B
-    pick_text(cm, "좁게")
+    pick_text(cm, "넓게")
     v = pv.values()
-    chk(tuple(v[k] for k in M) == (18, 30, 14, 14, 8, 8), "B1 좁게 → 여백·간격 칸", str(tuple(v[k] for k in M)))
+    chk(tuple(v[k] for k in M) == (54, 66, 42, 42, 24, 24), "B1 넓게 → 여백·간격 칸", str(tuple(v[k] for k in M)))
     chk(tuple(v[k] for k in C) == (0, 0, 0, 0) and cc.currentText() == "없음", "B2 크롭 칸은 그대로")
     type_spin(pv.sp["margin_top"], 20)
     chk(pv.values()["margin_top"] == 20 and cm.currentText() == "사용자 지정", "B3 칸을 바꾸면 사용자 지정", cm.currentText())
-    type_spin(pv.sp["margin_top"], 18)
-    chk(cm.currentText() == "좁게", "B4 값이 다시 맞으면 그 이름", cm.currentText())
+    type_spin(pv.sp["margin_top"], 54)
+    chk(cm.currentText() == "넓게", "B4 값이 다시 맞으면 그 이름", cm.currentText())
+    pick_text(cm, "없음")
+    v = pv.values()
+    chk(tuple(v[k] for k in M) == (0, 0, 0, 0, 0, 0), "B4b 없음 → 여백·간격 0", str(tuple(v[k] for k in M)))
+    pick_text(cm, "넓게")
     pick_text(cc, "상하")
     v = pv.values()
     chk(tuple(v[k] for k in C) == (5, 5, 0, 0), "B5 크롭 상하 → 5·5·0·0", str(tuple(v[k] for k in C)))
@@ -103,7 +108,7 @@ try:
     pick_text(cc, "사용자 지정")
     chk(pv.values()["crop_left"] == 7, "B7 사용자 지정을 골라도 칸 그대로")
     g = dlg.get_settings()
-    chk(g["margin_left"] == 14 and g["crop_left"] == 7, "B8 get_settings 에 값")
+    chk(g["margin_left"] == 42 and g["crop_left"] == 7, "B8 get_settings 에 값")
 
     # C
     dlg.apply_settings({"margin_top": 54, "margin_bottom": 66, "margin_left": 42, "margin_right": 42,
@@ -122,22 +127,23 @@ try:
     api = mw._merge_preset_api()
     chk(callable(api.get("get_parts")), "D0 preset_api 에 get_parts")
     lst = api["get_parts"]("margin")
-    chk([p["name"] for p in lst] == ["보통", "좁게", "넓게"] and mw._prefs.get("nup_margin_presets"),
+    chk([p["name"] for p in lst] == ["보통", "넓게", "좁게", "없음"] and mw._prefs.get("nup_margin_presets"),
         "D1 처음 한 번 기본 항목을 심어 설정에 둔다", str(lst))
     dlg = TwoUpSettingsDialog({}, None, preset_api=api, sample=str(sp))
     dlg.show(); spin(0.3)
     pv = dlg.preview; cm = pv.cmb_margin_style
     up, dn, sv, de = pv.part_buttons("margin")
+    pick_text(cm, "보통")
     chk(sv.isEnabled() and de.isEnabled() and not up.isEnabled() and dn.isEnabled(), "D2 api 있으면 단추 켜짐(맨 위 ▲ 꺼짐)")
     type_spin(pv.sp["gap"], 30)
     QInputDialog.getText = staticmethod(lambda *a, **k: ("내 여백", True))
     QTest.mouseClick(sv, Qt.MouseButton.LeftButton); spin(0.1)
     st = mw._prefs["nup_margin_presets"]
-    chk([p["name"] for p in st] == ["보통", "좁게", "넓게", "내 여백"] and st[3]["gap"] == 30,
+    chk([p["name"] for p in st] == ["보통", "넓게", "좁게", "없음", "내 여백"] and st[4]["gap"] == 30,
         "D3 새 이름 저장 → 목록 끝, 값", str([(p["name"], p.get("gap")) for p in st]))
     chk(cm.currentText() == "내 여백", "D4 저장한 이름을 보인다", cm.currentText())
     QTest.mouseClick(up, Qt.MouseButton.LeftButton); spin(0.1)
-    chk([p["name"] for p in mw._prefs["nup_margin_presets"]] == ["보통", "좁게", "내 여백", "넓게"]
+    chk([p["name"] for p in mw._prefs["nup_margin_presets"]] == ["보통", "넓게", "좁게", "내 여백", "없음"]
         and cm.currentText() == "내 여백", "D5 ▲ 로 한 칸 위, 계속 골라 둠")
     pick_text(cm, "좁게")
     type_spin(pv.sp["margin_top"], 19)
@@ -145,7 +151,7 @@ try:
     QMessageBox.question = staticmethod(lambda *a, **k: QMessageBox.StandardButton.Yes)
     QTest.mouseClick(sv, Qt.MouseButton.LeftButton); spin(0.1)
     st = mw._prefs["nup_margin_presets"]
-    chk([p["name"] for p in st].index("좁게") == 1 and st[1]["margin_top"] == 19, "D6 같은 이름은 그 자리에서 덮어쓰기(기본 항목도)")
+    chk([p["name"] for p in st].index("좁게") == 2 and st[2]["margin_top"] == 19, "D6 같은 이름은 그 자리에서 덮어쓰기(기본 항목도)")
     pick_text(cm, "보통")
     QTest.mouseClick(de, Qt.MouseButton.LeftButton); spin(0.1)
     chk("보통" not in [p["name"] for p in mw._prefs["nup_margin_presets"]] and cm.findText("보통") < 0,

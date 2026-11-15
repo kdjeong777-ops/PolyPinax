@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-15 01:04+0900\n"
+"POT-Creation-Date: 2026-11-15 09:13+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -7316,12 +7316,12 @@ msgid "보통"
 msgstr "Normal"
 
 #: viewer/twoup.py
-msgid "좁게"
-msgstr "Narrow"
-
-#: viewer/twoup.py
 msgid "넓게"
 msgstr "Wide"
+
+#: viewer/twoup.py
+msgid "좁게"
+msgstr "Narrow"
 
 #: viewer/twoup.py
 msgid "상하좌우"
@@ -7334,6 +7334,18 @@ msgstr "Top and bottom"
 #: viewer/twoup.py
 msgid "좌우"
 msgstr "Left and right"
+
+#: viewer/twoup.py
+msgid "2장·양면·여백좁게"
+msgstr "2-up · Duplex · Narrow margins"
+
+#: viewer/twoup.py
+msgid "4장·양면·여백좁게"
+msgstr "4-up · Duplex · Narrow margins"
+
+#: viewer/twoup.py
+msgid "6장·양면·여백없음·늘이기"
+msgstr "6-up · Duplex · No margins · Stretch"
 
 #: viewer/twoup.py
 msgid "단면"
@@ -11263,8 +11275,8 @@ msgid "문서만"
 msgstr "Document only"
 
 #: viewer/widgets/print_dialog.py
-msgid "다단 인쇄 설정의 '인쇄 면' 을 따릅니다(다단 설정에서 바꾸세요)."
-msgstr "Follows the 'Print sides' option in N-up printing settings (change it there)."
+msgid "이 프린터는 양면 인쇄를 지원하지 않습니다."
+msgstr "This printer does not support duplex printing."
 
 #: viewer/widgets/print_dialog.py
 msgid "시트 "
@@ -16637,4 +16649,7 @@ msgstr "Getting Started"
 
 #~ msgid "8장 (8-up, 2열×4행)"
 #~ msgstr "8 pages (8-up, 2 cols × 4 rows)"
+
+#~ msgid "다단 인쇄 설정의 '인쇄 면' 을 따릅니다(다단 설정에서 바꾸세요)."
+#~ msgstr "Follows the 'Print sides' option in N-up printing settings (change it there)."
 

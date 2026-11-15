@@ -38,9 +38,10 @@ DEFAULT_TWOUP = {
     "page_size": "A4",                 # 출력 용지(PAGE_SIZES)
     "center": True,                    # 셀 안 가운데 정렬
     "fit_mode": "contain",             # 260611-46: 채움 방식 contain|cover|stretch
-    "margin_top": 36, "margin_bottom": 48, "margin_left": 28, "margin_right": 28,  # pt
-    "gap": 16,                         # 열(가로) 간격(pt)
-    "gap_v": 16,                       # 행(세로) 간격(pt) — 6-up 등
+    # 261115-6(마스터 §11.10.4, 사용자 지시 '기본은 좁게'): 여백 스타일 '좁게' 값(종전 36·48·28·28·16·16 = '보통')
+    "margin_top": 18, "margin_bottom": 30, "margin_left": 14, "margin_right": 14,  # pt
+    "gap": 8,                          # 열(가로) 간격(pt)
+    "gap_v": 8,                        # 행(세로) 간격(pt) — 6-up 등
     "crop_top": 0, "crop_bottom": 0, "crop_left": 0, "crop_right": 0,  # 원본 크롭(%)
     "duplex": False,                   # 양면(True)/단면(False) 인쇄
     "duplex_side": "long",             # 261008-2: 양면일 때 넘기는 쪽 long(긴 쪽)|short(짧은 쪽) — 프린터 양면 설정과 같다
@@ -82,10 +83,12 @@ MULTI_FILE_KEYS = ("make_divider", "doc_break", "doc_start_odd")
 #   설정(`nup_margin_presets`·`nup_crop_presets`)에 목록이 없을 때 한 번만 (그때 화면 언어 이름으로) 심는다.
 MARGIN_STYLE_KEYS = ("margin_top", "margin_bottom", "margin_left", "margin_right", "gap", "gap_v")
 CROP_STYLE_KEYS = ("crop_top", "crop_bottom", "crop_left", "crop_right")
+#   261115-6: '없음' 추가·순서 보통·넓게·좁게·없음·기본값은 '좁게'(= DEFAULT_TWOUP).
 MARGIN_STYLE_DEFAULTS = (
-    (tr_noop("보통"), (36, 48, 28, 28, 16, 16)),      # = DEFAULT_TWOUP
-    (tr_noop("좁게"), (18, 30, 14, 14, 8, 8)),
+    (tr_noop("보통"), (36, 48, 28, 28, 16, 16)),
     (tr_noop("넓게"), (54, 66, 42, 42, 24, 24)),
+    (tr_noop("좁게"), (18, 30, 14, 14, 8, 8)),        # = DEFAULT_TWOUP
+    (tr_noop("없음"), (0, 0, 0, 0, 0, 0)),
 )
 CROP_STYLE_DEFAULTS = (
     (tr_noop("없음"), (0, 0, 0, 0)),
@@ -101,6 +104,30 @@ def default_part_styles(kind) -> list:
     """261115-5: 그 종류의 기본 항목 `[{name, 값…}]` — 이름은 지금 화면 언어."""
     keys, rows = PART_STYLE_KINDS[kind]
     return [dict(zip(keys, vals), name=tr(nm)) for nm, vals in rows]
+
+
+# 261115-6(마스터 §11.10.5, 사용자 지시): 기본 전체 스타일(`merge_presets`) — 나머지 키는 DEFAULT_TWOUP.
+#   넘기는 쪽은 책처럼 좌우로: 가로 시트(2장) 짧은 쪽, 세로 시트(4·6장) 긴 쪽(§11.10.1 제본 표).
+_M_NARROW = dict(zip(MARGIN_STYLE_KEYS, (18, 30, 14, 14, 8, 8)))
+_M_NONE = dict(zip(MARGIN_STYLE_KEYS, (0, 0, 0, 0, 0, 0)))
+NUP_STYLE_DEFAULTS = (
+    (tr_noop("2장·양면·여백좁게"),
+     dict(nup=2, orient="auto", cols=1, rows=2, duplex=True, duplex_side="short", **_M_NARROW)),
+    (tr_noop("4장·양면·여백좁게"),
+     dict(nup=4, orient="portrait", cols=2, rows=2, duplex=True, duplex_side="long", **_M_NARROW)),
+    (tr_noop("6장·양면·여백없음·늘이기"),
+     dict(nup=6, orient="portrait", cols=2, rows=3, duplex=True, duplex_side="long",
+          fit_mode="stretch", **_M_NONE)),
+)
+# 기본 항목을 한 번만 넣는 판 번호(설정 `nup_seed_ver`) — {판: {종류: (그 판에 새로 생긴 이름…)}}.
+#   종류 'style' = merge_presets, 'margin'·'crop' = 여백·크롭 스타일(목록이 이미 있을 때만 더한다).
+NUP_SEED_VER = 1
+NUP_SEED_ADDED = {1: {"style": tuple(n for n, _ in NUP_STYLE_DEFAULTS), "margin": (tr_noop("없음"),)}}
+
+
+def default_nup_styles() -> list:
+    """261115-6: 기본 전체 스타일 `[{name, 값…}]` — 이름은 지금 화면 언어."""
+    return [dict(vals, name=tr(nm)) for nm, vals in NUP_STYLE_DEFAULTS]
 
 
 DUPLEX_CHOICES = ((tr_noop("단면"), "none"), (tr_noop("양면(긴 쪽)"), "long"), (tr_noop("양면(짧은 쪽)"), "short"))

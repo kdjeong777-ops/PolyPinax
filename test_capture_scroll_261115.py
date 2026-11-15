@@ -13,6 +13,8 @@ I. 응답성 — 상한 크기 결과의 메인 일(스트립 카드 + 클립보
 J. (덧붙임) 영역 고르기 없이 '캡처할 곳을 누르세요' 덮개 → 누른 스크롤 칸이 대상(폭 전체, 덮개 위젯이 겹쳐도)·첫 누름은 위젯에 안 감,
    진행 중 한 번 더 누르면 끝(부분 결과)·그 누름도 안 감·끝나면 가로채기 정리, Esc(앱 안 키) = 끝, 덮개 Esc·오른쪽 클릭 = 취소,
    PolyPDF 밖·스크롤 아닌 곳 = 안내만, 다른 프로그램 길(SendInput·GetAsyncKeyState·전역 훅·화면 찍기) 없음
+K. (261115-17) PDF 본문 — 한 쪽씩·이어 보기·2장 보기 모두 다섯 쪽을 마지막 쪽 끝까지 쪽 렌더로 이어 붙임(간격 = 화면),
+   중간 멈춤 = 그때까지의 쪽, 크기 상한 'full', 한 걸음 메인 일 < 1초
 """
 import os, sys, time, random
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -372,6 +374,100 @@ if sc is not None:
             chk(ov is not None and mw._scroll_picker is None and mw._scroll_run is None and gone_or_hidden(ov),
                 "J 덮개에서 %s = 취소(시작하지 않음)" % ("Esc" if how == "esc" else "오른쪽 클릭"))
     sa.close()
+
+    # ── K. PDF 본문 — 다른 쪽까지 이어서(쪽 렌더, 261115-17) ──────────────
+    if not hasattr(sc, "PageCaptureRun"):
+        chk(False, "K PDF 본문 쪽 잇기(PageCaptureRun) — 없음(수정 전 코드)")
+    else:
+        import tempfile, fitz
+        from viewer.widgets.main_view import MainView
+        tdir = tempfile.mkdtemp(prefix="shot_scroll_k_")
+        kpdf = os.path.join(tdir, "five.pdf")
+        d = fitz.open()
+        cols = [(1, 0, 0), (0, .6, 0), (0, 0, 1), (.8, .5, 0), (.5, 0, .7)]
+        for k in range(5):
+            pg = d.new_page(width=300, height=400)
+            pg.draw_rect(fitz.Rect(20, 20, 280, 380), color=cols[k], fill=cols[k])
+            pg.insert_text((40, 60 + 40 * k), "PAGE %d" % (k + 1), fontsize=24, color=(1, 1, 1))
+        d.save(kpdf); d.close()
+        mv2 = MainView()
+        mv2.setWindowFlags(Qt.WindowType.Window)
+        mv2.move(100, 100); mv2.resize(420, 560); mv2.show(); app.processEvents()
+        mv2.load_document(kpdf, 0)
+        for _ in range(20):
+            app.processEvents(); time.sleep(0.01)
+
+        def run_pdf(mode, fit=None, stop_after=None):
+            mv2.set_page_scroll_mode(mode)
+            if fit:
+                mv2.choose_fit(fit)
+            mv2.go_to_page(0) if hasattr(mv2, "go_to_page") else None
+            for _ in range(10):
+                app.processEvents(); time.sleep(0.01)
+            vp2 = mv2.view.viewport()
+            mv2.view.verticalScrollBar().setValue(mv2.view.verticalScrollBar().minimum()); app.processEvents()
+            c = vp2.mapToGlobal(vp2.rect().center())
+            n0 = len(mw.shot_strip.all_paths())
+            mw._capture_scroll(None, gpos=c)
+            r = mw._scroll_run
+            info = {"cls": type(r).__name__ if r else None, "zoom": mv2._zoom}
+            if r is not None and stop_after:
+                r.progress.connect(lambda n, h: r.stop() if n >= stop_after else None)
+            if r is not None and hasattr(r, "max_step_s"):
+                r.finished.connect(lambda _x: info.setdefault("max_step", r.max_step_s))
+            ok = wait_until(lambda: len(mw.shot_strip.all_paths()) > n0, 30000)
+            out = QImage(mw.shot_strip.all_paths()[-1]) if ok else QImage()
+            return ok, out, info
+
+        def expect_h(zoom, n, dpr=1.0):
+            hs = [mv2._page_pixmap(i, zoom, dpr).height() for i in range(n)]
+            return sum(hs) + int(round(mv2.CONT_GAP_PX * dpr)) * (n - 1), hs[0]
+
+        for mode, fit, label in (("page", MainView.FIT_PAGE, "한 쪽씩 보기"),
+                                 ("continuous", MainView.FIT_PAGE, "이어 보기"),
+                                 ("page", MainView.FIT_PAGE_TWO, "2장 보기")):
+            ok, out, info = run_pdf(mode, fit)
+            want_h, h0 = expect_h(info["zoom"], 5)
+            p0 = mv2._page_pixmap(0, info["zoom"], 1.0).toImage().convertToFormat(QImage.Format.Format_RGB32)
+            p0.setDevicePixelRatio(1.0)
+            top_same = (not out.isNull() and out.width() == p0.width()
+                        and out.convertToFormat(QImage.Format.Format_RGB32).copy(0, 0, p0.width(), h0) == p0)
+            chk(ok and info["cls"] == "PageCaptureRun" and mw._scroll_reason == "end" and mw._scroll_frames == 5
+                and out.height() == want_h and top_same,
+                "K %s — 다섯 쪽을 마지막 쪽 끝까지 이어 붙인다(쪽 그림 + 화면과 같은 간격)" % label,
+                f"{ok} {info} {getattr(mw, '_scroll_reason', None)} frames {getattr(mw, '_scroll_frames', None)} "
+                f"{out.size()} want h {want_h} top {top_same}")
+            chk(info.get("max_step", 9) < 1.0, "K %s — 한 걸음(한 쪽)의 메인 일 < 1초" % label, str(info.get("max_step")))
+        ok, out, info = run_pdf("page", MainView.FIT_PAGE, stop_after=2)
+        want_h, _h0 = expect_h(info["zoom"], 2)
+        chk(ok and mw._scroll_reason == "stopped" and mw._scroll_frames == 2 and out.height() == want_h,
+            "K 중간에 멈추면 그때까지의 쪽이 결과", f"{getattr(mw, '_scroll_reason', None)} {getattr(mw, '_scroll_frames', None)} {out.size()}")
+        # 쪽 가운데서 시작 — 보이는 높이부터
+        mv2.set_page_scroll_mode("page"); mv2.choose_fit(MainView.FIT_WIDTH)
+        for _ in range(10):
+            app.processEvents(); time.sleep(0.01)
+        sb2 = mv2.view.verticalScrollBar()
+        sb2.setValue(min(sb2.maximum(), 120)); app.processEvents()
+        off = sb2.value()
+        vp2 = mv2.view.viewport()
+        n0 = len(mw.shot_strip.all_paths())
+        mw._capture_scroll(None, gpos=vp2.mapToGlobal(vp2.rect().center()))
+        okm = wait_until(lambda: len(mw.shot_strip.all_paths()) > n0, 30000)
+        outm = QImage(mw.shot_strip.all_paths()[-1]) if okm else QImage()
+        want_m, _h0 = expect_h(mv2._zoom, 5)
+        chk(okm and off > 0 and outm.height() == want_m - off,
+            "K 쪽 가운데서 시작하면 화면 맨 위 높이부터", f"off {off} {outm.size()} want {want_m - off}")
+        # 크기 상한
+        src = sc.PdfPageSource(mv2)
+        cap = sc.PageCaptureRun(src, max_h=900, step_ms=1)
+        got = {}
+        cap.finished.connect(lambda r: got.setdefault("r", r))
+        cap.start()
+        wait_until(lambda: "r" in got, 10000)
+        hh = sum(h for _im, _y, h in cap.segments())
+        chk(got.get("r") == "full" and hh <= 900 and cap.frames >= 2,
+            "K 크기 상한에 닿으면 'full' — 상한까지만", f"{got} h {hh} frames {cap.frames}")
+        mv2.close()
 
     # ── I. 응답성 — 상한 크기 결과의 메인 일 ─────────────────────────
     from viewer import clipboard_util, screenshot as ss

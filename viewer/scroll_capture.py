@@ -182,18 +182,26 @@ class RowStitcher:
         return segs
 
 
-def compose(segments, scale: float = 1.0) -> QImage:
-    """조각을 위에서 아래로 그린 한 장(배경 스레드에서도 된다 — QImage·QPainter 만)."""
+def compose(segments, scale: float = 1.0, background=None) -> QImage:
+    """조각을 위에서 아래로 그린 한 장(배경 스레드에서도 된다 — QImage·QPainter 만).
+
+    조각 = (그림 | None, y0, 높이). None 은 빈 간격(배경색). 폭이 다른 조각은 가장 넓은 폭에 가운데(261115-17 쪽 잇기)."""
     if not segments:
         return QImage()
-    w = segments[0][0].width()
+    ws = [im.width() for im, _y, _h in segments if im is not None]
+    if not ws:
+        return QImage()
+    w = max(ws)
     total = sum(hh for _im, _y, hh in segments)
     out = QImage(w, max(1, total), QImage.Format.Format_RGB32)
-    out.fill(QColor("white"))
+    out.fill(QColor(background) if background is not None else QColor("white"))
     p = QPainter(out)
     y = 0
     for im, y0, hh in segments:
-        p.drawImage(QRect(0, y, w, hh), im, QRect(0, y0, w, hh))
+        if im is not None:
+            iw = im.width()
+            x = (w - iw) // 2
+            p.drawImage(QRect(x, y, iw, hh), im, QRect(0, y0, iw, hh))
         y += hh
     p.end()
     if scale and abs(scale - 1.0) > 1e-3:
@@ -207,17 +215,18 @@ class ScrollComposeWorker(QObject):
     done = pyqtSignal(object, object)     # (저장 경로 str | None, QImage)
     finished = pyqtSignal()
 
-    def __init__(self, segments, scale: float, source_name: str):
+    def __init__(self, segments, scale: float, source_name: str, background=None):
         super().__init__()
         self._segs = segments
         self._scale = scale
         self._name = source_name
+        self._bg = background
 
     def run(self):
         path, img = None, QImage()
         try:
             from viewer import screenshot as ss
-            img = compose(self._segs, self._scale)
+            img = compose(self._segs, self._scale, self._bg)
             if not img.isNull():
                 path = str(ss.save_screenshot(img, source_name=self._name, suffix="_S"))
         except Exception:
@@ -234,6 +243,14 @@ class ScrollCaptureRun(QObject):
     이유: 'end'(끝까지) | 'noscroll'(휠을 받지 않는 창) | 'nomatch' | 'full'(상한) | 'stopped'(사용자 멈춤) | 'steps'."""
     progress = pyqtSignal(int, int)      # (찍은 장 수, 지금 높이)
     finished = pyqtSignal(str)
+    background = None                    # 합성 배경(None = 흰색)
+
+    @property
+    def frames(self) -> int:
+        return self.stitcher.frames
+
+    def segments(self):
+        return self.stitcher.segments()
 
     def __init__(self, grab_fn: Callable[[], QImage], wheel_fn: Callable[[int], None],
                  dpr: float = 1.0, stop_poll: Optional[Callable[[], bool]] = None,
@@ -347,6 +364,181 @@ class ScrollCaptureRun(QObject):
         self.reason = reason
         self._step_timer.stop()
         self._poll.stop()
+        self.finished.emit(reason)
+
+
+# ── PDF 본문 — 쪽을 렌더해 잇기 (261115-17, 스크린샷 SOT §3.2 의 3a) ─────
+PAGE_STEP_MS = 15          # 쪽 하나 렌더한 뒤 다음 쪽까지 쉬는 시간(메인이 다른 일을 하게)
+
+
+class PdfPageSource:
+    """본문(`MainView`)에서 쪽 그림을 꺼내 준다 — 시작 화면의 배율·시작 쪽·그 쪽 안 높이·간격·배경색.
+
+    쪽 그림은 본문과 같은 원천(`MainView._page_pixmap` — 렌더 캐시·끼운 쪽·저장 전 회전)이고 메인 스레드에서만 부른다
+    (열린 문서가 스레드 안전하지 않다). `MainView` 의 안쪽 값을 읽는 곳은 여기 한 곳이다."""
+
+    def __init__(self, mv):
+        self.mv = mv
+        view = mv.view
+        self.dpr = float(view.devicePixelRatioF() or 1.0)
+        self.zoom = float(mv._zoom)
+        self.gap = int(round(mv.CONT_GAP_PX * self.dpr))
+        br = view.backgroundBrush()
+        if br.style() != Qt.BrushStyle.NoBrush:
+            self.background = QColor(br.color())
+        else:
+            vp = view.viewport()
+            self.background = QColor(vp.palette().color(vp.backgroundRole()))
+        p = mv.current_page()
+        top = view.mapToScene(QPoint(0, 0)).y()              # 지금 쪽 맨 위 = 장면 y 0 (이어 보기는 앞 쪽이 음수 쪽에)
+        prev_h = getattr(mv, "_cont_prev_h", None)
+        if top < -mv.CONT_GAP_PX and prev_h and mv._cont_active():
+            prev = mv._nav_step(p, -1)
+            if prev is not None:
+                top += prev_h + mv.CONT_GAP_PX
+                p = prev
+        self.start = p
+        self.offset = max(0, int(round(top * self.dpr)))
+
+    def next_page(self, i):
+        return self.mv._nav_step(i, +1)
+
+    def est_size(self, i):
+        """그 쪽의 렌더 크기 짐작(장치 px) — 못 구하면 None."""
+        try:
+            sz = self.mv._shown_size(i)
+        except Exception:
+            sz = None
+        if not sz:
+            return None
+        s = self.zoom * self.dpr
+        w, h = sz[0] * s, sz[1] * s
+        if self.mv._rotations.get(i, 0) in (90, 270):
+            w, h = h, w
+        return w, h
+
+    def render(self, i) -> QImage:
+        img = self.mv._page_pixmap(i, self.zoom, self.dpr).toImage()
+        img.setDevicePixelRatio(1.0)
+        return img.convertToFormat(QImage.Format.Format_RGB32)
+
+
+def pdf_source_for(widget: QWidget, grect: QRect) -> Optional[PdfPageSource]:
+    """대상이 PDF 를 보이는 본문의 칸이면 그 쪽 원천, 아니면 None(그림·사진 보기·목록 등 — 휠 방식)."""
+    try:
+        from viewer.widgets.main_view import MainView
+    except Exception:
+        return None
+    x = widget
+    while x is not None and not isinstance(x, MainView):
+        x = x.parentWidget()
+    if x is None or x._doc is None or getattr(x, "_is_image", False) or getattr(x._doc, "is_photo", False):
+        return None
+    vp = x.view.viewport()
+    if not QRect(vp.mapToGlobal(QPoint(0, 0)), vp.size()).contains(grect.center()):
+        return None
+    try:
+        return PdfPageSource(x)
+    except Exception:
+        return None
+
+
+class PageCaptureRun(QObject):
+    """쪽을 한 걸음에 하나씩 렌더해 아래로 잇는다(타이머). `ScrollCaptureRun` 과 같은 겉(진행·끝·멈춤·조각).
+
+    이유: 'end'(마지막 쪽) | 'stopped' | 'full'(상한) | 'nomatch'(첫 쪽도 못 그림)."""
+    progress = pyqtSignal(int, int)
+    finished = pyqtSignal(str)
+
+    def __init__(self, source: PdfPageSource, max_h: int = MAX_H, max_pixels: int = MAX_PIXELS,
+                 step_ms: int = PAGE_STEP_MS, parent=None):
+        super().__init__(parent)
+        self.src = source
+        self.max_h, self.max_pixels, self.step_ms = int(max_h), int(max_pixels), int(step_ms)
+        self.background = source.background
+        self.reason = None
+        self.frames = 0
+        self.max_step_s = 0.0             # 한 걸음의 가장 긴 메인 일(검사가 본다)
+        self._segs = []
+        self._h = 0
+        self._w = 0
+        self._page = source.start
+        self._first = True
+        self._t = QTimer(self)
+        self._t.setSingleShot(True)
+        self._t.timeout.connect(self._step)
+
+    def start(self):
+        self._t.start(0)
+
+    def stop(self):
+        if self.reason is None:
+            self._end("stopped")
+
+    def segments(self):
+        return list(self._segs)
+
+    def height(self) -> int:
+        return self._h
+
+    def _step(self):
+        import time
+        if self.reason is not None:
+            return
+        t0 = time.perf_counter()
+        try:
+            self._one()
+        finally:
+            self.max_step_s = max(self.max_step_s, time.perf_counter() - t0)
+
+    def _one(self):
+        i = self._page
+        if i is None:
+            self._end("end")
+            return
+        gap = self.src.gap if self._segs else 0
+        est = self.src.est_size(i)
+        if est and not self._first and est[0] * est[1] > self.max_pixels:
+            self._end("full")             # 이 배율의 한 쪽이 상한보다 크다 — 렌더 한 번이 1초를 넘지 않게
+            return
+        try:
+            img = self.src.render(i)
+        except Exception:
+            img = None
+        if img is None or img.isNull():
+            self._end("end" if self._segs else "nomatch")
+            return
+        y0 = min(self.src.offset, img.height() - 1) if self._first else 0
+        self._first = False
+        h = img.height() - y0
+        w = max(self._w, img.width())
+        room = min(self.max_h - self._h, self.max_pixels // max(1, w) - self._h) - gap
+        full = h > room
+        if full:
+            h = max(0, room)
+        if h > 0:
+            if gap:
+                self._segs.append((None, 0, gap))
+                self._h += gap
+            self._segs.append((img, y0, h))
+            self._h += h
+            self._w = w
+            self.frames += 1
+            self.progress.emit(self.frames, self._h)
+        if full:
+            self._end("full")
+            return
+        self._page = self.src.next_page(i)
+        if self._page is None:
+            self._end("end")
+            return
+        self._t.start(self.step_ms)
+
+    def _end(self, reason: str):
+        if self.reason is not None:
+            return
+        self.reason = reason
+        self._t.stop()
         self.finished.emit(reason)
 
 

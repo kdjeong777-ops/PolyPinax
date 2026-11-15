@@ -884,7 +884,14 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             sc.app_wheel(sc.own_widget_at(center, exclude=(panel,)) or tgt, center, n)
         # 한 번 더 누르기·Esc 면 끝 — 앱 안 이벤트 거르개(누름은 위젯에 보내지 않는다)
         catcher = sc.ClickCatcher(self)
-        run = sc.ScrollCaptureRun(grab_fn, wheel_fn, dpr=dpr, parent=self)
+        src = sc.pdf_source_for(tgt, grect)          # 261115-17: PDF 본문이면 쪽을 렌더해 잇는다(보기 방식과 상관없이)
+        if src is not None:
+            run = sc.PageCaptureRun(src, parent=self)
+            dpr = src.dpr
+            if view is None:
+                view = src.mv
+        else:
+            run = sc.ScrollCaptureRun(grab_fn, wheel_fn, dpr=dpr, parent=self)
         self._scroll_run, self._scroll_panel, self._scroll_dpr = run, panel, dpr
         self._scroll_catcher, self._scroll_rect = catcher, grect
         cur = view.current_file() if view is not None else None
@@ -916,8 +923,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         if run is None:
             return
         self._scroll_reason = reason
-        self._scroll_frames = run.stitcher.frames
-        segs = run.stitcher.segments()
+        self._scroll_frames = run.frames
+        segs = run.segments()
+        bg = getattr(run, "background", None)     # 쪽 잇기(261115-17)는 본문 배경색으로 간격·둘레
         run.deleteLater()
         if not segs:
             self._scroll_run = None
@@ -925,7 +933,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             return
         dpr = getattr(self, "_scroll_dpr", 1.0)
         scale = dpr if (self._cap_copy == "visible" and abs(dpr - 1.0) > 1e-3) else 1.0
-        w = sc.ScrollComposeWorker(segs, scale, self._scroll_name)
+        w = sc.ScrollComposeWorker(segs, scale, self._scroll_name, background=bg)
         w.done.connect(self._scroll_saved)        # 메인 창의 메서드 → 메인 스레드에서 받는다
         run_in_thread(w, self._thread_keep)
 

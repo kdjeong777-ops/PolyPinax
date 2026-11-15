@@ -833,76 +833,70 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self._after_capture()
 
     # ── 스크롤 캡처 (261115-14, 스크린샷 SOT §3.2) ─────────────────
-    SCROLL_START_MS = 150      # 영역 고르기 화면이 사라진 뒤 첫 찍기까지(다른 프로그램 화면이 다시 그려지게)
+    SCROLL_START_MS = 150      # 누르기 덮개가 사라진 뒤 시작까지(가렸던 화면이 다시 그려지게)
 
-    def _capture_scroll(self, view=None, grect=None):
-        """영역을 고르고(§3.1 고르기 그대로) 그 아래 창을 휠로 내리며 찍어 한 장으로 잇는다.
-        grect: 전역 논리 좌표 영역(주면 고르기를 건너뛴다 — 검사·다시 하기)."""
-        if getattr(self, "_scroll_run", None) is not None:
+    def _capture_scroll(self, view=None, grect=None, gpos=None):
+        """PolyPDF 화면의 스크롤되는 곳을 누르면(261115-14 덧붙임 — 영역 고르기 없음, 우리 프로그램만) 그곳을
+        앱 안 휠로 내리며 찍어 한 장으로 잇는다. 진행 중 한 번 더 누르거나 Esc 면 끝(그때까지 이은 것이 결과).
+        gpos: 누른 전역 점(주면 덮개를 건너뛴다), grect: 대상(전역 논리 좌표, 주면 찾기도 건너뛴다 — 검사)."""
+        if getattr(self, "_scroll_run", None) is not None or getattr(self, "_scroll_picker", None) is not None:
             return
-        from PyQt6.QtCore import QRect
-        from PyQt6.QtGui import QCursor, QGuiApplication
+        from PyQt6.QtGui import QGuiApplication
         from viewer import scroll_capture as sc
-        screen = None
+        if grect is None and gpos is None:
+            picker = sc.ScrollPicker(self)
+            self._scroll_picker = picker
+
+            def picked(p):
+                self._scroll_picker = None
+                picker.deleteLater()
+                QTimer.singleShot(self.SCROLL_START_MS, lambda: self._capture_scroll(view, gpos=p))
+
+            def cancelled():
+                self._scroll_picker = None
+                picker.deleteLater()
+            picker.picked.connect(picked)
+            picker.cancelled.connect(cancelled)
+            picker.start()
+            return
         if grect is None:
-            from viewer.widgets.region_capture import RegionCaptureOverlay
-            ov = RegionCaptureOverlay(mode="region", copy_mode=self._cap_copy, parent=self,
-                                      last_region=getattr(self, "_cap_last_region", None))
-            ov.grab()
-            if not ov.region_out:
+            grect, why = sc.target_at(gpos)
+            if grect is None:
+                self.status.showMessage(
+                    tr("스크롤 캡처는 PolyPDF 화면에서만 됩니다.") if why == "outside"
+                    else tr("누른 곳은 스크롤되는 곳이 아닙니다 — 본문·목록처럼 스크롤되는 곳을 누르세요."), 6000)
                 return
-            self._cap_last_region = ov.region_out
-            screen = ov._screen
-            x, y, w, h = (int(v) for v in ov.region_out[:4])
-            g = screen.geometry()
-            grect = QRect(g.x() + x, g.y() + y, w, h)
         center = grect.center()
-        screen = screen or QGuiApplication.screenAt(center) or QGuiApplication.primaryScreen()
         panel = sc.ScrollCapturePanel()
         tgt = sc.own_widget_at(center, exclude=(panel,))
-        self._scroll_cursor = None
-        if tgt is not None:                       # PolyPDF 자기 창 — 앱 안에서 직접
-            win = tgt.window()
-            dpr = float(win.devicePixelRatioF() or 1.0)
+        if tgt is None:                           # 검사·다시 하기로 준 grect 가 PolyPDF 밖
+            panel.deleteLater()
+            self.status.showMessage(tr("스크롤 캡처는 PolyPDF 화면에서만 됩니다."), 6000)
+            return
+        screen = QGuiApplication.screenAt(center) or QGuiApplication.primaryScreen()
+        win = tgt.window()
+        dpr = float(win.devicePixelRatioF() or 1.0)
 
-            def grab_fn():
-                return sc.app_grab(win, grect)
+        def grab_fn():
+            return sc.app_grab(win, grect)
 
-            def wheel_fn(n):
-                sc.app_wheel(sc.own_widget_at(center, exclude=(panel,)) or tgt, center, n)
-            delay = 0
-        else:                                     # 다른 프로그램 — Windows 휠 + 화면 찍기
-            g = screen.geometry()
-            local = grect.translated(-g.topLeft())
-            dpr = float(screen.devicePixelRatio() or 1.0)
-            self._scroll_cursor = QCursor.pos()
-
-            def grab_fn():
-                return sc.screen_grab(screen, local)
-
-            def wheel_fn(n):
-                QCursor.setPos(screen, center)
-                sc.win_wheel(n)
-            delay = self.SCROLL_START_MS
-        armed = {"on": False}
-
-        def stop_poll():
-            down = sc.stop_keys_down()
-            if not down:
-                armed["on"] = True              # 고르기 때 누른 단추가 떼어진 뒤부터
-                return False
-            return armed["on"]
-        sc.clear_stop_keys()
-        run = sc.ScrollCaptureRun(grab_fn, wheel_fn, dpr=dpr, stop_poll=stop_poll, parent=self)
+        def wheel_fn(n):
+            sc.app_wheel(sc.own_widget_at(center, exclude=(panel,)) or tgt, center, n)
+        # 한 번 더 누르기·Esc 면 끝 — 앱 안 이벤트 거르개(누름은 위젯에 보내지 않는다)
+        catcher = sc.ClickCatcher(self)
+        run = sc.ScrollCaptureRun(grab_fn, wheel_fn, dpr=dpr, parent=self)
         self._scroll_run, self._scroll_panel, self._scroll_dpr = run, panel, dpr
+        self._scroll_catcher, self._scroll_rect = catcher, grect
         cur = view.current_file() if view is not None else None
         self._scroll_name = Path(cur).name if cur else tr("화면캡처.png")
         panel.stopRequested.connect(run.stop)
+        catcher.clicked.connect(run.stop)
         run.progress.connect(panel.set_progress)
         run.finished.connect(self._scroll_finished)
         panel.place(grect, screen.geometry())
         panel.show()
-        QTimer.singleShot(delay, run.start)
+        catcher.start()
+        QTimer.singleShot(0, run.start)
 
     def _scroll_finished(self, reason):
         """진행이 끝났다(끝·멈춤·상한…) — 찍은 것을 배경에서 합성·저장한다."""
@@ -915,10 +909,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         except Exception:
             pass
         self._scroll_panel = None
-        if getattr(self, "_scroll_cursor", None) is not None:
-            from PyQt6.QtGui import QCursor
-            QCursor.setPos(self._scroll_cursor)
-            self._scroll_cursor = None
+        catcher = getattr(self, "_scroll_catcher", None)
+        self._scroll_catcher = None
+        if catcher is not None:
+            catcher.close()                       # 누른 단추를 뗄 때까지는 남는다
         if run is None:
             return
         self._scroll_reason = reason

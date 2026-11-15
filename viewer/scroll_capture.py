@@ -1,16 +1,17 @@
 """스크롤 캡처 (261115-14, 스크린샷 SOT §3.2).
 
-고른 영역 아래 창에 휠을 자동으로 보내며 내리고, 찍은 그림들을 줄(행) 단위로 겹침을 맞춰 한 장으로 잇는다.
+누른 PolyPDF 스크롤 칸에 앱 안 휠을 자동으로 보내며 내리고, 찍은 그림들을 줄(행) 단위로 겹침을 맞춰 한 장으로 잇는다.
 
 - `RowStitcher` — 이어 붙이기(순수 계산, QImage 만). `add(img)` → 'first' | 'added' | 'same' | 'nomatch' | 'full'.
 - `ScrollCaptureRun` — 진행(타이머만, 메인 반복문 없음). 찍기·휠은 주입한다(`grab_fn()`, `wheel_fn(notches)`).
 - `ScrollCapturePanel` — 영역 밖에 뜨는 멈춤 띠(진행·[멈춤]).
+- `ScrollPicker`·`target_at` — 눌러 시작(덮개가 누름을 받음), 대상 = 누른 PolyPDF 스크롤 칸의 보이는 폭 전체(261115-14 덧붙임).
+- `ClickCatcher` — 진행 중 한 번 더 누르거나 Esc 면 끝(앱 안 이벤트 거르개, 누름은 위젯에 보내지 않음).
 - `ScrollComposeWorker` — 합성·화질 맞춤·PNG 저장(배경 스레드).
-- `own_widget_at`·`app_wheel`·`app_grab` / `win_wheel`·`screen_grab`·`stop_keys_down` — 앱 안 창 / 다른 프로그램 길.
+- `own_widget_at`·`app_wheel`·`app_grab` — 앱 안 창 길(다른 프로그램 길은 없다 — 백신 오인 방지, 스크린샷 SOT §3.2).
 """
 from __future__ import annotations
 
-import sys
 from typing import Callable, List, Optional
 
 from PyQt6.QtCore import QObject, QPoint, QPointF, QRect, Qt, QTimer, pyqtSignal
@@ -23,7 +24,7 @@ from viewer.i18n import tr
 WAIT_MS = 300          # 휠 뒤 첫 찍기까지
 SETTLE_MS = 150        # 화면이 멎었나 다시 찍는 간격
 SETTLE_TRIES = 6
-POLL_MS = 50           # 멈춤 키·클릭 보기
+POLL_MS = 50           # 멈춤 확인(stop_poll 을 줄 때)
 FIRST_NOTCHES = 3
 NOTCH_MIN, NOTCH_MAX = 1, 15
 STEP_FRACTION = 0.6    # 한 번에 몸통 높이의 이만큼 움직이게
@@ -361,7 +362,7 @@ class ScrollCapturePanel(QWidget):
         self.setObjectName("scrollCapturePanel")
         lay = QHBoxLayout(self)
         lay.setContentsMargins(10, 6, 6, 6)
-        self.label = QLabel(tr("스크롤 캡처 중 — Esc·[멈춤] = 여기까지 저장"), self)
+        self.label = QLabel(tr("스크롤 캡처 중 — 한 번 더 누르면 여기까지 저장 (Esc·[멈춤]도)"), self)
         lay.addWidget(self.label)
         self.btn = QPushButton(tr("멈춤"), self)
         self.btn.clicked.connect(self.stopRequested.emit)
@@ -370,7 +371,7 @@ class ScrollCapturePanel(QWidget):
                            "#scrollCapturePanel QLabel{color:white;}")
 
     def set_progress(self, frames: int, height: int):
-        self.label.setText(tr("스크롤 캡처 중 — {n}장 · 높이 {h}px · Esc·[멈춤] = 여기까지 저장").format(
+        self.label.setText(tr("스크롤 캡처 중 — {n}장 · 높이 {h}px · 한 번 더 누르면 여기까지 저장").format(
             n=frames, h=height))
         self.adjustSize()
 
@@ -430,58 +431,210 @@ def app_grab(window: QWidget, grect: QRect) -> QImage:
     return window.grab(QRect(tl, grect.size())).toImage()
 
 
-# ── 다른 프로그램 길(Windows) ────────────────────────────────
-def screen_grab(screen, local_rect: QRect) -> QImage:
-    """화면의 그 영역(화면 기준 논리 좌표)을 장치 px 그림으로."""
-    return screen.grabWindow(0, local_rect.x(), local_rect.y(),
-                             local_rect.width(), local_rect.height()).toImage()
+# ── 눌러 시작 (261115-14 덧붙임 — PolyPDF 화면만) ─────────────────
+MIN_TARGET = 160          # 대상 스크롤 칸의 가로·세로 최소(장치 px)
+CATCH_RELEASE_MS = 2000   # 끝난 뒤 누른 단추를 뗄 때까지 가로채기를 두는 최대 시간
 
 
-def _win():
-    return sys.platform == "win32" and QGuiApplication.platformName() == "windows"
+class _PickOverlay(QWidget):
+    """한 화면을 덮는 옅은 덮개 — 누름·뗌을 받아 아래 창에 보내지 않는다."""
+
+    def __init__(self, picker: "ScrollPicker", screen, hint: bool):
+        super().__init__(None)
+        self._picker = picker
+        self._hint = hint
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint
+                            | Qt.WindowType.Tool)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.setObjectName("scrollPickOverlay")
+        self.setGeometry(screen.geometry())
+        self.text = tr("캡처할 곳을 누르세요 — PolyPDF 화면의 스크롤되는 곳을 자동으로 내리며 한 장으로 찍습니다 · Esc = 취소")
+        self._pressed = False
+
+    def paintEvent(self, _e):
+        p = QPainter(self)
+        p.fillRect(self.rect(), QColor(0, 0, 0, 48))
+        if self._hint:
+            f = p.font()
+            f.setPointSizeF(max(11.0, f.pointSizeF() * 1.25))
+            p.setFont(f)
+            fm = p.fontMetrics()
+            tw, th = fm.horizontalAdvance(self.text) + 32, fm.height() + 18
+            box = QRect((self.width() - tw) // 2, 40, tw, th)
+            p.fillRect(box, QColor(32, 33, 36, 235))
+            p.setPen(QColor("#2a7de1"))
+            p.drawRect(box.adjusted(0, 0, -1, -1))
+            p.setPen(QColor("white"))
+            p.drawText(box, Qt.AlignmentFlag.AlignCenter, self.text)
+        p.end()
+
+    def mousePressEvent(self, e):
+        if e.button() == Qt.MouseButton.RightButton:
+            self._picker.cancel()
+            return
+        if e.button() == Qt.MouseButton.LeftButton:
+            self._pressed = True
+        e.accept()
+
+    def mouseReleaseEvent(self, e):
+        e.accept()
+        if e.button() == Qt.MouseButton.LeftButton and self._pressed:
+            self._pressed = False
+            self._picker._pick(e.globalPosition().toPoint())
+
+    def mouseDoubleClickEvent(self, e):
+        e.accept()
+
+    def keyPressEvent(self, e):
+        if e.key() == Qt.Key.Key_Escape:
+            self._picker.cancel()
+            return
+        super().keyPressEvent(e)
 
 
-def win_wheel(notches: int):
-    """지금 커서 자리에 SendInput 휠(아래로). 커서는 부르는 쪽이 `QCursor.setPos(화면, 점)` 으로 옮긴다(배율 변환은 Qt 가)."""
-    if not _win():
-        raise RuntimeError("not windows")
-    import ctypes
-    from ctypes import wintypes
+class ScrollPicker(QObject):
+    """'캡처할 곳을 누르세요' — 화면마다 덮개. 뗄 때 덮개를 닫고 `picked(전역 논리 점)`, Esc·오른쪽 클릭이면 `cancelled`."""
+    picked = pyqtSignal(QPoint)
+    cancelled = pyqtSignal()
 
-    class MOUSEINPUT(ctypes.Structure):
-        _fields_ = [("dx", wintypes.LONG), ("dy", wintypes.LONG), ("mouseData", wintypes.DWORD),
-                    ("dwFlags", wintypes.DWORD), ("time", wintypes.DWORD),
-                    ("dwExtraInfo", ctypes.c_size_t)]
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.overlays: List[_PickOverlay] = []
+        self.done = False
 
-    class INPUT(ctypes.Structure):
-        class _U(ctypes.Union):
-            _fields_ = [("mi", MOUSEINPUT), ("pad", ctypes.c_byte * 32)]
-        _anonymous_ = ("u",)
-        _fields_ = [("type", wintypes.DWORD), ("u", _U)]
+    def start(self):
+        from PyQt6.QtGui import QCursor
+        cur = QGuiApplication.screenAt(QCursor.pos()) or QGuiApplication.primaryScreen()
+        for s in QGuiApplication.screens():
+            ov = _PickOverlay(self, s, hint=(s is cur))
+            self.overlays.append(ov)
+            ov.show()
+            if s is cur:
+                ov.raise_()
+                ov.activateWindow()
+                ov.setFocus()
 
-    inp = INPUT()
-    inp.type = 0                          # INPUT_MOUSE
-    inp.mi.dwFlags = 0x0800               # MOUSEEVENTF_WHEEL
-    inp.mi.mouseData = ctypes.c_uint32(-WHEEL_DELTA * int(notches)).value
-    ctypes.windll.user32.SendInput(1, ctypes.byref(inp), ctypes.sizeof(INPUT))
+    def _close(self):
+        for ov in self.overlays:
+            try:
+                ov.hide()
+                ov.close()
+            except RuntimeError:
+                pass
+        self.overlays = []
+
+    def _pick(self, gpos: QPoint):
+        if self.done:
+            return
+        self.done = True
+        self._close()
+        self.picked.emit(QPoint(gpos))
+
+    def cancel(self):
+        if self.done:
+            return
+        self.done = True
+        self._close()
+        self.cancelled.emit()
 
 
-_VK = (0x1B, 0x01, 0x02)                  # Esc, 왼쪽·오른쪽 단추
+def target_at(gpos: QPoint, exclude=()):
+    """누른 점 → (대상 QRect 전역 논리 좌표 | None, 이유). 이유: 'ok' | 'outside'(PolyPDF 창 아님) | 'noscroll'(스크롤되는 곳 아님).
+
+    대상 = 그 점 아래 PolyPDF 창에서 점을 담은 스크롤 영역(QAbstractScrollArea)의 보이는 칸 가운데 가장 작은 것 —
+    본문처럼 위에 덮개 위젯이 겹쳐도 찾는다. 폭은 그 칸의 보이는 폭 전체(스크린샷 SOT §3.2)."""
+    from PyQt6.QtWidgets import QAbstractScrollArea
+    w = own_widget_at(gpos, exclude=exclude)
+    if w is None:
+        return None, "outside"
+    win = w.window()
+    cands = list(win.findChildren(QAbstractScrollArea))
+    if isinstance(win, QAbstractScrollArea):
+        cands.append(win)
+    best, best_a = None, None
+    for sa in cands:
+        try:
+            if not sa.isVisible():
+                continue
+            vp = sa.viewport()
+            if vp is None or not vp.isVisible():
+                continue
+            r = QRect(vp.mapToGlobal(QPoint(0, 0)), vp.size())
+            dpr = float(vp.devicePixelRatioF() or 1.0)
+            if not r.contains(gpos) or r.width() * dpr < MIN_TARGET or r.height() * dpr < MIN_TARGET:
+                continue
+            a = r.width() * r.height()
+            if best_a is None or a < best_a:
+                best, best_a = r, a
+        except RuntimeError:
+            continue
+    if best is None:
+        return None, "noscroll"
+    return best, "ok"
 
 
-def stop_keys_down() -> bool:
-    """Esc 나 마우스 단추가 눌렸나(다른 프로그램이 앞에 있어도)."""
-    if not _win():
+class ClickCatcher(QObject):
+    """스크롤 캡처 진행 중 PolyPDF 화면의 누름(클릭·터치)과 Esc 를 받아 `clicked` 를 낸다 — 앱 안 이벤트 거르개만
+    (전역 훅·키 상태 엿보기 없음 — 백신 오인 방지, 스크린샷 SOT §3.2). 누름·뗌은 삼켜 그 아래 위젯에 보내지 않고,
+    `close()` 뒤에도 누른 단추를 뗄 때까지(최대 CATCH_RELEASE_MS) 남아 뗌이 홀로 가지 않게 한다."""
+    clicked = pyqtSignal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        from PyQt6.QtCore import QEvent
+        self._press_types = (QEvent.Type.MouseButtonPress, QEvent.Type.MouseButtonDblClick)
+        self._release_type = QEvent.Type.MouseButtonRelease
+        self._key_type = QEvent.Type.KeyPress
+        self._held = False
+        self._closing = False
+        self._active = False
+
+    def start(self):
+        self._active = True
+        QApplication.instance().installEventFilter(self)
+
+    def eventFilter(self, obj, ev):
+        t = ev.type()
+        if t in self._press_types:
+            if not self._held:
+                self._held = True
+                if not self._closing:
+                    self.clicked.emit()
+            return True
+        if t == self._release_type:
+            if self._held:
+                self._held = False
+                if self._closing:
+                    QTimer.singleShot(0, self._finish)
+            return True
+        if t == self._key_type and not self._closing:
+            try:
+                if ev.key() == Qt.Key.Key_Escape:
+                    self.clicked.emit()
+                    return True
+            except Exception:
+                pass
         return False
-    import ctypes
-    g = ctypes.windll.user32.GetAsyncKeyState
-    return any(g(vk) & 0x8000 for vk in _VK)
 
+    def close(self):
+        """가로채기를 끝낸다 — 단추가 눌려 있으면 뗄 때까지(최대 CATCH_RELEASE_MS)."""
+        if not self._active or self._closing:
+            return
+        self._closing = True
+        if self._held:
+            QTimer.singleShot(CATCH_RELEASE_MS, self._finish)
+        else:
+            self._finish()
 
-def clear_stop_keys():
-    """시작 전 '지난번에 눌림' 표시를 비운다."""
-    if not _win():
-        return
-    import ctypes
-    for vk in _VK:
-        ctypes.windll.user32.GetAsyncKeyState(vk)
+    def _finish(self):
+        if not self._active:
+            return
+        self._active = False
+        try:
+            QApplication.instance().removeEventFilter(self)
+        except Exception:
+            pass
+        self.deleteLater()

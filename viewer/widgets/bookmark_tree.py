@@ -3977,6 +3977,14 @@ class BookmarkTree(QWidget):
                     for n in marked:
                         n.setData(0, self.DATA_ALL_EXPANDED, None)
 
+    def _nav_ahead(self, fpk: str, norm_key) -> bool:
+        """261115-10(§4.7.3): 이 창이 **아직 내보내지 않은 옮김**(모아 둔 `_quick_pend`·예약한 `_pending_nav`)이 다른 파일인가 —
+        그러면 본문의 쪽 알림은 늦게 열린 지나온 파일 것이라 고른 줄을 되돌리면 안 된다(사용자 보고 '두 번 눌러야·내려가다 올라감')."""
+        for nav in (self.__dict__.get("_quick_pend"), self.__dict__.get("_pending_nav_v")):
+            if nav and norm_key(str(nav[0])) != fpk:
+                return True
+        return False
+
     def _keep_collapsed(self, node) -> bool:
         """261114-3(§4.7.3): '모두 접기' 상태에서 접힌 파일 줄인가 — 본문만 따라가고 줄은 접힌 채 둔다."""
         return (self.is_collapse_all_mode() and node is not None and not node.isExpanded()
@@ -5034,6 +5042,8 @@ class BookmarkTree(QWidget):
             fpk = str(file_path).lower()
             def norm_key(p):  # 폴백 — 동일 규칙 근사
                 return str(p).lower()
+        if self._nav_ahead(fpk, norm_key):
+            return                                  # 261115-10(§4.7.3): 이미 다른 파일로 옮겼다 — 늦게 온 앞 파일 알림은 고른 줄을 되돌리지 않는다
         top = None
         for it in self._iter_file_nodes():          # 260901-2: 트리 보기 포함
             d = it.data(0, self.DATA_FILE)
@@ -5085,6 +5095,16 @@ class BookmarkTree(QWidget):
                 #   같은 페이지의 여러 책갈피 중 마지막만 골라지던 결함. 소속 파일 노드로 비교.
                 if self._file_node_of(cur) is top:
                     target = cur
+        if self.is_collapse_all_mode():
+            # 261115-10(§4.7.3): 모두 접기 상태 — 접힌 책갈피 안이면 보이는 가장 가까운 조상을 고른다(펼치지 않는다)
+            vis, p = target, (target.parent() if target is not top else None)
+            while p is not None:
+                if not p.isExpanded():
+                    vis = p                          # 위로 갈수록 바깥 — 가장 바깥 접힌 줄이 보이는 줄
+                if p is top:
+                    break
+                p = p.parent()
+            target = vis
         self.tree.blockSignals(True)
         self.tree.setCurrentItem(target)
         self.tree.blockSignals(False)

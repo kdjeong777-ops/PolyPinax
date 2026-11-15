@@ -1336,6 +1336,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         """260606-9/260618-23: 활성 창의 책갈피 트리(좌=상단/우=하단)를 그 창 파일·페이지에 맞춰 선택."""
         try:
             idx = self._active_pane
+            if self.__dict__.get("_cold_pending", {}).get(idx) is not None:
+                return      # 261115-10(책갈피창·저장 SOT §4.7.3): 이 창에 새 열기를 데우는 중 — 앞 파일 쪽 알림으로 고른 줄을 되돌리지 않는다(열리면 맞춘다)
             mv = self._mv[idx]
             f = mv.current_file()
             if f and str(f).lower().endswith(".pdf"):

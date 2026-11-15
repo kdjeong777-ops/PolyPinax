@@ -18,7 +18,6 @@ from PyQt6.QtCore import QObject, QPoint, QPointF, QRect, Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QColor, QGuiApplication, QImage, QPainter
 from PyQt6.QtWidgets import QApplication, QHBoxLayout, QLabel, QPushButton, QWidget
 
-from viewer.branding import APP_NAME           # 261115-21: 화면 문구의 앱 이름은 글자로 박지 않는다
 from viewer.i18n import tr
 
 # ── 상수(스크린샷 SOT §3.2 와 같은 값) ─────────────────────────
@@ -652,7 +651,7 @@ class _PickOverlay(QWidget):
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setObjectName("scrollPickOverlay")
         self.setGeometry(screen.geometry())
-        self.text = tr("캡처할 곳을 누르세요 — {app} 화면의 스크롤되는 곳을 자동으로 내리며 한 장으로 찍습니다 · Esc = 취소").format(app=APP_NAME)
+        self.text = tr("캡처할 곳을 누르세요 — PolyPinax 화면의 스크롤되는 곳을 자동으로 내리며 한 장으로 찍습니다 · Esc = 취소")
         self._pressed = False
 
     def paintEvent(self, _e):

@@ -863,7 +863,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             grect, why = sc.target_at(gpos)
             if grect is None:
                 self.status.showMessage(
-                    tr("스크롤 캡처는 {app} 화면에서만 됩니다.").format(app=APP_NAME) if why == "outside"
+                    tr("스크롤 캡처는 PolyPinax 화면에서만 됩니다.") if why == "outside"
                     else tr("누른 곳은 스크롤되는 곳이 아닙니다 — 본문·목록처럼 스크롤되는 곳을 누르세요."), 6000)
                 return
         center = grect.center()
@@ -871,7 +871,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         tgt = sc.own_widget_at(center, exclude=(panel,))
         if tgt is None:                           # 검사·다시 하기로 준 grect 가 PolyPDF 밖
             panel.deleteLater()
-            self.status.showMessage(tr("스크롤 캡처는 {app} 화면에서만 됩니다.").format(app=APP_NAME), 6000)
+            self.status.showMessage(tr("스크롤 캡처는 PolyPinax 화면에서만 됩니다."), 6000)
             return
         screen = QGuiApplication.screenAt(center) or QGuiApplication.primaryScreen()
         win = tgt.window()

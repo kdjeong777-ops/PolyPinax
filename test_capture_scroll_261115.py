@@ -16,7 +16,7 @@ J. (덧붙임) 영역 고르기 없이 '캡처할 곳을 누르세요' 덮개 �
 K. (261115-17) PDF 본문 — 한 쪽씩·이어 보기·2장 보기 모두 다섯 쪽을 마지막 쪽 끝까지 쪽 렌더로 이어 붙임(간격 = 화면),
    중간 멈춤 = 그때까지의 쪽, 크기 상한 'full', 한 걸음 메인 일 < 1초
 L. (261115-21) 첫 쪽만으로 MAX_PIXELS 를 넘는 배율 — 배율을 낮춰 상한 안 크기로 렌더(결과가 비지 않음, 메인 < 1초)
-M. (261115-21) [💾 PDF 저장] 툴팁 = 지금 걸린 키(종전 '(Ctrl+S)' 고정), 단축키를 바꾸면 따라감 · J 에 안내 문구의 앱 이름 = branding.APP_NAME
+M. (261115-21) [💾 PDF 저장] 툴팁 = 지금 걸린 키(종전 '(Ctrl+S)' 고정), 단축키를 바꾸면 따라감 · J 에 안내 문구의 앱 이름 = PolyPinax
 """
 import os, sys, time, random
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -348,8 +348,7 @@ if sc is not None:
         mw._capture_scroll(None, gpos=QPoint(5, 5))
         msg_out = mw.status.currentMessage()
         chk(mw._scroll_run is None and "화면에서만" in msg_out, "J PolyPDF 밖을 누르면 안내만(시작하지 않음)", msg_out)
-        # 261115-21: 안내의 앱 이름은 branding 상수(이사 판부터 PolyPinax) — 옛 이름을 글자로 박지 않는다
-        from viewer.branding import APP_NAME
+        # 261115-21: 안내의 앱 이름은 제품 이름(이사 판부터 PolyPinax) — 번역 문구 안에는 원문 글자로(branding.py 머리 규칙)
         mw._capture_scroll(None)
         pk_n = mw._scroll_picker
         ov_txt = " ".join(o.text for o in (pk_n.overlays if pk_n else []))
@@ -357,9 +356,8 @@ if sc is not None:
             pk_n.cancel()
         for _ in range(5):
             app.processEvents()
-        chk(APP_NAME + " 화면에서만" in msg_out and APP_NAME + " 화면의" in ov_txt
-            and (APP_NAME == "PolyPDF" or "PolyPDF 화면" not in msg_out + ov_txt),
-            "J 안내·덮개 문구의 앱 이름 = branding.APP_NAME(%s)" % APP_NAME, msg_out + " | " + ov_txt)
+        chk("PolyPinax 화면에서만" in msg_out and "PolyPinax 화면의" in ov_txt,
+            "J 안내·덮개 문구의 앱 이름 = PolyPinax", msg_out + " | " + ov_txt)
         plain = QWidget(); plain.setWindowFlags(Qt.WindowType.Window)
         QPushButton("x", plain).resize(180, 60)
         plain.move(20, 620); plain.resize(200, 100); plain.show(); app.processEvents()

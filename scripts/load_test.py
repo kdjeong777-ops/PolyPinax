@@ -11,6 +11,7 @@
 - 대상은 `release_test_suite.json` 의 가장 큰 폴더(`clear_index` 대상 중 마지막)와 가장 큰 PDF(`T3` 또는 첫 PDF 대상).
 - 색인을 비우고 연다 → 색인 자식 프로세스가 도는 동안 조작한다(시작·끝 색인 파일 수를 적는다 — 부하가 실제로 있었는지).
 - 박동: 20ms QTimer 의 간격 최댓값 = 조작 중 메인 정지. 판정 **모든 조작 < 1초**, 테마 왕복 뒤 전용 메모리 증가 < 20MB.
+- 책갈피창 빠른 내림(261115-11, 사용자 지시 — 늘 포함): ↓ 연타·꾹 누르기·↑ 되돌아오기·모두 접기 연타 — 정지와 함께 멈춘 뒤 본문이 고른 파일을 따라오는지(못 따라오면 그 조작 오류).
 - 시험 프로필(`QStandardPaths` 테스트 모드) — 사용자 실제 설정 폴더를 건드리지 않는다.
 - 261025-12: 다른 무거운 작업(다른 검사·빌드·측정)과 겹쳤으면 판정 '보류'(`scripts/overlap.py`, 릴리스 SOT §4.3 의 8).
 종료 코드: 0 통과, 1 실패, 3 보류(겹침 — 다시 잰다).
@@ -201,6 +202,50 @@ def main():
     op("목록 검색어 지우기", lambda: bt.search_edit.setText(""))
     op("편집 모드 켜기", lambda: bt.set_edit_mode(True))
     op("편집 모드 끄기", lambda: bt.set_edit_mode(False))
+
+    # 261115-11(응답성 SOT §7.6, 사용자 지시 '책갈피창에서 아래 파일로 빠르게 내리면서 속도 등에 문제없는지 — 향후 테스트에 항상'): 큰 실제 폴더·색인 중에
+    #   ↓ 를 빠르게(연타·꾹 누르기) — 최장 정지(op 판정)와 끝에 본문이 고른 파일을 따라오는지(못 따라오면 오류). 검사는 test_bookmark_fast_down_261115.
+    from PyQt6.QtCore import Qt as _Qt, QEvent as _QE
+    from PyQt6.QtGui import QKeyEvent as _QKE
+    from PyQt6.QtTest import QTest as _QT
+
+    def _sel_file():
+        it = bt.tree.currentItem()
+        while it is not None and not it.data(0, bt.DATA_FILE):
+            it = it.parent()
+        return str(it.data(0, bt.DATA_FILE)) if it is not None else ""
+
+    def fast_down(n, gap, autorep=False, key=_Qt.Key.Key_Down, start_top=True):
+        nodes = list(bt._iter_file_nodes())
+        if not nodes:
+            raise RuntimeError("목록에 파일이 없다")
+        bt.tree.setFocus()
+        if start_top:
+            bt.tree.setCurrentItem(nodes[0])
+            spin(1.5)
+        for _ in range(n):
+            if autorep:
+                app.sendEvent(bt.tree, _QKE(_QE.Type.KeyPress, key, _Qt.KeyboardModifier.NoModifier, "", True))
+            else:
+                _QT.keyClick(bt.tree, key)
+            spin(gap)
+        if autorep:
+            app.sendEvent(bt.tree, _QKE(_QE.Type.KeyRelease, key, _Qt.KeyboardModifier.NoModifier, "", False))
+        t0 = time.perf_counter()
+        want_f = os.path.normcase(_sel_file())
+        while time.perf_counter() - t0 < 5.0:
+            cur_f = mw.main_view.current_file()
+            if cur_f and os.path.normcase(str(cur_f)) == want_f:
+                return
+            spin(0.02)
+        raise RuntimeError("멈춘 뒤 5초 안에 본문이 고른 파일을 따라오지 않았다: %s" % Path(want_f).name)
+
+    op("책갈피창 ↓ 연타 ×60(30ms)", lambda: fast_down(60, 0.03), settle=2.0)
+    op("책갈피창 ↓ 꾹 누르기 ×60(20ms 자동 반복)", lambda: fast_down(60, 0.02, autorep=True), settle=2.0)
+    op("책갈피창 ↑ 연타 ×60 되돌아오기", lambda: fast_down(60, 0.03, key=_Qt.Key.Key_Up, start_top=False), settle=2.0)
+    op("책갈피 모두 접기", lambda: bt.toggle_expand_all(False))
+    op("책갈피창 모두 접기 ↓ 연타 ×60(30ms)", lambda: fast_down(60, 0.03), settle=2.0)
+    op("책갈피 모두 접기 풀기", lambda: bt.toggle_expand_all(False), settle=2.0)     # 켜져 있으면 해제 — 평소 상태로
     sp = bt.parentWidget()
     while sp is not None and not hasattr(sp, "setSizes"):
         sp = sp.parentWidget()

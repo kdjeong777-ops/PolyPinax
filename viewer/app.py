@@ -10692,7 +10692,18 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         from viewer import theme as _theme
         _theme.set_dark(dark)
         from viewer.widgets.keycaps import app_style as _keycap_style   # 261107-4(디자인 SOT §2.9.2): 메뉴 단축키 칸은 키캡 그림
-        app.setStyle(_keycap_style("Fusion"))
+        # 261115-2 덧붙임(디자인 SOT §2.5 함정): setStyle 은 위젯 목록을 복사해 둔 채 위젯마다 polish·StyleChange 를 보낸다 —
+        #   그 사이 파이썬 GC 가 순환 참조로 남은 부모 없는 위젯을 지우면 끊어진 포인터를 만져 0xC0000005. 모아 지운 뒤 GC 를 멈추고 바꾼다.
+        import gc as _gc
+        _style = _keycap_style("Fusion")
+        _gc_on = _gc.isenabled()
+        _gc.collect()
+        _gc.disable()
+        try:
+            app.setStyle(_style)
+        finally:
+            if _gc_on:
+                _gc.enable()
         # 260618-16: Qt6.5+ 에서 시스템이 다크면 standardPalette() 가 다크를 반환 →
         #   '밝게'를 골라도 대부분 검게 보이던 문제. 라이트는 **명시적 라이트 팔레트** 강제.
         if not dark:

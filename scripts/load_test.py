@@ -223,6 +223,9 @@ def main():
         if start_top:
             bt.tree.setCurrentItem(nodes[0])
             spin(1.5)
+            # 261115-12(사용자 지시 갈래): 준비(첫 파일로 옮기기 = 보통 열기)는 '첫 파일 열기' 조작이 따로 잰다 — 여기서는 누르기부터
+            beat["last"] = time.perf_counter()
+            beat["max"] = 0.0
         for _ in range(n):
             if autorep:
                 app.sendEvent(bt.tree, _QKE(_QE.Type.KeyPress, key, _Qt.KeyboardModifier.NoModifier, "", True))
@@ -240,6 +243,23 @@ def main():
             spin(0.02)
         raise RuntimeError("멈춘 뒤 5초 안에 본문이 고른 파일을 따라오지 않았다: %s" % Path(want_f).name)
 
+    def first_open():
+        """목록 첫 파일 줄을 고른다(누름과 같은 보통 열기) — 본문이 그 파일이 될 때까지 5초 안. 못 따라오면 오류."""
+        nodes = list(bt._iter_file_nodes())
+        if not nodes:
+            raise RuntimeError("목록에 파일이 없다")
+        bt.tree.setFocus()
+        bt.tree.setCurrentItem(nodes[0])
+        want_f = os.path.normcase(str(nodes[0].data(0, bt.DATA_FILE)))
+        t0 = time.perf_counter()
+        while time.perf_counter() - t0 < 5.0:
+            cur_f = mw.main_view.current_file()
+            if cur_f and os.path.normcase(str(cur_f)) == want_f:
+                return
+            spin(0.02)
+        raise RuntimeError("5초 안에 본문이 첫 파일을 열지 않았다: %s" % Path(want_f).name)
+
+    op("책갈피창 첫 파일 열기(누름과 같은 보통 열기)", first_open, settle=2.0)
     op("책갈피창 ↓ 연타 ×60(30ms)", lambda: fast_down(60, 0.03), settle=2.0)
     op("책갈피창 ↓ 꾹 누르기 ×60(20ms 자동 반복)", lambda: fast_down(60, 0.02, autorep=True), settle=2.0)
     op("책갈피창 ↑ 연타 ×60 되돌아오기", lambda: fast_down(60, 0.03, key=_Qt.Key.Key_Up, start_top=False), settle=2.0)

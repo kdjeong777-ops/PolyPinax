@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-11-15 09:42+0900\n"
+"POT-Creation-Date: 2026-11-15 17:35+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -231,6 +231,14 @@ msgstr ""
 
 #: viewer/app.py
 msgid "영역 캡쳐 저장"
+msgstr ""
+
+#: viewer/app.py
+msgid "화면캡처.png"
+msgstr ""
+
+#: viewer/app.py
+msgid "이 창은 자동 스크롤이 안 됩니다 — 한 화면만 저장했습니다."
 msgstr ""
 
 #: viewer/app.py
@@ -1819,14 +1827,6 @@ msgstr ""
 
 #: viewer/app.py
 msgid "전역 화면캡처 단축키 해제됨(앱 활성 시에만 작동)"
-msgstr ""
-
-#: viewer/app.py
-msgid "화면캡처.png"
-msgstr ""
-
-#: viewer/app.py
-msgid "이 창은 자동 스크롤이 안 됩니다 — 한 화면만 저장했습니다."
 msgstr ""
 
 #: viewer/app.py

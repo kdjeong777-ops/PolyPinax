@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-15 09:42+0900\n"
+"POT-Creation-Date: 2026-11-15 17:35+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -232,6 +232,14 @@ msgstr "Custom Size Settings"
 #: viewer/app.py
 msgid "영역 캡쳐 저장"
 msgstr "Save region capture"
+
+#: viewer/app.py
+msgid "화면캡처.png"
+msgstr "Screen capture.png"
+
+#: viewer/app.py
+msgid "이 창은 자동 스크롤이 안 됩니다 — 한 화면만 저장했습니다."
+msgstr "This window cannot be scrolled automatically — saved one screen only."
 
 #: viewer/app.py
 msgid "클립보드로 복사 중..."
@@ -1862,14 +1870,6 @@ msgstr "Applies to the pane that has focus (main view, thumbnails, Bookmarks pan
 #: viewer/app.py
 msgid "전역 화면캡처 단축키 해제됨(앱 활성 시에만 작동)"
 msgstr "Global screen-capture shortcut released (works only while the app is active)"
-
-#: viewer/app.py
-msgid "화면캡처.png"
-msgstr "Screen capture.png"
-
-#: viewer/app.py
-msgid "이 창은 자동 스크롤이 안 됩니다 — 한 화면만 저장했습니다."
-msgstr "This window cannot be scrolled automatically — saved one screen only."
 
 #: viewer/app.py
 msgid "파일 작업"
@@ -16717,4 +16717,10 @@ msgstr "Getting Started"
 
 #~ msgid "(이메일로 요청하셔도 보내드립니다)"
 #~ msgstr "(also available by email on request)"
+
+#~ msgid "스크롤 캡처 중 — Esc·[멈춤] = 여기까지 저장"
+#~ msgstr "Scrolling capture — Esc · [Stop] = save up to here"
+
+#~ msgid "누른 자리의 창을 찾지 못했습니다."
+#~ msgstr "Could not find a window where you clicked."
 

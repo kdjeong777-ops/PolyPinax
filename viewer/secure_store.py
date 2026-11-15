@@ -10,7 +10,13 @@ import base64
 import hashlib
 import json
 import os
+import threading
 from pathlib import Path
+
+from viewer import bg_write
+
+# 261114-17(응답성 SOT §4.8·보안 SOT §7.2): 읽고-고치고-쓰기를 차례대로 — 쓰기 자체는 배경 줄(bg_write)이 한다
+_LOCK = threading.RLock()
 
 
 def _store_path() -> Path:
@@ -114,7 +120,7 @@ def unprotect_text(value: str) -> str:
 
 def _load() -> dict:
     p = _store_path()
-    if not p.exists():
+    if not bg_write.exists(p):
         # 260618-4: 구 위치에서 1회 이전(있으면 새 위치로 복사)
         lp = _legacy_store_path()
         if lp != p and lp.exists():
@@ -126,19 +132,16 @@ def _load() -> dict:
                 return {}
         return {}
     try:
-        return json.loads(p.read_text(encoding="utf-8")) or {}
+        return json.loads(bg_write.read_text(p)) or {}       # 아직 쓰지 않은 마지막 글이 있으면 그것
     except Exception:
         return {}
 
 
 def _save(data: dict) -> None:
-    # 260618-4: 원자적 쓰기 — 임시파일에 쓰고 os.replace 로 교체.
-    #   (비원자적 write_text 는 중간 크래시 시 JSON 손상 → 저장암호 전체 손실 위험)
+    # 261114-17(응답성 SOT §4.8): 배경 쓰기 줄로 — 메인은 직렬화한 글만 넘긴다. 원자적 쓰기(tmp + os.replace)는
+    #   그 줄이 한다(종전 260618-4 처럼 중간 크래시에 JSON 이 깨지지 않게). 종전엔 메인에서 os.replace — 백신에 붙들리면 창이 섰다.
     try:
-        p = _store_path()
-        tmp = p.with_name(p.name + ".tmp")
-        tmp.write_text(json.dumps(data), encoding="utf-8")
-        os.replace(tmp, p)
+        bg_write.submit(_store_path(), json.dumps(data))
     except Exception:
         pass
 
@@ -148,9 +151,11 @@ def remember_password(path, pw: str) -> bool:
     if not pw or not available():
         return False
     try:
-        data = _load()
-        data[_key(path)] = _protect(pw)
-        _save(data)
+        k, v = _key(path), _protect(pw)
+        with _LOCK:
+            data = _load()
+            data[k] = v
+            _save(data)
         return True
     except Exception:
         return False
@@ -202,21 +207,24 @@ def relocate(old, new) -> bool:
         _SESSION[kn] = _SESSION.pop(ko)
         moved = True
     try:
-        data = _load()
-        if ko in data:
-            data[kn] = data.pop(ko)
-            _save(data)
-            moved = True
+        with _LOCK:
+            data = _load()
+            if ko in data:
+                data[kn] = data.pop(ko)
+                _save(data)
+                moved = True
     except Exception:
         pass
     return moved
 
 
 def forget_password(path) -> None:
-    _SESSION.pop(_key(path), None)
+    k = _key(path)
+    _SESSION.pop(k, None)
     try:
-        data = _load()
-        if data.pop(_key(path), None) is not None:
-            _save(data)
+        with _LOCK:
+            data = _load()
+            if data.pop(k, None) is not None:
+                _save(data)
     except Exception:
         pass

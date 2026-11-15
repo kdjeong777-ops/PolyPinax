@@ -70,6 +70,10 @@ res4 = mw._run_merge_job(job4, "오류 테스트")
 chk(res4.get("err") == "강제 오류" and not res4.get("ok"), "예외 시 err 전달", str(res4))
 
 # 5) 병합 배치 사용자 스타일(프리셋) 저장/불러오기/삭제 + _apply_prefs 보존 (260611-36)
+#   261115-6·-9: 기본 전체 스타일 셋 넣기는 이미 했다고(빈 목록에서 사용자 스타일만 본다 — 기본 셋은 test_nup_defaults_261115)
+from viewer.twoup import NUP_SEED_VER
+mw._prefs["nup_seed_ver"] = NUP_SEED_VER
+mw._prefs["merge_presets"] = []
 mw._merge_save_preset("스타일A", {"nup": 6, "page_size": "Letter", "crop_top": 9})
 mw._merge_save_preset("스타일B", {"nup": 2})
 names = [p.get("name") for p in mw._merge_get_presets()]

@@ -105,8 +105,7 @@ def about_html(version: str) -> str:
              "이 조건에 따라 누구나 사용·수정·재배포할 수 있으며, 수정해 배포하거나 네트워크로 "
              "제공하는 경우에도 같은 조건으로 소스코드를 공개해야 합니다.").format(
                  license="<a href='%s'>%s</a>" % (LICENSE_URL, LICENSE_NAME))
-        + "<br><b>%s</b>: <a href='%s'>%s</a> %s</p>" % (
-            tr("소스코드"), SOURCE_URL, SOURCE_URL, tr("(이메일로 요청하셔도 보내드립니다)"))
+        + "<br><b>%s</b>: <a href='%s'>%s</a></p>" % (tr("소스코드"), SOURCE_URL, SOURCE_URL)
         + "<p><b>%s</b><br>" % tr("보증의 부인")
         + tr("이 프로그램은 '있는 그대로' 제공되며, 관련 법률이 허용하는 범위에서 상품성이나 특정 "
              "목적에의 적합성을 포함한 어떠한 명시적·묵시적 보증도 하지 않습니다. 프로그램 사용으로 "

@@ -3399,6 +3399,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             pass
         for mv in getattr(self, "_mv", []):
             try:
+                if getattr(mv, "_doc", None) is None and getattr(mv, "_is_image", False):
+                    continue        # 261115-29(책갈피창·저장 SOT §4.7.20): 그림 칸(스크린샷 컷)은 파일을 잡지 않는다 — 비우면 회색으로 남았다
                 if getattr(mv, "_doc", None) is not None:
                     try:
                         mv._doc.close()

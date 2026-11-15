@@ -18,6 +18,7 @@ from PyQt6.QtCore import QObject, QPoint, QPointF, QRect, Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QColor, QGuiApplication, QImage, QPainter
 from PyQt6.QtWidgets import QApplication, QHBoxLayout, QLabel, QPushButton, QWidget
 
+from viewer.branding import APP_NAME           # 261115-21: 화면 문구의 앱 이름은 글자로 박지 않는다
 from viewer.i18n import tr
 
 # ── 상수(스크린샷 SOT §3.2 와 같은 값) ─────────────────────────
@@ -417,6 +418,11 @@ class PdfPageSource:
             w, h = h, w
         return w, h
 
+    def rescale(self, k: float) -> None:
+        """배율을 k 배로(시작 높이도 같은 비율) — 한 쪽이 상한을 넘을 때(261115-21, 스크린샷 SOT §3.2 3a)."""
+        self.zoom *= k
+        self.offset = int(self.offset * k)
+
     def render(self, i) -> QImage:
         img = self.mv._page_pixmap(i, self.zoom, self.dpr).toImage()
         img.setDevicePixelRatio(1.0)
@@ -498,9 +504,12 @@ class PageCaptureRun(QObject):
             return
         gap = self.src.gap if self._segs else 0
         est = self.src.est_size(i)
-        if est and not self._first and est[0] * est[1] > self.max_pixels:
-            self._end("full")             # 이 배율의 한 쪽이 상한보다 크다 — 렌더 한 번이 1초를 넘지 않게
-            return
+        if est and est[0] * est[1] > self.max_pixels:
+            if not self._first:
+                self._end("full")         # 이 배율의 한 쪽이 상한보다 크다 — 렌더 한 번이 1초를 넘지 않게
+                return
+            # 261115-21: 첫 쪽도 상한 안에서 렌더한다 — 그 쪽 넓이가 상한의 98 %가 되게 배율을 낮춰 모든 쪽에
+            self.src.rescale((self.max_pixels * 0.98 / (est[0] * est[1])) ** 0.5)
         try:
             img = self.src.render(i)
         except Exception:
@@ -643,7 +652,7 @@ class _PickOverlay(QWidget):
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setObjectName("scrollPickOverlay")
         self.setGeometry(screen.geometry())
-        self.text = tr("캡처할 곳을 누르세요 — PolyPDF 화면의 스크롤되는 곳을 자동으로 내리며 한 장으로 찍습니다 · Esc = 취소")
+        self.text = tr("캡처할 곳을 누르세요 — {app} 화면의 스크롤되는 곳을 자동으로 내리며 한 장으로 찍습니다 · Esc = 취소").format(app=APP_NAME)
         self._pressed = False
 
     def paintEvent(self, _e):

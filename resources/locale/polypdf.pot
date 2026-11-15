@@ -186,6 +186,10 @@ msgid "전체"
 msgstr ""
 
 #: viewer/app.py
+msgid "스크린샷 전체를 PDF로"
+msgstr ""
+
+#: viewer/app.py
 msgid "책갈피 생성을 멈췄습니다. PDF 는 바뀌지 않았습니다."
 msgstr ""
 
@@ -235,10 +239,6 @@ msgstr ""
 
 #: viewer/app.py
 msgid "💾 PDF 저장"
-msgstr ""
-
-#: viewer/app.py
-msgid "스크린샷 전체를 PDF로 (Ctrl+S)"
 msgstr ""
 
 #: viewer/app.py
@@ -930,10 +930,6 @@ msgstr ""
 
 #: viewer/app.py
 msgid "원본 화질"
-msgstr ""
-
-#: viewer/app.py
-msgid "스크롤 캡처는 PolyPDF 화면에서만 됩니다."
 msgstr ""
 
 #: viewer/app.py
@@ -2308,6 +2304,11 @@ msgstr ""
 
 #: viewer/app.py
 msgid "누른 곳은 스크롤되는 곳이 아닙니다 — 본문·목록처럼 스크롤되는 곳을 누르세요."
+msgstr ""
+
+#: viewer/app.py
+#, python-brace-format
+msgid "스크롤 캡처는 {app} 화면에서만 됩니다."
 msgstr ""
 
 #: viewer/app.py
@@ -6005,15 +6006,16 @@ msgid "주의: 아래 자리에 글이 남았습니다 — 새 파일을 확인�
 msgstr ""
 
 #: viewer/scroll_capture.py
-msgid "캡처할 곳을 누르세요 — PolyPDF 화면의 스크롤되는 곳을 자동으로 내리며 한 장으로 찍습니다 · Esc = 취소"
-msgstr ""
-
-#: viewer/scroll_capture.py
 msgid "스크롤 캡처 중 — 한 번 더 누르면 여기까지 저장 (Esc·[멈춤]도)"
 msgstr ""
 
 #: viewer/scroll_capture.py
 msgid "멈춤"
+msgstr ""
+
+#: viewer/scroll_capture.py
+#, python-brace-format
+msgid "캡처할 곳을 누르세요 — {app} 화면의 스크롤되는 곳을 자동으로 내리며 한 장으로 찍습니다 · Esc = 취소"
 msgstr ""
 
 #: viewer/scroll_capture.py

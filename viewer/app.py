@@ -863,7 +863,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             grect, why = sc.target_at(gpos)
             if grect is None:
                 self.status.showMessage(
-                    tr("스크롤 캡처는 PolyPDF 화면에서만 됩니다.") if why == "outside"
+                    tr("스크롤 캡처는 {app} 화면에서만 됩니다.").format(app=APP_NAME) if why == "outside"
                     else tr("누른 곳은 스크롤되는 곳이 아닙니다 — 본문·목록처럼 스크롤되는 곳을 누르세요."), 6000)
                 return
         center = grect.center()
@@ -871,7 +871,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         tgt = sc.own_widget_at(center, exclude=(panel,))
         if tgt is None:                           # 검사·다시 하기로 준 grect 가 PolyPDF 밖
             panel.deleteLater()
-            self.status.showMessage(tr("스크롤 캡처는 PolyPDF 화면에서만 됩니다."), 6000)
+            self.status.showMessage(tr("스크롤 캡처는 {app} 화면에서만 됩니다.").format(app=APP_NAME), 6000)
             return
         screen = QGuiApplication.screenAt(center) or QGuiApplication.primaryScreen()
         win = tgt.window()
@@ -1564,7 +1564,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         """v1.6.2: 우측 패널 = 검색 영역(상) + 스크린샷 스트립(하) 세로 분할."""
         # M7: 스크린샷 패널 헤더에 저장 버튼 (화면캡쳐 버튼은 260606-8: 각 메인뷰 툴바로)
         self.btn_save_pdf = QPushButton(tr("💾 PDF 저장"))
-        self.btn_save_pdf.setToolTip(tr("스크린샷 전체를 PDF로 (Ctrl+S)"))
+        self._refresh_shot_pdf_tip()              # 261115-21: 지금 걸린 키(단축키 설정을 따른다)
         self.btn_save_pdf.clicked.connect(self.action_save_screenshot_pdf)
         # 260606-17: 클립보드로 복사(전체 스크린샷을 순서대로 클립보드 히스토리에)
         #   261008-1(스크린샷 SOT §8, 사용자 요청): '클립보드 저장' → '클립보드로 복사' — 파일로
@@ -2536,6 +2536,16 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             k = self._sc_key(sid)
             b.setToolTip((name + " (" + k + ")" if k else name) + "\n"
                          + tr("포커스가 있는 창(본문·썸네일·책갈피창·텍스트 창)에 적용합니다"))
+        self._refresh_shot_pdf_tip()
+
+    def _refresh_shot_pdf_tip(self) -> None:
+        """261115-21(스크린샷 SOT §7): [💾 PDF 저장] 툴팁 = 이름 + 지금 키 — 종전 '(Ctrl+S)' 고정 글자는 옛 키였다."""
+        b = getattr(self, "btn_save_pdf", None)
+        if b is None:
+            return
+        name = tr("스크린샷 전체를 PDF로")
+        k = self._sc_key("save_shots_pdf")
+        b.setToolTip(name + " (" + k + ")" if k else name)
 
     # 261107-14(마스터 §14.10) 기본 PDF 앱 — 261114-7 부터 사진과 한 함수 `PhotoMixin._register_default_apps`(사진 보기 SOT §4.45)
 

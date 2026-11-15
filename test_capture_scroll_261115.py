@@ -15,6 +15,8 @@ J. (덧붙임) 영역 고르기 없이 '캡처할 곳을 누르세요' 덮개 �
    PolyPDF 밖·스크롤 아닌 곳 = 안내만, 다른 프로그램 길(SendInput·GetAsyncKeyState·전역 훅·화면 찍기) 없음
 K. (261115-17) PDF 본문 — 한 쪽씩·이어 보기·2장 보기 모두 다섯 쪽을 마지막 쪽 끝까지 쪽 렌더로 이어 붙임(간격 = 화면),
    중간 멈춤 = 그때까지의 쪽, 크기 상한 'full', 한 걸음 메인 일 < 1초
+L. (261115-21) 첫 쪽만으로 MAX_PIXELS 를 넘는 배율 — 배율을 낮춰 상한 안 크기로 렌더(결과가 비지 않음, 메인 < 1초)
+M. (261115-21) [💾 PDF 저장] 툴팁 = 지금 걸린 키(종전 '(Ctrl+S)' 고정), 단축키를 바꾸면 따라감 · J 에 안내 문구의 앱 이름 = branding.APP_NAME
 """
 import os, sys, time, random
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -345,7 +347,19 @@ if sc is not None:
         mw.status.clearMessage()
         mw._capture_scroll(None, gpos=QPoint(5, 5))
         msg_out = mw.status.currentMessage()
-        chk(mw._scroll_run is None and "PolyPDF 화면에서만" in msg_out, "J PolyPDF 밖을 누르면 안내만(시작하지 않음)", msg_out)
+        chk(mw._scroll_run is None and "화면에서만" in msg_out, "J PolyPDF 밖을 누르면 안내만(시작하지 않음)", msg_out)
+        # 261115-21: 안내의 앱 이름은 branding 상수(이사 판부터 PolyPinax) — 옛 이름을 글자로 박지 않는다
+        from viewer.branding import APP_NAME
+        mw._capture_scroll(None)
+        pk_n = mw._scroll_picker
+        ov_txt = " ".join(o.text for o in (pk_n.overlays if pk_n else []))
+        if pk_n is not None:
+            pk_n.cancel()
+        for _ in range(5):
+            app.processEvents()
+        chk(APP_NAME + " 화면에서만" in msg_out and APP_NAME + " 화면의" in ov_txt
+            and (APP_NAME == "PolyPDF" or "PolyPDF 화면" not in msg_out + ov_txt),
+            "J 안내·덮개 문구의 앱 이름 = branding.APP_NAME(%s)" % APP_NAME, msg_out + " | " + ov_txt)
         plain = QWidget(); plain.setWindowFlags(Qt.WindowType.Window)
         QPushButton("x", plain).resize(180, 60)
         plain.move(20, 620); plain.resize(200, 100); plain.show(); app.processEvents()
@@ -467,7 +481,37 @@ if sc is not None:
         hh = sum(h for _im, _y, h in cap.segments())
         chk(got.get("r") == "full" and hh <= 900 and cap.frames >= 2,
             "K 크기 상한에 닿으면 'full' — 상한까지만", f"{got} h {hh} frames {cap.frames}")
+        # ── L. 첫 쪽만으로 상한을 넘는 배율 — 배율을 낮춰 상한 안에서 렌더(261115-21) ──
+        srcL = sc.PdfPageSource(mv2)
+        estL = srcL.est_size(srcL.start)
+        lim = int(estL[0] * estL[1] / 4)               # 첫 쪽이 상한의 4배
+        capL = sc.PageCaptureRun(srcL, max_pixels=lim, step_ms=1)
+        gotL = {}
+        capL.finished.connect(lambda r: gotL.setdefault("r", r))
+        capL.start()
+        wait_until(lambda: "r" in gotL, 10000)
+        imgsL = [s for s in capL.segments() if s[0] is not None]
+        bigL = max((s[0].width() * s[0].height() for s in imgsL), default=0)
+        chk("r" in gotL and capL.frames >= 1 and 0 < bigL <= lim and capL.max_step_s < 1.0,
+            "L 첫 쪽이 상한보다 커도 상한 안 크기로 렌더(배율을 낮춤) — 결과가 비지 않고 메인 < 1초",
+            f"{gotL} frames {capL.frames} 렌더 {bigL} 상한 {lim} step {capL.max_step_s:.3f}")
         mv2.close()
+
+    # ── M. [💾 PDF 저장] 툴팁 = 지금 걸린 키(단축키 설정을 따른다, 261115-21) ──
+    from PyQt6.QtGui import QKeySequence
+    tip0 = mw.btn_save_pdf.toolTip()
+    k0 = mw._sc_key("save_shots_pdf")
+    prefs = mw._prefs if isinstance(getattr(mw, "_prefs", None), dict) else {}
+    old_sc = dict(prefs.get("shortcuts") or {})
+    prefs["shortcuts"] = dict(old_sc, save_shots_pdf="Ctrl+Alt+P")
+    mw._prefs = prefs
+    mw._apply_shortcuts(prefs["shortcuts"])
+    tip1 = mw.btn_save_pdf.toolTip()
+    want1 = QKeySequence("Ctrl+Alt+P").toString(QKeySequence.SequenceFormat.NativeText)
+    prefs["shortcuts"] = old_sc
+    mw._apply_shortcuts(old_sc)
+    chk("(Ctrl+S)" not in tip0 and bool(k0) and ("(" + k0 + ")") in tip0 and ("(" + want1 + ")") in tip1,
+        "M [💾 PDF 저장] 툴팁이 지금 키를 보이고, 단축키를 바꾸면 따라간다", f"{tip0!r} → {tip1!r} (지금 키 {k0!r})")
 
     # ── I. 응답성 — 상한 크기 결과의 메인 일 ─────────────────────────
     from viewer import clipboard_util, screenshot as ss

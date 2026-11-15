@@ -288,6 +288,25 @@ try:
             aum = repr(e)
         chk(aum == "LocalTools.PolyPinax", "Q 작업 표시줄 고정의 앱 ID 도 새 이름(창과 같은 단추로 묶이게)", aum)
         chk(len(done) == 3 and _mf.repair_shortcuts(str(newexe), qd) == [], "Q 고친 것은 셋, 다시 불러도 할 일 없음", str(done))
+        # Q2(261115-25, 사용자 보고 — 제거 뒤 남음): 설치본 시작 메뉴 바로가기가 있으면 사용자 시작 메뉴의 옛 것은 고치지 않고 지운다,
+        #   앞서 고쳐 둔 PolyPinax.lnk(대상 = 지금 실행 파일)도 지운다 · 다른 대상의 PolyPinax 바로가기·바탕 화면은 종전대로
+        q2 = {"programs": [tmp / "q2_prog"], "desktop": [tmp / "q2_desk"], "taskbar": [tmp / "q2_bar"]}
+        for v in q2.values():
+            v[0].mkdir()
+        mk(q2["programs"][0] / "PolyPDF.lnk", gone)
+        mk(q2["programs"][0] / "PolyPinax.lnk", newexe)                     # beta.15 가 고쳐 둔 것
+        mk(q2["programs"][0] / "PolyPinax 휴대용.lnk", alive)               # 다른 대상 — 그대로
+        mk(q2["desktop"][0] / "PolyPDF.lnk", gone)
+        d2 = _mf.repair_shortcuts(str(newexe), q2, installed_start=True)
+        chk(not (q2["programs"][0] / "PolyPDF.lnk").exists() and not (q2["programs"][0] / "PolyPinax.lnk").exists()
+            and (q2["programs"][0] / "PolyPinax 휴대용.lnk").exists(),
+            "Q2 설치본 바로가기가 있으면 사용자 시작 메뉴의 옛 것·겹친 것은 지운다(다른 대상은 그대로)", str(d2))
+        chk((q2["desktop"][0] / "PolyPinax.lnk").exists() and tgt(q2["desktop"][0] / "PolyPinax.lnk").lower() == str(newexe).lower(),
+            "Q2 바탕 화면은 종전대로 고친다")
+        chk("installed_start=(not _ss_sc.PORTABLE) and installed_start_link().exists()" in read("main.py"),
+            "Q2 main — 설치본(휴대용 아님)일 때만 지우기, 휴대용은 종전대로 고친다")
+        chk(str(_mf.installed_start_link("PolyPinax")).lower().endswith(r"start menu\programs\polypinax\polypinax.lnk"),
+            "Q2 설치본 시작 메뉴 바로가기 자리(PolyPDF.iss [Icons] 의 그룹)", str(_mf.installed_start_link("PolyPinax")))
     chk("--hidden-import win32com.propsys" in read("build_ci.bat") and "--hidden-import win32com.shell" in read("build_ci.bat"),
         "Q 빌드본에 바로가기 앱 ID 쓰기(propsys·shell)를 넣는다")
     main_src = read("main.py")

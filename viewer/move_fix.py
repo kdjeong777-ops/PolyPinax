@@ -7,6 +7,8 @@
 - `repair_shortcuts(exe, folders, …)`: 사용자 시작 메뉴·바탕 화면·작업 표시줄 고정의 `.lnk` 중 **없어진 옛 실행 파일**(`PolyPDF.exe`)을
   가리키는 것을 지금 실행 파일로(대상·작업 폴더·아이콘·작업 표시줄 앱 ID). 이사 판 설치는 옛 `Program Files\\PolyPDF` 를 지우므로
   손으로 만든 바로가기·작업 표시줄 고정이 죽는다(beta.14 설치 시험 261114). 이름에 옛 이름이 든 것은 새 이름으로 바꾼다(작업 표시줄 고정은 이름 그대로).
+  261115-25: 설치본 시작 메뉴 바로가기(`installed_start_link`)가 있으면 사용자 시작 메뉴의 것은 고치지 않고 지운다 — 겹치고, 제거 뒤에도 남았다.
+  설치 프로그램 제거도 이 폴더들 중 시작 메뉴·바탕 화면에서 설치 폴더를 가리키는 것을 지운다(installer/old_dir_cleanup.iss).
 """
 import os
 import time
@@ -116,15 +118,39 @@ def _set_aumid(lnk: str, aumid: str) -> bool:
         return False
 
 
+def installed_start_link(app_name: str = "") -> Path:
+    """설치 프로그램이 만든 모든 사용자용 시작 메뉴 바로가기(`%ProgramData%\\…\\Programs\\<이름>\\<이름>.lnk`, PolyPDF.iss [Icons])."""
+    if not app_name:
+        from viewer.branding import APP_NAME as app_name
+    pd = Path(os.environ.get("ProgramData") or r"C:\ProgramData")
+    return pd / "Microsoft" / "Windows" / "Start Menu" / "Programs" / app_name / (app_name + ".lnk")
+
+
 def repair_shortcuts(exe: str, folders: dict, old_exe_names=("polypdf.exe",), old_word="PolyPDF", new_word="PolyPinax",
-                     aumid: str = "", exists=os.path.exists) -> list:
-    """없어진 옛 실행 파일을 가리키는 바로가기를 `exe` 로 → [(옛 경로, 새 경로)]. 이름에 옛 이름이 없는 바로가기·살아 있는 대상은 건드리지 않는다."""
+                     aumid: str = "", exists=os.path.exists, installed_start: bool = False) -> list:
+    """없어진 옛 실행 파일을 가리키는 바로가기를 `exe` 로 → [(옛 경로, 새 경로)]. 이름에 옛 이름이 없는 바로가기·살아 있는 대상은 건드리지 않는다.
+    261115-25: `installed_start`(설치본 시작 메뉴 바로가기가 있음)면 사용자 시작 메뉴(`programs`)의 것은 고치지 않고 **지운다**(새 경로 '') —
+    고쳐 두면 시작 메뉴에 같은 이름이 둘 생기고, 제거 프로그램 기록에 없어 제거 뒤에도 남았다. 앞서(beta.15) 고쳐 둔
+    `<새 이름>*.lnk`(대상 = 지금 실행 파일)도 같은 까닭으로 지운다."""
     done = []
     try:
         import win32com.client
         sh = win32com.client.Dispatch("WScript.Shell")
     except Exception:
         return done
+    if installed_start:
+        for d in folders.get("programs", []):
+            try:
+                dup = [p for p in Path(d).iterdir() if p.suffix.lower() == ".lnk" and p.name.lower().startswith(new_word.lower())]
+            except Exception:
+                continue
+            for p in dup:
+                try:
+                    if os.path.normcase(sh.CreateShortcut(str(p)).TargetPath or "") == os.path.normcase(exe):
+                        os.remove(p)
+                        done.append((str(p), ""))
+                except Exception:
+                    continue
     for kind, dirs in folders.items():
         for d in dirs:
             try:
@@ -136,6 +162,10 @@ def repair_shortcuts(exe: str, folders: dict, old_exe_names=("polypdf.exe",), ol
                     s = sh.CreateShortcut(str(p))
                     tgt = s.TargetPath or ""
                     if os.path.basename(tgt).lower() not in old_exe_names or exists(tgt):
+                        continue
+                    if installed_start and kind == "programs":
+                        os.remove(p)                            # 설치본 바로가기가 있다 — 고치지 않고 지운다
+                        done.append((str(p), ""))
                         continue
                     s.TargetPath = exe
                     s.WorkingDirectory = os.path.dirname(exe)

@@ -104,3 +104,5 @@ installer/languages.iss
 PolyPDF.portable
 Data/
 Data-*/
+# 261115-25: test_old_dir_cleanup.py 의 임시 폴더(사용자 데이터 자리 밖이어야 해서 저장소 안 — 끝나면 지운다)
+_olddir_test_*/

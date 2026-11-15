@@ -298,12 +298,16 @@ def _repair_progids() -> None:
         pass
     try:
         # 261114-23 덧붙임 2(beta.14 설치 시험): 옛 Program Files\PolyPDF 가 지워져 죽은 사용자 바로가기·작업 표시줄 고정을 지금 실행 파일로
-        from viewer.move_fix import repair_shortcuts, shortcut_folders, move_log
-        done = repair_shortcuts(sys.executable, shortcut_folders(), aumid=_branding.AUMID)
+        from viewer.move_fix import repair_shortcuts, shortcut_folders, move_log, installed_start_link
+        # 261115-25: 설치본(휴대용 아님)이고 설치본 시작 메뉴 바로가기가 있으면 사용자 시작 메뉴의 옛 바로가기는 지운다(겹침·제거 뒤 남음).
+        #   휴대용 판은 종전대로 고친다(그 바로가기가 휴대용 실행 파일을 가리키게)
+        from viewer import settings_store as _ss_sc
+        done = repair_shortcuts(sys.executable, shortcut_folders(), aumid=_branding.AUMID,
+                                installed_start=(not _ss_sc.PORTABLE) and installed_start_link().exists())
         for a, b in done:
             from PyQt6.QtCore import QStandardPaths
             move_log(Path(QStandardPaths.writableLocation(QStandardPaths.StandardLocation.AppDataLocation)).parent,
-                     "shortcut %s → %s" % (a, b))
+                     "shortcut %s → %s" % (a, b or "(removed)"))
     except Exception:
         pass
 

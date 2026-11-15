@@ -26,6 +26,9 @@
 #define MyAppPublisher "kdjeong777-ops"
 #define MyAppExe MyAppId + ".exe"
 #define MyProgId "PolyPDF.pdf"
+; 이사 전 제품 단위 ID(branding.OLD_ID) — 이사 뒤 남은 옛 설치 폴더 정리에만 쓴다(아래 CleanOldAppDir)
+#define OldAppId "PolyPDF"
+#define OldAppExe OldAppId + ".exe"
 
 [Setup]
 AppId={{8E7B5A30-6E2C-4E2B-9C1A-1A2B3C4D5E6F}
@@ -450,6 +453,8 @@ begin
   end;
 end;
 
+#include "old_dir_cleanup.iss"
+
 function ShouldRelaunch(): Boolean;
 begin
   Result := WizardSilent() and (ExpandConstant('{param:RELAUNCH|0}') = '1');
@@ -463,7 +468,12 @@ var
 begin
   Result := '';
   WaitForCaller();
-  if gPrevUninst = '' then Exit;
+  oldDir := ReadUninstVal('Inno Setup: App Path');           { 제거 전에 읽는다(제거하면 값이 사라진다) }
+  if gPrevUninst = '' then
+  begin
+    CleanOldAppDir(ExpandConstant('{autopf}\{#OldAppId}'));   { 261115-25: 이미 남아 있는 PC(등록 없는 옛 폴더) }
+    Exit;
+  end;
 
   { 1) 실행 중인 PolyPDF 종료(파일 잠금 방지) }
   Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM PolyPinax.exe /IM PolyPDF.exe', '',   { 261114-8: 새·옛 실행 파일 }
@@ -483,10 +493,12 @@ begin
     제거 단계를 건너뛰고, 옛 .pyd/.dll 이 남지 않게 기존 _internal 만 지운 뒤 덮어 설치한다. }
   if not FileExists(uninstExe) then
   begin
-    oldDir := ReadUninstVal('Inno Setup: App Path');
     if oldDir = '' then oldDir := ExtractFileDir(uninstExe);
-    if (oldDir <> '') and DirExists(oldDir + '\_internal') then
+    if IsOldAppDir(oldDir) then
+      CleanOldAppDir(oldDir)                                  { 261115-25: 이사 판 — 다른 폴더에 설치하므로 옛 폴더 통째로 }
+    else if (oldDir <> '') and DirExists(oldDir + '\_internal') then
       DelTree(oldDir + '\_internal', True, True, True);
+    CleanOldAppDir(ExpandConstant('{autopf}\{#OldAppId}'));
     Exit;
   end;
 
@@ -499,14 +511,19 @@ begin
     Exit;
   end;
 
-  { 3) 제거 완료 대기 — 언인스톨러는 임시 복사본으로 동작하므로 레지스트리 키가 사라질 때까지 폴링(최대 ~30초) }
+  { 3) 제거 완료 대기 — 언인스톨러는 임시 복사본으로 동작하므로 레지스트리 키가 사라질 때까지 폴링.
+    261115-25: 30초 → 120초 — 자연 음성(469MB)·백신 검사로 옛 제거가 길어지면 새 설치가 먼저 나가, 끝난 옛 제거가
+    같은 AppId 의 등록(새 판 것)을 지울 수 있다. }
   i := 0;
-  while (i < 60) and (ReadUninstVal('UninstallString') <> '') do
+  while (i < 240) and (ReadUninstVal('UninstallString') <> '') do
   begin
     Sleep(500);
     i := i + 1;
   end;
   Sleep(500);
+  { 4) 261115-25: 옛 제거 프로그램이 남긴 것(잠긴 파일 등)·등록 없이 남은 옛 이름 폴더 — 이사 판은 다른 폴더에 설치하므로 여기서 정리 }
+  CleanOldAppDir(oldDir);
+  CleanOldAppDir(ExpandConstant('{autopf}\{#OldAppId}'));
 end;
 
 { 261017(가상 프린터 SOT §4.5): 제거 — 사용자가 직접 지울 때만 가상 프린터도 지운다. 업그레이드는 새 설치 프로그램이
@@ -517,4 +534,12 @@ var
 begin
   if (CurUninstallStep = usUninstall) and (UPos('/KEEPPRINTER', Uppercase(GetCmdTail())) = 0) then
     Exec(ExpandConstant('{app}\{#MyAppExe}'), '--vprinter remove', '', SW_HIDE, ewWaitUntilTerminated, rc);
+  { 261115-25: 사용자가 직접 지울 때(업그레이드 아님) — 이사 뒤 등록 없이 남은 옛 이름 폴더, 그리고 앱이 고쳐 둔
+    사용자 시작 메뉴·바탕 화면의 바로가기(move_fix.repair_shortcuts — 이 제거 프로그램 기록에 없다) 중 이 설치 폴더를 가리키는 것 }
+  if (CurUninstallStep = usPostUninstall) and (UPos('/KEEPPRINTER', Uppercase(GetCmdTail())) = 0) then
+  begin
+    CleanOldAppDir(ExpandConstant('{autopf}\{#OldAppId}'));
+    DeleteLinksInto(ExpandConstant('{userprograms}'), '{#MyAppName}', ExpandConstant('{app}'), False);
+    DeleteLinksInto(ExpandConstant('{userdesktop}'), '{#MyAppName}', ExpandConstant('{app}'), False);
+  end;
 end;

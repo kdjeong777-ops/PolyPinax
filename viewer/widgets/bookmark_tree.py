@@ -132,7 +132,12 @@ class _EditableTree(QTreeWidget):
     def keyPressEvent(self, e):
         if e.key() == Qt.Key.Key_Delete:
             self.delPressed.emit(); e.accept(); return
-        super().keyPressEvent(e)
+        # 261115-12(응답성 SOT §4.7 ⑤): 키로 옮긴 줄인가 — 다른 파일이면 상태와 상관없이 '표지 먼저'
+        self._key_nav = True
+        try:
+            super().keyPressEvent(e)
+        finally:
+            self._key_nav = False
 
     def drawBranches(self, painter, rect, index):
         """260611-57/260618-1: 암호화 파일은 펼침표시(삼각형)·원을 인증 상태별 색으로.
@@ -759,6 +764,10 @@ class BookmarkTree(QWidget):
         self.tree.header().setStretchLastSection(False)
         from PyQt6.QtWidgets import QHeaderView as _QHV
         self.tree.header().setSectionResizeMode(0, _QHV.ResizeMode.ResizeToContents)
+        # 261115-12(응답성 SOT §4.4): 줄 높이는 모두 같다(굵은 글꼴·같은 아이콘) — 줄마다 크기를 묻지 않게.
+        #   열 폭(ResizeToContents)도 기본은 줄 1000개를 훑는다 — 보이는 줄만(파일 3061개 폴더에서 ↓·스크롤·모두 접기가 1~5초 섰다).
+        self.tree.setUniformRowHeights(True)
+        self.tree.header().setResizeContentsPrecision(0)
         self.tree.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         # 260901-2: 생성 시점부터 다중 선택 가능(종전엔 편집모드 전환 때 비로소 적용됐다).
         self.tree.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
@@ -2904,17 +2913,20 @@ class BookmarkTree(QWidget):
         return bool(self.__dict__.get("_last_nav_quick"))
 
     def _quick_eligible(self, item, path) -> bool:
-        """표지 먼저로 옮기나 — '모두 접기' 상태의 접힌 파일 줄, 또는 가벼운 넘김이면 **다른 파일**로 옮길 때(사용자 결정 '모두 접기 상태 + 느린 PC')."""
+        """표지 먼저로 옮기나 — '모두 접기' 상태의 접힌 파일 줄, 또는 **다른 파일**로 옮길 때 그것이 키(↑↓·Home/End 등)이거나
+        가벼운 넘김이면. 261115-12(사용자 결정 '키보드 이동엔 항상') — 종전 261114-5 는 '모두 접기 상태 + 느린 PC' 에만이었다.
+        마우스 누름·Enter 는 종전대로 바로 다 연다."""
         if not path or self._photo_on():
             return False
         if self._keep_collapsed(item):
             return True
-        try:
-            from viewer import perf_mode
-            if not perf_mode.is_lite():
+        if not getattr(self.tree, "_key_nav", False):
+            try:
+                from viewer import perf_mode
+                if not perf_mode.is_lite():
+                    return False
+            except Exception:
                 return False
-        except Exception:
-            return False
         from viewer.pathutil import norm_key
         last = self.__dict__.get("_last_nav_path")
         return not last or norm_key(str(last)) != norm_key(str(path))

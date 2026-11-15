@@ -21,9 +21,27 @@ FILE = "drafts.json"
 KINDS = ("sign", "image")
 
 
+_PATH_MEMO: dict = {}
+_LOAD_MEMO: dict = {}
+
+
 def _path() -> str:
-    from viewer import sign_store
-    return str(sign_store.root() / FILE)
+    """261115-12(응답성 SOT §4.7 ⑤): 본문을 그릴 때마다(`sign_draft_layer.reposition`) 불린다 — 폴더 만들기(`mkdir`)를
+    설정 폴더마다 한 번만. 시험이 설정 폴더를 바꾸면(테스트 모드·덮어쓰기) 그 폴더로 다시 만든다."""
+    try:
+        from PyQt6.QtCore import QStandardPaths
+        from viewer import settings_store
+        k = (str(getattr(settings_store, "_DIR_OVERRIDE", None)),
+             QStandardPaths.writableLocation(QStandardPaths.StandardLocation.AppDataLocation))
+    except Exception:
+        k = None
+    p = _PATH_MEMO.get(k) if k is not None else None
+    if p is None or not os.path.isdir(os.path.dirname(p)):
+        from viewer import sign_store
+        p = str(sign_store.root() / FILE)
+        if k is not None:
+            _PATH_MEMO[k] = p
+    return p
 
 
 def key(path) -> str:
@@ -31,11 +49,23 @@ def key(path) -> str:
 
 
 def _load() -> dict:
+    """261115-12: 파일이 그대로면(경로·수정 시각·크기) 읽어 둔 것을 **사본으로** — 그릴 때마다 열어 읽지 않는다."""
     p = _path()
     try:
+        st = os.stat(p)
+        sig = (p, st.st_mtime_ns, st.st_size)
+    except OSError:
+        _LOAD_MEMO.clear()
+        return {}
+    if _LOAD_MEMO.get("sig") == sig:
+        return json.loads(_LOAD_MEMO["raw"])
+    try:
         with open(p, encoding="utf-8") as f:
-            raw = json.load(f)
-        return raw if isinstance(raw, dict) else {}
+            text = f.read()
+        raw = json.loads(text)
+        raw = raw if isinstance(raw, dict) else {}
+        _LOAD_MEMO.update(sig=sig, raw=json.dumps(raw, ensure_ascii=False))
+        return raw
     except FileNotFoundError:
         return {}
     except OSError:
@@ -54,6 +84,7 @@ def _save(data: dict) -> None:
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=1)
     os.replace(tmp, p)
+    _LOAD_MEMO.clear()
 
 
 def new_id() -> str:

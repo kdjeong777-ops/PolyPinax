@@ -59,6 +59,8 @@ try:
     sd._save(data)
     chk([x["id"] for x in sd.drafts(pdf)] == ["a1", "b2"], "C 쓰면 다음 읽기가 새 내용", str(sd.drafts(pdf)))
 
+    from viewer import bg_write                                    # 261115-19: 우리 쓰기는 배경 줄 — 디스크에 닿은 뒤에 남이 바꾼다
+    bg_write.flush()
     time.sleep(0.05)
     with open(p, "w", encoding="utf-8") as f:                      # 다른 프로세스가 바꿈
         json.dump({sd.key(pdf): {"drafts": [{"id": "z9", "page": 2, "rect": [0, 0, 2, 2]}]}}, f)

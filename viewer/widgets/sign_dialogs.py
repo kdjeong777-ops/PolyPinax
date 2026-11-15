@@ -634,7 +634,7 @@ class DigitalIdDialog(QDialog):
             self.lab_pic.setPixmap(_checker_preview(self._img_pil, 70))
         else:
             self.lab_pic.setPixmap(QPixmap())
-            self.lab_pic.setText(tr("(서명 그림 없음 — [서명 그림…] 으로 넣으세요)") if fp else "")
+            self.lab_pic.setText(tr("(서명 그림 없음 — [서명 그림] 으로 넣으세요)") if fp else "")
         self.sp_mm.blockSignals(True)
         self.sp_mm.setValue(sign_store.id_image_mm(fp) if fp else sign_store.IMAGE_MM_DEFAULT)
         self.sp_mm.blockSignals(False)

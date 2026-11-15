@@ -7,18 +7,24 @@
 
 `drafts[]` = `{"id", "page", "rect": [x0, y0, x1, y1], "kind": "sign"|"image", "image": "<옛 서명 그림 이름>", "field": "<빈 칸 이름>",
 "fp": "<그림만 자리의 디지털 ID — 그 ID 의 서명 그림, 261031-1>"}` —
-`rect` 는 **그림 상자**, 보이는 쪽 좌표(fitz `page.rect`, `/Rotate` 적용 뒤). 쓰기는 원자적, 깨진 파일은 옆에 보관(sign_store 와 같은 규칙).
+`rect` 는 **그림 상자**, 보이는 쪽 좌표(fitz `page.rect`, `/Rotate` 적용 뒤). 쓰기는 배경 쓰기 줄(`bg_write` — 원자적, 261115-19),
+깨진 파일은 옆에 보관(sign_store 와 같은 규칙).
 """
 from __future__ import annotations
 
 import json
 import os
+import threading
 import uuid
 
+from viewer import bg_write
 from viewer.i18n import tr
 
 FILE = "drafts.json"
 KINDS = ("sign", "image")
+# 261115-19(응답성 SOT §4.8): 쓰기는 배경 쓰기 줄(bg_write) — 끌기·크기·놓기마다 메인 os.replace 를 하지 않는다.
+#   읽고-고치고-쓰기는 이 자물쇠로 차례대로(secure_store 와 같은 방식, 261114-17)
+_LOCK = threading.RLock()
 
 
 _PATH_MEMO: dict = {}
@@ -49,8 +55,16 @@ def key(path) -> str:
 
 
 def _load() -> dict:
-    """261115-12: 파일이 그대로면(경로·수정 시각·크기) 읽어 둔 것을 **사본으로** — 그릴 때마다 열어 읽지 않는다."""
+    """261115-12: 파일이 그대로면(경로·수정 시각·크기) 읽어 둔 것을 **사본으로** — 그릴 때마다 열어 읽지 않는다.
+    261115-19: 배경 줄에 아직 쓰지 않은 글이 있으면 그것(같은 프로세스 안에서 순서가 어긋나지 않게)."""
     p = _path()
+    pend = bg_write.pending_text(p)
+    if pend is not None:
+        try:
+            raw = json.loads(pend)
+            return raw if isinstance(raw, dict) else {}
+        except Exception:
+            return {}
     try:
         st = os.stat(p)
         sig = (p, st.st_mtime_ns, st.st_size)
@@ -79,11 +93,8 @@ def _load() -> dict:
 
 
 def _save(data: dict) -> None:
-    p = _path()
-    tmp = p + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=1)
-    os.replace(tmp, p)
+    # 261115-19: 직렬화만 여기(부르는 스레드) — 원자적 쓰기(tmp + os.replace)는 배경 줄이 한다
+    bg_write.submit(_path(), json.dumps(data, ensure_ascii=False, indent=1))
     _LOAD_MEMO.clear()
 
 
@@ -113,22 +124,23 @@ def out_of(path) -> str:
 
 
 def set_drafts(path, items, out: str | None = None) -> None:
-    data = _load()
     k = key(path)
-    e = dict(data.get(k) or {})
     items = [_clean(d) for d in items]
-    if out is not None:
-        e["out"] = str(out or "")
-    if items:
-        e["drafts"] = items
-    else:
-        e.pop("drafts", None)
-        e.pop("out", None)
-    if e:
-        data[k] = e
-    else:
-        data.pop(k, None)
-    _save(data)
+    with _LOCK:
+        data = _load()
+        e = dict(data.get(k) or {})
+        if out is not None:
+            e["out"] = str(out or "")
+        if items:
+            e["drafts"] = items
+        else:
+            e.pop("drafts", None)
+            e.pop("out", None)
+        if e:
+            data[k] = e
+        else:
+            data.pop(k, None)
+        _save(data)
 
 
 def clear(path) -> None:
@@ -138,13 +150,14 @@ def clear(path) -> None:
 # ---- 확정한 서명 파일 -----------------------------------------------------------
 
 def set_signed(out, src, base_len: int, base_sha: str, items) -> None:
-    data = _load()
     k = key(out)
-    e = dict(data.get(k) or {})
-    e["signed"] = {"src": str(src), "base_len": int(base_len), "base_sha": str(base_sha),
-                   "drafts": [_clean(d) for d in items]}
-    data[k] = e
-    _save(data)
+    with _LOCK:
+        data = _load()
+        e = dict(data.get(k) or {})
+        e["signed"] = {"src": str(src), "base_len": int(base_len), "base_sha": str(base_sha),
+                       "drafts": [_clean(d) for d in items]}
+        data[k] = e
+        _save(data)
 
 
 def signed(path) -> dict | None:
@@ -166,25 +179,26 @@ def relocate(pairs) -> None:
     pairs = [(key(a), str(b)) for a, b in pairs]
     if not pairs:
         return
-    data = _load()
-    changed = False
     m = {a: b for a, b in pairs}
-    for a, b in pairs:
-        if a in data:
-            data[key(b)] = data.pop(a)
-            changed = True
-    for e in data.values():
-        if not isinstance(e, dict):
-            continue
-        if e.get("out") and key(e["out"]) in m:
-            e["out"] = m[key(e["out"])]
-            changed = True
-        s = e.get("signed")
-        if isinstance(s, dict) and s.get("src") and key(s["src"]) in m:
-            s["src"] = m[key(s["src"])]
-            changed = True
-    if changed:
-        _save(data)
+    with _LOCK:
+        data = _load()
+        changed = False
+        for a, b in pairs:
+            if a in data:
+                data[key(b)] = data.pop(a)
+                changed = True
+        for e in data.values():
+            if not isinstance(e, dict):
+                continue
+            if e.get("out") and key(e["out"]) in m:
+                e["out"] = m[key(e["out"])]
+                changed = True
+            s = e.get("signed")
+            if isinstance(s, dict) and s.get("src") and key(s["src"]) in m:
+                s["src"] = m[key(s["src"])]
+                changed = True
+        if changed:
+            _save(data)
 
 
 def default_out(path) -> str:

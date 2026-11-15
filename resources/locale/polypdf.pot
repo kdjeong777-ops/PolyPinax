@@ -12627,7 +12627,7 @@ msgid "  · 공동인증서"
 msgstr ""
 
 #: viewer/widgets/sign_dialogs.py
-msgid "(서명 그림 없음 — [서명 그림…] 으로 넣으세요)"
+msgid "(서명 그림 없음 — [서명 그림] 으로 넣으세요)"
 msgstr ""
 
 #: viewer/widgets/sign_dialogs.py

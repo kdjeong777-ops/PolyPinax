@@ -12963,8 +12963,8 @@ msgid "  · 공동인증서"
 msgstr "  · Korean certificate"
 
 #: viewer/widgets/sign_dialogs.py
-msgid "(서명 그림 없음 — [서명 그림…] 으로 넣으세요)"
-msgstr "(No signature image — add one with [Signature Image…])"
+msgid "(서명 그림 없음 — [서명 그림] 으로 넣으세요)"
+msgstr "(No signature image — add one with [Signature Image])"
 
 #: viewer/widgets/sign_dialogs.py
 msgid "보관함"

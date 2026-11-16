@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-11-15 17:35+0900\n"
+"POT-Creation-Date: 2026-11-16 22:12+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1466,7 +1466,7 @@ msgstr ""
 msgid "크롭 해제 (붙여넣은 쪽)"
 msgstr ""
 
-#: viewer/app.py
+#: viewer/app.py viewer/photo_controller.py
 msgid "1단 보기"
 msgstr ""
 
@@ -1483,11 +1483,11 @@ msgstr ""
 msgid "사용자 단어장에 넣기"
 msgstr ""
 
-#: viewer/app.py viewer/photo_controller.py
+#: viewer/app.py viewer/photo_controller.py viewer/widgets/main_view.py
 msgid "도형 입력 설정"
 msgstr ""
 
-#: viewer/app.py viewer/photo_controller.py
+#: viewer/app.py viewer/photo_controller.py viewer/widgets/main_view.py
 msgid "글쓰기 입력 설정"
 msgstr ""
 
@@ -1507,6 +1507,11 @@ msgstr ""
 
 #: viewer/app.py
 msgid "선택 사진 모양 변경"
+msgstr ""
+
+#: viewer/app.py viewer/edit_controller.py viewer/photo_controller.py
+#: viewer/widgets/merge_preview.py
+msgid "크롭"
 msgstr ""
 
 #: viewer/app.py viewer/stamp_controller.py
@@ -2428,11 +2433,6 @@ msgstr ""
 
 #: viewer/app.py viewer/photo_controller.py
 msgid "사진 모드(PolyPix)로 바꾸기"
-msgstr ""
-
-#: viewer/app.py viewer/edit_controller.py viewer/photo_controller.py
-#: viewer/widgets/merge_preview.py
-msgid "크롭"
 msgstr ""
 
 #: viewer/app.py viewer/edit_controller.py
@@ -9971,10 +9971,6 @@ msgstr ""
 msgid "채움"
 msgstr ""
 
-#: viewer/widgets/main_view.py
-msgid "청소"
-msgstr ""
-
 #: viewer/widgets/main_view.py viewer/widgets/stamp_dialog.py
 msgid "파일에서"
 msgstr ""
@@ -11318,14 +11314,6 @@ msgid "찾은 자리 {n}곳"
 msgstr ""
 
 #: viewer/widgets/region_capture.py
-msgid "Enter·더블클릭 = 캡처 · 끌기 = 옮기기·크기 · 화살표 = 1px(Shift 10px, Ctrl 크기) · 오른쪽 클릭 = 다시 고르기 · Esc = 취소"
-msgstr ""
-
-#: viewer/widgets/region_capture.py
-msgid " · Shift+점 끌기 = 그 점만(모양 펴기)"
-msgstr ""
-
-#: viewer/widgets/region_capture.py
 msgid "끌어서 영역 고르기(클릭 두 번도 됩니다) · Esc·오른쪽 클릭 = 취소"
 msgstr ""
 
@@ -11339,6 +11327,14 @@ msgstr ""
 
 #: viewer/widgets/region_capture.py
 msgid "Enter·더블클릭 = 캡처 · 끌기 = 옮기기·크기 · 화살표 = 1px(Shift 10px, Ctrl 크기) · Esc·오른쪽 클릭 = 취소"
+msgstr ""
+
+#: viewer/widgets/region_capture.py
+msgid "Enter·더블클릭 = 캡처 · 끌기 = 옮기기·크기 · 화살표 = 1px(Shift 10px, Ctrl 크기) · 오른쪽 클릭 = 다시 고르기 · Esc = 취소"
+msgstr ""
+
+#: viewer/widgets/region_capture.py
+msgid " · Shift+점 끌기 = 그 점만(모양 펴기)"
 msgstr ""
 
 #: viewer/widgets/region_capture.py
@@ -13816,11 +13812,6 @@ msgstr ""
 #: viewer/widgets/thumbs_list.py
 #, python-brace-format
 msgid "p.{r} 뒤"
-msgstr ""
-
-#: viewer/widgets/thumbs_list.py
-#, python-brace-format
-msgid "붙여넣기 p.{epg}"
 msgstr ""
 
 #: viewer/widgets/thumbs_list.py

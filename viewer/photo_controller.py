@@ -1901,7 +1901,7 @@ class PhotoMixin:
         if tp is None:
             return
         try:
-            tp.btn_apply.setEnabled(False)               # [PDF 에 반영] — 사진에는 없다(4.34·G1)
+            self._text_apply_sync()                      # [PDF 에 반영] — 사진에는 없다(4.34·G1), 켜기·끄기는 한 곳(261116-29)
         except Exception:
             pass
         words = self._photo_ocr_words(cur)

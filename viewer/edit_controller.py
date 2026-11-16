@@ -1532,6 +1532,7 @@ class EditMixin:
             except Exception:
                 pass
         self._mix_draw_gate()                    # 261116-13(사진 보기 SOT §4.47): 섞은 칸에서는 그리지 않는다
+        self._mix_lock_sync()                    # 261116-29: 섞은 PDF 칸이 활성이면 쪽 썸네일 편집을 다시 뺀다
         self._hist_reset()                       # 261012-7·10(§4.6.8): 기록은 편집 모드 한 번 동안
 
     def _reload_rotation(self, path):

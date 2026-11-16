@@ -3858,6 +3858,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         if cur and mv._doc is not None and getattr(self, "_photo_mode", False) and self._is_photo_path(cur):
             self._photo_text_reload(cur)                   # 261104-10(사진 보기 SOT §4.34): 사진 — 우리 OCR 낱말만
             return
+        self._text_apply_sync()                           # 261116-29: [PDF 에 반영] 켜기·끄기는 한 곳
         if not cur or not str(cur).lower().endswith(".pdf") or mv._doc is None:
             tp.set_page("", 0, [], tr("PDF 를 먼저 여세요."))
             return
@@ -4369,6 +4370,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         260913-6(사용자 결정 "보이지않는 글자층을 다시 디자인해서 넣어"): 고친 줄만 바꿔 끼우던
         것을 **쪽의 층 전체 다시 쓰기**로. 범위(고친 쪽만 / 스캔 쪽 전체)를 고르고, 쓰기는
         `TextLayerWorker` 가 임시 파일까지 — 원본 덮어쓰기는 `_on_text_layer_done` 에서 메인이 한다."""
+        if self._mix_pdf_locked():                    # 261116-29(사진 보기 SOT §4.47): 섞은 PDF 칸은 보기만 — 흐리게 막기
+            return
         mv = self.main_view
         cur = mv.current_file() if mv else None
         if not cur or mv._doc is None:
@@ -5488,6 +5491,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         return str(path), int(mv.current_page() or 0)
 
     def _open_crop_dialog(self, pages=None, view=None):
+        if self._mix_pdf_locked():                    # 261116-29(사진 보기 SOT §4.47): 섞은 PDF 칸은 보기만 — 흐리게 막기
+            return
         mv0 = view or self.main_view
         cur0 = mv0.current_file() if mv0 is not None else None
         if cur0 and getattr(self, "_photo_mode", False) and self._is_photo_path(cur0):
@@ -6968,6 +6973,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
     def _delete_current_page(self, mv=None) -> None:
         """본문 우클릭 '삭제'·본문 Del(261017-1, 입력 SOT §3) — 지금 쪽을 썸네일 쪽 편집으로 지운다(미저장). 편집모드에서만."""
         if not self.bookmark_tree.is_edit_mode():
+            return
+        if self._mix_pdf_locked():                    # 261116-29(사진 보기 SOT §4.47): 섞은 PDF 칸은 보기만 — 흐리게 막기
             return
         _cur = self.main_view.current_file() if self.main_view else None
         if _cur and getattr(self, "_photo_mode", False) and self._is_photo_path(_cur):

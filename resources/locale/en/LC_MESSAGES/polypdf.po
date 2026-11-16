@@ -6945,6 +6945,10 @@ msgstr "There are no screenshots."
 msgid "아래 목록에서 고르세요."
 msgstr "Choose from the list below."
 
+#: viewer/split_kind_controller.py
+msgid "섞은 PDF 칸은 보기만 됩니다 — 고치려면 우클릭 'PDF 모드로 보기' 로 바꾸세요."
+msgstr "The mixed PDF pane is view-only — to edit, right-click and choose 'View in PDF Mode'."
+
 #: viewer/stamp_controller.py
 msgid "영역이 너무 작습니다 — 끌어서 고르세요."
 msgstr "The area is too small — drag to select it."

@@ -14111,6 +14111,16 @@ msgstr "Reorder pages: drag and drop or Alt+↑/↓  ·  Delete: Delete  ·  Mov
 
 #: viewer/widgets/thumbs_list.py
 #, python-brace-format
+msgid "{n} · 붙여넣기"
+msgstr "{n} · pasted"
+
+#: viewer/widgets/thumbs_list.py
+#, python-brace-format
+msgid "원래 p.{page}"
+msgstr "Originally p.{page}"
+
+#: viewer/widgets/thumbs_list.py
+#, python-brace-format
 msgid "p.{r} 뒤"
 msgstr "after p.{r}"
 

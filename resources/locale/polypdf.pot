@@ -13765,6 +13765,16 @@ msgstr ""
 
 #: viewer/widgets/thumbs_list.py
 #, python-brace-format
+msgid "{n} · 붙여넣기"
+msgstr ""
+
+#: viewer/widgets/thumbs_list.py
+#, python-brace-format
+msgid "원래 p.{page}"
+msgstr ""
+
+#: viewer/widgets/thumbs_list.py
+#, python-brace-format
 msgid "p.{r} 뒤"
 msgstr ""
 

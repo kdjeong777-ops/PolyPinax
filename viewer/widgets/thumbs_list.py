@@ -94,6 +94,8 @@ class PageThumbs(QWidget):
     #   본문에 보여 주려면 번호가 있어야 해서, 쪽 수를 넘는 자리에 **합성 번호**를 준다.
     #   `STAGED_BASE + 일련번호` — 어떤 문서의 쪽 수보다도 크므로 자체 쪽과 겹치지 않는다.
     STAGED_BASE = 1000000
+    # 261116-11(책갈피창·저장 SOT §4.7.7, 사용자 결정 A): 번호 띠의 자리·색 — 순서가 바뀌면 띠 칸만 다시 칠한다
+    BAND_ROLE = int(Qt.ItemDataRole.UserRole.value) + 11
 
     THUMB_DPI = 48
     # 261014-24(마스터 §19.11 P-B): 화면 밖 아이콘 비우기 — 그린 아이콘이 이보다 많으면 보이는 곳 ± ICON_KEEP_SCREENS 화면 밖을 비운다.
@@ -280,7 +282,61 @@ class PageThumbs(QWidget):
 
     def _emit_order_changed(self):
         self._order_pending = False
+        self._renumber_bands()                   # 261116-11: 띠 번호를 새 순서로(저장 전에도)
         self.pageOrderChanged.emit()
+
+    # ----- 261116-11(책갈피창·저장 SOT §4.7.7, 사용자 결정 A): 띠 번호 = 지금 목록 순서(저장 뒤 번호) -----
+    def _band_text(self, item, row: int) -> str:
+        v = item.data(Qt.ItemDataRole.UserRole)
+        if isinstance(v, (tuple, list)):
+            return tr("{n} · 붙여넣기").format(n=row + 1)
+        return str(row + 1)
+
+    def _band_tip(self, item, row: int) -> None:
+        """순서가 바뀐 자체 쪽에만 '원래 p.N' — 붙여넣은 쪽 툴팁(원본 파일·쪽)은 그대로."""
+        v = item.data(Qt.ItemDataRole.UserRole)
+        if not isinstance(v, int):
+            return
+        want = tr("원래 p.{page}").format(page=v + 1) if row != v else None
+        if item.data(Qt.ItemDataRole.ToolTipRole) != want:
+            item.setData(Qt.ItemDataRole.ToolTipRole, want)
+
+    def _paint_band(self, pm, g, text: str) -> None:
+        """카드 그림 `pm` 의 번호 띠 칸만 다시 칠한다 — g = (x0, y, w, h, 바탕, 글, 테두리, 테두리 굵기)."""
+        from PyQt6.QtCore import QRect
+        x0, y, w, h, bg, fg, bd, bw = g
+        p = QPainter(pm)
+        p.fillRect(x0, y, w, h, bg)
+        p.setPen(QPen(bd, bw))
+        p.drawRect(x0, 0, w - 1, y + h - 1)
+        if bw == 1:
+            p.drawLine(x0, y, x0 + w - 1, y)
+        p.setPen(fg)
+        p.drawText(QRect(x0, y, w, h), Qt.AlignmentFlag.AlignCenter, text)
+        p.end()
+
+    def _renumber_bands(self) -> None:
+        """순서가 바뀐 뒤 — 그려 둔 카드는 띠만 다시 칠하고(쪽 그림은 그대로), 툴팁을 맞춘다. 그리지 않은 카드는 그릴 때 새 번호로."""
+        drawn = self._iconed
+        for row in range(self.list.count()):
+            it = self.list.item(row)
+            self._band_tip(it, row)
+            g = it.data(self.BAND_ROLE) if id(it) in drawn else None
+            if not g:
+                continue
+            text = self._band_text(it, row)
+            if g[8] == text:
+                continue
+            ic = it.icon()
+            if ic.isNull():
+                continue
+            try:
+                pm = QPixmap(ic.pixmap(QSize(g[9], g[10]), 1.0))
+                self._paint_band(pm, g[:8], text)
+            except Exception:
+                continue
+            it.setIcon(QIcon(pm))
+            it.setData(self.BAND_ROLE, g[:8] + (text,) + g[9:])
 
     def row_of_page(self, page_index: int) -> int:
         """260915-1: 이 문서 쪽(0-based)이 **지금 목록의 몇째 행**인지. 없으면(삭제) -1.
@@ -641,9 +697,14 @@ class PageThumbs(QWidget):
             p.setPen(QPen(QColor("#2a7de1"), 2))
             p.drawRect(x0, 0, card_w - 1, card_h - 1)
             p.setPen(QColor("#ffffff"))
+            # 261116-11(§4.7.7, 사용자 결정 A): 띠 = 지금 목록 순서 번호 · 붙여넣기 (원본 쪽은 툴팁에)
+            _row = self.list.row(item)
+            _btxt = self._band_text(item, max(0, _row))
             p.drawText(QRect(x0, pix.height(), card_w, band),
-                       Qt.AlignmentFlag.AlignCenter, tr('붙여넣기 p.{epg}').format(epg=int(epg) + 1))
+                       Qt.AlignmentFlag.AlignCenter, _btxt)
             p.end()
+            item.setData(self.BAND_ROLE, (x0, pix.height(), card_w, band, QColor("#2a7de1"), QColor("#ffffff"),
+                                          QColor("#2a7de1"), 2, _btxt, canvas_w, card_h))
             item.setIcon(QIcon(bordered))
             self._iconed[id(item)] = item
             item.setToolTip(tr('붙여넣기 대기: {name} p.{epg}').format(name=Path(src).name, epg=int(epg) + 1))
@@ -1414,9 +1475,14 @@ class PageThumbs(QWidget):
         p.drawRect(x0, 0, card_w - 1, card_h - 1)
         p.drawLine(x0, pix.height(), x0 + card_w - 1, pix.height())
         p.setPen(band_fg)
+        _row = self.list.row(item)               # 261116-11(§4.7.7, 사용자 결정 A): 쪽 번호가 아니라 지금 목록 순서
+        _btxt = self._band_text(item, _row) if _row >= 0 else str(int(page_idx) + 1)
         p.drawText(QRect(x0, pix.height(), card_w, band),
-                   Qt.AlignmentFlag.AlignCenter,
-                   str(int(page_idx) + 1))
+                   Qt.AlignmentFlag.AlignCenter, _btxt)
+        item.setData(self.BAND_ROLE, (x0, pix.height(), card_w, band, band_bg, band_fg, band_bd, 1,
+                                      _btxt, canvas_w, card_h))
+        if _row >= 0:
+            self._band_tip(item, _row)
         # 260609-14(D5): 숨김 페이지 — 흐리게 + 우측 회색 띠 '숨김'
         if int(page_idx) in self._hidden_pages:
             p.fillRect(x0, 0, card_w, pix.height(), QColor(255, 255, 255, 150))

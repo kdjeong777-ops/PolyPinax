@@ -1547,6 +1547,7 @@ class EditMixin:
             if not mv or mv._is_image or mv._doc is None:
                 if mv:
                     mv.set_nav_pages(None)
+                    mv.set_page_numbers(None)       # 261116-11(책갈피창·저장 SOT §4.7.7)
                 return
             tp = self.page_thumbs
             # 260915-1(마스터 §4.7.7): 저장 전 쪽 이동·삭제가 있으면 본문 넘김도 **썸네일 순서**를
@@ -1561,6 +1562,8 @@ class EditMixin:
                     seq = tp.current_nav_ids()
             except Exception:
                 seq = None
+            # 261116-11(책갈피창·저장 SOT §4.7.7, 사용자 결정 A): 쪽 칸도 그 순서의 번호(저장 뒤 번호) — 필터와 무관하게 목록 전체 순서
+            mv.set_page_numbers(seq)
             if getattr(tp, "_filter", "all") == "all" and not seq:
                 mv.set_nav_pages(None)
                 return

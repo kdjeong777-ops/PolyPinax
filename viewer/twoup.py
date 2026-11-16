@@ -65,6 +65,8 @@ DEFAULT_TWOUP = {
     # 261115-9(마스터 §11.10.5, 사용자 지시): 표지·목차는 기본 끔(종전 참 — 병합 창·값 없는 스타일이 켜졌다).
     #   값이 빠졌을 때 읽는 예비값도 이 값(`_COVER_DEFAULT`·`_TOC_DEFAULT`).
     "make_cover": False, "make_toc": False,
+    # 261116-5(마스터 §11.10.6): 목차 제목(빈 값 = 문서 언어 판정 '목  차'/'CONTENTS')·단계(고른 단계 이하 모두, 기본 1)
+    "toc_title": "", "toc_levels": 1,
     "cover": {"title": "", "subtitle": "", "company": "", "name": ""},
     "cover_template": "",             # .docx (비우면 기본 생성)
     "toc_template": "",               # .docx (비우면 기본 생성)
@@ -186,26 +188,63 @@ def _item_toc(it, doc, gen_bookmarks_fn=None):
     return emb
 
 
-def _single_toc_entries(emb, it, page_to_slab, body_plan=None):
-    """261021-3(§11.10.2, 사용자 결정): 파일 하나 다단의 목차 = 원본 책갈피 **1단계** `(제목, 본문 번호)`.
-    번호는 그 쪽이 든 시트의 본문(아라비아) 번호 — `_merge_body_plan` 의 셈과 같다.
-    `body_plan=None` 이면 번호 없이 `(제목, "")` — 목차 쪽 수를 미리 셀 때. **두 번 모두 같은 항목**을 골라야
-    목차 쪽 수가 같다(쪽 밖을 가리키는 책갈피는 둘 다 버린다 — 261021-4 점검)."""
+def _toc_rows(s, single, file_blocks, page_to_slab, embs, body_plan=None):
+    """다단 목차 줄 `[(단계, 제목, 번호 글, 슬랩)]` (261116-5, 마스터 §11.10.6 — 종전 261021-3 `_single_toc_entries` 를 넓힘).
+
+    파일 하나(`single`) = 원본 책갈피의 고른 단계 이하(첫 단계 = 1, 기본 1단계 = 종전), 책갈피가 없으면 파일 이름 한 줄.
+    여러 파일 = 단계 1 파일 이름, 단계 2~ 그 파일 책갈피(단계+1). 번호는 그 쪽이 든 시트의 본문(아라비아) 번호 —
+    `_merge_body_plan` 의 셈과 같다. `body_plan=None` 이면 번호 없이 — 목차 쪽 수를 미리 셀 때. **두 번 모두 같은 줄**을
+    골라야 목차 쪽 수가 같다(쪽 밖을 가리키는 책갈피는 둘 다 버린다 — 261021-4 점검)."""
+    levels = max(1, int(s.get("toc_levels", 1) or 1))
     ara, cnt = {}, 0
     for d in body_plan or []:
         if d["kind"] in ("divider", "blank", "content"):
             cnt += 1
         if d.get("slab") is not None:
             ara.setdefault(d["slab"], cnt)
-    out = []
-    for lvl, title, pno in emb or []:
-        if int(lvl) != 1:
+
+    def num(slab):
+        return str(ara[slab]) if body_plan is not None else ""
+
+    def marks(fb, top):
+        """그 파일 책갈피 → 단계 top+1… 의 줄(고른 단계 이하)."""
+        it = fb["it"]
+        emb = embs.get(id(it)) or []
+        if not emb:
+            return []
+        base = min(int(e[0]) for e in emb)
+        out = []
+        for lvl, title, pno in emb:
+            lv = int(lvl) - base + 1 + top
+            if lv > levels:
+                continue
+            slab = page_to_slab.get((id(it), max(1, int(pno)) - 1))
+            if slab is None or (body_plan is not None and slab not in ara):
+                continue
+            out.append((lv, str(title) or tr("(제목 없음)"), num(slab), slab))
+        return out
+    if single:
+        rows = marks(file_blocks[0], 0)
+        if rows:
+            return rows
+    rows = []
+    for fb in file_blocks:
+        lo = fb["slab_lo"]
+        if body_plan is not None and lo not in ara:
             continue
-        slab = page_to_slab.get((id(it), max(1, int(pno)) - 1))
-        if slab is None or (body_plan is not None and slab not in ara):
-            continue
-        out.append((str(title) or tr("(제목 없음)"), ara[slab] if body_plan is not None else ""))
-    return out
+        rows.append((1, fb["name"], num(lo), lo))
+        if not single and levels >= 2:
+            rows += marks(fb, 1)
+    return rows
+
+
+def _toc_title(s, rows) -> str:
+    """261116-5: 설정 제목, 비면 목차 줄의 문서 언어(마스터 §11.10.6)."""
+    t = str(s.get("toc_title", "") or "")
+    if t.strip():
+        return t
+    from viewer.toc_page import auto_title
+    return auto_title([r[1] for r in rows])
 
 
 def _fit_rect(box, sw, sh):
@@ -859,12 +898,14 @@ def _build_preview_state(items, s):
     if not slabs:
         raise RuntimeError("배치할 내용이 없습니다.")
     single = bool(s.get("single_file", False)) and len(file_blocks) == 1     # 261021-3(§11.10.2)
-    emb = []
-    if single and bool(s.get("make_toc", _TOC_DEFAULT)):
-        try:
-            emb = _item_toc(file_blocks[0]["it"], _open_item_cached(file_blocks[0]["it"])[0])
-        except Exception:
-            emb = []
+    embs = {}
+    # 261116-5(§11.10.6): 여러 파일은 2단계부터 그 파일 책갈피 — 미리보기도 내장 책갈피만(261021-4)
+    if bool(s.get("make_toc", _TOC_DEFAULT)) and (single or int(s.get("toc_levels", 1) or 1) >= 2):
+        for fb in file_blocks:
+            try:
+                embs[id(fb["it"])] = _item_toc(fb["it"], _open_item_cached(fb["it"])[0])
+            except Exception:
+                embs[id(fb["it"])] = []
     fw = fh = None
     for sl in slabs:
         if sl["kind"] == "content":
@@ -884,23 +925,21 @@ def _build_preview_state(items, s):
     make_cover = bool(s.get("make_cover", _COVER_DEFAULT)); make_toc = bool(s.get("make_toc", _TOC_DEFAULT))
     cover_doc = _fitz_cover_doc(s.get("cover", {}), fw, fh) if make_cover else None
     cover_pages = cover_doc.page_count if cover_doc else 0
-    names = [fb["name"] for fb in file_blocks]
-    if single:
-        names = [t for t, _n in _single_toc_entries(emb, file_blocks[0]["it"], _p2s)] or names
     toc_doc = None; toc_pages = 0
     if make_toc:
-        toc_doc = _fitz_toc_doc([(n, "") for n in names], fw, fh)
+        rows0 = _toc_rows(s, single, file_blocks, _p2s, embs)
+        ttl = _toc_title(s, rows0)
+        toc_doc = _fitz_toc_doc([(r[0], r[1], "") for r in rows0], fw, fh, ttl)
         toc_pages = toc_doc.page_count
     front_pages = cover_pages + toc_pages
-    body_plan, _slab_phys, toc_entries = _merge_body_plan(slabs, file_blocks, s, front_pages)
-    if single:
-        toc_entries = _single_toc_entries(emb, file_blocks[0]["it"], _p2s, body_plan) or toc_entries
+    body_plan, _slab_phys, _toc_entries = _merge_body_plan(slabs, file_blocks, s, front_pages)
     if make_toc:
         try:
             toc_doc.close()
         except Exception:
             pass
-        toc_doc = _fitz_toc_doc(toc_entries, fw, fh)
+        rows = _toc_rows(s, single, file_blocks, _p2s, embs, body_plan)
+        toc_doc = _fitz_toc_doc([(r[0], r[1], r[2]) for r in rows], fw, fh, ttl)
         for r in range(toc_doc.page_count):
             _draw_footer(toc_doc[r], _roman(r + 1), s, toc_doc[r].rect.width)
     st.update({"cover_doc": cover_doc, "toc_doc": toc_doc, "cover_pages": cover_pages,
@@ -1080,41 +1119,6 @@ def _fill_cover_docx(template, cover, out_docx, ow=None, oh=None):
         return False
 
 
-def _fill_toc_docx(template, entries, out_docx, ow=None, oh=None):
-    """목차 양식 docx 의 {{TOC}} 단락을 '파일명 ... 쪽' 목록으로 치환(없으면 기본 생성)."""
-    try:
-        from docx import Document
-        from docx.shared import Pt
-    except Exception:
-        return False
-    try:
-        if template and os.path.exists(template):
-            doc = Document(template)
-            anchor = None
-            for p in doc.paragraphs:
-                if "{{TOC}}" in p.text:
-                    anchor = p
-                    break
-            if anchor is not None:
-                anchor.text = ""
-                for name, pg in entries:
-                    anchor.insert_paragraph_before(f"{name} ............ {pg}")
-            else:
-                for name, pg in entries:
-                    doc.add_paragraph(f"{name} ............ {pg}")
-        else:
-            doc = Document()
-            _apply_page_size(doc, ow, oh)     # 260825-4: 본문 방향/크기에 맞춤
-            h = doc.add_paragraph(); r = h.add_run(tr("목차")); r.bold = True; r.font.size = Pt(24)
-            doc.add_paragraph("")
-            for name, pg in entries:
-                doc.add_paragraph(f"{name} ............ {pg}")
-        doc.save(out_docx)
-        return True
-    except Exception:
-        return False
-
-
 def _fitz_cover_pdf(cover, ow, oh, out_pdf):
     d = fitz.open()
     pg = d.new_page(width=ow, height=oh)
@@ -1127,24 +1131,6 @@ def _fitz_cover_pdf(cover, ow, oh, out_pdf):
                     oh * 0.72), cover.get("company", ""), fontsize=14, color=(0.1, 0.1, 0.1))
     pg.insert_text((cx - fitz.get_text_length(cover.get("name", ""), fontsize=14) / 2,
                     oh * 0.72 + 24), cover.get("name", ""), fontsize=14, color=(0.1, 0.1, 0.1))
-    d.save(out_pdf); d.close()
-    return True
-
-
-def _fitz_toc_pdf(entries, ow, oh, out_pdf):
-    d = fitz.open()
-    pg = d.new_page(width=ow, height=oh)
-    pg.insert_text((50, 60), tr("목차"), fontsize=22, color=(0, 0, 0))
-    y = 110
-    for name, p in entries:
-        if y > oh - 50:
-            pg = d.new_page(width=ow, height=oh); y = 60
-        line = f"{name}"
-        pg.insert_text((50, y), line, fontsize=12, color=(0, 0, 0))
-        ptxt = str(p)
-        pg.insert_text((ow - 50 - fitz.get_text_length(ptxt, fontsize=12), y),
-                       ptxt, fontsize=12, color=(0, 0, 0))
-        y += 26
     d.save(out_pdf); d.close()
     return True
 
@@ -1219,18 +1205,13 @@ def _fitz_cover_doc(cover, w, h):
     return d
 
 
-def _fitz_toc_doc(entries, w, h):
-    d = fitz.open(); pg = d.new_page(width=w, height=h)
-    _kr_text(pg, (50, 64), tr("목차"), 22, (0, 0, 0), True)
-    y = 112
-    for name, pnum in entries:
-        if y > h - 50:
-            pg = d.new_page(width=w, height=h); y = 64
-        _kr_text(pg, (50, y), str(name), 12, (0, 0, 0))
-        ptxt = str(pnum)
-        _kr_text(pg, (w - 50 - _kr_width(ptxt, 12), y), ptxt, 12, (0, 0, 0))
-        y += 26
-    return d
+def _fitz_toc_doc(entries, w, h, title=None):
+    """목차 fitz 그리기 — 261116-5 부터 `toc_page.render_fitz`(점선·오른쪽 끝 번호·단계 들여쓰기, 마스터 §11.10.6).
+    `entries` 는 `(단계, 제목, 번호)` 또는 옛 `(제목, 번호)`(단계 1). 제목이 없으면 문서 언어 판정."""
+    from viewer import toc_page
+    rows = [(1, e[0], e[1]) if len(e) == 2 else (e[0], e[1], e[2]) for e in entries]
+    ttl = title if title is not None else toc_page.auto_title([r[1] for r in rows])
+    return toc_page.render_fitz(rows, w, h, ttl)[0]
 
 
 def _fill_divider_docx(template, title, out_docx, ow=None, oh=None):
@@ -1320,11 +1301,6 @@ def write_sample_templates(folder, divider=True):
             p = doc.add_paragraph(); p.alignment = WD_ALIGN_PARAGRAPH.CENTER
             p.add_run(ph).font.size = Pt(14)
 
-    def toc(doc):
-        h = doc.add_paragraph(); r = h.add_run(tr("목차")); r.bold = True; r.font.size = Pt(24)
-        doc.add_paragraph("")
-        p = doc.add_paragraph(); p.add_run("{{TOC}}")     # 이 단락이 항목 목록으로 치환됨
-
     def divider(doc):
         for _ in range(8):
             doc.add_paragraph("")
@@ -1332,7 +1308,11 @@ def write_sample_templates(folder, divider=True):
         r = p.add_run("{{TITLE}}"); r.bold = True; r.font.size = Pt(30)
 
     _save(tr("표지_샘플.docx"), cover)
-    _save(tr("목차_샘플.docx"), toc)
+    # 261116-5(마스터 §11.10.6): 목차 양식은 책갈피창 '목차 페이지 만들기' 와 같은 하나 — {{TITLE}}·{{TOC}}·'TOC n' 스타일·점선 탭
+    from viewer.toc_page import write_sample as _toc_sample
+    _tp = str(folder / tr("목차_샘플.docx"))
+    if _toc_sample(_tp):
+        made.append(_tp)
     if with_divider:
         _save(tr("간지_샘플.docx"), divider)
     return made
@@ -1510,26 +1490,21 @@ def _assemble(items, s, fast=False, gen_bookmarks_fn=None, tick=None, tmpdir=Non
                 cover_doc = _fitz_cover_doc(s.get("cover", {}), fw, fh)
         cover_pages = cover_doc.page_count if cover_doc else 0
 
-        names = [fb["name"] for fb in file_blocks]
         # 261021-3(§11.10.2): 파일 하나 다단은 목차·책갈피를 원본 책갈피로 — 미리 한 번 읽어 둔다
         single = bool(s.get("single_file", False)) and len(file_blocks) == 1
         embs = {id(fb["it"]): _item_toc(fb["it"], _doc(fb["it"]), gen_bookmarks_fn) for fb in file_blocks}
-        if single:
-            _it0 = file_blocks[0]["it"]
-            _top = [t for t, _n in _single_toc_entries(embs[id(_it0)], _it0, page_to_slab)]
-            names = _top or names                   # 책갈피가 없으면 종전대로 파일 이름 한 줄
-        toc_pages = 0
+        toc_pages = 0; toc_rows = []; toc_rects = []; toc_title = ""
         if make_toc:
             _tk(tr("목차 생성 중…"))
-            toc_doc = _make_toc_doc([(n, "") for n in names], fw, fh, s, fast, tmpdir, 0)
+            # 261116-5(§11.10.6): 줄 = 고른 단계 이하(파일 하나는 원본 책갈피·책갈피가 없으면 파일 이름, 여러 파일은 파일 이름 + 2단계~)
+            _rows0 = _toc_rows(s, single, file_blocks, page_to_slab, embs)
+            toc_title = _toc_title(s, _rows0)
+            toc_doc, _r0 = _make_toc_doc([(r[0], r[1], "") for r in _rows0], fw, fh, s, fast, tmpdir, 0, toc_title)
             toc_pages = toc_doc.page_count
         front_pages = cover_pages + toc_pages
 
         # 3) 본문 번호/물리위치/빈페이지 계획
-        body_plan, slab_phys, toc_entries = _merge_body_plan(slabs, file_blocks, s, front_pages)
-        if single:
-            _fb = file_blocks[0]
-            toc_entries = _single_toc_entries(embs[id(_fb["it"])], _fb["it"], page_to_slab, body_plan) or toc_entries
+        body_plan, slab_phys, _toc_entries = _merge_body_plan(slabs, file_blocks, s, front_pages)
 
         # 4) 목차 재생성(실제 번호) — 쪽 수 동일
         if make_toc:
@@ -1537,7 +1512,9 @@ def _assemble(items, s, fast=False, gen_bookmarks_fn=None, tick=None, tmpdir=Non
                 toc_doc.close()
             except Exception:
                 pass
-            toc_doc = _make_toc_doc(toc_entries, fw, fh, s, fast, tmpdir, 1)
+            toc_rows = _toc_rows(s, single, file_blocks, page_to_slab, embs, body_plan)
+            toc_doc, toc_rects = _make_toc_doc([(r[0], r[1], r[2]) for r in toc_rows], fw, fh, s, fast, tmpdir, 1,
+                                               toc_title)
 
         # 5) 조립
         final = fitz.open()
@@ -1668,6 +1645,14 @@ def _assemble(items, s, fast=False, gen_bookmarks_fn=None, tick=None, tmpdir=Non
                     ok=_lk_ok, drop=_lk_drop))
         except Exception:
             pass          # 링크를 못 옮겨도 다단 자체는 막지 않는다
+        # 261116-5(§11.10.6): 목차 줄 → 그 시트(실제 쪽) 내부 링크 — 맞쪽 빈 쪽을 끼운 뒤라 같은 shift 만큼
+        if toc_pages and toc_rects:
+            try:
+                from viewer.toc_page import add_links
+                add_links(final, cover_pages + _lk_shift, toc_rects,
+                          [(slab_phys[r[3]] - 1 + _lk_shift) if r[3] in slab_phys else None for r in toc_rows])
+            except Exception:
+                pass
         return final, page_infos
     finally:
         for dch, cached in opened.values():
@@ -1679,16 +1664,11 @@ def _assemble(items, s, fast=False, gen_bookmarks_fn=None, tick=None, tmpdir=Non
         _unpin_preview()
 
 
-def _make_toc_doc(entries, w, h, s, fast, tmpdir, seq):
-    if not fast and tmpdir is not None:
-        tp = str(tmpdir / f"toc_{seq}.pdf"); tx = str(tmpdir / f"toc_{seq}.docx")
-        if _fill_toc_docx(s.get("toc_template", ""), entries, tx, ow=w, oh=h) \
-                and _docx_to_pdf(tx, tp):
-            try:
-                return fitz.open(tp)
-            except Exception:
-                pass
-    return _fitz_toc_doc(entries, w, h)
+def _make_toc_doc(rows, w, h, s, fast, tmpdir, seq, title):
+    """261116-5(§11.10.6): 목차 문서와 줄 자리 — `toc_page.render_toc` 하나(만들 때는 Word 양식, 없으면 기본 모양·실패하면 fitz)."""
+    from viewer.toc_page import render_toc
+    return render_toc(rows, w, h, title, s.get("toc_template", ""), tmpdir,
+                      use_word=not fast and tmpdir is not None, seq=seq)
 
 
 def _render_content_sheet(out_doc, chunk, s, phys_no, doc_fn, plan=None):

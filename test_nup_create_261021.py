@@ -62,7 +62,9 @@ try:
     chk(dlg.windowTitle() == "다단 생성", "B1 제목 '다단 생성'", dlg.windowTitle())
     chk(not dlg.grp_divider.isVisible() and not dlg.chk_docbreak.isVisible() and not dlg.chk_doc_odd.isVisible(),
         "B2 간지·문서마다 새 쪽·홀수 시작은 숨긴다")
-    chk(dlg.chk_toc.text() == "목차 만들기 (책갈피 1단계)", "B3 목차 체크 이름", dlg.chk_toc.text())
+    # 261116-5(마스터 §11.10.6): 단계는 옆 '목차 단계' 칸(기본 1단계) — 종전 체크 이름에서 '(책갈피 1단계)' 를 뗐다
+    chk(dlg.chk_toc.text() == "목차 만들기" and dlg.cmb_toc_lv.currentData() == 1, "B3 목차 체크 이름·단계 기본 1단계",
+        dlg.chk_toc.text())
     g = dlg.get_settings()
     chk(g.get("make_divider") is True and g.get("doc_break") is True and "single_file" not in g,
         "B4 숨긴 칸의 값은 그대로(스타일 저장에 병합용 설정이 남는다), single_file 은 스타일에 안 들어감", str(g.get("make_divider")))

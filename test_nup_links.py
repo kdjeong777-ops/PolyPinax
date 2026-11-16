@@ -138,7 +138,8 @@ try:
     d5 = fitz.open(out5); n5 = d5.page_count; d5.close()
     L5 = links_of(out5)
     u5 = [e for e in L5 if e[1] == fitz.LINK_URI]
-    g5 = [e for e in L5 if e[1] == fitz.LINK_GOTO]
+    # 261116-5(마스터 §11.10.6): 목차 쪽에는 목차 줄 링크(GOTO)가 따로 있다 — 여기서는 본문 시트의 옮긴 링크만 본다
+    g5 = [e for e in L5 if e[1] == fitz.LINK_GOTO and e[0] >= n5 - 2]
     chk(n5 > 2, "⑤ 표지·목차가 붙어 쪽이 늘었다", "%d쪽" % n5)
     chk(len(u5) == 4, "⑤ URI 4개가 그대로", len(u5))
     chk(len(g5) == 1 and g5[0][3] is not None and g5[0][3] > g5[0][0],

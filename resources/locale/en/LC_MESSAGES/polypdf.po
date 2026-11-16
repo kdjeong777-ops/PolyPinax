@@ -1288,7 +1288,7 @@ msgid "{head}{v}쪽"
 msgstr "{head}{v}"
 
 #: viewer/app.py viewer/edit_controller.py viewer/sign_controller.py
-#: viewer/vprinter_controller.py viewer/workers.py
+#: viewer/toc_page_flow.py viewer/vprinter_controller.py viewer/workers.py
 msgid "완료"
 msgstr "Done"
 
@@ -1361,7 +1361,7 @@ msgstr "This file has no backup of its original."
 msgid "지금 파일은 휴지통으로 보내고, 처음 덮어쓸 때 백업해 둔 원본을 제자리로 옮깁니다. 이 파일의 꾸밈·하이퍼링크 기록도 지웁니다."
 msgstr "The current file goes to the Recycle Bin, and the original backed up at the first overwrite is moved back into place. This file's markup and hyperlink records are also removed."
 
-#: viewer/app.py
+#: viewer/app.py viewer/toc_page_flow.py
 msgid "이 파일에 저장하지 않은 편집이 있습니다 — 먼저 💾 저장하거나 되돌린 뒤 다시 해 주세요."
 msgstr "This file has unsaved edits — press 💾 Save or revert them first, then try again."
 
@@ -1462,7 +1462,7 @@ msgstr "N-up PDF creation cancelled."
 msgid "다단 생성 실패"
 msgstr "N-up PDF Creation Failed"
 
-#: viewer/app.py viewer/page_edit_build.py viewer/twoup.py
+#: viewer/app.py viewer/page_edit_build.py viewer/toc_page.py viewer/twoup.py
 #: viewer/widgets/bookmark_tree.py
 msgid "(제목 없음)"
 msgstr "(Untitled)"
@@ -1986,7 +1986,7 @@ msgstr "{n} bookmarks added — save (💾) in the bookmarks panel edit mode (�
 msgid "쪽 범위"
 msgstr "Page Range"
 
-#: viewer/app.py viewer/edit_controller.py
+#: viewer/app.py viewer/edit_controller.py viewer/toc_page_flow.py
 msgid "알 수 없는 오류"
 msgstr "Unknown error"
 
@@ -3415,7 +3415,7 @@ msgstr "No component can read this format: {name}"
 msgid "그림을 읽을 수 없습니다: {name}"
 msgstr "Cannot read this picture: {name}"
 
-#: viewer/bookmark_gen.py viewer/twoup.py viewer/widgets/toc_review_dialog.py
+#: viewer/bookmark_gen.py viewer/widgets/toc_review_dialog.py
 #: viewer/widgets/twoup_dialog.py
 msgid "목차"
 msgstr "Contents"
@@ -3703,7 +3703,7 @@ msgid "{stem}_{a}-{b}쪽.pdf"
 msgstr "{stem}_p{a}-{b}.pdf"
 
 #: viewer/convert_controller.py viewer/edit_controller.py
-#: viewer/page_edit_build.py viewer/sign_controller.py
+#: viewer/page_edit_build.py viewer/sign_controller.py viewer/toc_page.py
 msgid "저장 중"
 msgstr "Saving"
 
@@ -4492,11 +4492,11 @@ msgstr "Also replace {m} pages whose text layer differs from the app's OCR"
 msgid "OCR {n}쪽을 PDF 글자층에 넣을까요?"
 msgstr "Add {n} OCR pages to the PDF text layer?"
 
-#: viewer/page_edit_build.py
+#: viewer/page_edit_build.py viewer/toc_page.py
 msgid "원본에 놓을 준비"
 msgstr "Preparing to place in original"
 
-#: viewer/page_edit_build.py
+#: viewer/page_edit_build.py viewer/toc_page.py
 msgid "쪽 복사 중"
 msgstr "Copying pages"
 
@@ -6231,7 +6231,7 @@ msgstr "Send"
 msgid "만든 파일을 클립보드에 복사(메신저·메일 창에 붙여넣기)"
 msgstr "Copy the file to the clipboard (paste into a messenger or mail window)"
 
-#: viewer/share_controller.py
+#: viewer/share_controller.py viewer/widgets/toc_page_dialog.py
 msgid "만들기"
 msgstr "Create"
 
@@ -6785,7 +6785,8 @@ msgstr "Could not sign: {e}"
 msgid "원본 파일에는 서명을 저장하지 않습니다 — 다른 이름을 고르세요."
 msgstr "Signatures are not saved into the original file — choose another name."
 
-#: viewer/sign_draft_controller.py viewer/widgets/sign_dialogs.py
+#: viewer/sign_draft_controller.py viewer/toc_page_flow.py
+#: viewer/widgets/sign_dialogs.py
 msgid "바꾸기"
 msgstr "Replace"
 
@@ -7377,6 +7378,58 @@ msgstr "PyMuPDF not available: {e}"
 msgid "쪽 쓰기"
 msgstr "Writing page"
 
+#: viewer/toc_page.py
+msgid "1단계"
+msgstr "Level 1"
+
+#: viewer/toc_page.py
+#, python-brace-format
+msgid "1~{n}단계"
+msgstr "Levels 1–{n}"
+
+#: viewer/toc_page.py
+msgid "목차 만드는 중…"
+msgstr "Creating table of contents…"
+
+#: viewer/toc_page.py viewer/toc_page_flow.py
+msgid "암호 PDF 에는 목차 쪽을 끼우지 않습니다."
+msgstr "A table of contents page is not inserted into a password-protected PDF."
+
+#: viewer/toc_page.py
+msgid "목차 쪽 말고는 쪽이 없습니다."
+msgstr "There are no pages other than the table of contents."
+
+#: viewer/toc_page.py
+msgid "고른 단계에 책갈피가 없습니다."
+msgstr "There are no bookmarks at the selected levels."
+
+#: viewer/toc_page_flow.py viewer/widgets/bookmark_tree.py
+#: viewer/widgets/toc_page_dialog.py
+msgid "목차 페이지 만들기"
+msgstr "Create table of contents page"
+
+#: viewer/toc_page_flow.py
+msgid "목차 읽는 중…"
+msgstr "Reading bookmarks…"
+
+#: viewer/toc_page_flow.py
+msgid "이 파일에는 목차로 쓸 책갈피가 없습니다."
+msgstr "This file has no bookmarks to use for a table of contents."
+
+#: viewer/toc_page_flow.py
+msgid "목차 페이지 만들기를 취소했습니다 — 원본은 그대로입니다."
+msgstr "Table of contents page canceled — the original is unchanged."
+
+#: viewer/toc_page_flow.py
+#, python-brace-format
+msgid "목차 {k}쪽을 2쪽부터 넣어 저장했습니다 → {name}"
+msgstr "Inserted {k} table of contents page(s) from page 2 and saved → {name}"
+
+#: viewer/toc_page_flow.py
+#, python-brace-format
+msgid "이미 만든 목차 {n}쪽이 있습니다 — 새 목차로 바꿀까요?"
+msgstr "There are already {n} table of contents page(s) — replace them with a new one?"
+
 #: viewer/twoup.py viewer/widgets/read_aloud.py
 msgid "보통"
 msgstr "Normal"
@@ -7430,12 +7483,12 @@ msgid "표지_샘플.docx"
 msgstr "Cover_sample.docx"
 
 #: viewer/twoup.py
-msgid "목차_샘플.docx"
-msgstr "Contents_sample.docx"
-
-#: viewer/twoup.py
 msgid "최종 저장 중…"
 msgstr "Saving final file…"
+
+#: viewer/twoup.py viewer/widgets/toc_page_dialog.py
+msgid "목차_샘플.docx"
+msgstr "Contents_sample.docx"
 
 #: viewer/twoup.py
 msgid "간지_샘플.docx"
@@ -8627,6 +8680,10 @@ msgstr "Translate ({n} files)"
 #, python-brace-format
 msgid "({n}개 병합)"
 msgstr "({n} merged)"
+
+#: viewer/widgets/bookmark_tree.py
+msgid "이 파일의 책갈피로 목차 쪽을 만들어 1쪽(표지) 바로 뒤에 끼워 저장합니다 — 목차 줄을 누르면 그 쪽으로 갑니다"
+msgstr "Creates a table of contents page from this file's bookmarks and saves it right after page 1 (the cover) — click a line to go to that page"
 
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format
@@ -14110,6 +14167,55 @@ msgstr "Delete ({n} pages)"
 msgid "붙여넣기 ({_pcnt}쪽) — {_where}"
 msgstr "Paste ({_pcnt} pages) — {_where}"
 
+#: viewer/widgets/toc_page_dialog.py viewer/widgets/twoup_dialog.py
+msgid "목차 제목:"
+msgstr "Contents title:"
+
+#: viewer/widgets/toc_page_dialog.py
+msgid "고른 단계 이하를 모두 넣고 단계마다 들여씁니다."
+msgstr "Includes every level up to the selected one and indents each level."
+
+#: viewer/widgets/toc_page_dialog.py viewer/widgets/twoup_dialog.py
+msgid "목차 단계:"
+msgstr "Contents levels:"
+
+#: viewer/widgets/toc_page_dialog.py
+msgid "비우면 기본 모양"
+msgstr "Leave blank for the default look"
+
+#: viewer/widgets/toc_page_dialog.py viewer/widgets/twoup_dialog.py
+msgid "양식"
+msgstr "Template"
+
+#: viewer/widgets/toc_page_dialog.py
+msgid "샘플 만들기"
+msgstr "Create sample"
+
+#: viewer/widgets/toc_page_dialog.py
+msgid "목차_샘플.docx 를 만들어 엽니다 — 고쳐 저장한 뒤 '양식' 으로 고르세요. 다단 목차와 같은 양식입니다."
+msgstr "Creates and opens Contents_sample.docx — edit and save it, then pick it with 'Template'. It is the same template as the N-up table of contents."
+
+#: viewer/widgets/toc_page_dialog.py
+msgid "Word 양식:"
+msgstr "Word template:"
+
+#: viewer/widgets/toc_page_dialog.py
+msgid "목차는 이 파일의 1쪽(표지) 뒤, 2쪽부터 끼워 저장합니다. 쪽 번호는 끼운 뒤의 쪽이고, 목차 줄을 누르면 그 쪽으로 갑니다."
+msgstr "The table of contents is saved after page 1 (the cover), starting at page 2. Page numbers are those after inserting it, and clicking a line goes to that page."
+
+#: viewer/widgets/toc_page_dialog.py
+msgid "목차 Word 양식"
+msgstr "Table of contents Word template"
+
+#: viewer/widgets/toc_page_dialog.py
+msgid "샘플을 만들지 못했습니다."
+msgstr "Could not create the sample."
+
+#: viewer/widgets/toc_page_dialog.py
+#, python-brace-format
+msgid "목차 {n}쪽 — 첫 쪽"
+msgstr "{n} contents page(s) — first page"
+
 #: viewer/widgets/toc_review_dialog.py
 msgid "오프셋 적용"
 msgstr "Apply Offset"
@@ -14848,12 +14954,16 @@ msgid "비우면 기본 양식"
 msgstr "Leave blank for default template"
 
 #: viewer/widgets/twoup_dialog.py
-msgid "양식"
-msgstr "Template"
-
-#: viewer/widgets/twoup_dialog.py
 msgid "표지 Word 양식:"
 msgstr "Cover Word template:"
+
+#: viewer/widgets/twoup_dialog.py
+msgid "목차 만들기"
+msgstr "Create table of contents"
+
+#: viewer/widgets/twoup_dialog.py
+msgid "고른 단계 이하를 모두 넣고 단계마다 들여씁니다. 여러 파일이면 1단계가 파일 이름, 2단계부터 그 파일의 책갈피입니다."
+msgstr "Includes every level up to the selected one and indents each level. With several files, level 1 is the file name and level 2 onward are that file's bookmarks."
 
 #: viewer/widgets/twoup_dialog.py
 msgid "목차 Word 양식:"
@@ -14904,14 +15014,6 @@ msgid "우하단"
 msgstr "Bottom right"
 
 #: viewer/widgets/twoup_dialog.py
-msgid "목차 만들기 (책갈피 1단계)"
-msgstr "Create table of contents (top-level bookmarks)"
-
-#: viewer/widgets/twoup_dialog.py
-msgid "목차 만들기"
-msgstr "Create table of contents"
-
-#: viewer/widgets/twoup_dialog.py
 msgid "표지·목차 Word 양식 샘플 저장"
 msgstr "Save Sample Cover/TOC Word Templates"
 
@@ -14934,6 +15036,11 @@ msgstr "Divider"
 #: viewer/widgets/twoup_dialog.py
 msgid "양식 파일 없음"
 msgstr "Template File Missing"
+
+#: viewer/widgets/twoup_dialog.py
+#, python-brace-format
+msgid "비우면 문서 언어로 ({ko} / {en})"
+msgstr "Leave blank to follow the document language ({ko} / {en})"
 
 #: viewer/widgets/twoup_dialog.py
 #, python-brace-format
@@ -16729,4 +16836,43 @@ msgstr "Getting Started"
 
 #~ msgid "누른 자리의 창을 찾지 못했습니다."
 #~ msgstr "Could not find a window where you clicked."
+
+#~ msgid "입력 PDF를 지정하세요."
+#~ msgstr "Specify the input PDF."
+
+#~ msgid "윗 책갈피와 같은 단계 (레벨 {base})"
+#~ msgstr "Same level as the bookmark above (level {base})"
+
+#~ msgid "윗 책갈피의 하위 (레벨 {base})"
+#~ msgstr "Child of the bookmark above (level {base})"
+
+#~ msgid "입력"
+#~ msgstr "Input"
+
+#~ msgid "PDF 파일 경로"
+#~ msgstr "PDF file path"
+
+#~ msgid "PDF 파일:"
+#~ msgstr "PDF file:"
+
+#~ msgid "PDF 선택"
+#~ msgstr "Select PDF"
+
+#~ msgid "정렬할 책갈피를 선택하세요."
+#~ msgstr "Select the bookmarks to sort."
+
+#~ msgid "고른 책갈피와 그 하위를 페이지 순서로 늘어놓고 레벨을 윗 책갈피에 맞춥니다"
+#~ msgstr "Arrange the selected bookmarks and their children in page order and match their level to the bookmark above"
+
+#~ msgid "선택 책갈피 {_n_bm}개 페이지순 정렬"
+#~ msgstr "Sort {_n_bm} Selected Bookmarks by Page"
+
+#~ msgid "레벨"
+#~ msgstr "Level"
+
+#~ msgid "목차 만들기 (책갈피 1단계)"
+#~ msgstr "Create table of contents (top-level bookmarks)"
+
+#~ msgid "비우면 문서 언어로 (목  차 / CONTENTS)"
+#~ msgstr ""
 

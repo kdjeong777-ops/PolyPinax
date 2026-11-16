@@ -6943,6 +6943,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 n = int(getattr(self.main_view._doc, "page_count", 0) or 0)
                 if n > 0:
                     self._rotate_pages(list(range(n)), int(extra or 90))
+            elif kind == "toc_page":                     # 261116-5(책갈피창·저장 SOT §4.7.29): 목차 쪽을 맨 앞에 끼워 저장
+                from viewer.toc_page_flow import run as _toc_run
+                _toc_run(self, path)
         QTimer.singleShot(0, go)
 
     def _delete_current_page(self, mv=None) -> None:

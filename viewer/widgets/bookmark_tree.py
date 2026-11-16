@@ -3781,6 +3781,11 @@ class BookmarkTree(QWidget):
             if _sfn is not None and _sfn.childCount() and not pm:
                 self._act(menu, tr("페이지순 책갈피 정렬(선택 파일)"), lambda f=_sfn: self._op_sort_by_page(f),
                           tip=tr("이 파일의 책갈피를 같은 단계 안에서 페이지 순서로 늘어놓습니다 — 하위 책갈피는 부모를 따라갑니다"))
+                # 261116-5(§4.7.29): 바로 아래 — 그 파일 책갈피로 목차 쪽을 만들어 1쪽 뒤(2쪽부터)에 끼워 저장(앱 `toc_page_flow`)
+                _tfp = str(_sfn.data(0, self.DATA_FILE) or "")
+                if _tfp.lower().endswith(".pdf"):
+                    self._act(menu, tr("목차 페이지 만들기"), lambda p=_tfp: self._file_action("toc_page", [p]),
+                              tip=tr("이 파일의 책갈피로 목차 쪽을 만들어 1쪽(표지) 바로 뒤에 끼워 저장합니다 — 목차 줄을 누르면 그 쪽으로 갑니다"))
         # 도구
         if is_file and not pm:
             cmp_pair = None

@@ -55,6 +55,7 @@ ALLOW = {
     "viewer/app.py": {"PolyPDF_특허",                         # 특허(한국 전용) 저장 폴더
                       "기본값"},                                # 배포 기본값 프로필 이름
     "viewer/instance_link.py": {"응답 없음"},                 # 창 사이 통신 오류 값(로그)
+    "viewer/toc_page.py": {"목  차"},                         # 261116-5 목차 쪽 제목 — 문서 언어(한글 문서)의 글이라 화면 언어로 번역하지 않는다(마스터 §11.10.6)
     "viewer/vprinter_recv.py": {"PolyPDF 인쇄"},              # 261017 가상 프린터 기본 저장 폴더 이름(사용자 디스크의 자리)
     "viewer/settings_store.py": {"기본값",
                                  "옮기지 못함("},                # 261025-8 error.log 기록 — 화면 문구 아님(다국어 SOT §6 로그). 변수로 만든 뒤 _log_error 로 넘겨 이름 규칙(LOGF)이 못 본다

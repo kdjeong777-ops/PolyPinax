@@ -1262,7 +1262,7 @@ msgid "{head}{v}쪽"
 msgstr ""
 
 #: viewer/app.py viewer/edit_controller.py viewer/sign_controller.py
-#: viewer/vprinter_controller.py viewer/workers.py
+#: viewer/toc_page_flow.py viewer/vprinter_controller.py viewer/workers.py
 msgid "완료"
 msgstr ""
 
@@ -1323,7 +1323,7 @@ msgstr ""
 msgid "지금 파일은 휴지통으로 보내고, 처음 덮어쓸 때 백업해 둔 원본을 제자리로 옮깁니다. 이 파일의 꾸밈·하이퍼링크 기록도 지웁니다."
 msgstr ""
 
-#: viewer/app.py
+#: viewer/app.py viewer/toc_page_flow.py
 msgid "이 파일에 저장하지 않은 편집이 있습니다 — 먼저 💾 저장하거나 되돌린 뒤 다시 해 주세요."
 msgstr ""
 
@@ -1422,7 +1422,7 @@ msgstr ""
 msgid "다단 생성 실패"
 msgstr ""
 
-#: viewer/app.py viewer/page_edit_build.py viewer/twoup.py
+#: viewer/app.py viewer/page_edit_build.py viewer/toc_page.py viewer/twoup.py
 #: viewer/widgets/bookmark_tree.py
 msgid "(제목 없음)"
 msgstr ""
@@ -1941,7 +1941,7 @@ msgstr ""
 msgid "쪽 범위"
 msgstr ""
 
-#: viewer/app.py viewer/edit_controller.py
+#: viewer/app.py viewer/edit_controller.py viewer/toc_page_flow.py
 msgid "알 수 없는 오류"
 msgstr ""
 
@@ -3294,7 +3294,7 @@ msgstr ""
 msgid "그림을 읽을 수 없습니다: {name}"
 msgstr ""
 
-#: viewer/bookmark_gen.py viewer/twoup.py viewer/widgets/toc_review_dialog.py
+#: viewer/bookmark_gen.py viewer/widgets/toc_review_dialog.py
 #: viewer/widgets/twoup_dialog.py
 msgid "목차"
 msgstr ""
@@ -3579,7 +3579,7 @@ msgid "{stem}_{a}-{b}쪽.pdf"
 msgstr ""
 
 #: viewer/convert_controller.py viewer/edit_controller.py
-#: viewer/page_edit_build.py viewer/sign_controller.py
+#: viewer/page_edit_build.py viewer/sign_controller.py viewer/toc_page.py
 msgid "저장 중"
 msgstr ""
 
@@ -4342,11 +4342,11 @@ msgstr ""
 msgid "OCR {n}쪽을 PDF 글자층에 넣을까요?"
 msgstr ""
 
-#: viewer/page_edit_build.py
+#: viewer/page_edit_build.py viewer/toc_page.py
 msgid "원본에 놓을 준비"
 msgstr ""
 
-#: viewer/page_edit_build.py
+#: viewer/page_edit_build.py viewer/toc_page.py
 msgid "쪽 복사 중"
 msgstr ""
 
@@ -6055,7 +6055,7 @@ msgstr ""
 msgid "만든 파일을 클립보드에 복사(메신저·메일 창에 붙여넣기)"
 msgstr ""
 
-#: viewer/share_controller.py
+#: viewer/share_controller.py viewer/widgets/toc_page_dialog.py
 msgid "만들기"
 msgstr ""
 
@@ -6600,7 +6600,8 @@ msgstr ""
 msgid "원본 파일에는 서명을 저장하지 않습니다 — 다른 이름을 고르세요."
 msgstr ""
 
-#: viewer/sign_draft_controller.py viewer/widgets/sign_dialogs.py
+#: viewer/sign_draft_controller.py viewer/toc_page_flow.py
+#: viewer/widgets/sign_dialogs.py
 msgid "바꾸기"
 msgstr ""
 
@@ -7170,6 +7171,58 @@ msgstr ""
 msgid "쪽 쓰기"
 msgstr ""
 
+#: viewer/toc_page.py
+msgid "1단계"
+msgstr ""
+
+#: viewer/toc_page.py
+#, python-brace-format
+msgid "1~{n}단계"
+msgstr ""
+
+#: viewer/toc_page.py
+msgid "목차 만드는 중…"
+msgstr ""
+
+#: viewer/toc_page.py viewer/toc_page_flow.py
+msgid "암호 PDF 에는 목차 쪽을 끼우지 않습니다."
+msgstr ""
+
+#: viewer/toc_page.py
+msgid "목차 쪽 말고는 쪽이 없습니다."
+msgstr ""
+
+#: viewer/toc_page.py
+msgid "고른 단계에 책갈피가 없습니다."
+msgstr ""
+
+#: viewer/toc_page_flow.py viewer/widgets/bookmark_tree.py
+#: viewer/widgets/toc_page_dialog.py
+msgid "목차 페이지 만들기"
+msgstr ""
+
+#: viewer/toc_page_flow.py
+msgid "목차 읽는 중…"
+msgstr ""
+
+#: viewer/toc_page_flow.py
+msgid "이 파일에는 목차로 쓸 책갈피가 없습니다."
+msgstr ""
+
+#: viewer/toc_page_flow.py
+msgid "목차 페이지 만들기를 취소했습니다 — 원본은 그대로입니다."
+msgstr ""
+
+#: viewer/toc_page_flow.py
+#, python-brace-format
+msgid "목차 {k}쪽을 2쪽부터 넣어 저장했습니다 → {name}"
+msgstr ""
+
+#: viewer/toc_page_flow.py
+#, python-brace-format
+msgid "이미 만든 목차 {n}쪽이 있습니다 — 새 목차로 바꿀까요?"
+msgstr ""
+
 #: viewer/twoup.py viewer/widgets/read_aloud.py
 msgid "보통"
 msgstr ""
@@ -7223,11 +7276,11 @@ msgid "표지_샘플.docx"
 msgstr ""
 
 #: viewer/twoup.py
-msgid "목차_샘플.docx"
+msgid "최종 저장 중…"
 msgstr ""
 
-#: viewer/twoup.py
-msgid "최종 저장 중…"
+#: viewer/twoup.py viewer/widgets/toc_page_dialog.py
+msgid "목차_샘플.docx"
 msgstr ""
 
 #: viewer/twoup.py
@@ -8343,6 +8396,10 @@ msgstr ""
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format
 msgid "({n}개 병합)"
+msgstr ""
+
+#: viewer/widgets/bookmark_tree.py
+msgid "이 파일의 책갈피로 목차 쪽을 만들어 1쪽(표지) 바로 뒤에 끼워 저장합니다 — 목차 줄을 누르면 그 쪽으로 갑니다"
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
@@ -13766,6 +13823,55 @@ msgstr ""
 msgid "붙여넣기 ({_pcnt}쪽) — {_where}"
 msgstr ""
 
+#: viewer/widgets/toc_page_dialog.py viewer/widgets/twoup_dialog.py
+msgid "목차 제목:"
+msgstr ""
+
+#: viewer/widgets/toc_page_dialog.py
+msgid "고른 단계 이하를 모두 넣고 단계마다 들여씁니다."
+msgstr ""
+
+#: viewer/widgets/toc_page_dialog.py viewer/widgets/twoup_dialog.py
+msgid "목차 단계:"
+msgstr ""
+
+#: viewer/widgets/toc_page_dialog.py
+msgid "비우면 기본 모양"
+msgstr ""
+
+#: viewer/widgets/toc_page_dialog.py viewer/widgets/twoup_dialog.py
+msgid "양식"
+msgstr ""
+
+#: viewer/widgets/toc_page_dialog.py
+msgid "샘플 만들기"
+msgstr ""
+
+#: viewer/widgets/toc_page_dialog.py
+msgid "목차_샘플.docx 를 만들어 엽니다 — 고쳐 저장한 뒤 '양식' 으로 고르세요. 다단 목차와 같은 양식입니다."
+msgstr ""
+
+#: viewer/widgets/toc_page_dialog.py
+msgid "Word 양식:"
+msgstr ""
+
+#: viewer/widgets/toc_page_dialog.py
+msgid "목차는 이 파일의 1쪽(표지) 뒤, 2쪽부터 끼워 저장합니다. 쪽 번호는 끼운 뒤의 쪽이고, 목차 줄을 누르면 그 쪽으로 갑니다."
+msgstr ""
+
+#: viewer/widgets/toc_page_dialog.py
+msgid "목차 Word 양식"
+msgstr ""
+
+#: viewer/widgets/toc_page_dialog.py
+msgid "샘플을 만들지 못했습니다."
+msgstr ""
+
+#: viewer/widgets/toc_page_dialog.py
+#, python-brace-format
+msgid "목차 {n}쪽 — 첫 쪽"
+msgstr ""
+
 #: viewer/widgets/toc_review_dialog.py
 msgid "오프셋 적용"
 msgstr ""
@@ -14492,11 +14598,15 @@ msgid "비우면 기본 양식"
 msgstr ""
 
 #: viewer/widgets/twoup_dialog.py
-msgid "양식"
+msgid "표지 Word 양식:"
 msgstr ""
 
 #: viewer/widgets/twoup_dialog.py
-msgid "표지 Word 양식:"
+msgid "목차 만들기"
+msgstr ""
+
+#: viewer/widgets/twoup_dialog.py
+msgid "고른 단계 이하를 모두 넣고 단계마다 들여씁니다. 여러 파일이면 1단계가 파일 이름, 2단계부터 그 파일의 책갈피입니다."
 msgstr ""
 
 #: viewer/widgets/twoup_dialog.py
@@ -14548,14 +14658,6 @@ msgid "우하단"
 msgstr ""
 
 #: viewer/widgets/twoup_dialog.py
-msgid "목차 만들기 (책갈피 1단계)"
-msgstr ""
-
-#: viewer/widgets/twoup_dialog.py
-msgid "목차 만들기"
-msgstr ""
-
-#: viewer/widgets/twoup_dialog.py
 msgid "표지·목차 Word 양식 샘플 저장"
 msgstr ""
 
@@ -14577,6 +14679,11 @@ msgstr ""
 
 #: viewer/widgets/twoup_dialog.py
 msgid "양식 파일 없음"
+msgstr ""
+
+#: viewer/widgets/twoup_dialog.py
+#, python-brace-format
+msgid "비우면 문서 언어로 ({ko} / {en})"
 msgstr ""
 
 #: viewer/widgets/twoup_dialog.py

@@ -209,9 +209,21 @@ class TwoUpSettingsDialog(QDialog):
         # 목차
         grp_t = QGroupBox(tr("목차"))
         tf = QFormLayout(grp_t)
-        self.chk_toc = QCheckBox(tr("목차 만들기 (책갈피 1단계)") if self._single else tr("목차 만들기"))
+        self.chk_toc = QCheckBox(tr("목차 만들기"))
         self.chk_toc.setChecked(bool(s["make_toc"]))
         tf.addRow(self.chk_toc)
+        # 261116-5(마스터 §11.10.6): 제목(비우면 문서 언어 '목  차'/'CONTENTS')·단계(고른 단계 이하 모두) — 책갈피창 목차와 같은 규칙
+        self.ed_toc_title = QLineEdit(str(s.get("toc_title", "") or ""))
+        from viewer.toc_page import MAX_LEVELS, level_label, KO_TITLE, EN_TITLE
+        self.ed_toc_title.setPlaceholderText(tr("비우면 문서 언어로 ({ko} / {en})").format(ko=KO_TITLE, en=EN_TITLE))
+        tf.addRow(tr("목차 제목:"), self.ed_toc_title)
+        self.cmb_toc_lv = QComboBox()
+        for lv in range(1, MAX_LEVELS + 1):
+            self.cmb_toc_lv.addItem(level_label(lv), lv)
+        self._set_combo(self.cmb_toc_lv, int(s.get("toc_levels", 1) or 1))
+        self.cmb_toc_lv.setToolTip(tr("고른 단계 이하를 모두 넣고 단계마다 들여씁니다. 여러 파일이면 1단계가 파일 이름, "
+                                      "2단계부터 그 파일의 책갈피입니다."))
+        tf.addRow(tr("목차 단계:"), self.cmb_toc_lv)
         self.ed_toc_tpl = QLineEdit(s.get("toc_template", ""))
         self.ed_toc_tpl.setPlaceholderText(tr("비우면 기본 양식"))
         bt = QPushButton(tr("양식")); bt.clicked.connect(lambda: self._pick(self.ed_toc_tpl))
@@ -278,7 +290,8 @@ class TwoUpSettingsDialog(QDialog):
                   self.chk_cover, self.chk_toc, self.chk_div):
             c.toggled.connect(self._sync_preview)
         self.cmb_ffont.currentFontChanged.connect(self._sync_preview)
-        for ed in (self.ed_title, self.ed_sub, self.ed_comp, self.ed_name):
+        self.cmb_toc_lv.currentIndexChanged.connect(self._sync_preview)   # 261116-5
+        for ed in (self.ed_title, self.ed_sub, self.ed_comp, self.ed_name, self.ed_toc_title):
             ed.textChanged.connect(self._sync_preview)   # 입력 즉시 미리보기 반영(디바운스)
         # '새 문서는 홀수 페이지로 시작'은 doc_break + 양면일 때만 노출
         self.chk_docbreak.toggled.connect(self._update_doc_odd)
@@ -433,6 +446,8 @@ class TwoUpSettingsDialog(QDialog):
             "footer_size": self.sp_fsize.value(),
             "make_cover": self.chk_cover.isChecked(),
             "make_toc": self.chk_toc.isChecked(),
+            "toc_title": self.ed_toc_title.text(),             # 261116-5: 사용자 글 그대로(가운데 칸 포함)
+            "toc_levels": int(self.cmb_toc_lv.currentData() or 1),
             "make_divider": self.chk_div.isChecked(),
             "divider_template": self.ed_div_tpl.text().strip(),
             "divider_bg": self.bt_div_bg._color,
@@ -581,6 +596,8 @@ class TwoUpSettingsDialog(QDialog):
         self.sp_fsize.setValue(int(s["footer_size"]))
         self.chk_cover.setChecked(bool(s["make_cover"]))   # 261115-9: s 는 DEFAULT_TWOUP 을 씌운 값
         self.chk_toc.setChecked(bool(s["make_toc"]))
+        self.ed_toc_title.setText(str(s.get("toc_title", "") or ""))          # 261116-5
+        self._set_combo(self.cmb_toc_lv, int(s.get("toc_levels", 1) or 1))
         cov = s.get("cover", {})
         self.ed_title.setText(cov.get("title", "")); self.ed_sub.setText(cov.get("subtitle", ""))
         self.ed_comp.setText(cov.get("company", "")); self.ed_name.setText(cov.get("name", ""))

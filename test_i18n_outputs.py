@@ -4,7 +4,7 @@ A. 도움말은 `resources/help/help_<코드>.html` — 언어마다 대체 사�
    (ko → ko, en → en, 도움말이 없는 언어 → 그 언어의 fallback → 한국어 원문)
 B. 영어 도움말에는 한글이 없고 숨긴 한국 전용 기능(§7: 단어장·법령·KCSC·KIPO·번역)을 말하지 않는다 ·
    도움말이 가리키는 메뉴 이름이 실제 영어 메뉴와 같다
-C. 다단의 기본 목차 쪽 제목은 만드는 때의 화면 언어(ko '목차', en 'Contents')
+C. 다단의 기본 목차 쪽 제목은 문서 언어(한글 '목  차', 영문 'CONTENTS'), 판정 못 하면 화면 언어 (261116-5 — 종전 화면 언어 '목차'·'Contents')
 D. 저장 창에 제안하는 기본 파일 이름은 화면 언어를 따르고, 번역된 이름에 Windows 가 막는 글자가 없다
 E. 실제 사용법 창이 그 언어의 도움말을 보여 준다
 F. 도움말이 실제 기능과 같다(261009-11) — app.py 기본 단축키가 두 도움말 표에 모두 · 낡은 경로·없어진 설정 없음 ·
@@ -84,12 +84,15 @@ try:
 
     # ── C ──
     from viewer import twoup
-    for code, want in (("ko", "목차"), ("en", "Contents")):
+    # 261116-5(마스터 §11.10.6): 제목은 문서 언어(목차 줄) — 판정 못 하면(숫자뿐) 화면 언어
+    for code in ("ko", "en"):
         i18n.install(None, code)
-        d = twoup._fitz_toc_doc([("a.pdf", 3)], 595, 842)
-        t = d[0].get_text()
-        d.close()
-        chk(want in t, "C %s 다단 기본 목차 제목 '%s'" % (code, want), t[:40])
+        for entries, want, why in (([("서론", 3)], "목  차", "한글 문서"), ([("Introduction", 3)], "CONTENTS", "영문 문서"),
+                                   ([("123", 3)], "목  차" if code == "ko" else "CONTENTS", "판정 못 함 → 화면 언어")):
+            d = twoup._fitz_toc_doc(entries, 595, 842)
+            t = d[0].get_text()
+            d.close()
+            chk(want in t, "C %s 다단 기본 목차 제목 '%s' (%s)" % (code, want, why), t[:40])
 
     # ── D ──
     i18n.install(None, "en")

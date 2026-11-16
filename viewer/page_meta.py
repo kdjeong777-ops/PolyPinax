@@ -25,7 +25,7 @@ SCHEMA_VERSION = 2
 PHOTO_VIEW_KEYS = ("photo_rot", "photo_crop")   # 사진 보기 상태 — 파일 기록 밖 맨 위 묶음(사진 보기 SOT §4.16·§4.40)
 CROP_MAX = 45.0
 BLOB_MIN = 4096          # 261101-3(마스터 §4.6.11): 이보다 긴 사진 값(`data`·`pdf`)은 파일별 `blobs` 에 한 번만
-_BLOB_FIELDS = ("data", "pdf")
+_BLOB_FIELDS = ("data", "pdf", "crop_src", "crop_pdf")   # 261116-24: 크롭한 사진의 원래 그림·원래 벡터 조각도
 
 
 def _is_pdf_key(k) -> bool:

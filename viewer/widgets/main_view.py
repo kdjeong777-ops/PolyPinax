@@ -519,9 +519,12 @@ class _MainDrawOverlay(QWidget):
         from PyQt6.QtCore import QRectF
         objs = getattr(self._owner, "_img_objects", [])
         sel = getattr(self._owner, "_img_selected", -1)
+        crop = getattr(self._owner, "_crop_edit", None)          # 261116-24: 크롭 중인 사진은 틀이 그린다
         for idx, obj in enumerate(objs):
             pix = obj.get("pix")
             if pix is None or pix.isNull():
+                continue
+            if crop is not None and obj is crop.obj:
                 continue
             cx, cy, hw, hh, rot = self._owner._img_geom(obj, pr)
             shape = obj.get("shape", "rect")
@@ -1566,6 +1569,12 @@ class _PdfGraphicsView(QGraphicsView):
             event.accept()
             return
         # 261112-5(마스터 §4.6.11 '반복 찍기'): 이미지 넣기가 켜져 있으면 Esc = 끄기
+        # 261116-24(마스터 §4.6.11 '크롭'): 크롭 틀 — Enter 적용·Esc 취소
+        if ownr is not None and getattr(ownr, "_crop_edit", None) is not None and k in (
+                Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Escape):
+            ownr.finish_image_crop(k != Qt.Key.Key_Escape)
+            event.accept()
+            return
         if k == Qt.Key.Key_Escape and ownr is not None and getattr(ownr, "_draw_kind", None) == "stamp":
             ownr._toggle_stamp()
             event.accept()
@@ -4329,6 +4338,11 @@ class MainView(QWidget):
         self._update_image_button()
 
     def _apply_tool(self):
+        if self._crop_edit is not None:          # 261116-24(§4.6.11 '크롭'): 다른 도구를 고르면 틀을 먼저 적용
+            self.finish_image_crop(True)
+        self._apply_tool_body()
+
+    def _apply_tool_body(self):
         """260611-76: 모드(_draw_kind)+스타일(_pen_idx)→파생 _draw_tool 재계산 후 UI 동기.
         - erase                         → ('erase', width)
         - select                        → ('select', None)
@@ -6489,6 +6503,8 @@ class MainView(QWidget):
         return self._stroke_delete_selected()
 
     def _load_page_images(self):
+        if self._crop_edit is not None:          # 261116-24(§4.6.11 '크롭'): 쪽을 넘기기 전에 틀을 적용(그 쪽에 저장)
+            self.finish_image_crop(True)
         self._img_objects = []
         self._img_selected = -1
         f = self.current_file()
@@ -6511,19 +6527,73 @@ class MainView(QWidget):
         if self._draw_overlay is not None:
             self._draw_overlay.update()
 
+    def _images_payload(self, objs) -> list:
+        return [dict(o.get("extra") or {},
+                     data=o["data"] or self._pix_to_b64(o["pix"]),   # 260829: 지연 생성
+                     rect=[round(v, 5) for v in o["rect"]],
+                     shape=o["shape"], alpha=int(o["alpha"]),
+                     rot=round(float(o.get("rot", 0.0)), 2))
+                for o in objs]
+
     def _save_page_images(self):
         f = self.current_file()
         if self._img_setter and f and not self._is_image:
-            out = [dict(o.get("extra") or {},
-                        data=o["data"] or self._pix_to_b64(o["pix"]),   # 260829: 지연 생성
-                        rect=[round(v, 5) for v in o["rect"]],
-                        shape=o["shape"], alpha=int(o["alpha"]),
-                        rot=round(float(o.get("rot", 0.0)), 2))
-                   for o in self._img_objects]
+            out = self._images_payload(self._img_objects)
             try:
                 self._img_setter(str(f), self._current_page, out)
             except Exception:
                 pass
+
+    # ===== 261116-24(마스터 §4.6.11 '크롭'): 사진 꾸밈 크롭 — Word 처럼, Shift+손잡이 = 그 점만(모양 펴기) =====
+    _crop_edit = None
+
+    def can_crop_image(self) -> bool:
+        """고른 사진 하나(돌린 사진도 — 사용자 결정 '돌린 것도 포함')."""
+        return self.selected_image_object() is not None
+
+    def image_cropped(self) -> bool:
+        o = self.selected_image_object()
+        return o is not None and "crop" in (o.get("extra") or {})
+
+    def start_image_crop(self) -> bool:
+        from viewer.widgets.deco_crop import DecoCrop
+        if not self.can_crop_image():
+            return False
+        if self._crop_edit is not None:
+            self.finish_image_crop(True)
+        self._commit_text_editor()
+        self._crop_edit = DecoCrop(self, self._img_selected)
+        self.view.setFocus()
+        if self._draw_overlay is not None:
+            self._draw_overlay.update()
+        return True
+
+    def finish_image_crop(self, apply: bool = True) -> None:
+        """Enter·틀 밖 누르기 = 적용, Esc = 취소."""
+        c, self._crop_edit = self._crop_edit, None
+        if c is not None and apply:
+            c.apply()
+        if self._draw_overlay is not None:
+            self._draw_overlay.update()
+
+    def reset_image_crop(self) -> bool:
+        from viewer.widgets.deco_crop import DecoCrop
+        if not self.image_cropped():
+            return False
+        DecoCrop(self, self._img_selected).reset()
+        return True
+
+    def _crop_save(self, c) -> None:
+        """크롭 결과 저장 — 그 사이 쪽을 넘겼으면 틀을 연 쪽에(배경 펴기가 늦게 끝나도)."""
+        if c.objs is self._img_objects and c.key == (str(self.current_file() or ""), int(self._current_page)):
+            self._save_page_images()
+        elif self._img_setter and c.key[0]:
+            try:
+                self._img_setter(c.key[0], c.key[1], self._images_payload(c.objs))
+            except Exception:
+                pass
+        if self._draw_overlay is not None:
+            self._draw_overlay.update()
 
     def add_image_from_pixmap(self, pix, shape=None):
         """클립보드/파일/드롭 이미지를 현재 페이지에 삽입(중앙, 비율 유지)."""
@@ -7036,6 +7106,10 @@ class MainView(QWidget):
                     # 260611-74: 글쓰기/지시선 모드 — 텍스트 작성·변형이 최우선
                     if self._draw_kind == "text":
                         r = self._text_event(t, ev, pr)
+                        if r is not None:
+                            return r
+                    if self._crop_edit is not None:         # 261116-24(§4.6.11 '크롭'): 크롭 틀이 떠 있으면 그것이 먼저
+                        r = self._crop_edit.event(t, ev, pr)
                         if r is not None:
                             return r
                     if self._draw_kind == "stamp":          # 261101-3(§4.6.11): 등록 이미지 넣기가 먼저

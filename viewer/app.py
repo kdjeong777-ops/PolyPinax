@@ -7053,6 +7053,12 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 ca = m_chg.addAction(self._shape_icon(key), label)
                 ca.setCheckable(True)
                 shape_acts[ca] = key
+        a_crop = a_uncrop = None
+        if kind == "image":
+            # 261116-24(§4.6.11 '크롭'): Word 처럼 보이는 범위만 자르기(돌린 사진도)
+            a_crop = menu.addAction(tr("크롭"))
+            a_crop.setEnabled(mv.can_crop_image())
+            a_uncrop = menu.addAction(tr("크롭 해제")) if mv.image_cropped() else None
         a_del = menu.addAction(self._kt({"text": tr("선택 글상자 삭제"), "leader": tr("선택 글상자 삭제"),
                                          "image": tr("선택 이미지 삭제"), "line": tr("선택 개체 삭제"),
                                          "multi": tr("고른 개체 삭제")}[kind], "Del"))
@@ -7075,6 +7081,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             mv.set_leader_tip(tip_acts[chosen])
         elif chosen in shape_acts:
             mv.set_image_shape(shape_acts[chosen])
+        elif a_crop is not None and chosen is a_crop:
+            mv.start_image_crop()
+        elif a_uncrop is not None and chosen is a_uncrop:
+            mv.reset_image_crop()
         elif a_more is not None and chosen is a_more:
             self._stamp_to_pages(mv)
         elif a_reg is not None and chosen is a_reg:

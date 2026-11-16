@@ -76,6 +76,23 @@ def content_clip(page):
     return full if box.is_empty else box + (-2, -2, 2, 2) & full
 
 
+def crop_piece(pdf_bytes: bytes, frac) -> bytes:
+    """벡터 조각의 (x0, y0, x1, y1)(쪽 비율)만 담은 새 조각 — 사진 꾸밈 네모 크롭(261116-24, 마스터 §4.6.11 '크롭')."""
+    import fitz
+    from viewer import pdf_font
+    with fitz.open(stream=pdf_bytes, filetype="pdf") as src:
+        r = src[0].rect
+        x0, y0, x1, y1 = frac
+        clip = fitz.Rect(r.x0 + x0 * r.width, r.y0 + y0 * r.height, r.x0 + x1 * r.width, r.y0 + y1 * r.height)
+        out = fitz.open()
+        pg = out.new_page(width=clip.width, height=clip.height)
+        pg.show_pdf_page(pg.rect, src, 0, clip=clip)
+        pdf_font.subset_fonts_safely(out)
+        data = out.tobytes(garbage=4, deflate=True, clean=True)
+        out.close()
+        return data
+
+
 def piece_size_pt(pdf_bytes: bytes):
     import fitz
     with fitz.open(stream=pdf_bytes, filetype="pdf") as d:

@@ -1174,7 +1174,9 @@ def _kr_text(page, pt, text, fontsize, color=(0, 0, 0), bold=False):
     ff, _fo = _kr_font(bold)
     try:
         if ff:
-            page.insert_text(pt, text, fontfile=ff, fontname="krf", fontsize=fontsize, color=color)
+            # 261116-14(마스터 §11.10.6): 굵은·보통은 다른 자원 이름 — 같은 이름이면 쪽에 먼저 넣은 글꼴이 재사용돼
+            #   보통 글(목차 번호·점선)이 굵게 그려지고, 보통 글꼴로 잰 폭(`_kr_width`)과 어긋났다
+            page.insert_text(pt, text, fontfile=ff, fontname=("krfb" if bold else "krf"), fontsize=fontsize, color=color)
             return
     except Exception:
         pass

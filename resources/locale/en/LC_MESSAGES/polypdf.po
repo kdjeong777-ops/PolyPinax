@@ -11661,6 +11661,11 @@ msgstr "Release or click once more to set the region · Esc/right-click = cancel
 msgid "Enter·더블클릭 = 펴서 캡처 · 점 끌기 = 그 점만 · 안쪽 끌기·화살표 = 옮기기 · 오른쪽 클릭 = 다시 고르기 · Esc = 취소"
 msgstr "Enter/double-click = straighten and capture · drag a point = that point only · drag inside/arrows = move · right-click = pick again · Esc = cancel"
 
+# | 클릭 = 다시 고르기 · Esc = 취소"
+#: viewer/widgets/region_capture.py
+msgid "Enter·더블클릭 = 캡처 · 끌기 = 옮기기·크기 · 화살표 = 1px(Shift 10px, Ctrl 크기) · Esc·오른쪽 클릭 = 취소"
+msgstr "Enter/double-click = capture · drag = move/resize · arrows = 1px (Shift 10px, Ctrl resize) · Esc/right-click = cancel"
+
 #: viewer/widgets/region_capture.py
 msgid " · Enter = 지난 영역"
 msgstr " · Enter = last region"

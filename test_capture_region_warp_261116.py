@@ -8,6 +8,7 @@ D. 꼬이는 자리로는 옮기지 않는다 · 안쪽 끌기·화살표 = 모�
 E. Enter 로 캡처 — 원근으로 찍힌 사각형을 펴서 돌려준다(공용 photo_warp, 배경 스레드, 메인 하트비트 공백 < 1초),
    region_out = 감싸는 사각형
 F. 안내 줄에 Shift+점 끌기 · 점 모드의 안내
+G. (261116-20) 사용자 크기(fixed) 모드는 모양 펴기 없음, 그 안내는 오른쪽 클릭 = 취소(실제 동작과 같게)
 """
 import os, sys, time, threading
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -111,6 +112,19 @@ ov.close()
 chk("Shift" in h_rect and "그 점만" in h_rect, "F 고치기 단계 안내에 Shift+점 끌기", h_rect)
 chk(h_shape != h_rect and "펴서" in h_shape, "F 점 모드 안내", h_shape)
 ov2.close()
+
+# ── G. 사용자 크기(fixed) — 모양 펴기 없음, 안내는 오른쪽 클릭 = 취소(261116-20) ──
+ovf = RegionCaptureOverlay(mode="fixed", fixed_size=(300, 200))
+ovf.resize(800, 600); ovf.show(); app.processEvents()
+QTest.mouseClick(ovf, L, pos=QPoint(100, 100))
+hf = ovf.hint()
+chk(ovf._phase == "edit" and "다시 고르기" not in hf and "오른쪽 클릭 = 취소" in hf and "Shift+점" not in hf,
+    "G 사용자 크기 고치기 단계 안내 = 오른쪽 클릭 취소(다시 고르기 아님)", hf)
+r = ovf._rect.normalized()
+drag(ovf, (r.right(), r.bottom()), (r.right() + 40, r.bottom() + 40), SH)
+chk(pts(ovf) is None, "G 사용자 크기에서는 Shift+손잡이도 모양 펴기가 되지 않는다", str(pts(ovf)))
+QTest.mouseClick(ovf, R, pos=QPoint(10, 10))
+chk(not ovf.isVisible() and ovf._result is None, "G 사용자 크기 오른쪽 클릭 = 취소(안내와 같음)")
 
 # ── E. 캡처 = 펴서 ────────────────────────────────────────────────
 W, H = 1600, 1000

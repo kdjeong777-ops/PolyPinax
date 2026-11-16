@@ -14,20 +14,20 @@ grab() 가 QPixmap(또는 None)을 반환(로컬 이벤트 루프). 끝난 뒤 `
 from __future__ import annotations
 
 import math
-import threading
 from typing import Optional
 
-from PyQt6.QtCore import Qt, QRect, QPoint, QPointF, QEventLoop, QSize, QTimer
+from PyQt6.QtCore import Qt, QRect, QPoint, QPointF, QEventLoop, QSize, QObject, pyqtSignal
 from PyQt6.QtGui import QPainter, QColor, QPen, QGuiApplication, QPixmap, QCursor, QPainterPath, QImage
 from PyQt6.QtWidgets import QWidget
 from viewer import photo_warp as pw
 from viewer.i18n import tr
+from viewer.workers import run_in_thread
 
 _HANDLE = 8        # 핸들 히트 반경(px)
 _MIN = 12          # 최소 박스 크기
 DRAG_MIN = 4       # 이보다 덜 끌었으면 클릭으로 본다(클릭 두 번 방식) — 스크린샷 SOT §3.1
 _CURVE_N = 24      # 휜 변을 그리고 감싸는 사각형을 잴 때 한 변의 마디 수
-_POLL_MS = 15      # 배경 펴기가 끝났는지 보는 간격
+_KEEP: list = []   # 배경 펴기 스레드·워커 참조(run_in_thread 가 끝나면 스스로 뺀다)
 # 손잡이 이름 → 점 8개(photo_warp.POINT_NAMES: TL·TR·BR·BL·T·R·B·L)의 번호
 _PT_INDEX = {"tl": 0, "tr": 1, "br": 2, "bl": 3, "t": 4, "r": 5, "b": 6, "l": 7}
 
@@ -38,6 +38,31 @@ def _unwarp_bytes(data: bytes, w: int, h: int, bpl: int, pts, size):
     im = Image.frombuffer("RGB", (w, h), data, "raw", "RGB", bpl, 1)
     out = pw.unwarp(im, pts, size=size).convert("RGB")
     return out.tobytes(), out.width, out.height
+
+
+class _WarpWorker(QObject):
+    """영역 캡처 모양 펴기 — 배경 한 번(응답성 SOT §4.4 표). 결과는 (바이트, 폭, 높이), 실패면 None."""
+    done = pyqtSignal(object)
+    finished = pyqtSignal()
+
+    def __init__(self, args):
+        super().__init__()
+        self._args = args
+        self._cancel = False
+
+    def request_cancel(self):
+        self._cancel = True
+
+    def run(self):
+        res = None
+        try:
+            if not self._cancel:
+                res = _unwarp_bytes(*self._args)
+        except Exception:
+            res = None
+        finally:
+            self.done.emit(res)
+            self.finished.emit()
 
 
 class RegionCaptureOverlay(QWidget):
@@ -162,24 +187,12 @@ class RegionCaptureOverlay(QWidget):
             ow, oh = pw.out_size(pts, w, h)
             size = (max(pw.OUT_MIN_SIDE, int(round(ow / d))), max(pw.OUT_MIN_SIDE, int(round(oh / d))))
         self._warp_box = box
-        self._warp_out = None
-        self.hide()
+        self.hide()                                   # 덮개는 숨기고 닫기는 결과가 온 뒤(_warp_done)
+        wk = _WarpWorker((data, w, h, bpl, pts, size))
+        wk.done.connect(self._warp_done)              # 신호는 grab() 의 로컬 루프가 메인에서 받는다
+        self._warp_thread = run_in_thread(wk, _KEEP)  # 응답성 SOT §4.3 규약
 
-        def run():
-            try:
-                self._warp_out = _unwarp_bytes(data, w, h, bpl, pts, size)
-            except Exception:
-                self._warp_out = False
-        self._warp_thread = threading.Thread(target=run, name="region-warp", daemon=True)
-        self._warp_thread.start()
-        QTimer.singleShot(_POLL_MS, self._poll_warp)
-
-    def _poll_warp(self):
-        t = self._warp_thread
-        if t is not None and t.is_alive():
-            QTimer.singleShot(_POLL_MS, self._poll_warp)
-            return
-        res = self._warp_out
+    def _warp_done(self, res):
         self._result = None
         if res:
             buf, ow, oh = res
@@ -244,6 +257,9 @@ class RegionCaptureOverlay(QWidget):
         if self._pts is not None:
             return tr("Enter·더블클릭 = 펴서 캡처 · 점 끌기 = 그 점만 · 안쪽 끌기·화살표 = 옮기기 · "
                       "오른쪽 클릭 = 다시 고르기 · Esc = 취소")
+        if self._mode != "region":       # 사용자 크기 — 오른쪽 클릭은 취소, 모양 펴기 없음(261116-20)
+            return tr("Enter·더블클릭 = 캡처 · 끌기 = 옮기기·크기 · 화살표 = 1px(Shift 10px, Ctrl 크기) · "
+                      "Esc·오른쪽 클릭 = 취소")
         return (tr("Enter·더블클릭 = 캡처 · 끌기 = 옮기기·크기 · 화살표 = 1px(Shift 10px, Ctrl 크기) · "
                    "오른쪽 클릭 = 다시 고르기 · Esc = 취소")
                 + tr(" · Shift+점 끌기 = 그 점만(모양 펴기)"))
@@ -360,8 +376,8 @@ class RegionCaptureOverlay(QWidget):
             return
         # edit: 핸들/이동 시작
         h = self._hit_handle(pos)
-        if (self._pts is None and h in _PT_INDEX
-                and e.modifiers() & Qt.KeyboardModifier.ShiftModifier):   # Shift+손잡이 = 그 점만(모양 펴기, 261116-18)
+        if (self._pts is None and self._mode == "region" and h in _PT_INDEX
+                and e.modifiers() & Qt.KeyboardModifier.ShiftModifier):   # Shift+손잡이 = 그 점만(모양 펴기, 261116-18) — 영역 캡처만(261116-20)
             self._enter_shape()
             h = "p%d" % _PT_INDEX[h]
             self.update()

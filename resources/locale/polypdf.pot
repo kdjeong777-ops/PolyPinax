@@ -11334,6 +11334,10 @@ msgid "Enter·더블클릭 = 펴서 캡처 · 점 끌기 = 그 점만 · 안쪽 
 msgstr ""
 
 #: viewer/widgets/region_capture.py
+msgid "Enter·더블클릭 = 캡처 · 끌기 = 옮기기·크기 · 화살표 = 1px(Shift 10px, Ctrl 크기) · Esc·오른쪽 클릭 = 취소"
+msgstr ""
+
+#: viewer/widgets/region_capture.py
 msgid " · Enter = 지난 영역"
 msgstr ""
 

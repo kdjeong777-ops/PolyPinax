@@ -1234,6 +1234,14 @@ class _PdfGraphicsView(QGraphicsView):
                 if self._owner is not None:
                     self._owner._sel_end()
                 return
+            try:                              # 261116-12(입력 SOT §4.2): PDF 링크 위 누르기 → 그 쪽으로(읽기 점프 없음)
+                if self._owner is not None and hasattr(self._owner, "follow_link_at"):
+                    z = getattr(self._owner, "_zoom", 1.0) or 1.0
+                    sp = self.mapToScene(event.position().toPoint())
+                    if self._owner.follow_link_at(sp.x() / z, sp.y() / z):
+                        return
+            except Exception:
+                pass
             if self._owner is not None:
                 self._owner.clear_text_selection()
             try:                              # 클릭 → 읽기 점프
@@ -1325,6 +1333,24 @@ class _PdfGraphicsView(QGraphicsView):
                 elif self._last_hover is not None:
                     self.viewport().setCursor(Qt.CursorShape.IBeamCursor)
                     self._last_hover = None
+        except Exception:
+            pass
+        try:                                  # 261116-12(입력 SOT §4.2): PDF 링크 위 = 손가락, 벗어나면 그 전 모양
+            if not event.buttons() and self._owner is not None and hasattr(self._owner, "link_at"):
+                on = False
+                if self._text_sel_ok():
+                    z = getattr(self._owner, "_zoom", 1.0) or 1.0
+                    sp = self.mapToScene(event.position().toPoint())
+                    on = self._owner.link_at(sp.x() / z, sp.y() / z) is not None
+                if on:
+                    if not getattr(self, "_link_hover", False):
+                        self._link_hover = True
+                        self._link_prev_cursor = self.viewport().cursor()
+                    self.viewport().setCursor(Qt.CursorShape.PointingHandCursor)
+                elif getattr(self, "_link_hover", False):
+                    self._link_hover = False
+                    self.viewport().setCursor(getattr(self, "_link_prev_cursor", None)
+                                              or Qt.CursorShape.IBeamCursor)
         except Exception:
             pass
         super().mouseMoveEvent(event)
@@ -2226,6 +2252,8 @@ class MainView(QWidget):
         self._nav_pages = None
         self._nav_pos = {}
         self._nav_ordered = False
+        self._page_no = None                 # 261116-11(§4.7.7): 쪽 칸 번호 — 앱이 새 문서의 쪽 편집 순서를 다시 넣는다
+        self._page_no_ids = None
         self._photo_pos = None               # 261104-2: 사진 목록 순번 — 앱이 사진을 연 뒤 set_photo_position 으로 넣는다
         self._doc = newdoc
         self._is_image = False               # v1.6.4 C2: PDF 모드
@@ -2424,6 +2452,50 @@ class MainView(QWidget):
             return page.get_text("text", clip=clip)
         except Exception:
             return ""
+
+    # ----- 261116-12(입력 SOT §4.2): 본문 PDF 링크 누르기 — 같은 문서 안 쪽으로 -----
+    def _goto_links(self):
+        """지금 쪽의 '같은 문서 안 쪽' 링크 [(fitz.Rect 화면 좌표, 대상 쪽 0-based)].
+
+        쪽마다 한 번만 읽는다(마우스 이동마다 PDF 를 읽지 않는다). 그림 보기·끼운 쪽·
+        사용자 회전 쪽은 빈 목록(좌표가 PDF 쪽과 다르다 — 알려진 한계)."""
+        if not self._doc or self._is_image:
+            return []
+        pg = self._current_page
+        key = (id(self._doc.doc), pg)
+        cache = getattr(self, "_link_cache", None)
+        if cache is not None and cache[0] == key:
+            return cache[1]
+        out = []
+        if not self._is_staged(pg) and not self._rotations.get(pg, 0):
+            try:
+                import fitz
+                n = self._doc.page_count
+                for ln in self._doc.doc.load_page(int(pg)).get_links() or []:
+                    if ln.get("kind") not in (fitz.LINK_GOTO, fitz.LINK_NAMED):
+                        continue
+                    t = ln.get("page")
+                    if isinstance(t, int) and 0 <= t < n and ln.get("from") is not None:
+                        out.append((fitz.Rect(ln["from"]), t))
+            except Exception:
+                out = []
+        self._link_cache = (key, out)
+        return out
+
+    def link_at(self, x: float, y: float):
+        """본문 좌표(장면 ÷ 배율 — 쪽의 화면 좌표)에 있는 링크의 대상 쪽(0-based), 없으면 None."""
+        for r, t in self._goto_links():
+            if r.x0 <= x <= r.x1 and r.y0 <= y <= r.y1:
+                return t
+        return None
+
+    def follow_link_at(self, x: float, y: float) -> bool:
+        """그 자리에 링크가 있으면 그 쪽으로 가고 True."""
+        t = self.link_at(x, y)
+        if t is None:
+            return False
+        self.go_to_page(int(t))
+        return True
 
     def copy_block(self, scene_rect) -> int:
         """260617-5: 사각형 블럭(좌상→우하) 영역의 텍스트를 클립보드로."""
@@ -2796,7 +2868,7 @@ class MainView(QWidget):
             _sb.setValue(0)                                  # 페이지 상단으로(지금 쪽 원점)
         self.spin_page.blockSignals(True)
         pp = getattr(self, "_photo_pos", None)
-        self.spin_page.setValue((pp[0] if pp else page_index) + 1)   # 261104-2: 사진은 목록 순번
+        self.spin_page.setValue(pp[0] + 1 if pp else self._page_no_of(page_index))   # 261104-2: 사진은 목록 순번 · 261116-11: 쪽 편집 순서
         self.spin_page.blockSignals(False)
         self.pageChanged.emit(page_index)
         self._update_match_counter()
@@ -2874,7 +2946,30 @@ class MainView(QWidget):
         elif self._is_image:
             self.imageGotoRequested.emit(v)
         else:
-            self.go_to_page(v)
+            ids = getattr(self, "_page_no_ids", None)     # 261116-11(§4.7.7): 저장 전 쪽 편집이면 칸의 수 = 목록 순서
+            self.go_to_page(ids[max(0, min(len(ids) - 1, v))] if ids else v)
+
+    # ----- 261116-11(책갈피창·저장 SOT §4.7.7, 사용자 결정 A): 쪽 칸 = 지금 썸네일 목록 순서(저장 뒤 번호) -----
+    def set_page_numbers(self, ids) -> None:
+        """저장 전 쪽 편집(옮김·지움·끼움)이 있으면 그 목록 순서(`current_nav_ids`) — 쪽 칸은 그 자리 번호를 보인다. None 이면 쪽 번호 그대로."""
+        ids = [int(p) for p in ids] if ids else None
+        self._page_no_ids = ids
+        self._page_no = {p: i + 1 for i, p in enumerate(ids)} if ids else None
+        if self._doc is None or self._is_image or getattr(self, "_photo_pos", None):
+            return
+        total = len(ids) if ids else self._doc.page_count
+        self.spin_page.blockSignals(True)
+        self.spin_page.setMaximum(max(1, total))
+        self.spin_page.setValue(self._page_no_of(self._current_page))
+        self.spin_page.blockSignals(False)
+        self.lbl_page_total.setText(f"/ {total}")
+
+    def _page_no_of(self, page_index) -> int:
+        """쪽 칸에 보일 수(1부터)."""
+        m = getattr(self, "_page_no", None)
+        if m and int(page_index) in m:
+            return m[int(page_index)]
+        return int(page_index) + 1
 
     def set_marks(self, file_path, marks) -> None:
         """그 파일의 쪽마다 칠할 사각형(마스터 §4.11 문서 비교) — 검색 강조와 따로. `marks=None` 이면 지운다."""
@@ -3384,7 +3479,7 @@ class MainView(QWidget):
         sb.setValue(int(round(keep_v)))
         hsb.setValue(keep_h)
         self.spin_page.blockSignals(True)
-        self.spin_page.setValue(page_index + 1)
+        self.spin_page.setValue(self._page_no_of(page_index))     # 261116-11(§4.7.7)
         self.spin_page.blockSignals(False)
         self._update_match_counter()
         self._update_doc_scroll()
@@ -7342,7 +7437,7 @@ class MainView(QWidget):
                 center_y = (rect.y0 + rect.y1) / 2 * self._zoom
                 self.view.centerOn(center_x, center_y)
                 self.spin_page.blockSignals(True)
-                self.spin_page.setValue(target_page + 1)
+                self.spin_page.setValue(self._page_no_of(target_page))     # 261116-11(§4.7.7)
                 self.spin_page.blockSignals(False)
                 self.pageChanged.emit(target_page)
                 self._update_match_counter()

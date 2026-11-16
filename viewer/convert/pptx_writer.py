@@ -16,6 +16,7 @@ EMU_PER_PT = 12700
 SPC_MIN, SPC_MAX = -400, 1000       # 글자 간격(1/100 pt) 범위 — 너무 좁히거나 벌리지 않게
 TABLE_FONT_PT = 10                  # 표 칸 글 크기 — 원본 크기를 못 잴 때만(`layout._size_in`)
 BOX_SLACK_PT = 2                    # 글상자 너비 여유 — 재는 값과 그리는 값의 작은 차로 줄이 넘어가지 않게
+PPT_LINE_K = 1.2                    # PowerPoint 가 그리는 한 줄 높이 ÷ 글자 크기 — 줄 사이가 이보다 좁으면 겹친다(§1.3, 261116-30)
 
 
 def _emu(pt: float) -> int:
@@ -42,14 +43,33 @@ def _spc(text: str, width: float, size: float, serif: bool) -> int:
     return int(max(SPC_MIN, min(SPC_MAX, round(v))))
 
 
+def _no_overlap_size(bands, k, x0, x1, y0, size) -> float:
+    """글이 숨지 않게(형식 변환 SOT §1.3, 261116-30) — 바로 아래 줄(가로로 겹치는 줄)까지의 거리가 PowerPoint 가 그리는 줄 높이
+    (글자 크기 × `PPT_LINE_K`)보다 좁으면 글자 크기를 줄인다. 하한 `layout.FIT_SIZE_MIN_PT` — 하한에서는 겹쳐도 그대로(글은 버리지 않는다)."""
+    gap = None
+    for nb in bands[k + 1:]:
+        ny0 = min(q["rect"][1] for q in nb)
+        if ny0 <= y0 + 0.5:
+            continue
+        if any(q["rect"][0] < x1 and q["rect"][2] > x0 for q in nb):
+            gap = ny0 - y0
+            break
+    if gap is None or size * PPT_LINE_K <= gap:
+        return size
+    floor = min(size, layout.FIT_SIZE_MIN_PT)
+    return max(floor, gap / PPT_LINE_K)
+
+
 def _text_box(slide, place, text, x0, y0, width, height, size, bold, serif) -> None:
+    from pptx.enum.text import MSO_AUTO_SIZE
     from pptx.util import Emu, Pt
     left, top, scale = place
     tb = slide.shapes.add_textbox(Emu(_emu(left + x0 * scale)), Emu(_emu(top + y0 * scale)),
-                                  Emu(_emu((width + BOX_SLACK_PT) * scale)), Emu(_emu(max(height, size) * scale)))
+                                  Emu(_emu((width + BOX_SLACK_PT) * scale)),
+                                  Emu(_emu(max(height, size * PPT_LINE_K) * scale)))
     tf = tb.text_frame
     tf.word_wrap = False
-    tf.auto_size = None
+    tf.auto_size = MSO_AUTO_SIZE.SHAPE_TO_FIT_TEXT     # 상자는 글에 맞춰(§1.3, 261116-30 — 종전 None)
     for side in ("margin_left", "margin_right", "margin_top", "margin_bottom"):
         setattr(tf, side, 0)
     p = tf.paragraphs[0]
@@ -148,10 +168,12 @@ def write_pptx_shape(ps, pages, dst: Path, tick) -> None:
         for e in edges:                                   # 머리말·꼬리말도 그 자리에 글상자로(§1.1)
             lines.append({"kind": "line", "rect": tuple(e["rect"]), "text": e["text"], "size": e["size"],
                           "bold": e.get("bold", False), "serif": e.get("serif", True)})
-        for band in layout.bands(lines):
+        bands = layout.bands(lines)
+        for k, band in enumerate(bands):
             text, x0, width, size, bold, serif = layout.band_text(band)
             y0 = min(q["rect"][1] for q in band)
             y1 = max(q["rect"][3] for q in band)
+            size = _no_overlap_size(bands, k, x0, x0 + width, y0, size)
             _text_box(slide, place, text, x0, y0, width, y1 - y0, size, bold, serif)
     tick(len(pages), len(pages), step_text("save"))
     prs.save(str(dst))

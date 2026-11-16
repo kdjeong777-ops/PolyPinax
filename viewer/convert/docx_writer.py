@@ -7,6 +7,83 @@ from __future__ import annotations
 
 from viewer.convert import layout
 
+_W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+_A = "http://schemas.openxmlformats.org/drawingml/2006/main"
+_WPS = "http://schemas.microsoft.com/office/word/2010/wordprocessingShape"
+_V = "urn:schemas-microsoft-com:vml"
+LINE_MIN_K = 1.2      # §1.3 — 글 문단 줄 간격 하한(글자 크기의 배). 1.15 → 42쪽, 1.2 → 43쪽, 1.3 → 48쪽(별첨4 Word, 표 행 '최소' 포함)
+DEFAULT_PT = 11.0     # 런에 크기가 없을 때(Word 기본 글자 크기)
+
+
+def no_hidden(path) -> dict:
+    """글이 숨지 않게(형식 변환 SOT §1.3, 261116-30) — 만든 docx 를 마지막에 한 번 훑는다. Word 변환 길(pdf2docx·MS Word 모듈)이 모두 부른다.
+
+    - 글이 든 문단의 줄 간격 '정확히' 는 **그 문단 가장 큰 글자 × `LINE_MIN_K` 아래로 두지 않는다**(규칙은 '정확히' 그대로 — '최소' 로
+      바꾸면 Word 가 글꼴 고유 줄 높이(맑은 고딕 1.33배)로 늘려 별첨4 Word 가 40 → 66쪽이 되었다, 실측). 빈 문단은 그대로(1 pt 구역 끝·빈 머리글).
+    - 표 행 높이 `exact` → `atLeast`(칸 글이 꺾이면 행이 자란다).
+    - 글상자는 '도형을 글에 맞춤'(DrawingML `spAutoFit`, VML `mso-fit-shape-to-text`).
+    반환: 바꾼 개수 `{"line": n, "row": n, "box": n}`."""
+    import os
+    import tempfile
+    import zipfile
+    from lxml import etree
+    q = lambda ns, t: "{%s}%s" % (ns, t)
+    n = {"line": 0, "row": 0, "box": 0}
+    path = str(path)
+    zin = zipfile.ZipFile(path)
+    parts = {}
+    for name in zin.namelist():
+        if not (name == "word/document.xml" or (name.startswith("word/header") or name.startswith("word/footer"))
+                and name.endswith(".xml")):
+            continue
+        root = etree.fromstring(zin.read(name))
+        for p in root.iter(q(_W, "p")):
+            if not "".join(t.text or "" for t in p.iter(q(_W, "t"))).strip():
+                continue
+            ppr = p.find(q(_W, "pPr"))
+            sp = ppr.find(q(_W, "spacing")) if ppr is not None else None
+            if sp is not None and sp.get(q(_W, "lineRule")) == "exact" and (sp.get(q(_W, "line")) or "").isdigit():
+                sizes = [int(e.get(q(_W, "val"))) / 2.0 for e in p.iter(q(_W, "sz")) if (e.get(q(_W, "val")) or "").isdigit()]
+                floor = int(round(max(sizes or [DEFAULT_PT]) * LINE_MIN_K * 20))      # 트윕(1/20 pt)
+                if int(sp.get(q(_W, "line"))) < floor:
+                    sp.set(q(_W, "line"), str(floor))
+                    n["line"] += 1
+        for h in root.iter(q(_W, "trHeight")):
+            if h.get(q(_W, "hRule")) == "exact":
+                h.set(q(_W, "hRule"), "atLeast")
+                n["row"] += 1
+        for bp in root.iter(q(_WPS, "bodyPr")):
+            for old in list(bp):
+                if old.tag in (q(_A, "noAutofit"), q(_A, "normAutofit"), q(_A, "spAutoFit")):
+                    bp.remove(old)
+            bp.insert(0, etree.Element(q(_A, "spAutoFit")))
+            n["box"] += 1
+        for tb in root.iter(q(_V, "textbox")):
+            st = tb.get("style") or ""
+            if "mso-fit-shape-to-text" not in st:
+                tb.set("style", (st + ";" if st else "") + "mso-fit-shape-to-text:t")
+                n["box"] += 1
+        parts[name] = etree.tostring(root, xml_declaration=True, encoding="UTF-8", standalone=True)
+    if not any(n.values()):
+        zin.close()
+        return n
+    fd, tmp = tempfile.mkstemp(suffix=".docx", dir=os.path.dirname(path) or ".")
+    os.close(fd)
+    try:
+        with zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as zout:
+            for it in zin.infolist():
+                zout.writestr(it, parts.get(it.filename) or zin.read(it.filename))
+        zin.close()
+        os.replace(tmp, path)
+    except Exception:
+        zin.close()
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+        raise
+    return n
+
 
 def set_hf_distance(sec, per_page) -> None:
     """머리글·바닥글 자리 = 원본 머리말 위쪽·꼬리말 아래쪽(쪽 높이 비율로 옮긴다)."""

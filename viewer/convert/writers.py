@@ -92,6 +92,8 @@ def write_docx_word(ps, pages, dst: Path, tick) -> None:
     원본에 글이 있는데 결과에 글이 거의 없으면 파일을 지우고 다른 방식을 알린다(261014-30 표본 시험: 고칠 수 없는 파일을 '변환했습니다' 로 냈다)."""
     from viewer.convert.word_com import convert_word
     convert_word(ps, pages, dst, tick)
+    from viewer.convert.docx_writer import no_hidden
+    no_hidden(dst)                             # 글이 숨지 않게 — Word 가 만든 줄 간격·표 행·글상자도(§1.3, 261116-30)
     src_n = sum(len("".join(ps.doc.load_page(int(p)).get_text().split())) for p in pages)
     if src_n >= 50:
         import docx

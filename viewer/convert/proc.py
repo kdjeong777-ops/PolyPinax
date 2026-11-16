@@ -92,6 +92,8 @@ def convert_docx(ps, pages, dst: Path, tick, mode: str = "shape") -> None:
         raise RuntimeError(tr("Word 파일을 만들지 못했습니다"))
     if any(per_page.values()):
         _put_header_footer(dst, layout.edge_plan(per_page), per_page)
+    from viewer.convert.docx_writer import no_hidden
+    no_hidden(dst)                             # 글이 숨지 않게 — 줄 간격·표 행 '최소'(§1.3, 261116-30)
 
 
 def _child_step(done, total, label, doc_pages) -> str:

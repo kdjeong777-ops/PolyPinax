@@ -416,12 +416,13 @@ def write_hwpx_shape(ps, pages, dst: Path, tick, join: bool = False) -> None:
                 _t, _x, _w, size, bold, serif = layout.band_text(grp)
                 jx0, intent, jx1, cy0, plan = _joined_para(jtext, grp, size, serif)
                 fsize = size * plan["scale"]
-                pitch = plan["pitch"] * 1.0
+                # 줄 간격 하한 = 글자 크기(LINE_PCT) — 그보다 좁으면 줄이 겹친다(§1.3, 261116-30 — 종전 하한 50 %)
+                pitch = max(plan["pitch"] * 1.0, fsize * LINE_PCT / 100.0)
                 rows = max(1, int(plan["rows"]))
                 top = min(cy0 - pitch / 2, body_bottom - pitch * rows)
                 prev = max(0.0, top - cur)
                 cur = max(cur, top) + pitch * rows
-                lpct = max(50, int(round(pitch / max(1.0, fsize) * 100)))
+                lpct = max(LINE_PCT, int(round(pitch / max(1.0, fsize) * 100)))
                 spacing = int(max(SPACING_MIN, min(0, round(plan["shrink"] * 100))))
                 # 왼쪽 여백 = 줄들의 가장 왼쪽. 들여쓰기(양수)면 첫 줄이 더 들어가고, 내어쓰기(음수)면 둘째 줄부터 |intent| 들어간다
                 doc.add_paragraph(jtext, section=sec, para_pr_id_ref=st.para(

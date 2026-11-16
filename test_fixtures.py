@@ -17,6 +17,7 @@
   image_strips_pdf() 그림 전용 — 가상 프린터·사진→PDF 꼴, 쪽마다 2048px Flate 그림 띠(261107-19, 응답성 SOT §7.5)
   tiled_bg_pdf()   발표 슬라이드 꼴 — 첫 쪽 질감 배경을 4×4pt 내장 그림(BI) 6만 9천 번으로 깔아 쪽 훑기가 비싸다(261114-11, 응답성 SOT §6)
   paragraph_pdf()  양쪽 맞춤 한글 문단으로 꽉 찬 3쪽 + 제목·목록 줄, 설치 안 된 CJK 글꼴(261113-3, 형식 변환 쪽 맞춤·줄 잇기)
+  tight_pdf()      촘촘한 문단·꼭 맞는 상자·꼭 맞는 표·눌러 그린 칸 글·문단 1쪽(261116-30, 변환 결과에서 글이 숨지 않는지)
   ruled_table_pdf()  괘선이 **선으로 그려진** 3열 표 — pdfplumber 가 표로 인식한다
                  (텍스트 창 SOT §3.3 — 칸을 놓쳐도 글을 잃지 않는지)
   scanned_form_pdf() 스캔 서식 모사 — 그림 위에 **보이지 않는 글자**(render mode 3)로
@@ -219,6 +220,59 @@ def paragraph_pdf() -> str:
     p = d / "sample_paragraphs.pdf"
     if not p.exists() or p.stat().st_size == 0:
         _build_paragraph_pdf(p)
+    return str(p)
+
+
+def _build_tight_pdf(dst: Path) -> None:
+    """261116-30(형식 변환 SOT §1.3): 변환 결과에서 글이 숨기 쉬운 꼴 — ① 줄 간격이 글자 크기에 가까운 문단(12 pt 글, 줄 간격 12.6 pt)
+    ② 글에 꼭 맞게 그린 상자 안의 두 줄 ③ 행 높이가 꼭 맞는 괘선 표(칸 글이 길어 바꾼 글꼴로는 두 줄이 된다)."""
+    import fitz
+    doc = fitz.open()
+    pg = doc.new_page(width=595, height=842)
+    pg.insert_text((72, 80), "촘촘한 줄 간격 문단", fontsize=16, fontname="korea")
+    y = 110.0
+    for k in range(6):                                              # 줄 간격 = 글자 크기 × 1.05
+        pg.insert_text((72, y), f"{k + 1}번째 줄 촘촘한 문단의 글 숨으면 안 됨", fontsize=12, fontname="korea")
+        y += 12.6
+    bx = fitz.Rect(72, 200, 330, 200 + 3 * 11.5 + 3)               # 글에 꼭 맞는 상자 — 세 줄
+    pg.draw_rect(bx, color=(0, 0, 0), width=0.8)
+    for k, t in enumerate(("상자 안 첫째 줄 글", "상자 안 둘째 줄 글", "상자 안 셋째 줄 가려지면 안 됨")):
+        pg.insert_text((76, 211 + k * 11.5), t, fontsize=10, fontname="korea")
+    x0, y0, cw, rh = 72, 280, 150, 15                               # 행 높이 15 pt 표(칸 글 10 pt 한 줄)
+    for r in range(4):
+        pg.draw_line((x0, y0 + r * rh), (x0 + 3 * cw, y0 + r * rh))
+    for c in range(4):
+        pg.draw_line((x0 + c * cw, y0), (x0 + c * cw, y0 + 3 * rh))
+    for r in range(3):
+        for c in range(3):
+            pg.insert_text((x0 + c * cw + 3, y0 + r * rh + 11), f"칸{r}{c} 표 글", fontsize=10, fontname="korea")
+    # ④ 가로로 눌러 그린 칸 글(원본은 칸에 들지만 보통 너비로 쓰면 두 줄) — 행 높이가 '정확히' 면 둘째 줄이 숨는다
+    x0, y0 = 72, 360
+    for r in range(3):
+        pg.draw_line((x0, y0 + r * rh), (x0 + 2 * cw, y0 + r * rh))
+    for c in range(3):
+        pg.draw_line((x0 + c * cw, y0), (x0 + c * cw, y0 + 2 * rh))
+    for r in range(2):
+        for c in range(2):
+            pt = fitz.Point(x0 + c * cw + 3, y0 + r * rh + 11)
+            pg.insert_text(pt, f"눌린칸{r}{c} 원본에서는 한 줄에 드는 긴 칸 글", fontsize=10, fontname="korea",
+                           morph=(pt, fitz.Matrix(0.62, 1)))
+    # ⑤ 세로로 눌러 그린 문단(글자 12 pt, 줄 간격 10 pt) — 줄 간격이 '정확히' 10 pt 면 글자 위가 잘린다
+    y = 430.0
+    for k in range(4):
+        pt = fitz.Point(72, y)
+        pg.insert_text(pt, f"눌린줄{k + 1} 줄 간격이 글자보다 좁은 문단", fontsize=12, fontname="korea", morph=(pt, fitz.Matrix(1, 0.8)))
+        y += 10.0
+    doc.save(str(dst))
+    doc.close()
+
+
+def tight_pdf() -> str:
+    """줄 간격이 좁은 문단·꼭 맞는 상자·행 높이가 꼭 맞는 표가 든 1쪽 PDF 경로 — 변환 결과에서 글이 숨지 않는지(261116-30)."""
+    d = _ensure_dir()
+    p = d / "sample_tight.pdf"
+    if not p.exists() or p.stat().st_size == 0:
+        _build_tight_pdf(p)
     return str(p)
 
 

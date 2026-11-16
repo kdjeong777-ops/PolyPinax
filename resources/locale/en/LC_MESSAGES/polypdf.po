@@ -2675,13 +2675,13 @@ msgstr "Add a bookmark at the current page <b>p.{page}</b>."
 
 #: viewer/app.py
 #, python-brace-format
-msgid "윗 책갈피와 같은 단계 (레벨 {base})"
-msgstr "Same level as the bookmark above (level {base})"
+msgid "(단계 {n}) 윗 책갈피와 같은 단계"
+msgstr "(Level {n}) Same level as the bookmark above"
 
 #: viewer/app.py
 #, python-brace-format
-msgid "윗 책갈피의 하위 (레벨 {base})"
-msgstr "Child of the bookmark above (level {base})"
+msgid "(단계 {n}) 윗 책갈피의 하위"
+msgstr "(Level {n}) Under the bookmark above"
 
 #: viewer/app.py
 #, python-brace-format
@@ -3089,6 +3089,11 @@ msgstr "Page range to export (1–{n}), e.g. 3-12"
 #: viewer/app.py
 msgid "3-12 처럼 적어 주세요."
 msgstr "Enter a range like 3-12."
+
+#: viewer/app.py
+#, python-brace-format
+msgid "(단계 {n}) 상위 단계"
+msgstr "(Level {n}) Higher level"
 
 #: viewer/app.py
 msgid "다른 PolyPinax 창이 연 원본에는 새 이름으로 저장할 수 없습니다."
@@ -7962,6 +7967,10 @@ msgid "페이지:"
 msgstr "Page:"
 
 #: viewer/widgets/bookmark_tree.py
+msgid "단계:"
+msgstr "Level:"
+
+#: viewer/widgets/bookmark_tree.py
 msgid "파일명 변경"
 msgstr "Rename File"
 
@@ -8142,10 +8151,6 @@ msgid "편집할 PDF 파일을 트리에서 선택하세요."
 msgstr "Select the PDF file to edit in the tree."
 
 #: viewer/widgets/bookmark_tree.py
-msgid "정렬할 책갈피를 선택하세요."
-msgstr "Select the bookmarks to sort."
-
-#: viewer/widgets/bookmark_tree.py
 msgid "삭제할 항목이 없습니다."
 msgstr "There is nothing to delete."
 
@@ -8292,6 +8297,10 @@ msgid "책갈피 수정"
 msgstr "Edit bookmark"
 
 #: viewer/widgets/bookmark_tree.py
+msgid "페이지순 책갈피 정렬(선택 파일)"
+msgstr "Sort Bookmarks by Page (Selected File)"
+
+#: viewer/widgets/bookmark_tree.py
 #, python-brace-format
 msgid "페이지순 정렬: {n}개"
 msgstr "Sorted by page: {n}"
@@ -8432,8 +8441,8 @@ msgid "이 파일의 모든 쪽을 돌립니다 — [저장] 하면 PDF 에 들�
 msgstr "Rotates every page of this file — Save writes it into the PDF."
 
 #: viewer/widgets/bookmark_tree.py
-msgid "고른 책갈피와 그 하위를 페이지 순서로 늘어놓고 레벨을 윗 책갈피에 맞춥니다"
-msgstr "Arrange the selected bookmarks and their children in page order and match their level to the bookmark above"
+msgid "이 파일의 책갈피를 같은 단계 안에서 페이지 순서로 늘어놓습니다 — 하위 책갈피는 부모를 따라갑니다"
+msgstr "Sorts this file's bookmarks by page within each level — sub-bookmarks move with their parent"
 
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format
@@ -8522,6 +8531,11 @@ msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format
+msgid "(단계 {n})"
+msgstr "(Level {n})"
+
+#: viewer/widgets/bookmark_tree.py
+#, python-brace-format
 msgid "같은 이름의 파일이 이미 있습니다: {name}"
 msgstr "A file with the same name already exists: {name}"
 
@@ -8601,11 +8615,6 @@ msgstr "Translate ({n} files)"
 #, python-brace-format
 msgid "({n}개 병합)"
 msgstr "({n} merged)"
-
-#: viewer/widgets/bookmark_tree.py
-#, python-brace-format
-msgid "선택 책갈피 {_n_bm}개 페이지순 정렬"
-msgstr "Sort {_n_bm} Selected Bookmarks by Page"
 
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format

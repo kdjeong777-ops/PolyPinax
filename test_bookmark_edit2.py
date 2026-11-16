@@ -7,7 +7,7 @@
   ③ 고른 책갈피 **아래**에 추가
   ④ 추가 뒤 **그 하나만** 선택
   ⑤ 우클릭에 모두 펼치기/모두 접기
-  ⑥ 우클릭에 선택 책갈피 **페이지순 정렬**(하위 포함, 레벨은 윗 책갈피에 맞춤)
+  ⑥ 우클릭에 **페이지순 정렬** — 261116-2(§4.7.27 ⑤) 부터 그 파일 전부·단계를 지키며(종전: 한 줄로 평탄하게)
   ⑦ 저장은 **원본 파일**에(못 하면 알린다)
   ⑧ 본문 우클릭에 좌/우 90° 회전
   ⑨ OCR 학습 데이터가 없으면 **사람이 읽을 안내**
@@ -150,8 +150,10 @@ try:
     pages = [p for _d, _t, p in after]
     chk(len(after) == 4 and pages == sorted(pages),
         "⑥ 페이지 오름차순으로 늘어선다", str([(t.split('  (p.')[0], p) for _d, t, p in after]))
-    depths = {d for d, _t, _p in after}
-    chk(len(depths) == 1, "⑥ 레벨이 윗 책갈피와 같게(한 줄로) 맞춰진다", str(depths))
+    # 261116-2(§4.7.27 ⑤, 사용자 지시 '단계를 무시하지 말고'): 종전 '한 줄로 평탄하게' 는 바뀌었다 — 하위는 부모 아래 그대로
+    chk([holder.child(i).text(0).split("  (p.")[0] for i in range(holder.childCount())] == ["앞쪽", "중간쪽", "나중쪽"],
+        "⑥ 하위는 부모 아래에서 쪽 순(단계를 지킨다)",
+        str([holder.child(i).text(0) for i in range(holder.childCount())]))
 
     # ── ⑦⑧⑨ 배선 확인 ──────────────────────────────────────────────────
     from viewer.app import MainWindow

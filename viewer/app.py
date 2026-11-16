@@ -4638,10 +4638,14 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         form.addRow(tr("제목"), ed)
         cmb = None
         if top > base:
+            # 261116-2(책갈피창·저장 SOT §4.7.27 ①②): 값 = 단계(파일 아래 첫 책갈피 = 1), 표기는 이름 앞 '(단계 N)'.
+            #   하위 단계에 있으면 위에 상위 단계들도 — 단계 k 조상 바로 뒤 형제로 넣는다.
             cmb = QComboBox()
-            cmb.addItem(tr('윗 책갈피와 같은 단계 (레벨 {base})').format(base=base), 1)
-            cmb.addItem(tr('윗 책갈피의 하위 (레벨 {base})').format(base=base + 1), 2)
-            cmb.setCurrentIndex(0)                       # 기본 = 같은 단계
+            for k in range(1, base):
+                cmb.addItem(tr('(단계 {n}) 상위 단계').format(n=k), k)
+            cmb.addItem(tr('(단계 {n}) 윗 책갈피와 같은 단계').format(n=base), base)
+            cmb.addItem(tr('(단계 {n}) 윗 책갈피의 하위').format(n=base + 1), base + 1)
+            cmb.setCurrentIndex(base - 1)                # 기본 = 같은 단계
             form.addRow(tr("단계"), cmb)
         v.addLayout(form)
         bb = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok
@@ -4650,18 +4654,18 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         v.addWidget(bb)
         ed.setFocus()
         if dlg.exec() != QDialog.DialogCode.Accepted:
-            return "", 1, False
-        return ed.text(), (cmb.currentData() if cmb is not None else 1), True
+            return "", None, False
+        return ed.text(), (cmb.currentData() if cmb is not None else None), True   # 261116-2: 단계(없으면 None — 기본 자리)
 
     def _prompt_add_bookmark(self, cur: str, page_1based: int):
         """제목 입력 → 트리 대상 파일에 책갈피 추가(저장은 편집모드 💾). 261019-3: 활성 창의 책갈피창에."""
         bt = self._bm_tree_for_pane()
         if not bt.has_file(cur, warn=True) or not bt.ensure_edit_mode(tr("책갈피 추가")):     # 261019-2(마스터 §4.7.0)
             return
-        title, level, ok = self._ask_bookmark(cur, page_1based, bt=bt)   # 260908-1: 레벨 포함
+        title, depth, ok = self._ask_bookmark(cur, page_1based, bt=bt)   # 260908-1 · 261116-2: 단계(§4.7.27)
         if not ok:
             return
-        bt.add_bookmark(cur, page_1based, title, level)
+        bt.add_bookmark(cur, page_1based, title, depth=depth)
         self.status.showMessage(
             tr('책갈피 추가됨: {title}  (p.{page_1based}) — 책갈피창 편집(✏)에서 저장(💾)해야 PDF에 반영됩니다.').format(title=title or tr('(제목 없음)'), page_1based=page_1based), 6000)
 

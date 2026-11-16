@@ -710,7 +710,7 @@ class PresentationWindow(QWidget):
         self._tb_erasers = []
         for ei, ew in enumerate(self._eraser_widths):
             eb = QPushButton()
-            # 260611-2: 본문과 동일 디자인 아이콘(얇게/두껍게), 없으면 기존 드로잉 아이콘
+            # 260611-2: 본문과 동일 디자인 아이콘(얇게/두껍게)
             # 261116-10(디자인 SOT §4.5): PNG(테 어두운 회색 고정 — 어두운 띠에서 테가 사라짐) → 그림, 띠는 늘 어두워 다크 꼴
             from viewer.widgets.icons import color_icon as _cix
             eb.setIcon(_cix("eraser_thick" if ei else "eraser_thin", dark=True))
@@ -2074,7 +2074,9 @@ class PresentationWindow(QWidget):
         if k in (Qt.Key.Key_Enter, Qt.Key.Key_Return):
             self._commit_numbuf()
             return
-        if Qt.Key.Key_0 <= k <= Qt.Key.Key_9:
+        # 261116-22(발표 SOT §3): 글자·숫자 키는 수식 없음(Shift·키패드만 허용)일 때만 — Ctrl+S·Ctrl+D·Ctrl+6 은 분할·2쪽·쪽 번호가 아니다
+        plain = not (e.modifiers() & ~(Qt.KeyboardModifier.ShiftModifier | Qt.KeyboardModifier.KeypadModifier))
+        if plain and Qt.Key.Key_0 <= k <= Qt.Key.Key_9:
             self._numbuf = (self._numbuf + chr(k))[:6]
             self._update_hint()
             return
@@ -2095,10 +2097,10 @@ class PresentationWindow(QWidget):
         if k == Qt.Key.Key_End:
             self._go(self._doc.page_count - 1)
             return
-        if k == Qt.Key.Key_S:                 # 260609-6: 상하 2분할 토글
+        if plain and k == Qt.Key.Key_S:       # 260609-6: 상하 2분할 토글
             self.set_split(not self._split_mode)
             return
-        if k == Qt.Key.Key_D:                 # 260905(§4.1): 좌우 2쪽 보기 토글
+        if plain and k == Qt.Key.Key_D:       # 260905(§4.1): 좌우 2쪽 보기 토글
             self.set_dual(not self._dual_mode)
             return
         super().keyPressEvent(e)
@@ -2644,69 +2646,6 @@ class PresentationWindow(QWidget):
             self._apply_pointer()
             self._ptr_timer.start()
             self.pointerChanged.emit(self._ptr_active)
-
-    def _make_eraser_icon(self):
-        """260609-18(G4): 지우개 아이콘(분홍 몸체+파란 밴드+지운 자국)."""
-        from PyQt6.QtGui import QIcon, QPolygon
-        from PyQt6.QtCore import QPoint
-        d = 22
-        pm = QPixmap(d, d)
-        pm.fill(QColor(0, 0, 0, 0))
-        p = QPainter(pm)
-        p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        # 기울어진 지우개 몸체(평행사변형)
-        body = QPolygon([QPoint(4, 14), QPoint(12, 4), QPoint(18, 8), QPoint(10, 18)])
-        p.setPen(QPen(QColor("#ffffff"), 1.2))
-        p.setBrush(QColor("#f48fb1"))         # 분홍
-        p.drawPolygon(body)
-        # 파란 밴드
-        p.setBrush(QColor("#5a8bd6"))
-        band = QPolygon([QPoint(4, 14), QPoint(7, 11), QPoint(13, 15), QPoint(10, 18)])
-        p.drawPolygon(band)
-        # 지운 자국(밑줄)
-        p.setPen(QPen(QColor("#bbbbbb"), 1.4))
-        p.drawLine(3, 20, 16, 20)
-        p.end()
-        return QIcon(pm)
-
-    def _make_straight_icon(self):
-        """260609-19(H3): 옆으로 일직선 아이콘(가로 직선)."""
-        from PyQt6.QtGui import QIcon
-        d = 22
-        pm = QPixmap(d, d)
-        pm.fill(QColor(0, 0, 0, 0))
-        p = QPainter(pm)
-        p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        pen = QPen(QColor("#ffffff"), 2.6)
-        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
-        p.setPen(pen)
-        p.drawLine(3, d // 2, d - 3, d // 2)
-        # 양 끝점 강조(직선 끝)
-        p.setBrush(QColor("#ffffff"))
-        p.drawEllipse(2, d // 2 - 2, 4, 4)
-        p.drawEllipse(d - 6, d // 2 - 2, 4, 4)
-        p.end()
-        return QIcon(pm)
-
-    def _make_part_eraser_icon(self, width):
-        """260609-20(I3): 일부분 지우개 아이콘(굵기에 따라 원 크기)."""
-        from PyQt6.QtGui import QIcon
-        d = 22
-        pm = QPixmap(d, d)
-        pm.fill(QColor(0, 0, 0, 0))
-        p = QPainter(pm)
-        p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        # 지울 자국 선
-        p.setPen(QPen(QColor("#cfcfcf"), 1.6))
-        p.drawLine(3, 16, d - 3, 16)
-        # 지우개 원(굵기 비례)
-        r = max(4, min(9, int(width / 3) + 3))
-        p.setPen(QPen(QColor("#ffffff"), 1.4))
-        p.setBrush(QColor("#f48fb1"))
-        cx, cy = d // 2, 9
-        p.drawEllipse(cx - r, cy - r, 2 * r, 2 * r)
-        p.end()
-        return QIcon(pm)
 
     # 260611-4: 선 종류 3단계(본문과 동일 글리프/이름)
     _MODE_GLYPH = ("─", "▬", "〜")

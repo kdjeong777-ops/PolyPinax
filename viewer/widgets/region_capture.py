@@ -5,22 +5,39 @@
 - mode='fixed'(사용자 크기): 클릭한 곳을 좌상단으로 그 크기 상자를 놓는다.
 - 고치기 단계: 안쪽 끌기 = 옮기기, 꼭짓점·변 끌기 = 크기, 화살표 = 1 px(Shift 10 px), Ctrl+화살표 = 크기.
 - 확정: Enter 또는 더블클릭. 취소: Esc, 오른쪽 클릭(고치기 단계에서는 다시 고르기).
+- 모양 펴기(261116-18): 고치기 단계에서 Shift+손잡이 끌기 = 그 점만(점 8개 — 사진 크롭 '모양 펴기'와 같은 뜻), 캡처하면
+  `photo_warp.unwarp` 로 직사각형으로 펴서 돌려준다(배경 스레드 — 응답성 SOT §4.4).
 - copy_mode='visible'(보이는 크기, 논리 픽셀) / 'original'(원본 = 장치 픽셀).
 
 grab() 가 QPixmap(또는 None)을 반환(로컬 이벤트 루프). 끝난 뒤 `region_out` = `[x, y, w, h, 화면 이름]`(영역 캡처일 때).
 """
 from __future__ import annotations
 
+import math
+import threading
 from typing import Optional
 
-from PyQt6.QtCore import Qt, QRect, QPoint, QEventLoop, QSize
-from PyQt6.QtGui import QPainter, QColor, QPen, QGuiApplication, QPixmap, QCursor
+from PyQt6.QtCore import Qt, QRect, QPoint, QPointF, QEventLoop, QSize, QTimer
+from PyQt6.QtGui import QPainter, QColor, QPen, QGuiApplication, QPixmap, QCursor, QPainterPath, QImage
 from PyQt6.QtWidgets import QWidget
+from viewer import photo_warp as pw
 from viewer.i18n import tr
 
 _HANDLE = 8        # 핸들 히트 반경(px)
 _MIN = 12          # 최소 박스 크기
 DRAG_MIN = 4       # 이보다 덜 끌었으면 클릭으로 본다(클릭 두 번 방식) — 스크린샷 SOT §3.1
+_CURVE_N = 24      # 휜 변을 그리고 감싸는 사각형을 잴 때 한 변의 마디 수
+_POLL_MS = 15      # 배경 펴기가 끝났는지 보는 간격
+# 손잡이 이름 → 점 8개(photo_warp.POINT_NAMES: TL·TR·BR·BL·T·R·B·L)의 번호
+_PT_INDEX = {"tl": 0, "tr": 1, "br": 2, "bl": 3, "t": 4, "r": 5, "b": 6, "l": 7}
+
+
+def _unwarp_bytes(data: bytes, w: int, h: int, bpl: int, pts, size):
+    """배경 스레드 몫 — RGB888 바이트 그림을 점 8개(비율) 테두리로 펴서 (바이트, 폭, 높이)."""
+    from PIL import Image
+    im = Image.frombuffer("RGB", (w, h), data, "raw", "RGB", bpl, 1)
+    out = pw.unwarp(im, pts, size=size).convert("RGB")
+    return out.tobytes(), out.width, out.height
 
 
 class RegionCaptureOverlay(QWidget):
@@ -53,6 +70,10 @@ class RegionCaptureOverlay(QWidget):
         self._drag_off = QPoint()
         self._origin = QPoint()
         self._pressed = False          # sizing 중 누른 채인가(끌어 고르기)
+        self._pts = None               # 모양 펴기 점 8개(위젯 좌표, float) — None 이면 사각형(261116-18)
+        self._move_base = None         # 모양 옮기기 시작 때의 점
+        self._warp_thread = None       # 배경 펴기(캡처 때)
+        self._warp_box = None
         self._last = None              # 지난 영역(같은 화면일 때만)
         try:
             if mode == "region" and last_region and len(last_region) == 5 \
@@ -75,6 +96,11 @@ class RegionCaptureOverlay(QWidget):
         return self._result
 
     def _finish(self, ok: bool):
+        if self._warp_thread is not None:            # 이미 펴는 중
+            return
+        if ok and self._pts is not None:
+            self._start_warp()
+            return
         if ok and self._rect.isValid() and self._rect.width() >= _MIN and self._rect.height() >= _MIN:
             r = self._rect.normalized()
             # 위젯 좌표 → 장치픽셀
@@ -94,6 +120,114 @@ class RegionCaptureOverlay(QWidget):
         if self._loop:
             self._loop.quit()
 
+    # ── 모양 펴기(261116-18, 스크린샷 SOT §3.1) ───────────────────
+    def _curve_points(self) -> list:
+        """테두리를 따라 찍은 점들(위젯 좌표) — 휜 변까지."""
+        tl, trc, br, bl, tm, rm, bm, lm = self._pts
+        out = [tl]
+        for p0, mid, p2 in ((tl, tm, trc), (trc, rm, br), (br, bm, bl), (bl, lm, tl)):
+            out += [pw._quad_curve(p0, mid, p2, i / _CURVE_N) for i in range(1, _CURVE_N + 1)]
+        return out
+
+    def _shape_path(self) -> QPainterPath:
+        path = QPainterPath()
+        pts = self._curve_points()
+        path.moveTo(QPointF(*pts[0]))
+        for q in pts[1:]:
+            path.lineTo(QPointF(*q))
+        path.closeSubpath()
+        return path
+
+    def _shape_box(self) -> QRect:
+        """테두리를 감싸는 사각형(위젯 좌표, 화면 안으로)."""
+        pts = self._curve_points()
+        x0 = max(0, int(math.floor(min(p[0] for p in pts))))
+        y0 = max(0, int(math.floor(min(p[1] for p in pts))))
+        x1 = min(self.width(), int(math.ceil(max(p[0] for p in pts))))
+        y1 = min(self.height(), int(math.ceil(max(p[1] for p in pts))))
+        return QRect(x0, y0, max(1, x1 - x0), max(1, y1 - y0))
+
+    def _start_warp(self):
+        """캡처 — 테두리를 감싸는 사각형만큼 화면 그림을 잘라 배경에서 편다. 덮개는 먼저 닫고, 로컬 루프가 끝나기를 기다린다."""
+        box = self._shape_box()
+        d = self._dpr
+        dp = QRect(int(box.x() * d), int(box.y() * d), max(1, int(box.width() * d)), max(1, int(box.height() * d)))
+        img = self._bg.copy(dp).toImage().convertToFormat(QImage.Format.Format_RGB888)
+        w, h, bpl = img.width(), img.height(), img.bytesPerLine()
+        data = bytes(img.constBits().asstring(img.sizeInBytes()))
+        pts = [((x - box.x()) / box.width(), (y - box.y()) / box.height()) for x, y in self._pts]
+        pts = pw.clamp_points(pts)
+        size = None
+        if self._copy_mode == "visible" and d != 1.0:            # 보이는 크기 — 논리 픽셀로 바로 편다
+            ow, oh = pw.out_size(pts, w, h)
+            size = (max(pw.OUT_MIN_SIDE, int(round(ow / d))), max(pw.OUT_MIN_SIDE, int(round(oh / d))))
+        self._warp_box = box
+        self._warp_out = None
+        self.hide()
+
+        def run():
+            try:
+                self._warp_out = _unwarp_bytes(data, w, h, bpl, pts, size)
+            except Exception:
+                self._warp_out = False
+        self._warp_thread = threading.Thread(target=run, name="region-warp", daemon=True)
+        self._warp_thread.start()
+        QTimer.singleShot(_POLL_MS, self._poll_warp)
+
+    def _poll_warp(self):
+        t = self._warp_thread
+        if t is not None and t.is_alive():
+            QTimer.singleShot(_POLL_MS, self._poll_warp)
+            return
+        res = self._warp_out
+        self._result = None
+        if res:
+            buf, ow, oh = res
+            self._result = QPixmap.fromImage(QImage(buf, ow, oh, 3 * ow, QImage.Format.Format_RGB888).copy())
+            if self._mode == "region":
+                b = self._warp_box
+                self.region_out = [b.x(), b.y(), b.width(), b.height(), self._screen.name()]
+        self._warp_thread = None
+        self.close()
+        if self._loop:
+            self._loop.quit()
+
+    def _enter_shape(self):
+        """사각형 → 점 8개(네 귀 + 곧은 변 가운데)."""
+        r = self._rect.normalized()
+        c = [(float(r.left()), float(r.top())), (float(r.right()), float(r.top())),
+             (float(r.right()), float(r.bottom())), (float(r.left()), float(r.bottom()))]
+        self._pts = c + pw.mids_of(c)
+
+    def move_point(self, i: int, xy) -> bool:
+        """점 하나만 옮긴다 — 꼭짓점이면 곧은 채였던 이웃 변의 가운데 점도 따라간다(사진 크롭 `WarpCanvas.move_point` 와 같은 뜻).
+        꼬이면(볼록하지 않으면) 옮기지 않는다."""
+        x = float(min(self.width() - 1, max(0, xy[0])))
+        y = float(min(self.height() - 1, max(0, xy[1])))
+        pts = list(self._pts)
+        if i < 4:
+            tol = pw.STRAIGHT_TOL * max(self.width(), self.height())
+            before = pw.mids_of(pts[:4])
+            follow = [math.hypot(pts[4 + k][0] - before[k][0], pts[4 + k][1] - before[k][1]) <= tol for k in range(4)]
+            pts[i] = (x, y)
+            after = pw.mids_of(pts[:4])
+            for k in range(4):
+                if follow[k]:
+                    pts[4 + k] = after[k]
+        else:
+            pts[i] = (x, y)
+        if not pw.is_valid(pts):
+            return False
+        self._pts = pts
+        return True
+
+    def _move_shape(self, base, dx: float, dy: float):
+        """점 8개를 모양 그대로 옮긴다 — 화면 밖으로 나가지 않게."""
+        xs, ys = [p[0] for p in base], [p[1] for p in base]
+        dx = max(-min(xs), min(self.width() - 1 - max(xs), dx))
+        dy = max(-min(ys), min(self.height() - 1 - max(ys), dy))
+        self._pts = [(x + dx, y + dy) for x, y in base]
+
     # ── 안내 ──────────────────────────────────────────────────
     def hint(self) -> str:
         """지금 단계에서 되는 조작만(스크린샷 SOT §3.1 표와 같은 말)."""
@@ -107,15 +241,38 @@ class RegionCaptureOverlay(QWidget):
             return s
         if self._phase == "sizing":
             return tr("놓거나 한 번 더 클릭하면 영역이 정해집니다 · Esc·오른쪽 클릭 = 취소")
-        return tr("Enter·더블클릭 = 캡처 · 끌기 = 옮기기·크기 · 화살표 = 1px(Shift 10px, Ctrl 크기) · "
-                  "오른쪽 클릭 = 다시 고르기 · Esc = 취소")
+        if self._pts is not None:
+            return tr("Enter·더블클릭 = 펴서 캡처 · 점 끌기 = 그 점만 · 안쪽 끌기·화살표 = 옮기기 · "
+                      "오른쪽 클릭 = 다시 고르기 · Esc = 취소")
+        return (tr("Enter·더블클릭 = 캡처 · 끌기 = 옮기기·크기 · 화살표 = 1px(Shift 10px, Ctrl 크기) · "
+                   "오른쪽 클릭 = 다시 고르기 · Esc = 취소")
+                + tr(" · Shift+점 끌기 = 그 점만(모양 펴기)"))
 
     # ── 그리기 ────────────────────────────────────────────────
     def paintEvent(self, _e):
         p = QPainter(self)
         p.drawPixmap(self.rect(), self._bg, self._bg.rect())   # 화면 배경
         p.fillRect(self.rect(), QColor(0, 0, 0, 110))          # 어둡게
-        if self._rect.isValid():
+        if self._pts is not None:                              # 모양 펴기 — 테두리 안만 밝게, 점 8개(261116-18)
+            p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+            path = self._shape_path()
+            p.save()
+            p.setClipPath(path)
+            p.drawPixmap(self.rect(), self._bg, self._bg.rect())
+            p.restore()
+            p.setPen(QPen(QColor("#2a7de1"), 2))
+            p.drawPath(path)
+            for i, (x, y) in enumerate(self._pts):
+                p.setBrush(QColor("#2a7de1") if i < 4 else QColor("white"))
+                p.setPen(QPen(QColor("#2a7de1"), 2 if i >= 4 else 1))
+                if i < 4:
+                    p.drawRect(QRect(int(x) - 3, int(y) - 3, 6, 6))
+                else:
+                    p.drawEllipse(QPointF(x, y), 4, 4)
+            b = self._shape_box()
+            p.setPen(QColor("white"))
+            p.drawText(b.x(), max(12, b.y() - 6), f"{b.width()} × {b.height()}")
+        elif self._rect.isValid():
             r = self._rect.normalized()
             p.drawPixmap(r, self._bg, QRect(
                 int(r.x() * self._dpr), int(r.y() * self._dpr),
@@ -146,6 +303,15 @@ class RegionCaptureOverlay(QWidget):
         }
 
     def _hit_handle(self, pos: QPoint):
+        if self._pts is not None:                     # 모양 펴기 — 'p0'..'p7'(꼭짓점 먼저), 테두리 안 = 옮기기
+            best, bd = None, _HANDLE + 1
+            for i, (x, y) in enumerate(self._pts):
+                d = max(abs(pos.x() - x), abs(pos.y() - y))
+                if d < bd - (0.5 if i < 4 else 0):
+                    best, bd = "p%d" % i, d
+            if best is not None:
+                return best
+            return "move" if self._shape_path().contains(QPointF(pos)) else None
         if not self._rect.isValid():
             return None
         for name, hp in self._handle_points(self._rect.normalized()).items():
@@ -166,6 +332,7 @@ class RegionCaptureOverlay(QWidget):
         if e.button() == Qt.MouseButton.RightButton:
             if self._phase == "edit" and self._mode == "region":   # 다시 고르기
                 self._rect = QRect()
+                self._pts = None
                 self._phase = "place"
                 self.setCursor(Qt.CursorShape.CrossCursor)
                 self.update()
@@ -193,14 +360,31 @@ class RegionCaptureOverlay(QWidget):
             return
         # edit: 핸들/이동 시작
         h = self._hit_handle(pos)
+        if (self._pts is None and h in _PT_INDEX
+                and e.modifiers() & Qt.KeyboardModifier.ShiftModifier):   # Shift+손잡이 = 그 점만(모양 펴기, 261116-18)
+            self._enter_shape()
+            h = "p%d" % _PT_INDEX[h]
+            self.update()
         self._drag = h
         if h == "move":
-            self._drag_off = pos - self._rect.normalized().topLeft()
+            if self._pts is not None:
+                self._move_base = (e.position(), list(self._pts))
+            else:
+                self._drag_off = pos - self._rect.normalized().topLeft()
 
     def mouseMoveEvent(self, e):
         pos = e.position().toPoint()
         if self._phase == "sizing":
             self._rect = QRect(self._origin, pos)
+            self.update()
+            return
+        if self._phase == "edit" and self._drag and self._pts is not None:   # 모양 펴기 — 점 하나·통째로
+            fp = e.position()
+            if self._drag == "move":
+                p0, base = self._move_base
+                self._move_shape(base, fp.x() - p0.x(), fp.y() - p0.y())
+            elif self._drag.startswith("p"):
+                self.move_point(int(self._drag[1:]), (fp.x(), fp.y()))
             self.update()
             return
         if self._phase == "edit" and self._drag:
@@ -259,6 +443,11 @@ class RegionCaptureOverlay(QWidget):
         if self._phase == "edit" and k in arrows:
             dx, dy = arrows[k]
             step = 10 if e.modifiers() & Qt.KeyboardModifier.ShiftModifier else 1
+            if self._pts is not None:                                    # 모양 펴기 — 옮기기만(크기 없음)
+                if not e.modifiers() & Qt.KeyboardModifier.ControlModifier:
+                    self._move_shape(list(self._pts), dx * step, dy * step)
+                    self.update()
+                return
             r = self._rect.normalized()
             if e.modifiers() & Qt.KeyboardModifier.ControlModifier:      # 크기
                 w = max(_MIN, min(self.width() - r.x(), r.width() + dx * step))
@@ -280,6 +469,6 @@ class RegionCaptureOverlay(QWidget):
             return Qt.CursorShape.SizeHorCursor
         if h in ("t", "b"):
             return Qt.CursorShape.SizeVerCursor
-        if h == "move":
+        if h == "move" or (h and h.startswith("p")):
             return Qt.CursorShape.SizeAllCursor
         return Qt.CursorShape.CrossCursor

@@ -11318,11 +11318,19 @@ msgid "Enter·더블클릭 = 캡처 · 끌기 = 옮기기·크기 · 화살표 =
 msgstr ""
 
 #: viewer/widgets/region_capture.py
+msgid " · Shift+점 끌기 = 그 점만(모양 펴기)"
+msgstr ""
+
+#: viewer/widgets/region_capture.py
 msgid "끌어서 영역 고르기(클릭 두 번도 됩니다) · Esc·오른쪽 클릭 = 취소"
 msgstr ""
 
 #: viewer/widgets/region_capture.py
 msgid "놓거나 한 번 더 클릭하면 영역이 정해집니다 · Esc·오른쪽 클릭 = 취소"
+msgstr ""
+
+#: viewer/widgets/region_capture.py
+msgid "Enter·더블클릭 = 펴서 캡처 · 점 끌기 = 그 점만 · 안쪽 끌기·화살표 = 옮기기 · 오른쪽 클릭 = 다시 고르기 · Esc = 취소"
 msgstr ""
 
 #: viewer/widgets/region_capture.py

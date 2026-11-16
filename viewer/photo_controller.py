@@ -395,6 +395,7 @@ class PhotoMixin:
 
     def _photo_on_mode_changed(self, on: bool):
         """모드가 바뀐 뒤 — 원천을 바꾼다(4.2). 메인이 하는 일은 보이는 것 바꾸기뿐, 훑기·디코드는 배경(§6, 응답성 SOT §5)."""
+        self._mix_mode_changed()                       # 261116-13(4.47): 섞은 칸의 종류가 곧 창 모드 — 표지만 놓는다
         for bt in (getattr(self, "bookmark_tree", None), getattr(self, "bookmark_tree_right", None)):
             if bt is not None and hasattr(bt, "set_photo_mode"):
                 bt.set_photo_mode(on)
@@ -1033,9 +1034,9 @@ class PhotoMixin:
         if s is None and create:
             from viewer.widgets.photo_strip import PhotoStrip
             s = PhotoStrip(getattr(self.page_thumbs, "_icon_w", 130), self.page_thumbs)
-            s.photoActivated.connect(lambda p: self._on_bookmark_activated(p, 0))
-            s.menuRequested.connect(self._photo_strip_menu)          # 261104-3(4.20)
-            s.deleteRequested.connect(self._photo_delete)            # 261104-4(4.25): Del
+            s.photoActivated.connect(self._photo_strip_pick)         # 261116-13(4.47): 섞은 사진 칸의 줄이면 그 칸에
+            s.menuRequested.connect(self._photo_strip_menu_route)    # 261104-3(4.20)
+            s.deleteRequested.connect(self._photo_strip_delete_route)   # 261104-4(4.25): Del
             s.nearEnd.connect(self._photo_device_next)                # 261104-9(4.33): 휴대 장치 — 끝에 닿으면 다음 폴더를 잇는다
             s.set_label_style(self._photo_strip_style())             # 261104-13(4.38): 보기설정 스타일
             s.verticalScrollBar().valueChanged.connect(
@@ -2059,6 +2060,9 @@ class PhotoMixin:
 
     def _photo_after_open(self, path):
         """사진을 본문에 연 뒤 — 쪽 썸네일은 비우고(PDF 쪽 편집이 섞이지 않게, 4.3), 앞뒤 사진을 배경에서 미리 푼다(§6.4)."""
+        if self._mix_pane(self._active_pane):
+            self._mix_after_open(path)                   # 261116-13(4.47): 섞은 사진 칸 — 사진 모드 기억·쪽 썸네일은 그대로
+            return
         try:
             self.page_thumbs.clear_document()
         except Exception:

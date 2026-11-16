@@ -66,6 +66,7 @@ from viewer.stamp_controller import StampMixin          # 261101-3(마스터 §4
 from viewer.photo_controller import PhotoMixin          # 261104-2(사진 보기 SOT): 사진 모드(PolyPix)
 from viewer.share_controller import ShareMixin          # 261105-9(마스터 §4.7.23): 전달 묶음
 from viewer.doc_info_controller import DocInfoMixin     # 261107-3(마스터 §4.12): 정보 한 줄·문서 정보 창
+from viewer.split_kind_controller import SplitKindMixin  # 261116-13(사진 보기 SOT §4.47): 2단 ▾ PDF·PIX·스크린샷
 from viewer import key_actions as _key_actions           # 261107-26: F5 의 대상(입력 SOT §3.2.3)
 from viewer import settings_store, __version__
 # v1.6.2: 히스토리 패널 제거. HistoryItem 만 last_main 직렬화용으로 남김.
@@ -155,7 +156,7 @@ class _UpdateSignals(QObject):
     dl_progress = pyqtSignal(int, int)  # 261008-17(U13): 받는 중 (받은 바이트, 전체)
 
 
-class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, SignMixin, ConvertMixin, OcrBatchMixin, CompressMixin, RedactMixin, CompareMixin, VPrinterMixin, JobsMixin, LiteMixin, StampMixin, PhotoMixin, ShareMixin, DocInfoMixin, QMainWindow):
+class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, SignMixin, ConvertMixin, OcrBatchMixin, CompressMixin, RedactMixin, CompareMixin, VPrinterMixin, JobsMixin, LiteMixin, StampMixin, PhotoMixin, ShareMixin, DocInfoMixin, SplitKindMixin, QMainWindow):
     SETTINGS_FILE = "settings.json"
     bgWriteFailed = pyqtSignal(str, str)     # 261108-15: 배경 쓰기 줄(`bg_write`)의 실패 — 배경 스레드에서 보내 메인에서 알림
     MAX_RECENT_FOLDERS = 10
@@ -1158,6 +1159,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 self._push_nav_filter()              # 260609-26
         except Exception:
             pass
+        self._mix_sync_thumbs()                  # 261116-13(사진 보기 SOT §4.47): 섞은 2단 — 썸네일 칸은 활성 창 따라
 
     def _toggle_split(self, on: bool):
         on = bool(on)
@@ -1177,6 +1179,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 self.bookmark_tree_right.leave_shot_list()   # 261115-27(§4.7.26): 1단 — 아래 목록은 원래 목록으로
             except AttributeError:
                 pass
+            self._mix_leave()                              # 261116-13(사진 보기 SOT §4.47): 섞은 2단을 놓는다
         self._sync_right_layout()                          # 260606-19: 드로어/컬럼 통합 동기화
         self._set_active_pane(self._active_pane if on else 0)
         self._sync_right_pane_bookmark()                   # 260618-19: 우측 다른폴더 파일 표시 갱신
@@ -1225,6 +1228,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         """260618-26: 2단 → 1단(우측 숨김). 우측 내용을 좌측으로 가져온 뒤 단일 창.
         261016-2: 2창에서 본문 우클릭 '1단 보기' 가 이것을 쓴다(`_view_single_keep`)."""
         if not getattr(self, "_split_on", False):
+            return
+        if self._mix_on_now():               # 261116-13(사진 보기 SOT §4.47): 섞은 칸 — 그 모드로 바꿔 1단에
+            self._mix_view_in_mode()
             return
         right = self._mv[1]
         rf = right.current_file()
@@ -1771,7 +1777,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self._sync_right_layout()
 
     def _vm_split(self):
-        self.act_split.setChecked(True)
+        self._split_body()                   # 261116-13(사진 보기 SOT §4.47): 종전 2단 — 섞은 2단이면 같은 종류로
 
     def _vm_search(self):
         if self.act_split.isChecked():
@@ -1954,6 +1960,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             m_view.addAction(_a)
             self._view_acts[_id] = _a           # 260621-P3: API 키 게이팅용
             self._reg_cmd("view." + _id, _a, short=_short, tip=_tip)
+        self._split_menu_install(self._view_acts["split"])   # 261116-13(사진 보기 SOT §4.47): 2단 ▾ PDF·PIX·스크린샷
 
         # 260825: 뷰어 옵션(우클릭) 메뉴를 단축키로 — 보기 메뉴에 노출(단축키 표시) + 설정 등록
         m_view.addSeparator()
@@ -6604,6 +6611,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         cur = self.main_view.current_file() if self.main_view else None
         if not cur:
             return
+        if self._mix_pane(self._active_pane):
+            self._mix_menu(global_pos)                    # 261116-13(사진 보기 SOT §4.47): 섞은 칸 — '그 모드로 보기'
+            return
         edit = self.bookmark_tree.is_edit_mode()
         # 261012-11(마스터 §4.6.9, 사용자 지시): 꾸밈이 골라져 있거나 개체 위를 우클릭하면 **그 개체의 옵션만**.
         #   261107-2: 사진 본문도 먼저 본다 — 종전에는 사진 메뉴가 먼저 떠 개체 메뉴가 나오지 않았다.
@@ -8565,10 +8575,13 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 else:
                     self.main_view.set_hover_words([])
                     self._apply_vocab_marks(item.page_index or 0, [])
-            elif self._photo_mode and path.suffix.lower() == ".zip":
+            elif self._pane_photo_kind() and path.suffix.lower() == ".zip":
+                if self._mix_pane(self._active_pane):   # 261116-13(사진 보기 SOT §4.47): 섞은 칸은 보기 중심
+                    self.status.showMessage(tr("zip 은 사진 모드에서 볼 수 있습니다."), 4000)
+                    return
                 self._photo_open_zip(path)            # 261104-4(사진 보기 SOT 4.24): 사진이 든 zip — 꺼내 썸네일 줄에
                 return
-            elif self._photo_mode and self._is_photo_path(path):
+            elif self._pane_photo_kind() and self._is_photo_path(path):   # 261116-13: 섞은 사진 칸도(사진 보기 SOT §4.47)
                 # 261104-2(사진 보기 SOT 4.4 (다)): 사진 모드 — 사진 문서로(경로는 원본, 그림은 Pillow 로 필요한 크기만)
                 from viewer.photo_doc import PhotoFormatMissing
                 try:
@@ -8795,6 +8808,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         열리고(_load_main→_push_nav_filter), 필터 밖 끝페이지는 보이는 페이지로 스냅된다.
         """
         if idx != self._active_pane:
+            return
+        if self._mix_pane(idx):
+            self._mix_step(direction)              # 261116-13(사진 보기 SOT §4.47): 섞은 칸 — 아래 책갈피창 차례
             return
         if getattr(self, "_photo_mode", False):
             self._photo_step(direction)            # 261104-2(사진 보기 SOT 4.12): 사진은 파일이 넘김 단위 — 묻지 않는다
@@ -9234,6 +9250,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         # v1.6.7 E1: 표시는 임시 PNG 일 수 있으므로, ◀▶/순번 조회용으로
         #            카드 원본 path 를 별도 보관 (_current_main 은 disp 가 됨).
         self._current_shot_path = path
+        self._mix_leave()                                # 261116-13(사진 보기 SOT §4.47): 컷을 띄우면 섞은 2단을 놓는다
         # 261112-20(스크린샷 SOT §5, 사용자 결정): 늘 2단 오른쪽 창에 — 1단이면 2단을 켜고(왼쪽을 복사하지 않는다),
         #   활성 창은 오른쪽(◀▶ 컷 넘김이 활성 창에서만 받는다). 1단 복귀는 기존 단추.
         if not getattr(self, "_split_on", False):

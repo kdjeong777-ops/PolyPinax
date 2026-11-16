@@ -202,7 +202,9 @@ class RibbonRow(QToolBar):
             w = self.widgetForAction(a)
             if isinstance(w, QToolButton):
                 if a.menu() is not None:
-                    w.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+                    # 261116-13(디자인 SOT §2.9.5): `ribbonSplit` 이면 분할 단추 — 본체는 실행, ▾ 칸만 메뉴(지금은 보기 `2단`)
+                    w.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup if a.property("ribbonSplit")
+                                   else QToolButton.ToolButtonPopupMode.InstantPopup)
                 if a.property("ribbonIconOnly") and self.toolButtonStyle() != Qt.ToolButtonStyle.ToolButtonTextOnly:
                     # 261031-12 보완: 그림만(글자는 무리 바깥 표시·툴팁) — 글자만 줄(보기·도구 탭)에서는 글자 단추
                     w.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)

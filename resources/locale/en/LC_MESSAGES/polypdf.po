@@ -455,7 +455,7 @@ msgstr "Index"
 msgid "PDF 만들기·합치기·암호·서명"
 msgstr "Create, merge, encrypt and sign PDFs"
 
-#: viewer/app.py
+#: viewer/app.py viewer/split_kind_controller.py
 msgid "PDF"
 msgstr "PDF"
 
@@ -919,8 +919,8 @@ msgstr "Information"
 msgid "현재 파일 즐겨찾기 추가"
 msgstr "Add Current File to Favorites"
 
-#: viewer/app.py viewer/widgets/settings_dialog.py
-#: viewer/widgets/tag_rules_panel.py
+#: viewer/app.py viewer/split_kind_controller.py
+#: viewer/widgets/settings_dialog.py viewer/widgets/tag_rules_panel.py
 msgid "스크린샷"
 msgstr "Screenshots"
 
@@ -3240,6 +3240,10 @@ msgstr ""
 "Opening…\n"
 "{name}"
 
+#: viewer/app.py
+msgid "zip 은 사진 모드에서 볼 수 있습니다."
+msgstr "Zip files can be viewed in photo mode."
+
 #: viewer/app.py viewer/widgets/presentation.py
 msgid "다음"
 msgstr "Next"
@@ -5145,7 +5149,7 @@ msgstr "{dev}: Can't open the device — unlock it, tap 'Trust This Computer', t
 msgid "{dev}: 사진을 받는 동안 응답이 없습니다 — 연결을 확인하세요. 복사한 사진만 보입니다."
 msgstr "{dev}: No response while receiving photos — check the connection. Only the photos already copied are shown."
 
-#: viewer/photo_controller.py
+#: viewer/photo_controller.py viewer/split_kind_controller.py
 msgid "마지막 사진입니다."
 msgstr "This is the last photo."
 
@@ -5174,7 +5178,7 @@ msgstr "Photo OCR stopped — read {n} photos."
 msgid "사진 글자 {n}개를 읽었습니다 — 남기려면 '저장 안 한 OCR' 을 저장하세요."
 msgstr "Read {n} words from the photo — to keep them, save 'Unsaved OCR'."
 
-#: viewer/photo_controller.py
+#: viewer/photo_controller.py viewer/split_kind_controller.py
 msgid "첫 사진입니다."
 msgstr "This is the first photo."
 
@@ -6920,6 +6924,26 @@ msgstr "{stem}_unsigned ({n}).pdf"
 #, python-brace-format
 msgid "{stem}_서명.pdf"
 msgstr "{stem}_signed.pdf"
+
+#: viewer/split_kind_controller.py
+msgid "사진 모드로 보기"
+msgstr "View in Photo Mode"
+
+#: viewer/split_kind_controller.py
+msgid "PDF 모드로 보기"
+msgstr "View in PDF Mode"
+
+#: viewer/split_kind_controller.py
+msgid "PIX"
+msgstr "PIX"
+
+#: viewer/split_kind_controller.py
+msgid "스크린샷이 없습니다."
+msgstr "There are no screenshots."
+
+#: viewer/split_kind_controller.py
+msgid "아래 목록에서 고르세요."
+msgstr "Choose from the list below."
 
 #: viewer/stamp_controller.py
 msgid "영역이 너무 작습니다 — 끌어서 고르세요."

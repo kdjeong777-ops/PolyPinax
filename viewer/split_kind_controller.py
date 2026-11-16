@@ -259,6 +259,8 @@ class SplitKindMixin:
         if folder:
             self._set_pane_folder(1, folder)
         self._mix_draw_gate()
+        if photo:
+            self._photo_edit_default()                   # 261116-25(사진 SOT §4.48): 사진 칸 2단을 띄우면 편집 모드(설정 존중)
         self._set_active_pane(1)
         if fpath:
             self._load_main(HistoryItem(str(fpath), page, "", "bookmark"))
@@ -284,6 +286,8 @@ class SplitKindMixin:
         if getattr(self, "_split_on", False) and getattr(self, "_folder", None):
             self._set_pane_folder(1, self._folder)
         self._mix_draw_gate()
+        self._meta_other_drop()                          # 261116-25: 그 칸 폴더 사이드카(편집 중이면 [저장]·취소 때)
+        self._photo_gate_actions()                       # 261116-25: 흐리게 끈 PDF 전용 명령을 되살린다
         strip = self._photo_strip_widget(create=False)
         if strip is not None:
             self.page_thumbs.set_alt_view(strip, photo)
@@ -307,15 +311,17 @@ class SplitKindMixin:
         except Exception:
             pass
         self._mix_draw_gate()
+        self._meta_other_drop()                          # 261116-25
 
     def _mix_draw_gate(self) -> None:
-        """섞은 칸에서는 꾸미기를 그리지 않는다(보기 중심) — 편집 모드여도."""
+        """섞은 **PDF** 칸에서는 꾸미기를 그리지 않는다 — 편집 모드여도. 섞은 사진 칸은 그린다
+        (261116-25 사용자 결정 '섞은 칸도 꾸미기 허용' — 저장은 사진 사이드카 길, `_meta_store_for`)."""
         try:
             edit = bool(self.bookmark_tree.is_edit_mode())
             mv = self._mv[1]
             if edit:
                 self._init_draw_config(mv)
-            mv.set_draw_mode(edit and not self._mix_pane(1))
+            mv.set_draw_mode(edit and not (self._mix_pane(1) and not self._pane_photo_kind(1)))
         except Exception:
             pass
 
@@ -349,6 +355,12 @@ class SplitKindMixin:
             if strip is not None:
                 self.page_thumbs.set_alt_view(strip, False)
             self._mix_strip_pane = None
+        self._photo_gate_actions()                       # 261116-25: 활성 칸 종류로 PDF 전용 명령 흐리게 끄기·되살리기
+
+    def _mix_grey_now(self) -> bool:
+        """261116-25(사진 SOT §4.47 '흐리게 끄기'): PDF 모드에서 섞은 사진 칸이 활성인가 — 그러면 PDF 전용 명령을 끈다."""
+        return (not bool(getattr(self, "_photo_mode", False)) and self._mix_pane(getattr(self, "_active_pane", 0))
+                and self._pane_photo_kind(1))
 
     def _mix_on_listed(self) -> None:
         """아래 책갈피창 목록이 다 찼다 — 섞은 사진 칸이 활성이면 썸네일 줄을 그 목록으로."""

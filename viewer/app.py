@@ -8144,7 +8144,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         act = self._active_pane
         moved = False
         for i, (f, pg) in sorted(rec.items()):
-            if i == act or i not in (0, 1):
+            if i not in (0, 1):                       # 261116-25(§4.7.20): 비어 있으면 활성 창도 — 다시 연 창은 아래에서 건너뛴다
                 continue
             mv = self._mv[i]
             if mv.current_file() and getattr(mv, "_doc", None) is not None:

@@ -423,6 +423,7 @@ class PhotoMixin:
             except Exception:
                 pass
             self._photo_index_start()                   # 사진 정보 색인(4.24, D19)
+            self._photo_edit_default()                  # 261116-25(4.48): 사진 모드에 들어가면 편집 모드(설정 존중)
         hook = getattr(self, "_photo_after_mode", None)
         if hook is not None:
             hook(on)
@@ -2001,7 +2002,8 @@ class PhotoMixin:
         acts = [(c, self._cmds.get(c)) for c in PHOTO_OFF_CMDS] + [(n, getattr(self, n, None)) for n in PHOTO_OFF_ATTRS]
         off = self.__dict__.setdefault("_photo_disabled", set())
         hidden = self.__dict__.setdefault("_photo_hidden", set())
-        if self._photo_mode:
+        grey = self._mix_grey_now()                    # 261116-25(4.47 '흐리게 끄기'): PDF 모드에서 섞은 사진 칸이 활성 — 끄기만(숨기지 않음)
+        if self._photo_mode or grey:
             # 끄기를 숨기기보다 **먼저**, 그리고 숨은 것도 늘 다시 끈다(261106-4) — Qt 는 숨은 액션을 isEnabled()=False 로
             #   보고하지만 그 사이 권한 적용 등이 setEnabled(True) 를 하면 그 값을 기억해, 다시 보일 때 켜진 채로 나온다
             for k, a in acts:
@@ -2024,7 +2026,7 @@ class PhotoMixin:
         for mv in getattr(self, "_mv", []) or []:       # 편집 모드 툴바의 전자서명 단추(크롭 오른쪽)
             if hasattr(mv, "set_sign_allowed"):
                 mv.set_sign_allowed(not self._photo_mode)
-        if self._photo_mode:
+        if self._photo_mode or grey:
             return
         if not off:
             return
@@ -2067,8 +2069,20 @@ class PhotoMixin:
                 out.append(str(p))
         return out
 
+    def _photo_edit_default(self) -> None:
+        """261116-25(4.48, 사용자 결정 (가) '사진 열 때마다, 설정 존중'): 사진 모드 진입·사진 열기·사진 칸 2단 — 편집 모드를 켠다.
+        설정 '시작 모드'(`open_edit_mode`)가 '보기' 거나 ✏ 가 꺼져 있으면(권한) 켜지 않는다. ✏ 를 누른 것과 같은 길."""
+        try:
+            bt = self.bookmark_tree
+            if (self._prefs.get("open_edit_mode", True) and bt.btn_edit.isEnabled()
+                    and not bt.is_edit_mode()):
+                bt.btn_edit.setChecked(True)
+        except Exception:
+            pass
+
     def _photo_after_open(self, path):
         """사진을 본문에 연 뒤 — 쪽 썸네일은 비우고(PDF 쪽 편집이 섞이지 않게, 4.3), 앞뒤 사진을 배경에서 미리 푼다(§6.4)."""
+        self._photo_edit_default()                       # 261116-25(4.48): 사진을 열 때마다 편집 모드(설정 존중)
         if self._mix_pane(self._active_pane):
             self._mix_after_open(path)                   # 261116-13(4.47): 섞은 사진 칸 — 사진 모드 기억·쪽 썸네일은 그대로
             return
@@ -2145,7 +2159,7 @@ class PhotoMixin:
         """사진의 보기 회전(시계 방향 도) — 폴더 사이드카의 `photo_rot`(PDF 쪽 회전 대기값과 다른 자리)."""
         if not self._is_photo_path(path):
             return 0
-        st = self._ensure_page_meta_store()
+        st = self._meta_store_for(path)                  # 261116-25: 섞은 칸의 다른 폴더 사진도 그 사이드카
         return st.photo_rotation(path) if st else 0
 
     def _photo_deco_frame(self, path):
@@ -2190,7 +2204,7 @@ class PhotoMixin:
         """사진의 보기 크롭 — 회전 0 판 쪽 비율 상자, 없으면 None."""
         if not path or not self._is_photo_path(path):
             return None
-        st = self._ensure_page_meta_store()
+        st = self._meta_store_for(path)                  # 261116-25
         try:
             return st.photo_crop(path) if st else None
         except Exception:

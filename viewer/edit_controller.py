@@ -870,6 +870,12 @@ class EditMixin:
                 self._open_saved_file(final, cur_page)
             except Exception:
                 pass
+        elif not was_open:
+            # 261116-25(책갈피창·저장 SOT §4.7.20): 활성 창이 다른 파일(섞은 사진 칸 등)을 보고 있었다 — 비운 창을 모두 되살린다
+            try:
+                self._restore_other_panes()
+            except Exception:
+                pass
         return True
 
     def _ensure_page_meta_store(self):
@@ -881,6 +887,32 @@ class EditMixin:
         if st is None or str(getattr(st, "base", "")) != str(self._folder):
             self._page_meta = PageMetaStore(self._folder)
         return self._page_meta
+
+    def _meta_store_for(self, path):
+        """261116-25(사진 보기 SOT §4.47): 그 파일의 사이드카 — 창 폴더 안이면 창 사이드카(`_ensure_page_meta_store`),
+        밖(섞은 2단의 다른 폴더 사진)이면 그 칸 폴더(`_folder_right`, 그 밖이면 파일 폴더)의 사이드카. 편집 모드 기준·[저장]·취소에 함께 든다."""
+        st = self._ensure_page_meta_store()
+        if not path or (st is not None and st._key(path) is not None):
+            return st
+        from viewer.page_meta import PageMetaStore
+        p = Path(str(path))
+        fr = self.__dict__.get("_folder_right")
+        base = Path(fr) if fr and Path(fr) in p.parents else p.parent
+        others = self.__dict__.setdefault("_page_meta_other", {})
+        o = others.get(str(base))
+        if o is None:
+            o = others[str(base)] = PageMetaStore(base)
+            snap = getattr(self, "_edit_snap", None)
+            if snap is not None:
+                import copy
+                snap.setdefault("other", {})[str(base)] = copy.deepcopy(o._data)
+        return o
+
+    def _meta_other_drop(self, force: bool = False) -> None:
+        """261116-25: 창 폴더 밖 사이드카 묶음을 놓는다 — 다음에 쓸 때 디스크에서 다시 읽게(모드를 오가며 옛 내용으로 덮지 않게).
+        편집 모드 중에는 [저장]·취소 전까지 놓지 않는다(`force` 는 저장·취소 직후)."""
+        if force or not self._in_edit():
+            self.__dict__.pop("_page_meta_other", None)
 
     def _crop_for(self, path, page0):
         """260905(발표 SOT §4.2.1): (top%, bottom%, left%, right%) 4원소."""
@@ -897,7 +929,7 @@ class EditMixin:
 
     # ===== 260609-22(J3): 본화면 선긋기 =================================
     def _drawings_for(self, path, page0):
-        st = self._ensure_page_meta_store()
+        st = self._meta_store_for(path)   # 261116-25: 그 파일의 사이드카(창 폴더 밖이면 그 칸 폴더)
         got = st.get_drawings(path, page0) if st else []
         if getattr(self, "_photo_deco_in", None):    # 사진 보기 SOT 4.19·4.40: 회전 0 판 좌표를 돌리고 자른 쪽으로 옮겨 보인다
             got = self._photo_deco_in(path, got)
@@ -906,7 +938,7 @@ class EditMixin:
     def _set_drawings(self, path, page0, strokes):
         if getattr(self, "_photo_deco_out", None):   # 사진 보기 SOT 4.19·4.40: 보이는 쪽 좌표를 회전 0 판·자르지 않은 쪽으로 되돌려 남긴다
             strokes = self._photo_deco_out(path, strokes)
-        st = self._ensure_page_meta_store()
+        st = self._meta_store_for(path)   # 261116-25: 그 파일의 사이드카(창 폴더 밖이면 그 칸 폴더)
         if not st:
             return
         self._hist_record(path, "drawings", page0, st.get_drawings(path, page0), list(strokes))
@@ -916,7 +948,7 @@ class EditMixin:
 
     # 260611-15: 삽입 이미지(주석) page_meta 연동
     def _images_for(self, path, page0):
-        st = self._ensure_page_meta_store()
+        st = self._meta_store_for(path)   # 261116-25: 그 파일의 사이드카(창 폴더 밖이면 그 칸 폴더)
         got = st.get_images(path, page0) if st else []
         if getattr(self, "_photo_deco_in", None):    # 사진 보기 SOT 4.19·4.40
             got = self._photo_deco_in(path, got, images=True)
@@ -935,7 +967,7 @@ class EditMixin:
     def _set_images(self, path, page0, images):
         if getattr(self, "_photo_deco_out", None):   # 사진 보기 SOT 4.19·4.40
             images = self._photo_deco_out(path, images, images=True)
-        st = self._ensure_page_meta_store()
+        st = self._meta_store_for(path)   # 261116-25: 그 파일의 사이드카(창 폴더 밖이면 그 칸 폴더)
         if not st:
             return
         self._hist_record(path, "images", page0, st.get_images(path, page0), list(images))
@@ -1124,8 +1156,9 @@ class EditMixin:
             for kind, target, value in changes:
                 if kind in ("drawings", "images"):
                     path, page = target
-                    (st.set_drawings if kind == "drawings" else st.set_images)(path, page, value)
-                    self._persist_meta(st)
+                    st2 = self._meta_store_for(path)         # 261116-25: 그 파일의 사이드카
+                    (st2.set_drawings if kind == "drawings" else st2.set_images)(path, page, value)
+                    self._persist_meta(st2)
                     touched.add(path)
                     goto = goto or (path, page)
                 elif kind == "meta":
@@ -1317,6 +1350,8 @@ class EditMixin:
         self._edit_snap = {
             "pm": copy.deepcopy(pm._data) if pm else None,
             "hl": copy.deepcopy(hl._data) if hl else None,
+            # 261116-25: 창 폴더 밖 사이드카(섞은 2단) — 이미 연 것도 기준에(새로 여는 것은 `_meta_store_for` 가 넣는다)
+            "other": {b: copy.deepcopy(o._data) for b, o in (self.__dict__.get("_page_meta_other") or {}).items()},
         }
 
     def _restore_edit(self):
@@ -1339,6 +1374,17 @@ class EditMixin:
                     pm._data["files"][k] = copy.deepcopy(old[k])
                 else:
                     pm._data["files"].pop(k, None)
+        for b, o in (self.__dict__.get("_page_meta_other") or {}).items():   # 261116-25: 창 폴더 밖 사이드카
+            oold = ((snap.get("other") or {}).get(b) or {}).get("files", {})
+            for f in open_files:
+                k = o._key(f)
+                if not k:
+                    continue
+                if k in oold:
+                    o._data["files"][k] = copy.deepcopy(oold[k])
+                else:
+                    o._data["files"].pop(k, None)
+        self._meta_other_drop(force=True)        # 편집 중엔 디스크에 쓰지 않았다 — 놓으면 다음에 기준(디스크)을 다시 읽는다
         if hl is not None and snap.get("hl") is not None:
             old = snap["hl"].get("links", {})
             for f in open_files:
@@ -1354,6 +1400,9 @@ class EditMixin:
     def _commit_edit(self):
         if self._page_meta is not None:
             self._page_meta.save()
+        for o in (self.__dict__.get("_page_meta_other") or {}).values():   # 261116-25: 창 폴더 밖 사이드카(섞은 2단)
+            o.save()
+        self._meta_other_drop(force=True)
         if self._hyperlinks is not None:
             self._hyperlinks.save()
 

@@ -594,7 +594,7 @@ def _task_register(name: str, xml: str) -> bool:
 
 
 def launch_command() -> tuple:
-    """예약 작업이 부를 명령 — 설치본은 PolyPDF.exe, 개발 실행은 python main.py."""
+    """예약 작업이 부를 명령 — 설치본은 <EXE_NAME>(sys.executable), 개발 실행은 python main.py."""
     if getattr(sys, "frozen", False):
         return sys.executable, "--printed"
     main = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "main.py")

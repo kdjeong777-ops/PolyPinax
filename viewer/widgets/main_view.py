@@ -1784,6 +1784,7 @@ class MainView(QWidget):
     signRegionSelected = pyqtSignal(object)      # 261010-21(보안 SOT §3.3): 서명 자리(scene QRectF)
     stampRegionSelected = pyqtSignal(object)     # 261101-3(마스터 §4.6.11): 등록할 PDF 영역(scene QRectF)
     imageMenuRequested = pyqtSignal(str)         # 261101-3: 이미지 ▾ — "file"·"clip"·"region"·"manage"
+    drawSettingsRequested = pyqtSignal(str)      # 261116-8(마스터 §4.6.10): 글쓰기·도형 ▾ 끝 '입력 설정' — "text"·"line"(그 탭으로)
     signPanelRequested = pyqtSignal()            # 261010-21(보안 SOT §5): 검증 띠의 [서명 패널]
     signEditRequested = pyqtSignal()             # 261012-1(보안 SOT §3.10): 검증 띠의 [서명 편집]
     hyperlinkActivated = pyqtSignal(object)      # 260609-3: 페이지 하이퍼링크 버튼 클릭(link dict)
@@ -3946,6 +3947,10 @@ class MainView(QWidget):
         for key, label in (("none", tr("채움 없음")), ("semi", tr("반투명 채움")), ("full", tr("채움"))):
             a = sm.addAction(label); a.setCheckable(True); a.setData(key)
             a.triggered.connect(lambda _=False, k=key: self._pick_shape_fill(k))
+        # 261116-8(사용자 지시 '박스 버튼 선택시 항목에 설정 항목 추가'): 끝에 우클릭 메뉴와 같은 이름·같은 창
+        sm.addSeparator()
+        a = sm.addAction(tr("도형 입력 설정"))
+        a.triggered.connect(lambda _=False: self.drawSettingsRequested.emit("line"))
         self._shape_menu = sm; self._shape_btn.setMenu(sm)
         hb.addWidget(self._shape_btn)
         # 260611-74(Phase2): 글쓰기 버튼 — 클릭=선택/해제, 더블클릭=글쓰기↔지시선, ▾=스타일
@@ -4079,6 +4084,51 @@ class MainView(QWidget):
                 self._draw_kind = "line"  # 색상버튼만 누르면 자연스럽게 선긋기 시작
         self._apply_tool()
 
+    def _edit_object(self, si, pr) -> bool:
+        """261116-9(마스터 §4.6.3): 개체 선택에서 두 번 누른 개체를 그 편집으로 — 글상자·지시선은 글 고치기(글쓰기 도구),
+        도형(사각형·둥근 사각형·원)은 도형 도구로 그 도형을 고른 채(크기·회전 손잡이). 선·하이라이트는 고칠 것이 없어 그대로.
+        바깥을 누르거나 Esc 로 끝내면 개체 선택으로 돌아온다(`_back_to_select`). PDF·사진 공통."""
+        if not (0 <= si < len(self._page_strokes)):
+            return False
+        st = self._page_strokes[si]
+        if st.get("text_box") or st.get("leader"):
+            kind = "text"
+        elif st.get("shape"):
+            kind = "shape"
+        else:
+            return False
+        self._multi_clear(); self._stroke_drag = None
+        prev = {"kind": kind, "text_kind": self._text_kind}
+        if kind == "text":
+            self._text_kind = "leader" if st.get("leader") else "text"
+        else:
+            self._ensure_pen()                       # 도형 도구는 색상버튼이 있어야 켜진다(§4.6.1) — 고른 도형 색은 그대로
+        self._draw_kind = kind
+        self._obj_edit = None
+        self._apply_tool()
+        self._obj_edit = prev
+        self._stroke_selected = si
+        if kind == "text":
+            self._begin_text_edit(si, pr)
+        else:
+            self.view.setFocus()
+        if self._draw_overlay is not None:
+            self._draw_overlay.update()
+        return True
+
+    def _back_to_select(self):
+        """261116-9: 두 번 눌러 들어간 개체 편집을 끝내고 개체 선택으로 — 글쓰기 종류(글쓰기·지시선)는 들어가기 전 것으로."""
+        oe = getattr(self, "_obj_edit", None) or {}
+        self._obj_edit = None
+        self._commit_text_editor()
+        if oe.get("text_kind"):
+            self._text_kind = oe["text_kind"]
+        self._stroke_selected = -1
+        self._draw_kind = "select"
+        self._apply_tool()
+        if self._draw_overlay is not None:
+            self._draw_overlay.update()
+
     def _pen_to_text_box(self):
         """261116-7(§4.6.1): 쓰는 중이거나 고른 글상자·지시선이 있으면 누른 색상버튼의 색·투명도를 그 글자에도.
         박스선 켬/끔은 건드리지 않는다(선 색·굵기만 펜으로)."""
@@ -4198,6 +4248,9 @@ class MainView(QWidget):
         - 그 외(모드 없음/펜 없음)        → None
         4개 모드는 상호배타(_draw_kind 단일값), 색상버튼은 독립 스타일."""
         k = self._draw_kind
+        oe = getattr(self, "_obj_edit", None)
+        if oe is not None and oe.get("kind") != k:
+            self._obj_edit = None                # 261116-9: 다른 도구를 고르면 '개체 선택으로 돌아가기' 표지를 푼다
         if k == "erase":
             ew = self._draw_eraser_widths
             w = ew[self._erase_k] if self._erase_k < len(ew) else 16
@@ -4378,6 +4431,10 @@ class MainView(QWidget):
             nm = s.get("name", "")
             a = self._text_menu.addAction(tr(nm)); a.setCheckable(True); a.setData(nm)   # 이름=키, 표시만 번역(§5)
             a.triggered.connect(lambda _=False, n=nm: self._pick_text_style(n))
+        # 261116-8: 스타일 목록 끝에 '글쓰기 입력 설정'(스타일을 고치는 창 — 우클릭 메뉴와 같은 이름·같은 창)
+        self._text_menu.addSeparator()
+        a = self._text_menu.addAction(tr("글쓰기 입력 설정"))
+        a.triggered.connect(lambda _=False: self.drawSettingsRequested.emit("text"))
         self._update_text_button()
 
     def _set_text_style(self, name):
@@ -6217,6 +6274,8 @@ class MainView(QWidget):
                     self.view.setFocus(); return True
             # 2) 기존 박스 본문 클릭 → 편집
             hi = self._textbox_hit_index(pos, pr)
+            if getattr(self, "_obj_edit", None) is not None and hi != self._stroke_selected:
+                self._back_to_select(); return True   # 261116-9: 개체 선택에서 들어온 편집 — 바깥을 누르면 개체 선택으로
             if hi >= 0:
                 self._stroke_selected = hi
                 self._begin_text_edit(hi, pr); return True
@@ -6821,6 +6880,8 @@ class MainView(QWidget):
             if self._text_editor is not None and obj is self._text_editor:
                 tt = ev.type()
                 if tt == QEvent.Type.KeyPress and ev.key() == Qt.Key.Key_Escape:
+                    if getattr(self, "_obj_edit", None) is not None:
+                        self._back_to_select(); return True   # 261116-9: 개체 선택에서 들어온 글 고치기 — Esc = 개체 선택으로
                     self._commit_text_editor(); return True
                 if tt == QEvent.Type.FocusOut:
                     # 핸들·테두리를 끄는 중이면 편집을 끝내지 않는다(끝나면 다시 못 잡는다)
@@ -6883,6 +6944,12 @@ class MainView(QWidget):
                         r = self._stamp_event(t, ev, pr)
                         if r is not None:
                             return r
+                    # 261116-9(사용자 지시 '개체선택 … 2번 클릭시 편집모드로'): 글상자·지시선은 글 고치기, 도형은 크기·회전 손잡이
+                    if is_select and t == QEvent.Type.MouseButtonDblClick \
+                            and ev.button() == Qt.MouseButton.LeftButton:
+                        si = self._stroke_hit_index(ev.position().toPoint(), pr)
+                        if si >= 0 and self._edit_object(si, pr):
+                            return True
                     if t == QEvent.Type.MouseButtonPress \
                             and ev.button() == Qt.MouseButton.LeftButton:
                         pos = ev.position().toPoint()
@@ -7025,6 +7092,8 @@ class MainView(QWidget):
                             self._drag_begin(ev.position().toPoint(), ev,       # 261112-7
                                              [self._stroke_selected] if h == "move" else (), ())
                             self.view.setFocus(); return True
+                        if getattr(self, "_obj_edit", None) is not None:
+                            self._back_to_select(); return True   # 261116-9: 바깥 누름 = 개체 선택으로(새 도형 안 그림)
                         self._stroke_selected = -1; ov.update()   # 빈 곳 → 해제(새 도형)
                     ov.mousePressEvent(ev)
                     return True

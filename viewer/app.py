@@ -1546,6 +1546,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         mv.signEditRequested.connect(lambda i=idx: (self._set_active_pane(i), self.action_sign_edit()))   # 보안 SOT §3.10
         self._sign_drafts_attach(mv, idx)                                                         # 보안 SOT §3.10 서명 자리
         self._wire_stamp(mv)                                                                      # 261101-3(§4.6.11) 이미지 넣기
+        mv.drawSettingsRequested.connect(lambda tab: self._open_line_text_settings(tab=tab))     # 261116-8(§4.6.10) ▾ 끝 '입력 설정'
         mv.hyperlinkActivated.connect(
             lambda link, i=idx: (i == self._active_pane) and self._launch_hyperlink(link))
         mv.drawModeChanged.connect(self._on_main_draw_mode_changed)   # 260611-4: 공유 동기

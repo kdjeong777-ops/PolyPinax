@@ -9,7 +9,7 @@ Word 모양 그대로도 71쪽이었다.
   C  HWPX 편집 가능(실제 `convert.run`) — 쪽마다 구역·원본 쪽 크기(모양 그대로 기반), 이은 문단은 줄을 꺾고(BREAK) 원본 줄 간격,
      제목·목록 줄은 따로, 그림·표 없이도 글이 한 번씩만
   D  Word 편집 가능(실제 `convert.run`, pdf2docx 자식 프로세스) — 쪽마다 구역(모양 그대로 기반), 이은 줄 사이에 줄 바꿈이 없고 빈칸으로,
-     목록 줄은 따로, 줄 간격은 '정확히', 설치 안 된 글꼴 이름이 남지 않는다
+     목록 줄은 따로, 줄 간격은 원본 고정값(규칙 '최소' — 261116-31), 설치 안 된 글꼴 이름이 남지 않는다
   E  Word 머리글은 원본에 머리말이 있던 쪽의 구역에만 — 없던 쪽(표지)은 빈 머리글·거리 0(머리글이 본문을 밀어 쪽마다 넘쳤다), 구역 끝 빈 문단은 1 pt
   F  (Word 가 있을 때만) Word 로 연 쪽 수 = 원본 쪽 수 — 모양 그대로·편집 가능
   G  넘침 줄이기 B 안(사용자 결정) — Word 너비 어림 × 1.10(바꾼 글꼴·설치된 글꼴 둘 다), 표 칸 밖 문단 위 간격 90 %. **수정 전 코드로 실패**
@@ -142,8 +142,10 @@ try:
         "D 목록 줄은 잇지 않는다(줄마다 끊음)", str(lst[:1]))
     x = dd.element.body.xml
     rules = re.findall(r'<w:spacing [^>]*w:lineRule="(\w+)"', x)
-    chk(rules and rules.count("exact") >= len(rules) * 0.8, "D 줄 간격은 '정확히'(Word 글꼴의 줄 높이를 타지 않게)",
-        f"{rules.count('exact')}/{len(rules)}")
+    # 261116-31(§1.3 사용자 결정 '최소'로 바꾸기): 원본 줄 간격 고정값이되 규칙은 '최소' — 빈 1 pt 문단만 '정확히'
+    fixed = rules.count("exact") + rules.count("atLeast")
+    chk(rules and fixed >= len(rules) * 0.8 and rules.count("atLeast") >= rules.count("exact"),
+        "D 줄 간격은 원본 줄 간격 고정값 — 규칙은 '최소'(글이 숨지 않게)", f"exact {rules.count('exact')} · atLeast {rules.count('atLeast')}/{len(rules)}")
     fonts = set(re.findall(r'w:eastAsia="([^"]+)"', x))
     inst = word_fit.installed_fonts() if word_fit is not None else {}
     bad = [f for f in fonts if f not in (layout.SERIF_FACE, layout.SANS_FACE)

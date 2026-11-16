@@ -4,8 +4,8 @@
 사용자 보고: "변환된 word, ppt 등의 일부 페이지 줄간격이 너무 좁거나, 박스 안에 있을 때 박스가 작아 뒤의 내용이 안보이는 경우가 있어
 줄간격은 최소 줄간격을 주어서 절대 일부가 숨겨져서 안보이게 하지 않도록 수정해."
 픽스처 `test_fixtures.tight_pdf()` — 촘촘한 문단·꼭 맞는 상자·꼭 맞는 표·가로로 눌러 그린 칸 글(보통 너비면 두 줄)·세로로 눌러 그린 문단.
-  A  Word 원본 모양·줄잇기(실제 `convert.run`): 글 문단 줄 간격 ≥ 가장 큰 글자 × 1.2(최소 줄 간격), 표 행 높이 '정확히' 가 없다, 모든 글이 docx 에 있다
-  B  `docx_writer.no_hidden` — 글 문단 줄 간격을 글자 × 1.2 로 올림(규칙은 정확히), 빈 문단은 그대로, 표 행 exact → atLeast, 글상자 '도형을 글에 맞춤'
+  A  Word 원본 모양·줄잇기(실제 `convert.run`): 글 문단 줄 규칙은 Word '최소'(atLeast, 261116-31), 표 행 높이 '정확히' 가 없다, 모든 글이 docx 에 있다
+  B  `docx_writer.no_hidden` — 글 문단 exact → atLeast(값 그대로), 빈 문단은 그대로, 표 행 exact → atLeast, 글상자 '도형을 글에 맞춤'
   C  PowerPoint: 바로 아래 줄과의 거리 ≥ 글자 크기 × PPT_LINE_K(겹치지 않음), 글상자는 '도형을 글에 맞춤'
   D  HWPX 줄잇기: 본문 문단 줄 간격 ≥ 100 %
   E  (Word·PowerPoint 가 있으면) 찍은 PDF 에 모든 글이 있다
@@ -42,19 +42,9 @@ def norm(s):
 def docx_checks(path, label):
     x = zipfile.ZipFile(str(path)).read("word/document.xml").decode("utf-8")
     paras = re.findall(r"<w:p[ >](?:(?!<w:p[ >]).)*?</w:p>", x, re.S)
-    k_min = 1.2
-    bad = []
-    for p in paras:
-        if not norm("".join(re.findall(r"<w:t[^>]*>([^<]*)</w:t>", p))):
-            continue
-        m = re.search(r'<w:spacing [^>]*w:line="(\d+)"[^>]*w:lineRule="exact"|<w:spacing [^>]*w:lineRule="exact"[^>]*w:line="(\d+)"', p)
-        if not m:
-            continue
-        line = int(m.group(1) or m.group(2)) / 20.0
-        sizes = [int(v) / 2.0 for v in re.findall(r'<w:sz w:val="(\d+)"', p)] or [11.0]
-        if line < max(sizes) * k_min - 0.06:
-            bad.append((line, max(sizes)))
-    chk(not bad, f"A {label}: 글 문단 줄 간격 ≥ 가장 큰 글자 × 1.2(최소 줄 간격)", f"{len(bad)}개 {bad[:3]}")
+    bad = [p for p in paras if 'w:lineRule="exact"' in p and norm("".join(re.findall(r"<w:t[^>]*>([^<]*)</w:t>", p)))]
+    least = sum(1 for p in paras if 'w:lineRule="atLeast"' in p)
+    chk(not bad and least > 0, f"A {label}: 글 문단 줄 규칙은 '최소'(atLeast) — '정확히' 가 없다(261116-31)", f"정확히 {len(bad)} · 최소 {least}")
     chk('w:hRule="exact"' not in x, f"A {label}: 표 행 높이 '정확히' 가 없다", str(x.count('w:hRule="exact"')))
     txt = norm("".join(re.findall(r"<w:t[^>]*>([^<]*)</w:t>", x)))
     chk(all(w in txt for w in WANT), f"A {label}: 모든 글이 docx 에 있다", str([w for w in WANT if w not in txt]))
@@ -108,9 +98,9 @@ try:
     if got is not None:
         x = zipfile.ZipFile(str(bp)).read("word/document.xml").decode("utf-8")
         d2 = Document(str(bp))
-        chk(d2.paragraphs[0].paragraph_format.line_spacing_rule == WD_LINE_SPACING.EXACTLY
-            and abs(d2.paragraphs[0].paragraph_format.line_spacing.pt - 11 * 1.2) < 0.1,
-            "B 글 문단 줄 간격 9 pt → 글자(기본 11 pt) × 1.2 로 올림", str(d2.paragraphs[0].paragraph_format.line_spacing.pt))
+        chk(d2.paragraphs[0].paragraph_format.line_spacing_rule == WD_LINE_SPACING.AT_LEAST
+            and abs(d2.paragraphs[0].paragraph_format.line_spacing.pt - 9) < 0.1,
+            "B 글 문단 exact → atLeast(Word '최소', 값 그대로 — 261116-31)", str(d2.paragraphs[0].paragraph_format.line_spacing_rule))
         chk(d2.paragraphs[1].paragraph_format.line_spacing_rule == WD_LINE_SPACING.EXACTLY, "B 빈 문단은 그대로(1 pt — 빈 쪽을 만들지 않게)")
         chk(d2.tables[0].rows[0].height_rule == WD_ROW_HEIGHT.AT_LEAST, "B 표 행 exact → atLeast")
         chk("mso-fit-shape-to-text:t" in x, "B 글상자는 '도형을 글에 맞춤'")

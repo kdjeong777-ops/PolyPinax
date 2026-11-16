@@ -11,15 +11,13 @@ _W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 _A = "http://schemas.openxmlformats.org/drawingml/2006/main"
 _WPS = "http://schemas.microsoft.com/office/word/2010/wordprocessingShape"
 _V = "urn:schemas-microsoft-com:vml"
-LINE_MIN_K = 1.2      # §1.3 — 글 문단 줄 간격 하한(글자 크기의 배). 1.15 → 42쪽, 1.2 → 43쪽, 1.3 → 48쪽(별첨4 Word, 표 행 '최소' 포함)
-DEFAULT_PT = 11.0     # 런에 크기가 없을 때(Word 기본 글자 크기)
 
 
 def no_hidden(path) -> dict:
     """글이 숨지 않게(형식 변환 SOT §1.3, 261116-30) — 만든 docx 를 마지막에 한 번 훑는다. Word 변환 길(pdf2docx·MS Word 모듈)이 모두 부른다.
 
-    - 글이 든 문단의 줄 간격 '정확히' 는 **그 문단 가장 큰 글자 × `LINE_MIN_K` 아래로 두지 않는다**(규칙은 '정확히' 그대로 — '최소' 로
-      바꾸면 Word 가 글꼴 고유 줄 높이(맑은 고딕 1.33배)로 늘려 별첨4 Word 가 40 → 66쪽이 되었다, 실측). 빈 문단은 그대로(1 pt 구역 끝·빈 머리글).
+    - 글이 든 문단의 줄 간격 `exact` → `atLeast`(Word '최소', 같은 값 — 글꼴 고유 줄 높이가 더 크면 Word 가 늘린다).
+      261116-31 사용자 결정 '최소'로 바꾸기 — 쪽이 느는 것은 감수(261116-30 의 '정확히 + 하한 1.2배' 를 바꿈). 빈 문단은 그대로(1 pt 구역 끝·빈 머리글).
     - 표 행 높이 `exact` → `atLeast`(칸 글이 꺾이면 행이 자란다).
     - 글상자는 '도형을 글에 맞춤'(DrawingML `spAutoFit`, VML `mso-fit-shape-to-text`).
     반환: 바꾼 개수 `{"line": n, "row": n, "box": n}`."""
@@ -42,12 +40,9 @@ def no_hidden(path) -> dict:
                 continue
             ppr = p.find(q(_W, "pPr"))
             sp = ppr.find(q(_W, "spacing")) if ppr is not None else None
-            if sp is not None and sp.get(q(_W, "lineRule")) == "exact" and (sp.get(q(_W, "line")) or "").isdigit():
-                sizes = [int(e.get(q(_W, "val"))) / 2.0 for e in p.iter(q(_W, "sz")) if (e.get(q(_W, "val")) or "").isdigit()]
-                floor = int(round(max(sizes or [DEFAULT_PT]) * LINE_MIN_K * 20))      # 트윕(1/20 pt)
-                if int(sp.get(q(_W, "line"))) < floor:
-                    sp.set(q(_W, "line"), str(floor))
-                    n["line"] += 1
+            if sp is not None and sp.get(q(_W, "lineRule")) == "exact":
+                sp.set(q(_W, "lineRule"), "atLeast")          # Word '최소' — 같은 값, 글꼴이 더 크면 Word 가 늘린다
+                n["line"] += 1
         for h in root.iter(q(_W, "trHeight")):
             if h.get(q(_W, "hRule")) == "exact":
                 h.set(q(_W, "hRule"), "atLeast")

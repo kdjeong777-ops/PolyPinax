@@ -233,7 +233,12 @@ try:
     import inspect as _in
     from viewer.widgets.main_view import MainView as _MV
     ui = _in.getsource(_MV._build_ui) if hasattr(_MV, "_build_ui") else ""
-    chk("icon_eraser_page.png" in _in.getsource(_MV),
+    # 261116-10(디자인 SOT §4.5): PNG 이름 대신 실제 단추 그림 — 청소 = `eraser_page`(옆 지우개 `eraser_thin`·`eraser_thick` 과 한 벌)
+    from viewer.widgets import icons as _ic
+    _cb = getattr(mv, "_draw_clear_btn", None)
+    _sz = _cb.iconSize() if _cb is not None else None
+    chk(_cb is not None and _cb.icon().pixmap(_sz, 2.0).toImage()
+        == _ic.color_icon("eraser_page", size=_sz.width()).pixmap(_sz, 2.0).toImage(),
         "⑤ 청소 단추가 페이지 지우개 그림을 쓴다(옆 지우개들과 한 벌)")
     # 261008-8(사용자 보고): 도형 버튼 — 글리프(▭❒◯)가 아니라 그린 단색 아이콘(themed_icon)
     from viewer.widgets.icons import _DRAW as _ICON_DRAW

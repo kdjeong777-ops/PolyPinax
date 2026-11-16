@@ -711,8 +711,9 @@ class PresentationWindow(QWidget):
         for ei, ew in enumerate(self._eraser_widths):
             eb = QPushButton()
             # 260611-2: 본문과 동일 디자인 아이콘(얇게/두껍게), 없으면 기존 드로잉 아이콘
-            _ep = resource_path("icon_eraser_thin.png" if ei == 0 else "icon_eraser_thick.png")
-            eb.setIcon(QIcon(_ep) if _ep else self._make_part_eraser_icon(ew))
+            # 261116-10(디자인 SOT §4.5): PNG(테 어두운 회색 고정 — 어두운 띠에서 테가 사라짐) → 그림, 띠는 늘 어두워 다크 꼴
+            from viewer.widgets.icons import color_icon as _cix
+            eb.setIcon(_cix("eraser_thick" if ei else "eraser_thin", dark=True))
             eb.setCheckable(True); eb.setFixedWidth(38)
             eb.setToolTip(tr('일부분 지우기 ({v}, 굵기 {ew})').format(v=tr('얇게') if ei == 0 else tr('두껍게'), ew=ew))
             eb.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -721,9 +722,8 @@ class PresentationWindow(QWidget):
             self._tb_erasers.append(eb)
         # 260609-18(G4): 전체 청소 버튼 — 지우개 아이콘
         self._tb_erase = QPushButton()
-        _bp = (resource_path("icon_eraser_page.png")      # 260908-4: 본문 지우개와 한 벌
-               or resource_path("icon_broom.png"))
-        self._tb_erase.setIcon(QIcon(_bp) if _bp else self._make_eraser_icon())
+        from viewer.widgets.icons import color_icon as _cix   # 260908-4: 본문 지우개와 한 벌 — 261116-10 그림 `eraser_page`(§4.5)
+        self._tb_erase.setIcon(_cix("eraser_page", dark=True))
         self._tb_erase.setFixedWidth(38)
         self._tb_erase.setToolTip(tr("청소 — 현재 페이지의 선 모두 지우기"))
         self._tb_erase.setStyleSheet(

@@ -3984,36 +3984,26 @@ class MainView(QWidget):
         self._draw_select_btn = QPushButton(); self._draw_select_btn.setFixedSize(28, H)
         self._draw_select_btn.setCheckable(True)
         self._draw_select_btn.setToolTip(tr("개체 선택(이미지 이동·크기·삭제)"))
-        _sp = resource_path("icon_select_box.png")
-        if _sp:
-            self._draw_select_btn.setIcon(QIcon(_sp))
-            self._draw_select_btn.setIconSize(QSize(H - 4, H - 4))
-        else:
-            self._draw_select_btn.setText("⤢")
+        # 261116-10(디자인 SOT §4.2): PNG(어두운 회색 고정 — 다크에서 점선이 사라짐) → 테마 그림 `select_box`.
+        #   그림은 `_update_draw_buttons` 가 테마·켜짐에 맞춰 그린다(아래 지우개·청소도 같다).
+        from viewer.widgets.icons import LINE_ICON_PX as _LPX
+        self._draw_select_btn.setIconSize(QSize(_LPX, _LPX))
         self._draw_select_btn.clicked.connect(self._on_draw_select)
         hb.addWidget(self._draw_select_btn)
         # 손바닥 단추는 261112-6 부터 이 줄 밖 — 본문 툴바 전자서명 오른쪽(_build_ui, 디자인 SOT §2.10)
         # 260611-1: 지우개 2종(얇게/두껍게)·청소 — 첨부 아이콘 사용(없으면 글리프 폴백)
         self._draw_erase_btns = []
-        _ico_sz = QSize(H - 4, H - 4)
-        for k, t, fn, glyph in [(0, tr("지우개(얇게)"), "icon_eraser_thin.png", "⌫"),
-                                (1, tr("지우개(두껍게)"), "icon_eraser_thick.png", "⌦")]:
+        _ico_sz = QSize(_LPX, _LPX)
+        for k, t in [(0, tr("지우개(얇게)")), (1, tr("지우개(두껍게)"))]:
             b = QPushButton(); b.setFixedSize(28, H); b.setCheckable(True)
             b.setToolTip(t)
-            _ip = resource_path(fn)
-            if _ip:
-                b.setIcon(QIcon(_ip)); b.setIconSize(_ico_sz)
-            else:
-                b.setText(glyph)
+            b.setIconSize(_ico_sz)                 # 261116-10: 그림 `eraser_thin`·`eraser_thick`(§4.5) — _update_draw_buttons
             b.clicked.connect(lambda _=False, kk=k: self._on_draw_erase(kk))
             hb.addWidget(b); self._draw_erase_btns.append(b)
         bclr = QPushButton(); bclr.setFixedSize(30, H); bclr.setToolTip(tr("청소(현재 페이지 선긋기 지움)"))
-        # 260908-4: 빗자루 → **문서+지우개** 그림. 옆의 두 지우개와 한 벌로 읽힌다.
-        _bp = resource_path("icon_eraser_page.png") or resource_path("icon_broom.png")
-        if _bp:
-            bclr.setIcon(QIcon(_bp)); bclr.setIconSize(_ico_sz)
-        else:
-            bclr.setText(tr("청소"))
+        # 260908-4: 빗자루 → **문서+지우개** 그림. 옆의 두 지우개와 한 벌로 읽힌다. 261116-10: 그림 `eraser_page`(§4.5).
+        bclr.setIconSize(_ico_sz)
+        self._draw_clear_btn = bclr
         bclr.clicked.connect(self.clear_page_drawings)
         hb.addWidget(bclr)
         # 260611-80: 되돌리기 / 다시실행
@@ -4510,11 +4500,21 @@ class MainView(QWidget):
         def _mode(b, on):
             b.setChecked(on)
             b.setStyleSheet(self._dbl_css(on).replace("QToolButton", "QPushButton"))   # 이 셋은 QPushButton
+        # 261116-10(디자인 SOT §4.2·§4.5): 개체 선택·지우개·청소 그림도 테마색 — 켜지면(살구색 바탕) 테마와 상관없이 밝은 바탕용
+        from viewer.widgets.icons import themed_icon as _tix, color_icon as _cix, LINE_ICON_PX as _LPX
+        from viewer import theme as _th
         for k, b in enumerate(getattr(self, "_draw_erase_btns", [])):
-            _mode(b, self._draw_kind == "erase" and self._erase_k == k)
+            on = self._draw_kind == "erase" and self._erase_k == k
+            _mode(b, on)
+            b.setIcon(_cix("eraser_thick" if k else "eraser_thin", dark=(_th.is_dark() and not on), size=_LPX))
+        cb = getattr(self, "_draw_clear_btn", None)
+        if cb is not None:
+            cb.setIcon(_cix("eraser_page", size=_LPX))
         sb = getattr(self, "_draw_select_btn", None)
         if sb is not None:
-            _mode(sb, self._draw_kind == "select")
+            on = self._draw_kind == "select"
+            _mode(sb, on)
+            sb.setIcon(_tix("select_box", dark=(_th.is_dark() and not on), size=_LPX, dpr=2.0))
         pb = getattr(self, "_draw_pan_btn", None)
         if pb is not None:
             on = self._draw_kind == "pan"

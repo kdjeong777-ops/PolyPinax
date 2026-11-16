@@ -216,6 +216,28 @@ def _hand(p, c):
         p.drawLine(QPointF(xb, max(ta, tb) + 0.9), QPointF(xb, 7.6))
 
 
+SELECT_DASH = (2.0, 1.6)   # 개체 선택 점선 — 대시·간격(펜 굵기 배수 아님, 16 격자 칸)
+_SELECT_ARROW = ((7.4, 6.4), (7.4, 15.2), (9.6, 13.1), (11.2, 16.0), (12.9, 15.2), (11.4, 12.4), (14.4, 12.4))
+
+
+def _select_box(p, c):
+    """261116-10(디자인 SOT §4.2, 사용자 보고 '다크모드에서 개체선택의 점선 상자가 안 보임'): 개체 선택 —
+    왼쪽 위 점선 상자 + 오른쪽 아래 채운 화살표 커서. 커서 둘레를 비워 점선과 떨어지게. 종전 PNG 는 어두운 회색 고정이었다."""
+    pen = QPen(c, 1.4, Qt.PenStyle.CustomDashLine, Qt.PenCapStyle.FlatCap)
+    pen.setDashPattern([SELECT_DASH[0] / 1.4, SELECT_DASH[1] / 1.4])
+    p.setPen(pen); p.setBrush(Qt.BrushStyle.NoBrush)
+    p.drawRect(QRectF(1.2, 1.2, 10.0, 10.0))
+    arrow = QPolygonF([QPointF(x, y) for x, y in _SELECT_ARROW])
+    p.setCompositionMode(QPainter.CompositionMode.CompositionMode_Clear)     # 커서 둘레 1px 를 비운다
+    p.setPen(QPen(Qt.GlobalColor.black, 2.0, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
+    p.setBrush(Qt.GlobalColor.black)
+    p.drawPolygon(arrow)
+    p.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceOver)
+    p.setPen(QPen(c, 0.6, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
+    p.setBrush(c)
+    p.drawPolygon(arrow)
+
+
 _DRAW = {
     "search": _search, "globe": _globe, "close": _close,
     "chevron_up": _chevron_up, "chevron_down": _chevron_down,
@@ -224,7 +246,7 @@ _DRAW = {
     "folder": _folder, "file": _file,
     "shape_rect": _shape_rect, "shape_round": _shape_round, "shape_circle": _shape_circle,
     "crop": _crop, "sign": _sign, "image": _image, "line_straight": _line_straight,
-    "view_tree": _view_tree, "view_single": _view_single, "hand": _hand,
+    "view_tree": _view_tree, "view_single": _view_single, "hand": _hand, "select_box": _select_box,
 }
 
 
@@ -435,6 +457,56 @@ def _exit(p, c, dark=False):
     p.drawLine(QPointF(14.5, 8.0), QPointF(11.8, 10.7))
 
 
+ACCENT["eraser_thin"] = {False: "#cf6b4f", True: "#e8805f"}   # 261116-10 지우개 끝(§2.5) — 종전 PNG 의 붉은 끝, 다크는 밝게
+ACCENT["eraser_thick"] = ACCENT["eraser_page"] = ACCENT["eraser_thin"]
+ERASER_TIP_FRAC = 0.36     # 지우개 길이 중 붉은 끝의 몫
+ERASER_FILL = {False: "#ffffff", True: "#2f2f33"}   # 지우개 몸통·청소 종이 — 다크는 어둡게(밝은 테·종이 줄이 보이게, §2.5)
+
+
+def _eraser_at(p, c, dark, cx, cy, length, width):
+    """(cx, cy) 가운데에 왼쪽 아래로 기운 지우개 — 흰 몸통 + 붉은 끝(c) + '아이콘 전경' 테."""
+    d = bool(dark)
+    p.save()
+    p.translate(cx, cy); p.rotate(-45)
+    body = QPainterPath()
+    body.addRoundedRect(QRectF(-length / 2, -width / 2, length, width), min(1.6, width / 2.4), min(1.6, width / 2.4))
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(QColor(ERASER_FILL[d])); p.drawPath(body)
+    cut = -length / 2 + length * ERASER_TIP_FRAC
+    p.save(); p.setClipPath(body)
+    p.setBrush(c); p.drawRect(QRectF(-length / 2 - 1, -width / 2 - 1, cut + length / 2 + 1, width + 2))
+    p.restore()
+    fg = QColor(fg_color(d))
+    p.setPen(QPen(fg, 1.2)); p.setBrush(Qt.BrushStyle.NoBrush)
+    p.drawPath(body)
+    p.drawLine(QPointF(cut, -width / 2), QPointF(cut, width / 2))
+    p.restore()
+
+
+def _eraser_thin(p, c, dark=False):
+    """261116-10(디자인 SOT §4.5): 지우개(얇게) — 가는 지우개. 종전 `icon_eraser_thin.png` 는 테가 어두운 회색 고정이었다."""
+    _eraser_at(p, c, dark, 8.0, 8.0, 17.0, 3.8)
+
+
+def _eraser_thick(p, c, dark=False):
+    """261116-10: 지우개(두껍게) — 굵은 지우개."""
+    _eraser_at(p, c, dark, 8.0, 8.0, 15.5, 6.6)
+
+
+def _eraser_page(p, c, dark=False):
+    """261116-10: 청소(현재 쪽 선긋기 지움) — 접힌 종이(줄 셋) 위에 굵은 지우개."""
+    d = bool(dark)
+    fg = QColor(fg_color(d))
+    paper = QPolygonF([QPointF(1.0, 0.8), QPointF(8.6, 0.8), QPointF(11.6, 3.8), QPointF(11.6, 13.0), QPointF(1.0, 13.0)])
+    p.setPen(QPen(fg, 1.2)); p.setBrush(QColor(ERASER_FILL[d]))
+    p.drawPolygon(paper)
+    p.drawPolyline(QPolygonF([QPointF(8.6, 0.8), QPointF(8.6, 3.8), QPointF(11.6, 3.8)]))
+    p.setPen(QPen(fg, 1.0))
+    for y, x2 in ((5.2, 8.6), (7.6, 9.2), (10.0, 6.4)):
+        p.drawLine(QPointF(3.2, y), QPointF(x2, y))
+    _eraser_at(p, c, dark, 10.6, 10.4, 11.0, 5.4)
+
+
 def _mp3(p, c):
     """261031-18(디자인 SOT §4.5, 사용자 지시 '▶ 와 색 통일'): mp3 저장 — 8분음표 + 오른쪽 아래 ✚, 모두 ▶ 색.
     종전 `icon_mp3.png`(밝은 파랑 그라데이션)를 대신한다 — 테마마다 ▶ 와 같은 색이 된다."""
@@ -533,8 +605,10 @@ _COLOR_DRAW = {"play": _play, "stop": _stop, "camera": _camera, "tri_right": _tr
                "highlighter": _highlighter,
                "fav_folder": _fav_folder, "fav_file": _fav_file, "fav_search": _fav_search,
                "open_folder": _open_folder, "open_file": _open_file,
-               "open": _open, "new_window": _new_window, "save": _save, "print": _print, "exit": _exit}
-_COLOR_NEEDS_DARK = {"highlighter", "fav_folder", "fav_file", "fav_search", "open_folder", "open_file", "open", "new_window", "save", "print", "exit"}   # 두 색 이상 — 테마도 넘긴다
+               "open": _open, "new_window": _new_window, "save": _save, "print": _print, "exit": _exit,
+               "eraser_thin": _eraser_thin, "eraser_thick": _eraser_thick, "eraser_page": _eraser_page}
+_COLOR_NEEDS_DARK = {"highlighter", "fav_folder", "fav_file", "fav_search", "open_folder", "open_file", "open", "new_window", "save", "print", "exit",
+                     "eraser_thin", "eraser_thick", "eraser_page"}   # 두 색 이상 — 테마도 넘긴다
 
 # 261025-10(디자인 SOT §2.7): 글자 + 메뉴 단추의 드롭다운 표시는 **Qt 메뉴 화살표 하나**(오른쪽 아래) — 글자에 ▾ 를 붙이지 않는다.
 #   글자가 화살표에 붙지 않게 오른쪽 안쪽 여백만 준다(바탕·테두리는 기본 스타일 그대로).

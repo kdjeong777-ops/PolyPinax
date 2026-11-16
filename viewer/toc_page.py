@@ -355,21 +355,38 @@ def mark_pages(doc, first, count) -> None:
         doc.xref_set_key(doc[i].xref, TOC_MARK_KEY, "true")
 
 
+def _is_marked(doc, i) -> bool:
+    try:
+        t, v = doc.xref_get_key(doc[i].xref, TOC_MARK_KEY)
+        return t == "bool" and v == "true"
+    except Exception:
+        return False
+
+
+def marked_pages(doc) -> list:
+    """이 기능이 만든 목차 쪽(0-based) — **어느 쪽에 있든**(261116-15: 썸네일로 뒤로 옮긴 목차도)."""
+    return [i for i in range(doc.page_count) if _is_marked(doc, i)]
+
+
 def marked_range(doc) -> tuple:
-    """이 기능이 만든 목차 쪽 `(처음 0-based, 쪽 수)` — 2쪽(색인 1)부터 이어진 표식 쪽(261116-5 덧붙임 2),
-    옛 판(맨 앞에 끼운 것)이면 1쪽부터. 없으면 (1, 0)."""
-    def marked(i):
-        try:
-            t, v = doc.xref_get_key(doc[i].xref, TOC_MARK_KEY)
-            return t == "bool" and v == "true"
-        except Exception:
-            return False
-    n = doc.page_count
-    start = 1 if n > 1 and marked(1) else (0 if n > 0 and marked(0) else 1)
-    k = 0
-    while start + k < n and marked(start + k):
-        k += 1
-    return start, k
+    """옛 목차 `(첫 표식 쪽 0-based, 표식 쪽 수)` — 없으면 (1, 0)(2쪽부터 끼운다, 261116-5 덧붙임 2).
+    261116-15: 종전에는 2쪽(옛 판 1쪽)부터 이어진 것만 봐, 쪽 편집으로 옮긴 목차를 못 알아봤다."""
+    ms = marked_pages(doc)
+    return (ms[0], len(ms)) if ms else (1, 0)
+
+
+def carry_marks(sdoc, odoc, ownpos) -> int:
+    """쪽 편집 저장(`page_edit_build.build`)이 원본 쪽 `p` 를 새 자리 `ownpos[p]` 로 복사할 때 목차 표식도 옮긴다 —
+    `insert_pdf` 는 쪽 사전의 `/PolyPDFToc` 를 옮기지 않는다(261116-15 실측). 옮긴 수."""
+    n = 0
+    for sp, op in (ownpos or {}).items():
+        if _is_marked(sdoc, int(sp)):
+            try:
+                odoc.xref_set_key(odoc[int(op)].xref, TOC_MARK_KEY, "true")
+                n += 1
+            except Exception:
+                pass
+    return n
 
 
 def count_marked(doc) -> int:
@@ -378,10 +395,16 @@ def count_marked(doc) -> int:
 
 
 def _layout(doc):
-    """옛 목차를 뺀 원본 쪽(0-based) 목록과 옛 목차 `(처음, 쪽 수)`."""
-    s, k_old = marked_range(doc)
-    keep = [i for i in range(doc.page_count) if not (s <= i < s + k_old)]
-    return keep, s, k_old
+    """옛 목차를 뺀 원본 쪽(0-based) 목록, 새 목차를 끼울 자리 `at`(남은 쪽 중 앞에 오는 쪽 수 — 옛 목차가 있던 자리,
+    없으면 1 = 1쪽 뒤), 옛 목차 쪽 수."""
+    ms = set(marked_pages(doc))
+    keep = [i for i in range(doc.page_count) if i not in ms]
+    if ms:
+        first = min(ms)
+        at = sum(1 for i in keep if i < first)
+    else:
+        at = 1
+    return keep, min(at, len(keep)), len(ms)
 
 
 def _body_toc(doc, keep):
@@ -403,20 +426,21 @@ def probe(path) -> dict:
     with fitz.open(str(path)) as d:
         if d.needs_pass or d.is_encrypted:
             return {"encrypted": True}
-        keep, _s, k = _layout(d)
+        keep, at, k = _layout(d)
         ref = d[keep[1] if len(keep) > 1 else keep[0]].rect if keep else d[0].rect
-        return {"encrypted": False, "old": k, "pages": d.page_count, "toc": _body_toc(d, keep),
+        return {"encrypted": False, "old": k, "at": at, "pages": d.page_count, "toc": _body_toc(d, keep),
                 "w": float(ref.width), "h": float(ref.height)}
 
 
-def new_page(p, k) -> int:
-    """남은 쪽 p(1-based) 의 끼운 뒤 실제 쪽 — 목차 k 쪽은 1쪽(표지) 바로 뒤(261116-5 덧붙임 2)."""
-    return p if p == 1 else p + k
+def new_page(p, k, at=1) -> int:
+    """남은 쪽 p(1-based) 의 끼운 뒤 실제 쪽 — 목차 k 쪽은 남은 쪽 `at` 개 뒤(기본 1 = 1쪽 표지 바로 뒤, 261116-5 덧붙임 2;
+    261116-15 옛 목차를 옮겨 둔 자리면 그 자리)."""
+    return p if p <= at else p + k
 
 
-def numbered(rows, k):
+def numbered(rows, k, at=1):
     """`[(단계, 제목, 남은 쪽)]` → 그릴 줄 — 번호는 목차 k 쪽을 끼운 뒤의 실제 쪽(번호 없이 셀 때는 k=None)."""
-    return [(lv, t, ("" if k is None else str(new_page(p, k)))) for lv, t, p in rows]
+    return [(lv, t, ("" if k is None else str(new_page(p, k, at)))) for lv, t, p in rows]
 
 
 def insert_toc(src, out, title, levels, template="", tmpdir=None, progress=None) -> dict:
@@ -437,7 +461,7 @@ def insert_toc(src, out, title, levels, template="", tmpdir=None, progress=None)
             if sdoc.needs_pass or sdoc.is_encrypted:
                 raise RuntimeError(tr("암호 PDF 에는 목차 쪽을 끼우지 않습니다."))
             tick(0, 4, tr("목차 만드는 중…"))
-            keep, s_old, k_old = _layout(sdoc)
+            keep, at, k_old = _layout(sdoc)
             if not keep:
                 raise RuntimeError(tr("목차 쪽 말고는 쪽이 없습니다."))
             body = _body_toc(sdoc, keep)
@@ -454,11 +478,11 @@ def insert_toc(src, out, title, levels, template="", tmpdir=None, progress=None)
                 d1.close()
             else:
                 k = fitz_pages(len(rows), h)
-            tocdoc, rects = render_toc(numbered(rows, k), w, h, ttl, template, tmpdir, use_word, "b")
+            tocdoc, rects = render_toc(numbered(rows, k, at), w, h, ttl, template, tmpdir, use_word, "b")
             if tocdoc.page_count != k:                   # Word 가 번호 탓에 다르게 나눴다 — 한 번 더
                 k = tocdoc.page_count
                 tocdoc.close()
-                tocdoc, rects = render_toc(numbered(rows, k), w, h, ttl, template, tmpdir, use_word, "c")
+                tocdoc, rects = render_toc(numbered(rows, k, at), w, h, ttl, template, tmpdir, use_word, "c")
                 k = tocdoc.page_count
             # 마스터 §4.5.10 ①: 맑은 고딕 전체(약 15MB)가 들어가지 않게 목차 쪽만 쓴 글자로 — 원본 쪽 글꼴은 건드리지 않는다
             from viewer.pdf_font import subset_fonts_safely
@@ -467,23 +491,23 @@ def insert_toc(src, out, title, levels, template="", tmpdir=None, progress=None)
             odoc = fitz.open()
             try:
                 odoc.insert_pdf(sdoc)                    # 한 번에 — 쪽 사이 링크 유지(page_edit_build 와 같은 까닭)
-                if k_old:
-                    odoc.delete_pages(from_page=s_old, to_page=s_old + k_old - 1)
-                odoc.insert_pdf(tocdoc, start_at=1)      # 1쪽(표지) 바로 뒤
+                if k_old:                                # 261116-15: 옛 목차 쪽은 어디에 있든 모두 뺀다
+                    odoc.delete_pages(sorted(set(range(sdoc.page_count)) - set(keep)))
+                odoc.insert_pdf(tocdoc, start_at=at)     # 1쪽(표지) 바로 뒤, 옛 목차가 있었으면 그 자리
                 tocdoc.close()
-                # 책갈피: 1쪽 것은 그대로, 2쪽 이후는 k 만큼 — '목차'(2쪽)는 2쪽 이후를 가리키는 첫 맨 위 책갈피 앞
+                # 책갈피: 끼운 자리 앞 것은 그대로, 뒤는 k 만큼 — '목차'(at+1 쪽)는 그 뒤를 가리키는 첫 맨 위 책갈피 앞
                 base = min((l for l, _t, _p in body), default=1)
                 bms, put = [], False
                 for l, t, p in body:
-                    if not put and l == base and p >= 2:
-                        bms.append((bookmark_title(ttl), 2, 0)); put = True
-                    bms.append((t, new_page(p, k), l - base))     # apply_toc 의 단계는 0부터
+                    if not put and l == base and p > at:
+                        bms.append((bookmark_title(ttl), at + 1, 0)); put = True
+                    bms.append((t, new_page(p, k, at), l - base))     # apply_toc 의 단계는 0부터
                 if not put:
-                    bms.append((bookmark_title(ttl), 2, 0))
+                    bms.append((bookmark_title(ttl), at + 1, 0))
                 apply_toc(odoc, bms)
                 copy_info(sdoc, odoc)
-                links = add_links(odoc, 1, rects, [new_page(p, k) - 1 for _l, _t, p in rows])
-                mark_pages(odoc, 1, k)
+                links = add_links(odoc, at, rects, [new_page(p, k, at) - 1 for _l, _t, p in rows])
+                mark_pages(odoc, at, k)
                 tick(3, 4, tr("저장 중"))
                 odoc.save(str(out), garbage=4, deflate=True)
                 pages = odoc.page_count
@@ -492,7 +516,7 @@ def insert_toc(src, out, title, levels, template="", tmpdir=None, progress=None)
         finally:
             sdoc.close()
         tick(4, 4, tr("원본에 놓을 준비"))
-        return {"path": str(out), "toc_pages": k, "old_toc_pages": k_old, "pages": pages, "keep": keep,
+        return {"path": str(out), "toc_pages": k, "old_toc_pages": k_old, "at": at, "pages": pages, "keep": keep,
                 "rows": len(rows), "links": links, "title": ttl}
     except BaseException:
         try:

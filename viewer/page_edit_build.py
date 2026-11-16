@@ -176,6 +176,8 @@ def build(src, plan, bookmarks_raw, recon, book_tmp, progress=None, crops=None, 
             if bms:
                 apply_toc(odoc, bms)
             copy_info(sdoc, odoc)                         # 261107-35(§4.7.9): 원본 정보·XMP 를 그대로
+            from viewer.toc_page import carry_marks       # 261116-15(§4.7.29): 목차 쪽 표식도 새 자리로(insert_pdf 는 옮기지 않는다)
+            carry_marks(sdoc, odoc, ownpos)
             tick(outc, total, tr("저장 중"))
             odoc.save(str(recon), garbage=4, deflate=True)
         finally:

@@ -7269,7 +7269,7 @@ msgstr ""
 
 #: viewer/toc_page_flow.py
 #, python-brace-format
-msgid "목차 {k}쪽을 2쪽부터 넣어 저장했습니다 → {name}"
+msgid "목차 {k}쪽을 {p}쪽부터 넣어 저장했습니다 → {name}"
 msgstr ""
 
 #: viewer/toc_page_flow.py
@@ -13920,11 +13920,11 @@ msgid "Word 양식:"
 msgstr ""
 
 #: viewer/widgets/toc_page_dialog.py
-msgid "목차는 이 파일의 1쪽(표지) 뒤, 2쪽부터 끼워 저장합니다. 쪽 번호는 끼운 뒤의 쪽이고, 목차 줄을 누르면 그 쪽으로 갑니다."
+msgid "목차 Word 양식"
 msgstr ""
 
 #: viewer/widgets/toc_page_dialog.py
-msgid "목차 Word 양식"
+msgid "목차는 이 파일의 1쪽(표지) 뒤, 2쪽부터 끼워 저장합니다. 쪽 번호는 끼운 뒤의 쪽이고, 목차 줄을 누르면 그 쪽으로 갑니다."
 msgstr ""
 
 #: viewer/widgets/toc_page_dialog.py
@@ -13934,6 +13934,11 @@ msgstr ""
 #: viewer/widgets/toc_page_dialog.py
 #, python-brace-format
 msgid "목차 {n}쪽 — 첫 쪽"
+msgstr ""
+
+#: viewer/widgets/toc_page_dialog.py
+#, python-brace-format
+msgid "옛 목차가 있던 자리({p}쪽부터)에 새 목차를 바꿔 넣어 저장합니다. 쪽 번호는 끼운 뒤의 쪽이고, 목차 줄을 누르면 그 쪽으로 갑니다."
 msgstr ""
 
 #: viewer/widgets/toc_review_dialog.py

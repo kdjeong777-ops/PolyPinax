@@ -73,6 +73,7 @@ class TocPageDialog(QDialog):
         self._toc = list(info.get("toc") or [])
         self._w, self._h = float(info.get("w") or 595.0), float(info.get("h") or 842.0)
         self._pages = int(info.get("pages") or 0) - int(info.get("old") or 0)
+        self._at = int(info.get("at", 1))                 # 261116-15: 옛 목차를 옮겨 둔 자리면 그 자리에 바꿔 넣는다
         mx = max(1, toc_page.max_level(self._toc))
         root = QVBoxLayout(self)
         row = QHBoxLayout(); root.addLayout(row, 1)
@@ -93,7 +94,10 @@ class TocPageDialog(QDialog):
         tr_row = QHBoxLayout(); tr_row.addWidget(self.ed_tpl, 1); tr_row.addWidget(b_pick); tr_row.addWidget(b_sample)
         tw = QWidget(); tw.setLayout(tr_row); tr_row.setContentsMargins(0, 0, 0, 0)
         form.addRow(tr("Word 양식:"), tw)
-        note = QLabel(tr("목차는 이 파일의 1쪽(표지) 뒤, 2쪽부터 끼워 저장합니다. 쪽 번호는 끼운 뒤의 쪽이고, 목차 줄을 누르면 그 쪽으로 갑니다."))
+        if int(info.get("old") or 0) and self._at != 1:
+            note = QLabel(tr("옛 목차가 있던 자리({p}쪽부터)에 새 목차를 바꿔 넣어 저장합니다. 쪽 번호는 끼운 뒤의 쪽이고, 목차 줄을 누르면 그 쪽으로 갑니다.").format(p=self._at + 1))
+        else:
+            note = QLabel(tr("목차는 이 파일의 1쪽(표지) 뒤, 2쪽부터 끼워 저장합니다. 쪽 번호는 끼운 뒤의 쪽이고, 목차 줄을 누르면 그 쪽으로 갑니다."))
         note.setWordWrap(True)
         form.addRow(note)
         self.lbl_preview = QLabel()
@@ -149,7 +153,7 @@ class TocPageDialog(QDialog):
         rows = self.rows()
         title = self.ed_title.text() if self.ed_title.text().strip() else self.ed_title.placeholderText()
         k = toc_page.fitz_pages(len(rows), self._h)
-        img = paint_preview(toc_page.numbered(rows, k), self._w, self._h, title, self.PREVIEW_W)
+        img = paint_preview(toc_page.numbered(rows, k, self._at), self._w, self._h, title, self.PREVIEW_W)
         self.lbl_preview.setPixmap(QPixmap.fromImage(img))
         self.lbl_preview.setToolTip(tr("목차 {n}쪽 — 첫 쪽").format(n=k))
 

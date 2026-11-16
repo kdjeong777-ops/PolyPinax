@@ -97,15 +97,15 @@ def run(mw, path) -> str | None:
             return None
         QMessageBox.warning(mw, title, str(e))
         return None
-    k, keep = int(built["toc_pages"]), list(built["keep"])
-    # 새 쪽 i 의 옛 쪽 — 1쪽, 목차 k 쪽(빈 자리), 나머지(옛 목차 쪽 것은 버림)
-    meta_keys = keep[:1] + [None] * k + keep[1:]
+    k, keep, at = int(built["toc_pages"]), list(built["keep"]), int(built.get("at", 1))
+    # 새 쪽 i 의 옛 쪽 — 끼운 자리 앞 쪽, 목차 k 쪽(빈 자리), 나머지(옛 목차 쪽 것은 버림). 261116-15: 자리는 옛 목차가 있던 곳일 수 있다
+    meta_keys = keep[:at] + [None] * k + keep[at:]
     plan = [("own", i) if i is not None else None for i in meta_keys]
     mw._remap_page_keys(str(src), str(final), meta_keys)          # 꾸밈·숨김·링크
     mw._remap_page_text(str(src), str(final), plan)              # OCR·단어장·텍스트 창 고침
     mw._remap_closed_pane_pages(str(src), str(final), meta_keys)
     mw._mirror_to_pdf(final, reopen=False)
-    mw.status.showMessage(tr("목차 {k}쪽을 2쪽부터 넣어 저장했습니다 → {name}").format(k=k, name=Path(final).name), 6000)
+    mw.status.showMessage(tr("목차 {k}쪽을 {p}쪽부터 넣어 저장했습니다 → {name}").format(k=k, p=at + 1, name=Path(final).name), 6000)
     try:
         mw.bookmark_tree.add_or_refresh_file(final, after=str(src))
         mw._open_saved_file(final, 0)

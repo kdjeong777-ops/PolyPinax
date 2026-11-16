@@ -7478,8 +7478,8 @@ msgstr "Table of contents page canceled — the original is unchanged."
 
 #: viewer/toc_page_flow.py
 #, python-brace-format
-msgid "목차 {k}쪽을 2쪽부터 넣어 저장했습니다 → {name}"
-msgstr "Inserted {k} table of contents page(s) from page 2 and saved → {name}"
+msgid "목차 {k}쪽을 {p}쪽부터 넣어 저장했습니다 → {name}"
+msgstr "Inserted {k} table of contents page(s) from page {p} and saved → {name}"
 
 #: viewer/toc_page_flow.py
 #, python-brace-format
@@ -14266,12 +14266,12 @@ msgid "Word 양식:"
 msgstr "Word template:"
 
 #: viewer/widgets/toc_page_dialog.py
-msgid "목차는 이 파일의 1쪽(표지) 뒤, 2쪽부터 끼워 저장합니다. 쪽 번호는 끼운 뒤의 쪽이고, 목차 줄을 누르면 그 쪽으로 갑니다."
-msgstr "The table of contents is saved after page 1 (the cover), starting at page 2. Page numbers are those after inserting it, and clicking a line goes to that page."
-
-#: viewer/widgets/toc_page_dialog.py
 msgid "목차 Word 양식"
 msgstr "Table of contents Word template"
+
+#: viewer/widgets/toc_page_dialog.py
+msgid "목차는 이 파일의 1쪽(표지) 뒤, 2쪽부터 끼워 저장합니다. 쪽 번호는 끼운 뒤의 쪽이고, 목차 줄을 누르면 그 쪽으로 갑니다."
+msgstr "The table of contents is saved after page 1 (the cover), starting at page 2. Page numbers are those after inserting it, and clicking a line goes to that page."
 
 #: viewer/widgets/toc_page_dialog.py
 msgid "샘플을 만들지 못했습니다."
@@ -14281,6 +14281,11 @@ msgstr "Could not create the sample."
 #, python-brace-format
 msgid "목차 {n}쪽 — 첫 쪽"
 msgstr "{n} contents page(s) — first page"
+
+#: viewer/widgets/toc_page_dialog.py
+#, python-brace-format
+msgid "옛 목차가 있던 자리({p}쪽부터)에 새 목차를 바꿔 넣어 저장합니다. 쪽 번호는 끼운 뒤의 쪽이고, 목차 줄을 누르면 그 쪽으로 갑니다."
+msgstr "The new table of contents replaces the old one where it was (from page {p}) and is saved. Page numbers are those after inserting it, and clicking a line goes to that page."
 
 #: viewer/widgets/toc_review_dialog.py
 msgid "오프셋 적용"

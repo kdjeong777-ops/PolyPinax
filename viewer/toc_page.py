@@ -285,11 +285,12 @@ def _norm(s):
 def locate_rows(doc, rows, first=0, count=None):
     """Word 로 만든 목차 쪽에서 줄 자리를 차례로 찾는다 — 제목 앞부분(띄어쓰기 뺀 12자)이 든 다음 줄. 못 찾으면 None."""
     import fitz
+    from viewer.text_extract2 import text_dict
     count = doc.page_count - first if count is None else count
     lines = []
     for pi in range(first, first + count):
         try:
-            dd = doc[pi].get_text("dict")
+            dd = text_dict(doc[pi], raw=False)  # 그림을 풀지 않는다(응답성 SOT §6)
         except Exception:
             continue
         for b in dd.get("blocks", []):

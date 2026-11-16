@@ -7892,6 +7892,14 @@ msgid "편집할 PDF 파일을 트리에서 선택하세요."
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
+msgid "바로 위에 같은 단계 책갈피가 없어 더 하위로 옮길 수 없습니다."
+msgstr ""
+
+#: viewer/widgets/bookmark_tree.py
+msgid "단계 1 책갈피입니다 — 파일 밖으로는 옮길 수 없습니다."
+msgstr ""
+
+#: viewer/widgets/bookmark_tree.py
 msgid "삭제할 항목이 없습니다."
 msgstr ""
 
@@ -8114,6 +8122,14 @@ msgstr ""
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format
 msgid "이름 변경: {name} → {name1}"
+msgstr ""
+
+#: viewer/widgets/bookmark_tree.py
+msgid "맨 위 책갈피라 더 위로 옮길 수 없습니다 — 파일 밖으로는 옮기지 않습니다."
+msgstr ""
+
+#: viewer/widgets/bookmark_tree.py
+msgid "맨 아래 책갈피라 더 아래로 옮길 수 없습니다 — 파일 밖으로는 옮기지 않습니다."
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py

@@ -3997,6 +3997,7 @@ class BookmarkTree(QWidget):
             return
         # 트리 출현 순서대로
         items.sort(key=lambda it: _path_to(it, target))
+        moved = 0
         with self._quiet_tree():                       # 260908-1
             for it in items:
                 parent = it.parent() or target
@@ -4007,7 +4008,11 @@ class BookmarkTree(QWidget):
                 parent.takeChild(idx)
                 prev.addChild(it)
                 prev.setExpanded(True)
+                moved += 1
         self._restore_cursor(items)
+        if not moved:                                  # 261116-3(§4.7.28): 그 자리에 머문다 — 짧게 알린다
+            self._notice(tr("바로 위에 같은 단계 책갈피가 없어 더 하위로 옮길 수 없습니다."))
+            return
         self._mark_dirty()
 
     def _op_outdent(self):
@@ -4020,16 +4025,21 @@ class BookmarkTree(QWidget):
             return
         # 역순(bottom-up)
         items.sort(key=lambda it: _path_to(it, target), reverse=True)
+        moved = 0
         with self._quiet_tree():                       # 260908-1
             for it in items:
                 parent = it.parent()
                 if parent is None or parent is target:
-                    continue    # 이미 최상위 (level 0) — 더 못 올림
+                    continue    # 이미 단계 1 — 더 올리면 파일 밖이다(261116-3, §4.7.28)
                 grand = parent.parent() or target
                 p_idx = grand.indexOfChild(parent)
                 parent.takeChild(parent.indexOfChild(it))
                 grand.insertChild(p_idx + 1, it)
+                moved += 1
         self._restore_cursor(items)
+        if not moved:                                  # 261116-3(§4.7.28): 그 자리에 머문다 — 짧게 알린다
+            self._notice(tr("단계 1 책갈피입니다 — 파일 밖으로는 옮길 수 없습니다."))
+            return
         self._mark_dirty()
 
     # ---- 260908-1(사용자 요청): 모두 펼치기 / 모두 접기 ------------------
@@ -5425,26 +5435,35 @@ class BookmarkTree(QWidget):
         for it in items:
             key = id(it.parent()) if it.parent() is not None else 0
             groups.setdefault(key, []).append(it)
-        for grp in groups.values():
-            parent = grp[0].parent()
-            def idx_of(x):
-                return (parent.indexOfChild(x) if parent is not None
-                        else self.tree.indexOfTopLevelItem(x))
-            grp.sort(key=idx_of, reverse=(direction > 0))    # 위로 = 오름차순, 아래로 = 내림차순
-            n = parent.childCount() if parent is not None else self.tree.topLevelItemCount()
-            for it in grp:
-                idx = idx_of(it)
-                new_idx = idx + direction
-                if new_idx < 0 or new_idx >= n:
-                    continue
-                if parent is not None:
-                    parent.takeChild(idx)
-                    parent.insertChild(new_idx, it)
-                else:
-                    self.tree.takeTopLevelItem(idx)
-                    self.tree.insertTopLevelItem(new_idx, it)
-                it.setSelected(True)
+        moved = 0
+        # 261116-3(책갈피창·저장 SOT §4.7.28): 같은 부모 안에서만 — 파일 첫·마지막 책갈피는 그 자리에 머문다.
+        #   떼었다 붙이는 동안 신호를 막는다(§4.7.2 — 현재 줄이 사라지면 본문이 옆 책갈피로 튀었다).
+        with self._quiet_tree():
+            for grp in groups.values():
+                parent = grp[0].parent()
+                def idx_of(x):
+                    return (parent.indexOfChild(x) if parent is not None
+                            else self.tree.indexOfTopLevelItem(x))
+                grp.sort(key=idx_of, reverse=(direction > 0))    # 위로 = 오름차순, 아래로 = 내림차순
+                n = parent.childCount() if parent is not None else self.tree.topLevelItemCount()
+                for it in grp:
+                    idx = idx_of(it)
+                    new_idx = idx + direction
+                    if new_idx < 0 or new_idx >= n:
+                        continue
+                    if parent is not None:
+                        parent.takeChild(idx)
+                        parent.insertChild(new_idx, it)
+                    else:
+                        self.tree.takeTopLevelItem(idx)
+                        self.tree.insertTopLevelItem(new_idx, it)
+                    it.setSelected(True)
+                    moved += 1
         self._restore_cursor(items)
+        if not moved:
+            self._notice(tr("맨 위 책갈피라 더 위로 옮길 수 없습니다 — 파일 밖으로는 옮기지 않습니다.") if direction < 0
+                         else tr("맨 아래 책갈피라 더 아래로 옮길 수 없습니다 — 파일 밖으로는 옮기지 않습니다."))
+            return
         self._mark_dirty()
 
     def _restore_cursor(self, items: list):

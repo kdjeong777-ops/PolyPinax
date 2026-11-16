@@ -2255,6 +2255,7 @@ class MainView(QWidget):
         self._page_no = None                 # 261116-11(§4.7.7): 쪽 칸 번호 — 앱이 새 문서의 쪽 편집 순서를 다시 넣는다
         self._page_no_ids = None
         self._photo_pos = None               # 261104-2: 사진 목록 순번 — 앱이 사진을 연 뒤 set_photo_position 으로 넣는다
+        self._link_cache = None              # 261116-21(입력 SOT §4.2): 옛 문서의 링크 상자를 들고 가지 않는다(회전·크롭 뒤 다시 열기 포함)
         self._doc = newdoc
         self._is_image = False               # v1.6.4 C2: PDF 모드
         self._update_empty_label()           # 260606-30: 문서 로드 → 안내 숨김
@@ -2457,17 +2458,19 @@ class MainView(QWidget):
     def _goto_links(self):
         """지금 쪽의 '같은 문서 안 쪽' 링크 [(fitz.Rect 화면 좌표, 대상 쪽 0-based)].
 
-        쪽마다 한 번만 읽는다(마우스 이동마다 PDF 를 읽지 않는다). 그림 보기·끼운 쪽·
-        사용자 회전 쪽은 빈 목록(좌표가 PDF 쪽과 다르다 — 알려진 한계)."""
+        쪽마다 한 번만 읽는다(마우스 이동마다 PDF 를 읽지 않는다). 그림 보기·끼운 쪽은 빈 목록(알려진 한계).
+        돌리기는 `/Rotate` 덧입히기라(261011-2) `get_links` 가 돌린 화면 좌표를 준다 — 그대로 맞는다.
+        261116-21: 키에 문서 판(`_cache_tag` — 파일 수정 시각·저장 전 회전·크롭 판)을 넣고, 문서를 열 때 비운다 —
+        다시 연 문서가 옛 문서와 같은 `id` 를 받아도 옛 상자를 쓰지 않게."""
         if not self._doc or self._is_image:
             return []
         pg = self._current_page
-        key = (id(self._doc.doc), pg)
+        key = (id(self._doc.doc), getattr(self._doc, "_cache_tag", ""), pg)
         cache = getattr(self, "_link_cache", None)
         if cache is not None and cache[0] == key:
             return cache[1]
         out = []
-        if not self._is_staged(pg) and not self._rotations.get(pg, 0):
+        if not self._is_staged(pg):
             try:
                 import fitz
                 n = self._doc.page_count

@@ -22,7 +22,7 @@ LICENSE_URL = "https://www.gnu.org/licenses/agpl-3.0.html"
 # (이름, 라이선스, 저작권자·비고, requirements.txt 패키지 이름들)
 OSS = (
     ("Python", "PSF License", "Python Software Foundation", ()),
-    ("Qt 6", "LGPL v3", "The Qt Company", ()),
+    ("Qt 6", "LGPL v3", "The Qt Company", ("PyQt6-Qt6",)),   # 261116-32: Qt 바이너리 pip 패키지(메타데이터 License: LGPL v3)
     ("PyQt6", "GPL v3", "Riverbank Computing", ("PyQt6",)),
     ("PyMuPDF · MuPDF", "AGPL v3", "Artifex Software", ("pymupdf-lite",)),   # 261101-4: 레이아웃 엔진을 뺀 같은 판(마스터 §14.2)
     ("pdfplumber · pdfminer.six", "MIT", tr_noop("Jeremy Singer-Vine 외"), ("pdfplumber",)),

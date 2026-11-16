@@ -112,6 +112,49 @@ def copy_info(sdoc, odoc) -> int:
     return n
 
 
+def carry_links(sdoc, odoc, ownpos) -> int:
+    """261116-16(§4.7.9, 사용자 보고 '목차를 다른 페이지로 옮기면, 하이퍼링크가 사라져'): 남은 원본 쪽의 **문서 안 링크**를
+    새 쪽 번호로 다시 넣는다. 넣은 수.
+
+    `insert_pdf` 는 같은 호출로 복사한 구간 안을 가리키는 링크만 남긴다 — 쪽을 옮겨 구간이 갈리면 구간을 넘는 링크(목차 줄 전부 등)가
+    사라졌다. 원본 쪽마다 `LINK_GOTO`·쪽이 풀린 `LINK_NAMED` 를 지우고(살아남은 것도 — 겹치지 않게) 원본에서 다시 읽어 넣는다:
+    대상은 `ownpos`(지운 쪽을 가리키면 버린다), 자리는 원본 화면 좌표 × `derotation_matrix`(`insert_link` 는 회전 전 좌표).
+    회전·크롭을 넣기 전에 부른다(새 쪽은 아직 원본과 같은 `/Rotate`). 웹·다른 파일 링크는 건드리지 않는다."""
+    import fitz
+    kinds = (fitz.LINK_GOTO, fitz.LINK_NAMED)
+    n = 0
+    for sp, op in (ownpos or {}).items():
+        try:
+            spg = sdoc[int(sp)]
+            src = [l for l in (spg.get_links() or []) if l.get("kind") in kinds
+                   and isinstance(l.get("page"), int) and l["page"] >= 0 and l.get("from") is not None]
+            opg = odoc[int(op)]
+            old = [l for l in (opg.get_links() or []) if l.get("kind") in kinds]
+        except Exception:
+            continue
+        if not src and not old:
+            continue
+        for l in old:
+            try:
+                opg.delete_link(l)
+            except Exception:
+                pass
+        mat = spg.derotation_matrix
+        for l in src:
+            t = ownpos.get(int(l["page"]))
+            if t is None:
+                continue                                   # 지운 쪽을 가리키던 링크
+            d = {"kind": fitz.LINK_GOTO, "from": fitz.Rect(l["from"]) * mat, "page": int(t)}
+            if l.get("to") is not None:
+                d["to"] = l["to"]
+            try:
+                opg.insert_link(d)
+                n += 1
+            except Exception:
+                pass
+    return n
+
+
 def build(src, plan, bookmarks_raw, recon, book_tmp, progress=None, crops=None, rotations=None, alias=None) -> dict:
     """새 PDF 를 만들고 {"path": 만든 임시 파일, "pages": 쪽수, "calls": insert_pdf 호출 수} 를 돌려준다.
 
@@ -158,6 +201,7 @@ def build(src, plan, bookmarks_raw, recon, book_tmp, progress=None, crops=None, 
                     outc += 1
             if outc == 0:
                 raise RuntimeError("저장할 페이지가 없습니다.")
+            carry_links(sdoc, odoc, ownpos)               # 261116-16(§4.7.9): 문서 안 링크를 새 쪽 번호로 — 회전·크롭 전에
             if rotations:
                 # 261011-2(§4.7.16): 저장 전 회전 → 새 순서의 그 쪽 `/Rotate` — 크롭보다 먼저(크롭 여백은 보이는 방향 기준)
                 from viewer import page_rotate as _pr

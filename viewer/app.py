@@ -1163,6 +1163,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
 
     def _toggle_split(self, on: bool):
         on = bool(on)
+        if not on and getattr(self, "_split_on", False):
+            self._split_remember()                         # 261116-17(사진 보기 SOT §4.47): 되돌아오면 오른쪽 칸을 되살린다
         self._split_on = on
         self._panes[1].setVisible(on)
         if on:
@@ -1196,11 +1198,15 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             except Exception:
                 pass
 
-    def _view_as_split(self):
+    def _view_as_split(self, restore: bool = True):
         """260618-26(우클릭 '2단창 보기'): 1단 → 2단. **2창(우측)에 기존 내용이 없을 때만**
         1창(좌측)에서 보던 화면(파일·페이지)과 책갈피를 2창에 복사한다. 우측에 이미 내용이
-        있으면(이전 2단 작업분) 그대로 두고 2단으로만 전환한다."""
+        있으면(이전 2단 작업분) 그대로 두고 2단으로만 전환한다.
+        261116-17: 1단으로 가기 전 오른쪽 칸(종류·파일·쪽)을 기억했으면 먼저 그것을 되살린다(사진 보기 SOT §4.47)."""
         if getattr(self, "_split_on", False):
+            return
+        if restore and self._split_restore():
+            self._set_active_pane(1)
             return
         left = self._mv[0]
         lf = left.current_file()

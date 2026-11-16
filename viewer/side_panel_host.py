@@ -209,8 +209,8 @@ def close_panel(win, spec: PanelSpec) -> None:
             win.act_toggle_search.setChecked(s["search"])
         if "shot" in s:
             win.act_toggle_shot.setChecked(s["shot"])
-        if "split" in s:                          # 260618-8: 2단(PDF) 상태 복원
-            win.act_split.setChecked(s["split"])
+        if s.get("split") and not win.act_split.isChecked():   # 260618-8: 2단 상태 복원 — 261116-17: 오른쪽 칸까지(사진 보기 SOT §4.47)
+            win._split_return()
         win._sync_right_layout()
         if s.get("splitter"):
             win.splitter.restoreState(s["splitter"])

@@ -7,6 +7,7 @@
   처음은 그 모드의 마지막 자리, 썸네일 칸은 활성 창 따라. 섞은 칸 우클릭 = 그 모드로 보기(창 모드를 바꿔 1단에).
 - `스크린샷` = 스크린샷 띠의 지금 컷을 누른 것과 같은 길(스크린샷 SOT §5).
 상태는 이 실행 동안만(`_mix_on`) — 설정 파일에 남기지 않는다.
+261116-17 되돌아오기: 2단을 닫을 때 오른쪽 칸(종류·파일·쪽)을 기억(`_split_last`), 1단에서 2단으로 돌아오면 되살린다.
 """
 from __future__ import annotations
 
@@ -73,6 +74,8 @@ class SplitKindMixin:
             acts["pix"].setEnabled(bool(getattr(self, "_photo_mode", False)) or self._photo_enabled())
 
     def _split_pick(self, kind: str) -> None:
+        if kind != "shot" and self._split_restore(want=kind):   # 261116-17: 1단에서 같은 종류를 고르면 되살림
+            return
         if kind == "shot":
             self._split_show_shot()
             return
@@ -82,16 +85,84 @@ class SplitKindMixin:
             self._mix_enter()
 
     def _split_body(self) -> None:
-        """본체·`Ctrl+Shift+2` — 종전 2단(사용자 결정 '본체는 늘 종전 2단'). 섞은 2단이면 같은 종류로 돌아온다."""
+        """본체·`Ctrl+Shift+2` — 종전 2단(사용자 결정 '본체는 늘 종전 2단'). 섞은 2단이면 같은 종류로 돌아온다.
+        1단에서 누르면 닫기 전 오른쪽 칸을 되살린다(261116-17 '되돌아오기')."""
         if self._mix_on_now():
             self._split_same()
             return
+        if not getattr(self, "_split_on", False):
+            self._split_return()
+            return
         self.act_split.setChecked(True)
+
+    # ── 되돌아오기 — 2단 → 1단 → 2단 (261116-17, 사진 보기 SOT §4.47) ──
+    def _split_remember(self) -> None:
+        """2단을 닫기 직전(`_toggle_split(False)` 맨 앞) — 오른쪽 칸의 종류·파일·쪽·폴더. 이 실행 동안만."""
+        try:
+            kind = self._split_kind_now()
+            mv = self._mv[1]
+            if kind == "shot":
+                f, pg = self.__dict__.get("_current_shot_path"), 0
+            else:
+                f = mv.current_file()
+                pg = (mv.current_page() or 0) if (f and kind == "pdf") else 0
+        except Exception:
+            return
+        if not kind or not f:
+            return
+        self._split_last = {"kind": kind, "file": str(f), "page": int(pg or 0),
+                            "folder": self.__dict__.get("_folder_right")}
+
+    def _split_return(self) -> None:
+        """1단 → 2단(본체·`Ctrl+Shift+2`·우클릭 `2단 보기`·옆 패널 닫기) — 기억이 있으면 되살리고, 없으면 종전 2단."""
+        if not self._split_restore():
+            self.act_split.setChecked(True)
+
+    def _split_restore(self, want=None) -> bool:
+        """기억한 오른쪽 칸을 되살린다 — 되살렸으면 True. `want` 는 ▾ 로 고른 종류(다르면 되살리지 않는다)."""
+        if getattr(self, "_split_on", False):
+            return False
+        rec = self.__dict__.get("_split_last") or {}
+        kind, f = rec.get("kind"), rec.get("file")
+        if kind not in KINDS or not f or (want is not None and want != kind):
+            return False
+        if kind == "shot":
+            ss = getattr(self, "shot_strip", None)
+            i = ss.index_of_path(f) if ss is not None else -1
+            if i < 0:
+                return False
+            self._mix_leave()
+            ss.activate_index(i)                         # 컷을 누른 것과 같은 길(스크린샷 SOT §5)
+            return True
+        photo = kind == "pix"
+        if not os.path.isfile(f) or not self._mix_kind_ok(f, photo):
+            return False
+        page = int(rec.get("page") or 0)
+        folder = rec.get("folder")
+        if photo != bool(getattr(self, "_photo_mode", False)):
+            if photo and not self._photo_enabled():
+                return False
+            fp = Path(f)
+            root = Path(folder) if folder and Path(folder) in fp.parents else fp.parent
+            self._mix_enter(target=(root, f, page))
+            return True
+        from viewer.pathutil import norm_key
+        mv = self._mv[1]
+        cur = mv.current_file()
+        self.act_split.setChecked(True)                  # toggled → _toggle_split(True)
+        if not (cur and norm_key(str(cur)) == norm_key(f)):
+            fold = folder or getattr(self, "_folder", None)
+            if fold:
+                self._set_pane_folder(1, fold)
+            self._set_active_pane(1)
+            self._load_main(HistoryItem(f, page, "", "bookmark"))
+        self._sync_split_menu_state()
+        return True
 
     def _split_same(self) -> None:
         """같은 종류 2단 — 오른쪽 칸이 다른 종류·컷이면 닫고 왼쪽 것을 복사(`_view_as_split` 의 빈 칸 길)."""
         if not getattr(self, "_split_on", False):
-            self._view_as_split()
+            self._view_as_split(restore=False)           # ▾ 로 고른 것 — 되살리기는 `_split_pick` 이 먼저 보았다
             return
         if self._mix_on_now():
             self._mix_leave()
@@ -160,14 +231,14 @@ class SplitKindMixin:
                 return folder, f, pg
         return folder, None, 0
 
-    def _mix_enter(self) -> None:
-        """다른 종류를 오른쪽 칸에 — PDF 모드의 `PIX`·사진 모드의 `PDF`."""
+    def _mix_enter(self, target=None) -> None:
+        """다른 종류를 오른쪽 칸에 — PDF 모드의 `PIX`·사진 모드의 `PDF`. `target`=(폴더, 파일, 쪽)은 되돌아오기(261116-17)."""
         photo = not bool(getattr(self, "_photo_mode", False))
         if photo and not self._photo_enabled():
             return                                       # 보기 종류 'PDF 전용' — ▾ 의 PIX 는 꺼져 있다
         if self._mix_on_now():
             return
-        folder, fpath, page = self._mix_target(photo)
+        folder, fpath, page = target or self._mix_target(photo)
         rt = self.bookmark_tree_right
         try:
             rt.leave_shot_list()

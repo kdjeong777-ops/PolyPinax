@@ -563,6 +563,8 @@ class _MainDrawOverlay(QWidget):
                     hp = pts[name]
                     p.drawRect(int(hp.x()) - 4, int(hp.y()) - 4, 8, 8)
                 p.restore()
+        if crop is not None:
+            crop.paint(p, pr)
 
     def _norm(self, pos, pr):
         fx = (pos.x() - pr.left()) / max(1, pr.width())

@@ -95,6 +95,15 @@ try:
 
     # ── A 네모 크롭 — 오른쪽 변 가운데(R=5)를 그림 폭 절반만큼 왼쪽으로 ──
     chk(mv.can_crop_image() and mv.start_image_crop() and mv._crop_edit is not None, "A0 고른 사진에 크롭 틀이 뜬다")
+    # A0b 덧칠 층 paintEvent 가 틀을 실제로 그린다 — 크롭 중인 사진은 평소 그리기에서 빠지므로, 틀이 안 그려지면 그 자리가 빈다
+    from PyQt6.QtGui import QImage, QPainter as _QP
+    from PyQt6.QtWidgets import QWidget as _QW
+    ov = mv._draw_overlay
+    img = QImage(ov.size(), QImage.Format.Format_ARGB32_Premultiplied); img.fill(0)
+    _qp = _QP(img); ov.render(_qp, QPoint(0, 0), flags=_QW.RenderFlag.DrawChildren); _qp.end()
+    cx = int(pr.left() + (rect0[0] + rect0[2] * 0.25) * pr.width()); cy = int(pr.top() + (rect0[1] + rect0[3] * 0.25) * pr.height())
+    px = img.pixelColor(cx, cy)
+    chk(px.alpha() > 200 and px.red() > 150 and px.blue() < 100, "A0b 크롭 틀이 덧칠 층에 그림을 그린다(빨간 왼쪽 위)", f"{px.name()} a={px.alpha()}")
     a = handle(mv, 5)
     wpx = rect0[2] * pr.width()
     drag(mv, a, QPoint(int(a.x() - wpx / 2), a.y()))

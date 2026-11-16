@@ -151,7 +151,8 @@ chk(dlg._pv_page == pv0 and cnt["n"] == 0 and dlg._row_dict(3)["src"] == dlg._ro
 dlg._render_preview = _orig_render
 dlg.rb_pv_body.setChecked(True); app.processEvents()
 dlg.table.item(3, COL_TITLE).setText("추가 항목"); dlg.table.item(3, COL_PAGE).setText("6"); app.processEvents()
-dlg.table.selectRow(3); dlg._level(+1); chk(dlg.table.item(3, COL_LEVEL).text() == "3", "③ 레벨 ▶")
+dlg.table.selectRow(3); dlg._level(+1)
+chk(dlg._row_dict(3)["level"] == 3 and dlg.table.item(3, COL_LEVEL).text() == "4", "③ 단계 ▶ (level 3 = 표의 단계 4, 261116-1)")
 dlg._move(-1); chk(dlg.table.item(2, COL_TITLE).text() == "추가 항목", "③ ▲ 이동")
 dlg.table.clearSelection(); dlg.table.selectRow(2); dlg._del_rows()
 chk(dlg.table.rowCount() == n0, "③ 삭제")

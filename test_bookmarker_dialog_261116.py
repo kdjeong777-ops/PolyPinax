@@ -71,6 +71,25 @@ for cur in (None, str(root / "그림.png")):
         f"C1 고른 PDF 없음({cur and Path(cur).suffix}) → 창도 편집 모드 묻기도 없이 안내", f"{infos} made={len(_made)} asked={_asked}")
 _bmd.BookmarkerDialog = _Real
 
+# ── D. 검토 표 '단계' 열 — 첫 책갈피 = 1(책갈피창 단계와 같은 기준, 261116-2), 행의 level 은 0부터 그대로 ─────
+from viewer.widgets import toc_review_dialog as _trd
+rows = [{"title": "1. 장", "toc_page": None, "page": 1, "level": 0},
+        {"title": "1.1 절", "toc_page": None, "page": 2, "level": 1},
+        {"title": "1.1.1 항", "toc_page": None, "page": 3, "level": 2}]
+tv = _trd.TocReviewDialog(pdf, [dict(r) for r in rows], method="toc")
+hdr = tv.table.horizontalHeaderItem(_trd.COL_LEVEL).text()
+shown = [tv.table.item(i, _trd.COL_LEVEL).text() for i in range(3)]
+chk(hdr == tr("단계") and shown == ["1", "2", "3"], "D1 열 이름 '단계', 첫 책갈피 = 1", f"{hdr} {shown}")
+chk([r["level"] for r in tv.rows()] == [0, 1, 2], "D2 결과 행의 level 은 0부터 그대로(책갈피창에 넣는 값)", str([r["level"] for r in tv.rows()]))
+chk(_trd._IndentDelegate.indent_px(tv.table.item(0, _trd.COL_LEVEL).text()) == 0
+    and _trd._IndentDelegate.indent_px(tv.table.item(2, _trd.COL_LEVEL).text()) == 2 * _trd.INDENT_PX,
+    "D3 들여쓰기 = (단계−1) × INDENT_PX")
+tv.table.selectRow(0); tv._level(-1)
+chk(tv.table.item(0, _trd.COL_LEVEL).text() == "1" and tv.rows()[0]["level"] == 0, "D4 ◀ 는 단계 1 아래로 내려가지 않는다")
+tv.table.item(1, _trd.COL_LEVEL).setText("9")
+chk(tv.rows()[1]["level"] == 5, "D5 손으로 큰 단계를 적어도 최대 단계 6(level 5)", str(tv.rows()[1]["level"]))
+tv.close()
+
 print()
 print("ALL PASS" if not fails else f"FAILED {len(fails)}: {fails}")
 sys.exit(1 if fails else 0)

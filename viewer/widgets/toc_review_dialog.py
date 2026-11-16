@@ -5,7 +5,7 @@
 수정·삭제·추가한 뒤** 저장한다. 비모달이 아니라 모달(저장/취소로 끝) — 결과가 곧 파일에
 써지므로 확정 단계가 분명해야 한다.
 
-열: 레벨 | 제목 | 목차 쪽 | 실제 쪽 | 확인
+열: 단계 | 제목 | 목차 쪽 | 실제 쪽 | 확인  (단계 = level + 1 — 첫 책갈피가 1, 책갈피창 단계와 같은 기준 261116-1)
   - 실제 쪽 = 목차 쪽 + 오프셋. 셀을 직접 고치면 그 행은 '수동'(오프셋 재적용에도 유지).
   - 확인 = [제목 대조] 결과(그 쪽 텍스트에 제목 앞부분이 있으면 ✓). 저장에는 영향 없음.
 오른쪽 미리보기: 현재 행의 실제 쪽을 렌더해 보여 준다(스캔본은 텍스트가 깨져 있어 눈으로
@@ -30,12 +30,13 @@ INDENT_PX = 14          # 260904-7: 제목 열 레벨당 들여쓰기(표시만 
 
 
 class _IndentDelegate(QStyledItemDelegate):
-    """제목 셀을 레벨(같은 행 '레벨' 열)만큼 들여 그린다. 텍스트에 공백을 넣지 않으므로 책갈피 제목은 오염되지 않는다."""
+    """제목 셀을 단계(같은 행 '단계' 열)만큼 들여 그린다. 텍스트에 공백을 넣지 않으므로 책갈피 제목은 오염되지 않는다."""
 
     @staticmethod
-    def indent_px(level) -> int:
+    def indent_px(shown) -> int:
+        """`shown` = 표의 단계 글자(1부터) — 단계 1 은 들여쓰지 않는다."""
         try:
-            return max(0, int(level)) * INDENT_PX
+            return max(0, int(shown) - 1) * INDENT_PX
         except (TypeError, ValueError):
             return 0
 
@@ -136,15 +137,15 @@ class TocReviewDialog(QDialog):
         self.btn_verify.clicked.connect(self._verify)
         fo.addWidget(self.btn_verify)
         self.btn_renumber = QPushButton(tr("번호 수정"))
-        self.btn_renumber.setToolTip(tr("현재 행의 번호를 **바로 위 같은 레벨 형제의 번호 + 1** 로 고치고(형제가 없으면 1), "
-                                     "그 아래 같은 레벨 형제들도 이어서 +1 씩 다시 매깁니다(상위 레벨이 나오기 전까지). "
-                                     "레벨을 고친 뒤 이 버튼으로 번호를 잇습니다. 형식은 옆 콤보(자동 = 위 형제의 형식)"))
+        self.btn_renumber.setToolTip(tr("현재 행의 번호를 **바로 위 같은 단계 형제의 번호 + 1** 로 고치고(형제가 없으면 1), "
+                                     "그 아래 같은 단계 형제들도 이어서 +1 씩 다시 매깁니다(상위 단계가 나오기 전까지). "
+                                     "단계를 고친 뒤 이 버튼으로 번호를 잇습니다. 형식은 옆 콤보(자동 = 위 형제의 형식)"))
         self.btn_renumber.clicked.connect(self._renumber)
         fo.addWidget(self.btn_renumber)
         self.cmb_numstyle = QComboBox()
         for label, key in ((tr("형식: 자동"), None), ("1.", "dot"), ("1)", "paren"), ("1", "bare")):
             self.cmb_numstyle.addItem(label, key)
-        self.cmb_numstyle.setToolTip(tr("번호 수정 형식 — 자동: 바로 위 같은 레벨 형제의 형식을 따름(없으면 레벨 1 '1.', 그 아래 '1)')"))
+        self.cmb_numstyle.setToolTip(tr("번호 수정 형식 — 자동: 바로 위 같은 단계 형제의 형식을 따름(없으면 단계 2 '1.', 그 아래 '1)')"))
         fo.addWidget(self.cmb_numstyle)
         for b in (self.btn_apply_off, self.btn_verify, self.btn_renumber):
             b.setAutoDefault(False); b.setDefault(False)
@@ -157,7 +158,7 @@ class TocReviewDialog(QDialog):
         left = QWidget(); ll = QVBoxLayout(left); ll.setContentsMargins(0, 0, 0, 0)
         self.table = QTableWidget(0, N_COLS)
         self.table.setItemDelegateForColumn(COL_TITLE, _IndentDelegate(self.table))   # 260904-7: 위계 들여쓰기
-        self.table.setHorizontalHeaderLabels([tr("레벨"), tr("제목"), tr("목차 쪽"), tr("실제 쪽")])
+        self.table.setHorizontalHeaderLabels([tr("단계"), tr("제목"), tr("목차 쪽"), tr("실제 쪽")])
         hh = self.table.horizontalHeader()
         # 260904-2: 표는 내용이 보일 만큼만 — 제목 열은 내용 맞춤(상한 420px), 나머지는 내용 맞춤.
         hh.setSectionResizeMode(COL_TITLE, QHeaderView.ResizeMode.Interactive)
@@ -180,8 +181,8 @@ class TocReviewDialog(QDialog):
                 (tr("삭제"), tr("선택 행 삭제(Del)"), self._del_rows),
                 ("▲", tr("위로"), lambda: self._move(-1)),
                 ("▼", tr("아래로"), lambda: self._move(+1)),
-                ("◀", tr("레벨 올리기(상위)"), lambda: self._level(-1)),
-                ("▶", tr("레벨 내리기(하위)"), lambda: self._level(+1)),
+                ("◀", tr("단계 올리기(상위)"), lambda: self._level(-1)),
+                ("▶", tr("단계 내리기(하위)"), lambda: self._level(+1)),
                 (tr("쪽순 정렬"), tr("목차 쪽이 중간에 줄어들지 않도록 — 자릿수가 빠진 쪽은 고치고(20→120), 순서 밖 행은 제자리로 옮깁니다"
                              "(표·그림 목록은 따로). 바뀐 행은 목차 쪽 셀이 파란색"), self._sort_pages)):
             b = QPushButton(label); b.setToolTip(tip); b.clicked.connect(slot)
@@ -318,7 +319,7 @@ class TocReviewDialog(QDialog):
     def _append_row(self, r: dict, at: int | None = None):
         row = self.table.rowCount() if at is None else at
         self.table.insertRow(row)
-        vals = [str(int(r.get("level", 0))), r.get("title", ""),
+        vals = [str(int(r.get("level", 0)) + 1), r.get("title", ""),     # 261116-1: 표에는 단계(level + 1)
                 "" if r.get("toc_page") is None else str(r["toc_page"]),
                 "" if r.get("page") is None else str(r["page"])]
         for c, v in enumerate(vals):
@@ -346,7 +347,7 @@ class TocReviewDialog(QDialog):
     def _row_dict(self, row: int) -> dict:
         def txt(c):
             it = self.table.item(row, c); return (it.text() if it else "").strip()
-        lv = toc_parse.fix_ocr_number(txt(COL_LEVEL)); lv = 0 if lv is None else min(5, int(lv))
+        lv = toc_parse.fix_ocr_number(txt(COL_LEVEL)); lv = 0 if lv is None else max(0, min(5, int(lv) - 1))   # 단계 → level
         tp = toc_parse.fix_ocr_number(txt(COL_TOC))
         pg = toc_parse.fix_ocr_number(txt(COL_PAGE))
         manual = bool(self.table.item(row, COL_PAGE) and
@@ -535,8 +536,8 @@ class TocReviewDialog(QDialog):
         self.table.blockSignals(True)
         for r in self._sel_rows():
             it = self.table.item(r, COL_LEVEL)
-            v = toc_parse.fix_ocr_number(it.text()) or 0
-            it.setText(str(max(0, min(5, v + d))))
+            v = toc_parse.fix_ocr_number(it.text()) or 1
+            it.setText(str(max(1, min(6, v + d))))              # 단계 1~6 (level 0~5)
         self.table.blockSignals(False)
 
     # ── 오프셋 / 대조 ───────────────────────────────────────────────
@@ -626,7 +627,7 @@ class TocReviewDialog(QDialog):
         if not sel:
             QMessageBox.information(self, tr("번호 수정"), tr("번호를 고칠 행을 먼저 선택하세요.")); return
         if skipped and not n:
-            QMessageBox.information(self, tr("번호 수정"), tr("장 제목(레벨 0)은 번호를 붙이지 않습니다.")); return
+            QMessageBox.information(self, tr("번호 수정"), tr("장 제목(단계 1)은 번호를 붙이지 않습니다.")); return
         self.status_msg(tr('{n}개 행의 번호를 고쳤습니다(위 형제 + 1, 아래 형제 이어서).{v}').format(n=n, v=tr(' (장 행 {skipped}개 제외)').format(skipped=skipped) if skipped else ''))
 
     def status_msg(self, text: str):

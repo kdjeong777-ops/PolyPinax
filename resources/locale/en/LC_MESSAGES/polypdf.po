@@ -1300,9 +1300,9 @@ msgstr "Word export cancelled."
 msgid "Word 저장"
 msgstr "Save Word"
 
-#: viewer/app.py
+#: viewer/app.py viewer/widgets/toc_review_dialog.py
 msgid "단계"
-msgstr "Step"
+msgstr "Level"
 
 #: viewer/app.py
 msgid "저장을 취소했습니다 — 원본은 그대로입니다."
@@ -14127,12 +14127,12 @@ msgid "번호 수정"
 msgstr "Fix Numbering"
 
 #: viewer/widgets/toc_review_dialog.py
-msgid "현재 행의 번호를 **바로 위 같은 레벨 형제의 번호 + 1** 로 고치고(형제가 없으면 1), 그 아래 같은 레벨 형제들도 이어서 +1 씩 다시 매깁니다(상위 레벨이 나오기 전까지). 레벨을 고친 뒤 이 버튼으로 번호를 잇습니다. 형식은 옆 콤보(자동 = 위 형제의 형식)"
-msgstr "Sets the current row's number to **the number of the nearest sibling above at the same level + 1** (1 if none), then renumbers the following same-level siblings by +1 each (until a higher level appears). After changing levels, use this button to continue numbering. Format is set in the adjacent combo box (Auto = format of the sibling above)"
+msgid "현재 행의 번호를 **바로 위 같은 단계 형제의 번호 + 1** 로 고치고(형제가 없으면 1), 그 아래 같은 단계 형제들도 이어서 +1 씩 다시 매깁니다(상위 단계가 나오기 전까지). 단계를 고친 뒤 이 버튼으로 번호를 잇습니다. 형식은 옆 콤보(자동 = 위 형제의 형식)"
+msgstr "Sets the current row's number to **the number of the sibling directly above at the same level + 1** (1 if there is none), then renumbers the following siblings at that level by +1 each (until a higher level appears). Use this button after changing levels to keep numbers in sequence. Format comes from the combo next to it (Auto = the sibling above)"
 
 #: viewer/widgets/toc_review_dialog.py
-msgid "번호 수정 형식 — 자동: 바로 위 같은 레벨 형제의 형식을 따름(없으면 레벨 1 '1.', 그 아래 '1)')"
-msgstr "Numbering format — Auto: follows the format of the nearest sibling above at the same level (if none, '1.' for level 1 and '1)' below it)"
+msgid "번호 수정 형식 — 자동: 바로 위 같은 단계 형제의 형식을 따름(없으면 단계 2 '1.', 그 아래 '1)')"
+msgstr "Renumber format — Auto: follows the sibling directly above at the same level (if none, level 2 uses '1.', deeper levels '1)')"
 
 #: viewer/widgets/toc_review_dialog.py
 msgid "목차 보기"
@@ -14199,10 +14199,6 @@ msgid "형식: 자동"
 msgstr "Format: Auto"
 
 #: viewer/widgets/toc_review_dialog.py
-msgid "레벨"
-msgstr "Level"
-
-#: viewer/widgets/toc_review_dialog.py
 msgid "목차 쪽"
 msgstr "TOC page"
 
@@ -14231,11 +14227,11 @@ msgid "선택 행 삭제(Del)"
 msgstr "Delete selected rows (Del)"
 
 #: viewer/widgets/toc_review_dialog.py
-msgid "레벨 올리기(상위)"
+msgid "단계 올리기(상위)"
 msgstr "Promote Level"
 
 #: viewer/widgets/toc_review_dialog.py
-msgid "레벨 내리기(하위)"
+msgid "단계 내리기(하위)"
 msgstr "Demote Level"
 
 #: viewer/widgets/toc_review_dialog.py
@@ -14251,8 +14247,8 @@ msgid "번호를 고칠 행을 먼저 선택하세요."
 msgstr "Select a row to renumber first."
 
 #: viewer/widgets/toc_review_dialog.py
-msgid "장 제목(레벨 0)은 번호를 붙이지 않습니다."
-msgstr "Chapter titles (level 0) are not numbered."
+msgid "장 제목(단계 1)은 번호를 붙이지 않습니다."
+msgstr "Chapter titles (level 1) are not numbered."
 
 #: viewer/widgets/toc_review_dialog.py
 msgid "쪽 순서가 이미 맞습니다."

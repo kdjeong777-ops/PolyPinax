@@ -8407,23 +8407,6 @@ msgid "키워드: {join}"
 msgstr ""
 
 #: viewer/widgets/bookmarker_dialog.py
-msgid "입력"
-msgstr ""
-
-#: viewer/widgets/bookmarker_dialog.py
-msgid "PDF 파일 경로"
-msgstr ""
-
-#: viewer/widgets/bookmarker_dialog.py viewer/widgets/settings_dialog.py
-#: viewer/widgets/tag_export_dialog.py viewer/widgets/vprinter_dialog.py
-msgid "찾아보기"
-msgstr ""
-
-#: viewer/widgets/bookmarker_dialog.py
-msgid "PDF 파일:"
-msgstr ""
-
-#: viewer/widgets/bookmarker_dialog.py
 msgid "기존 책갈피"
 msgstr ""
 
@@ -8537,8 +8520,9 @@ msgstr ""
 msgid "(비우면 PDF 파일과 같은 폴더)"
 msgstr ""
 
-#: viewer/widgets/bookmarker_dialog.py
-msgid "PDF 선택"
+#: viewer/widgets/bookmarker_dialog.py viewer/widgets/settings_dialog.py
+#: viewer/widgets/tag_export_dialog.py viewer/widgets/vprinter_dialog.py
+msgid "찾아보기"
 msgstr ""
 
 #: viewer/widgets/bookmarker_dialog.py

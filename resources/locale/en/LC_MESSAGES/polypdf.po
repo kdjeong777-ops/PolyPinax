@@ -8698,23 +8698,6 @@ msgid "키워드: {join}"
 msgstr "Keywords: {join}"
 
 #: viewer/widgets/bookmarker_dialog.py
-msgid "입력"
-msgstr "Input"
-
-#: viewer/widgets/bookmarker_dialog.py
-msgid "PDF 파일 경로"
-msgstr "PDF file path"
-
-#: viewer/widgets/bookmarker_dialog.py viewer/widgets/settings_dialog.py
-#: viewer/widgets/tag_export_dialog.py viewer/widgets/vprinter_dialog.py
-msgid "찾아보기"
-msgstr "Browse"
-
-#: viewer/widgets/bookmarker_dialog.py
-msgid "PDF 파일:"
-msgstr "PDF file:"
-
-#: viewer/widgets/bookmarker_dialog.py
 msgid "기존 책갈피"
 msgstr "Existing bookmarks"
 
@@ -8834,9 +8817,10 @@ msgstr "Save bookmark text (.txt) for ALPDF"
 msgid "(비우면 PDF 파일과 같은 폴더)"
 msgstr "(leave blank for the PDF's folder)"
 
-#: viewer/widgets/bookmarker_dialog.py
-msgid "PDF 선택"
-msgstr "Select PDF"
+#: viewer/widgets/bookmarker_dialog.py viewer/widgets/settings_dialog.py
+#: viewer/widgets/tag_export_dialog.py viewer/widgets/vprinter_dialog.py
+msgid "찾아보기"
+msgstr "Browse"
 
 #: viewer/widgets/bookmarker_dialog.py
 msgid "출력 폴더"

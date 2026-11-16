@@ -552,6 +552,8 @@ class BookmarkTree(QWidget):
         self._probe_done = 0
         self.probe_provider = None   # 앱이 주입: (path,size,mtime) -> (enc,has_toc,auth)|None
         self.photo_menu_fill = None   # 앱이 주입: (메뉴, 사진 경로들, 'tree', 책갈피창 줄) — 사진 세 메뉴 한 함수(사진 보기 SOT §4.20, 261107-2)
+        self.view_only = None           # 앱이 주입: () -> True 면 보기만(섞은 2단의 아래 창, 사진 보기 SOT §4.47, 261116-19) — 우클릭·Del·이름 변경 막음
+        self.view_only_menu = None      # 앱이 주입: (파일 경로|None, 전역 좌표) — 보기만일 때의 우클릭 메뉴('그 모드로 보기')
         self.xfer_quick = None          # 앱이 주입: (하위 메뉴, run(폴더)) -> bool — 폴더로 복사·이동 맨 위 즐겨찾기·최근 폴더(261112-18)
         self.xfer_done = None           # 앱이 주입: (대상 폴더) — 복사·이동이 되면 최근 폴더 맨 앞에(261112-18)
         self.save_first_check = None    # 앱이 주입: (파일들) -> True 면 저장 전 쪽 편집이 있어 알렸다 — 저장 ▸ 사본 넷 앞(261107-21, 마스터 §4.7.13)
@@ -3387,7 +3389,7 @@ class BookmarkTree(QWidget):
     def _edit_item(self, item: Optional[QTreeWidgetItem]):
         """항목 종류에 맞는 편집 창(파일명 / 책갈피 제목·페이지).
         파일 이름 변경은 디스크 일이라 언제나, 책갈피는 편집 모드에서만(261019-2 `ensure_edit_mode`)."""
-        if item is None or item.data(0, self.DATA_IS_TOC_PLACEHOLDER):
+        if item is None or item.data(0, self.DATA_IS_TOC_PLACEHOLDER) or self._is_view_only():   # 261116-19: 보기만이면 이름 변경 없음
             return
         if self._is_file_node(item):
             self._edit_file_node(item)
@@ -3654,6 +3656,10 @@ class BookmarkTree(QWidget):
     def _on_tree_context_menu(self, pos):
         item = self.tree.itemAt(pos)
         if item is None or item.data(0, self.DATA_IS_TOC_PLACEHOLDER):
+            return
+        if self._is_view_only():                         # 261116-19(사진 보기 SOT §4.47): 섞은 2단 아래 창 — 보기만
+            if self.view_only_menu is not None:
+                self.view_only_menu(self._file_path_of(item), self.tree.viewport().mapToGlobal(pos))
             return
         if self._zip_context_menu(item, pos):            # 261106-5(§4.24.1): PDF 모드 zip 줄·안 줄
             return
@@ -4295,8 +4301,15 @@ class BookmarkTree(QWidget):
     # ---- 삭제 / 선택만 남기기 ------------------------------------------
     def _on_del_key(self):
         """260611-56: 편집 모드에서 DEL 키 → 휴지통 버튼과 동일(선택 삭제)."""
-        if self._edit_mode:
+        if self._edit_mode and not self._is_view_only():   # 261116-19: 섞은 2단 아래 창은 지우지 않는다
             self._op_delete()
+
+    def _is_view_only(self) -> bool:
+        """261116-19(사진 보기 SOT §4.47): 앱이 '보기만'이라 하는가 — 섞은 2단의 아래 책갈피창."""
+        try:
+            return bool(self.view_only is not None and self.view_only())
+        except Exception:
+            return False
 
     def _op_delete(self, keep_mode=None):
         """v1.6.20 K3: 파일 노드는 휴지통, 책갈피 노드는 트리에서 제거(혼합 허용).

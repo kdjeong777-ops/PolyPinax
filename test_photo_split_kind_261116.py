@@ -7,6 +7,7 @@ B. ▾ PIX: 오른쪽 칸 = 사진 모드의 마지막 사진(사진 문서), �
 C. 썸네일 칸은 활성 창 따라 — 왼쪽(PDF)이면 쪽 썸네일, 오른쪽(사진)이면 사진 줄(아래 목록 차례)
 D. 오른쪽에서 PageDown = 아래 목록 차례로 다음 사진, 사진 줄을 누르면 오른쪽에(왼쪽 그대로)
 E. 편집 모드여도 섞은 칸에는 그리기 도구 줄이 없다(왼쪽은 있다)
+   E2(261116-19). 아래 책갈피창도 보기만 — 우클릭(실제 QContextMenuEvent) = '사진 모드로 보기' 한 줄, Del·이름 변경 없음
 F. 본체를 다시 누르면 종전 2단 — 오른쪽 PDF·아래 PDF 목록·사진 줄 숨김
 G. 섞은 칸 우클릭 '사진 모드로 보기' = 사진 모드 1단에 그 사진
 H. 사진 모드의 ▾ PDF = 오른쪽 PDF(PDF 모드의 마지막 자리)·아래 PDF 목록, 썸네일 칸 활성 창 따라, 1단이면 아래 목록은 사진으로
@@ -149,6 +150,33 @@ try:
     # E — 편집 모드 그리기
     top.btn_edit.setChecked(True); pump()
     chk(not mw._mv[0]._draw_bar.isHidden() and mv1._draw_bar.isHidden(), "E 편집 모드 — 섞은 칸에는 그리기 줄 없음")
+
+    # E2 — 261116-19: 섞은 2단 아래 책갈피창은 보기만 — 우클릭 = '사진 모드로 보기' 한 줄, Del·이름 변경 없음(편집 모드여도)
+    from PyQt6.QtGui import QContextMenuEvent
+    from viewer.widgets.ctx_menu import CtxMenu
+    node = bot._file_node_for_path(str(Path(order[0])))
+    chk(node is not None, "E2 준비 — 아래 창 사진 줄")
+    menus, dels, edits = [], [], []
+    _old_exec2 = CtxMenu.exec
+    CtxMenu.exec = lambda menu, *a, **k: menus.append([x.text() for x in menu.actions() if not x.isSeparator()])
+    _old_del, _old_ed = bot._op_delete, bot._edit_file_node
+    bot._op_delete = lambda *a, **k: dels.append(1)
+    bot._edit_file_node = lambda *a, **k: edits.append(1)
+    try:
+        if node is not None:
+            bot.tree.scrollToItem(node); pump()
+            vp2 = bot.tree.viewport()
+            c = bot.tree.visualItemRect(node).center()
+            QApplication.sendEvent(vp2, QContextMenuEvent(QContextMenuEvent.Reason.Mouse, c, vp2.mapToGlobal(c))); pump()
+            bot.tree.setCurrentItem(node); node.setSelected(True)
+            QTest.keyClick(bot.tree, Qt.Key.Key_Delete); pump()
+            bot._edit_item(node); pump()
+    finally:
+        CtxMenu.exec = _old_exec2
+        bot._op_delete, bot._edit_file_node = _old_del, _old_ed
+    chk(menus == [["사진 모드로 보기"]], "E2 아래 창 우클릭 = '사진 모드로 보기' 한 줄", str(menus))
+    chk(not dels and not edits and all(p.exists() for p in ph), "E2 Del·이름 변경 없음(편집 모드여도)",
+        "del %d edit %d" % (len(dels), len(edits)))
     top.btn_edit.setChecked(False); pump()
 
     # F — 본체로 종전 2단
@@ -196,6 +224,16 @@ try:
         "H 오른쪽 활성 — 쪽 썸네일")
     QTest.mouseClick(mw._mv[0].view.viewport(), Qt.MouseButton.LeftButton, pos=QPoint(40, 40)); pump()
     chk(mw._active_pane == 0 and strip.isVisibleTo(pt), "H 왼쪽(사진) 활성 — 사진 줄")
+    # 261116-19(사진 SOT §4.28): 섞은 2단이면 왼쪽 사진 우클릭에 '2분할 함께 움직이기' 없음(누르면 아무 일 없던 줄)
+    hm = []
+    _old_exec3 = CtxMenu.exec
+    CtxMenu.exec = lambda menu, *a, **k: hm.append([x.text() for x in menu.actions()])
+    try:
+        mw._on_viewer_context_menu(mw._mv[0].view.viewport().mapToGlobal(QPoint(60, 60))); pump()
+    finally:
+        CtxMenu.exec = _old_exec3
+    chk(bool(hm) and "사진 복사" in hm[0] and "2분할 함께 움직이기" not in hm[0],
+        "H 섞은 2단 — 왼쪽 사진 메뉴에 '2분할 함께 움직이기' 없음", str(hm[:1])[:200])
     m.aboutToShow.emit()
     chk(kinds["split_kind_pdf"].isChecked(), "H ▾ 체크 = PDF")
     mw._vm_single(); pump()

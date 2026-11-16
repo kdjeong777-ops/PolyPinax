@@ -248,6 +248,8 @@ class SplitKindMixin:
         self._mix_on = True
         if not self.__dict__.get("_mix_wired"):
             rt.filesListed.connect(self._mix_on_listed)
+            rt.view_only = self._mix_on_now              # 261116-19: 섞은 동안 아래 창은 보기만(우클릭 = 그 모드로 보기, Del·이름 변경 없음)
+            rt.view_only_menu = self._mix_tree_menu
             self._mix_wired = True
         rt._root_dir = None                              # 앞 목록을 새 종류로 한 번 더 훑지 않게(사진 SOT §4.2 와 같은 순서)
         rt.set_photo_mode(photo)
@@ -441,6 +443,11 @@ class SplitKindMixin:
         a.triggered.connect(lambda _checked=False, p=path: self._mix_view_in_mode(p))
         self._mix_last_menu = menu                       # 검사가 실제 항목을 누른다
         menu.exec(gpos)
+
+    def _mix_tree_menu(self, path, gpos) -> None:
+        """261116-19: 섞은 2단 아래 책갈피창 우클릭 — 그 칸 종류의 파일 줄이면 `그 모드로 보기` 한 줄, 그 밖(폴더·zip 줄)은 메뉴 없음."""
+        if path and os.path.isfile(str(path)) and self._mix_kind_ok(path, self._pane_photo_kind(1)):
+            self._mix_menu(gpos, path)
 
     def _mix_view_in_mode(self, path=None) -> None:
         """창 모드를 섞은 칸의 종류로 바꿔 그 파일을 1단에 연다(그 칸의 폴더)."""

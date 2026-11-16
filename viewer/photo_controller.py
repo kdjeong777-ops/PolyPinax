@@ -635,8 +635,17 @@ class PhotoMixin:
         self.status.showMessage(tr("2분할 함께 움직이기: 켬") if on else tr("2분할 함께 움직이기: 끔"), 2500)
 
     def _photo_pair_ok(self) -> bool:
-        if not (self.__dict__.get("_photo_pair_on") and getattr(self, "_split_on", False) and getattr(self, "_photo_mode", False)):
+        return bool(self.__dict__.get("_photo_pair_on")) and self._photo_pair_avail()
+
+    def _photo_pair_avail(self) -> bool:
+        """261116-19(4.28): 두 창이 모두 사진인가 — 메뉴 '2분할 함께 움직이기' 도 이때만(섞은 2단·컷·PDF 칸이면 없다)."""
+        if not (getattr(self, "_split_on", False) and getattr(self, "_photo_mode", False)) or self._mix_on_now():
             return False
+        try:
+            if self.bookmark_tree_right.in_shot_list():      # 컷 칸
+                return False
+        except AttributeError:
+            pass
         mvs = getattr(self, "_mv", [])
         return len(mvs) >= 2 and all(getattr(getattr(m, "_doc", None), "is_photo", False) for m in mvs[:2])
 
@@ -2915,7 +2924,7 @@ class PhotoMixin:
         if photos:
             act(self._kt(tr("발표보기"), "present"),
                 lambda p=photos[0]: self._photo_open_then(p, self._open_presentation), ok or many)
-        if getattr(self, "_split_on", False):
+        if self._photo_pair_avail():                          # 261116-19: 두 창 모두 사진일 때만(종전 2단이면 늘)
             a = menu.addAction(tr("2분할 함께 움직이기"))         # 4.28(261104-7 B3, §5.1 F3)
             a.setCheckable(True)
             a.setChecked(bool(self.__dict__.get("_photo_pair_on")))

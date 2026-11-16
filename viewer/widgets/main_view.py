@@ -1579,6 +1579,13 @@ class _PdfGraphicsView(QGraphicsView):
             ownr._toggle_stamp()
             event.accept()
             return
+        # 261116-19(마스터 §4.6.3): 개체 선택에서 두 번 눌러 들어간 도형 편집 — Esc = 개체 선택으로
+        #   (글 고치기의 Esc 는 글상자 eventFilter 가 받는다)
+        if (k == Qt.Key.Key_Escape and ownr is not None and getattr(ownr, "_obj_edit", None) is not None
+                and getattr(ownr, "_text_editor", None) is None):
+            ownr._back_to_select()
+            event.accept()
+            return
         if (ownr is not None and getattr(ownr, "_img_edit", False)
                 and (event.modifiers() & Qt.KeyboardModifier.ControlModifier)
                 and k == Qt.Key.Key_V):

@@ -7,6 +7,7 @@ B. 개체 선택에서 글상자를 두 번 누르면(실제 QMouseEvent 누름�
    바깥을 누르면 개체 선택으로 돌아온다(새 글상자를 만들지 않는다)
 C. 같은 길에서 Esc = 개체 선택으로
 D. 도형을 두 번 누르면 도형 편집(그 도형 고름) — 모서리 손잡이를 끌면 커지고, 바깥 누름 = 개체 선택(새 도형 안 그림)
+   D2(261116-19). 도형 편집 중 Esc(실제 키) = 개체 선택으로
 E. 같은 것을 사진 모드 본문에서도(B 의 짧은 판)
 """
 import os, sys, tempfile, shutil, time
@@ -137,7 +138,7 @@ try:
     ed = mv._text_editor
     chk(ed is not None, "C 다시 두 번 누르면 글 고치기")
     if ed is not None:
-        mv.eventFilter(ed, QKeyEvent(QEvent.Type.KeyPress, Qt.Key.Key_Escape, Qt.KeyboardModifier.NoModifier)); spin(0.05)
+        QTest.keyClick(ed, Qt.Key.Key_Escape); spin(0.05)          # 261116-19: 실제 키(편집기에 걸린 eventFilter 를 지나)
     chk(mv._draw_kind == "select" and mv._text_editor is None, "C Esc = 개체 선택으로", str(mv._draw_kind))
 
     # D — 도형
@@ -163,6 +164,12 @@ try:
     click_at(mv, mv._norm_to_view(0.15, 0.85, pr))
     chk(mv._draw_kind == "select" and len(mv._page_strokes) == n, "D 바깥 누름 = 개체 선택으로(새 도형 없음)",
         "%s %d→%d" % (mv._draw_kind, n, len(mv._page_strokes)))
+    # D2 — 261116-19: 도형 편집 중 Esc(실제 키 — 본문 뷰에 QTest.keyClick) = 개체 선택으로
+    dbl_at(mv, edge)
+    chk(mv._draw_kind == "shape", "D2 준비 — 다시 두 번 누르면 도형 편집", str(mv._draw_kind))
+    mv.view.setFocus(); QTest.keyClick(mv.view, Qt.Key.Key_Escape); spin(0.05)
+    chk(mv._draw_kind == "select" and mv._stroke_selected == -1 and len(mv._page_strokes) == n,
+        "D2 도형 편집 중 Esc = 개체 선택으로", "%s %s" % (mv._draw_kind, mv._stroke_selected))
 
     # E — 사진 모드
     mw.bookmark_tree.btn_edit.setChecked(False); spin(0.2)

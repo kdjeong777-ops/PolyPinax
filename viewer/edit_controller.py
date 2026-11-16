@@ -396,7 +396,8 @@ class EditMixin:
         x0 = min(rc[0], rc[2]) * pw; y0 = min(rc[1], rc[3]) * ph
         x1 = max(rc[0], rc[2]) * pw; y1 = max(rc[1], rc[3]) * ph
         rect = fitz.Rect(x0, y0, x1, y1)
-        trgb, _ = _rgb_op(stk.get("color", "#111111"), 100)
+        # 261116-7(마스터 §4.6.1): 글자 투명도(`text_alpha`, 없으면 100) — 화면(`main_view.text_qcolor`)과 같은 값
+        trgb, top = _rgb_op(stk.get("color", "#111111"), stk.get("text_alpha", 100))
         bg = stk.get("bg")
         if bg:
             brgb, bop = _rgb_op(bg, stk.get("bg_alpha", 100))
@@ -456,6 +457,8 @@ class EditMixin:
         ff = text_font_file()
         bold = bool(stk.get("bold", False)); italic = bool(stk.get("italic", False))
         kw = dict(fontsize=fs, color=trgb, align=int(stk.get("align", 0)))
+        if top < 1.0:
+            kw.update(fill_opacity=top, stroke_opacity=top)
         if ff:
             # 260913-5(SOT §4.5.10 ②): 한 번 저장한 쪽의 krfont 는 이미 부분집합 — 같은 이름이면
             #   insert_font 가 그것을 재사용해 새 글자가 사라진다. 그런 이름은 비켜 간다.
@@ -476,7 +479,7 @@ class EditMixin:
                 insert_textbox_styled(fitz, page, big, txt, bold=bold, italic=italic, **kw)
         except Exception:
             try:
-                page.insert_textbox(box, txt, fontsize=fs, color=trgb)
+                page.insert_textbox(box, txt, fontsize=fs, color=trgb, fill_opacity=top)
             except Exception:
                 pass
 

@@ -11361,9 +11361,47 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             return
         run(str(target))
 
+    # 261116-6(사진 보기 SOT §4.7): 등록은 됐는데 개별 단추가 앞 BUTTONS_MAX 개뿐이라 ▾ 목록에만 들어가
+    #   '등록이 안 된다'로 보였다(사용자가 같은 폴더를 세 번 더함). 같은 모드 목록에 이미 있으면 알리고 더하지 않으며,
+    #   더하면 어디에 보이는지 상태 막대에 알린다. 목록은 모드마다 따로라 다른 모드의 즐겨찾기와는 겹치지 않는다.
+    def _fav_existing(self, kind: str, path) -> "dict | None":
+        from viewer.widgets.favorites_dialog import fav_kind
+        key = os.path.normcase(os.path.normpath(str(path)))
+        for f in self._favorites:
+            if fav_kind(f) != kind:
+                continue
+            p = f.get("file") if kind == "file" else f.get("folder")
+            if p and os.path.normcase(os.path.normpath(str(p))) == key:
+                return f
+        return None
+
+    def _fav_where(self, fav: dict) -> str:
+        """그 즐겨찾기가 보이는 곳 — 개별 단추(앞 BUTTONS_MAX 개)인지 ▾ 목록 몇 번째인지."""
+        from viewer.widgets.favorites_dialog import BUTTONS_MAX, fav_kind
+        kind = fav_kind(fav)
+        same = [f for f in self._favorites if fav_kind(f) == kind]
+        n = next((i for i, f in enumerate(same) if f is fav), len(same) - 1) + 1
+        menu = tr("등록 폴더 ▾") if kind == "folder" else tr("등록 파일 ▾")
+        if n <= BUTTONS_MAX:
+            return tr("즐겨찾기 탭 단추와 {menu} 목록 {n}번째").format(menu=menu, n=n)
+        return tr("{menu} 목록 {n}번째 (단추는 앞 {m}개만 — 항목 관리에서 순서를 바꿀 수 있습니다)").format(
+            menu=menu, n=n, m=BUTTONS_MAX)
+
+    def _fav_already(self, fav: dict) -> None:
+        QMessageBox.information(self, tr("안내"), tr("이미 즐겨찾기에 있습니다: {name}\n{where}").format(
+            name=fav.get("name", "?"), where=self._fav_where(fav)))
+
+    def _fav_added(self, fav: dict) -> None:
+        self.status.showMessage(tr("즐겨찾기에 추가했습니다: {name} — {where}").format(
+            name=fav.get("name", "?"), where=self._fav_where(fav)), 8000)
+
     def _add_current_folder_favorite(self):
         if not self._folder:
             QMessageBox.information(self, tr("안내"), tr("먼저 폴더를 여세요."))
+            return
+        have = self._fav_existing("folder", self._folder)
+        if have is not None:
+            self._fav_already(have)
             return
         from viewer.widgets.favorites_dialog import AddFavoriteDialog, make_unique_name
         suggested = make_unique_name(self._folder.name, self._favorites)
@@ -11382,6 +11420,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             self._favorites.append(fav)
             self._refresh_favorites_menu()
             self._save_settings_now()
+            self._fav_added(fav)
 
     def _add_current_file_favorite(self):
         """260611-65: 현재 뷰어에 표시 중인 파일을 즐겨찾기에 추가."""
@@ -11399,19 +11438,25 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         if not (p.exists() and (p.suffix.lower() == ".pdf" or _photo_ok)):
             QMessageBox.information(self, tr("안내"), tr("PDF 파일을 선택하세요."))
             return
+        have = self._fav_existing("file", p)                 # 261116-6: 같은 모드에 이미 있으면 알림만
+        if have is not None:
+            self._fav_already(have)
+            return
         suggested = make_unique_name(p.stem, self._favorites)
         dlg = AddFavoriteDialog(suggested, "file", self)     # 261008-12: 종류 표시 '📄 파일'(종전 '📁 폴더')
         dlg.setWindowTitle(tr("현재 파일 즐겨찾기 추가"))
         if dlg.exec() == dlg.DialogCode.Accepted and dlg.name():
-            self._favorites.append({
+            fav = {
                 "name": dlg.name(),
                 "kind": "file",
                 "file": str(p),
                 "folder": str(p.parent),
                 "rel": self._fav_rel(p),
-            })
+            }
+            self._favorites.append(fav)
             self._refresh_favorites_menu()
             self._save_settings_now()
+            self._fav_added(fav)
 
     def _add_current_search_favorite(self):
         q = self.search_bar.current_query()

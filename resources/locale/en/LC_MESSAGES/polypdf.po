@@ -903,6 +903,19 @@ msgid "기타"
 msgstr "Other"
 
 #: viewer/app.py
+msgid "등록 폴더 ▾"
+msgstr "Saved Folders ▾"
+
+#: viewer/app.py
+msgid "등록 파일 ▾"
+msgstr "Saved Files ▾"
+
+#: viewer/app.py viewer/edit_controller.py viewer/photo_controller.py
+#: viewer/widgets/bookmark_tree.py viewer/widgets/hyperlink_dialog.py
+msgid "안내"
+msgstr "Information"
+
+#: viewer/app.py
 msgid "현재 파일 즐겨찾기 추가"
 msgstr "Add Current File to Favorites"
 
@@ -1179,11 +1192,6 @@ msgstr "Bookmarks are being generated. Try again after it finishes or is stopped
 #: viewer/app.py viewer/study_controller.py
 msgid "먼저 PDF를 여세요."
 msgstr "Open a PDF first."
-
-#: viewer/app.py viewer/edit_controller.py viewer/photo_controller.py
-#: viewer/widgets/bookmark_tree.py viewer/widgets/hyperlink_dialog.py
-msgid "안내"
-msgstr "Information"
 
 #: viewer/app.py
 msgid "책갈피 생성 취소(검토 표에서 취소) — PDF 는 그대로입니다"
@@ -1756,6 +1764,11 @@ msgstr "(No items)"
 #: viewer/app.py viewer/widgets/bookmark_tree.py
 msgid "오류"
 msgstr "Error"
+
+#: viewer/app.py
+#, python-brace-format
+msgid "{menu} 목록 {n}번째 (단추는 앞 {m}개만 — 항목 관리에서 순서를 바꿀 수 있습니다)"
+msgstr "item {n} in the {menu} list (only the first {m} get buttons — change the order in Manage Items)"
 
 #: viewer/app.py viewer/key_actions.py
 msgid "먼저 폴더를 여세요."
@@ -2351,6 +2364,25 @@ msgstr ""
 #: viewer/app.py
 msgid "초기화 실패"
 msgstr "Reset failed"
+
+#: viewer/app.py
+#, python-brace-format
+msgid "즐겨찾기 탭 단추와 {menu} 목록 {n}번째"
+msgstr "a Favorites tab button and item {n} in the {menu} list"
+
+#: viewer/app.py
+#, python-brace-format
+msgid ""
+"이미 즐겨찾기에 있습니다: {name}\n"
+"{where}"
+msgstr ""
+"Already in favorites: {name}\n"
+"{where}"
+
+#: viewer/app.py
+#, python-brace-format
+msgid "즐겨찾기에 추가했습니다: {name} — {where}"
+msgstr "Added to favorites: {name} — {where}"
 
 #: viewer/app.py
 msgid "녹화를 마무리하는 중…"

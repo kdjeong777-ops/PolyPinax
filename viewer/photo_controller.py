@@ -4568,7 +4568,9 @@ class PhotoFlattenWorker(QObject):
                 d = fitz.open("pdf", self.overlay)
                 try:
                     pm = d[0].get_pixmap(alpha=True)            # 쪽 pt = 사진 픽셀(D14) — 1:1
-                    ov = Image.frombytes("RGBA", (pm.width, pm.height), pm.samples)
+                    # 261116-7: MuPDF 알파 그림은 미리 곱한 값(premultiplied) — 'RGBA' 로 읽으면 반투명 글자·하이라이트가
+                    #   한 번 더 곱해져 어둡게 구워졌다(50% 빨강이 흰 바탕에 (192,128,128)). 'RGBa' 로 읽고 바꾼다.
+                    ov = Image.frombytes("RGBa", (pm.width, pm.height), pm.samples).convert("RGBA")
                 finally:
                     d.close()
                 if ov.size != im.size:

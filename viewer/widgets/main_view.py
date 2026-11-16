@@ -128,6 +128,18 @@ MV_SIZE_PT_MIN, MV_SIZE_PT_MAX = 4.0, 200.0
 MV_SPACING_PT_MIN, MV_SPACING_PT_MAX = -3.0, 30.0
 MV_A4_PT_H = 842.0        # 옛 `size`(비율)를 pt 로 환산할 때의 기준(페이지를 모를 때)
 MV_TEXT_STYLE_MAP = {n: s for n, s in MV_TEXT_STYLES}
+
+
+def text_qcolor(st) -> QColor:
+    """261116-7(마스터 §4.6.1·사진 보기 SOT §4.19): 글상자·지시선 **글자색** — `color` + 글자 투명도 `text_alpha`(0~100,
+    없으면 100 = 옛 자료 그대로). 화면·입력칸이 이것 하나를 쓰고, 굽기(`edit_controller`)는 같은 값을 fill_opacity 로."""
+    c = QColor(st.get("color", "#111111"))
+    try:
+        a = float(st.get("text_alpha", 100))
+    except (TypeError, ValueError):
+        a = 100.0
+    c.setAlpha(int(round(max(0.0, min(100.0, a)) * 2.55)))
+    return c
 # 260611-74: 지시선 화살표 끝 모양
 MV_LEADER_TIPS = ("arrow", "circle", "plain")
 # 261103-4·261107-33(디자인 SOT §2.6): 단어장 단어 밑줄 — 값은 viewer/vocab_marks.py 한 곳(이 이름은 옛 부르는 곳을 위해 남김)
@@ -673,8 +685,14 @@ class _MainDrawOverlay(QWidget):
         p.save()
         p.translate(-hw + pad, -hh + pad)
         p.setClipRect(QRectF(0, 0, iw, ih))
-        p.setPen(QColor(st.get("color", "#111111")))   # drawContents 가 펜 색을 글자색으로
-        doc.drawContents(p)
+        # 261116-7(사용자 보고 '글 내용이 설정된 색상으로 안써져'): `drawContents` 는 펜 색이 아니라 기본 팔레트
+        #   글자색(검정)으로 그려, 화면 글자가 늘 검정이었다(저장·굽기는 색이 맞았다). 그리기 문맥의 팔레트에 글자색 +
+        #   글자 투명도를 직접 준다.
+        from PyQt6.QtGui import QAbstractTextDocumentLayout, QPalette
+        ctx = QAbstractTextDocumentLayout.PaintContext()
+        ctx.palette.setColor(QPalette.ColorRole.Text, text_qcolor(st))
+        ctx.clip = QRectF(0, 0, iw, ih)
+        doc.documentLayout().draw(p, ctx)
         p.restore()
         p.restore()
 
@@ -4056,9 +4074,32 @@ class MainView(QWidget):
         self._pen_idx = None if self._pen_idx == idx else idx
         if self._pen_idx is not None:
             self._last_pen_idx = self._pen_idx    # 260907-5: 마지막으로 쓴 색을 기억
+            self._pen_to_text_box()
             if self._draw_kind in (None, "erase"):
                 self._draw_kind = "line"  # 색상버튼만 누르면 자연스럽게 선긋기 시작
         self._apply_tool()
+
+    def _pen_to_text_box(self):
+        """261116-7(§4.6.1): 쓰는 중이거나 고른 글상자·지시선이 있으면 누른 색상버튼의 색·투명도를 그 글자에도.
+        박스선 켬/끔은 건드리지 않는다(선 색·굵기만 펜으로)."""
+        idx = self._text_edit_idx if getattr(self, "_text_editor", None) is not None else getattr(self, "_stroke_selected", -1)
+        if not (0 <= idx < len(self._page_strokes)):
+            return
+        st = self._page_strokes[idx]
+        if not (st.get("text_box") or st.get("leader")):
+            return
+        f = self._pen_style_fields()
+        f.pop("box_line", None)
+        st.update(f)
+        ed = getattr(self, "_text_editor", None)
+        if ed is not None and self._text_edit_idx == idx:
+            c = text_qcolor(st)
+            ed.setStyleSheet("QTextEdit{color:rgba(%d,%d,%d,%d);background:transparent;border:none;padding:%dpx;}"
+                             % (c.red(), c.green(), c.blue(), c.alpha(), self.TEXT_PAD))
+        else:
+            self._save_page_strokes()
+        if self._draw_overlay is not None:
+            self._draw_overlay.update()
 
     def _ensure_pen(self):
         """260907-5(사용자 요청): 선·도형을 켤 때 **색이 없으면 골라 준다**.
@@ -5574,14 +5615,19 @@ class MainView(QWidget):
         스타일(메모·강조 등)이 박스선을 켜 두었더라도 마찬가지다 — 사용자가 선을
         고르지 않았는데 선이 그려지면 안 되고, 그렇다고 **박스를 안 만들면 더 곤란하다**
         (종전에는 아무 일도 일어나지 않아 '글쓰기가 안 된다'로 보였다).
-        지시선은 선이 본체라 글자색으로 그린다."""
+        지시선은 선이 본체라 글자색으로 그린다.
+
+        261116-7(§4.6.1, 사용자 결정 'A 색상 버튼 따라가기'): 색상버튼을 골랐으면 **글자도 그 색·투명도**
+        (`color`·`text_alpha`) — 사진·PDF 공통. 안 골랐으면 스타일 글자색 그대로(투명도 100)."""
         pen = self._active_pen()
         if self._pen_idx is None:
             tc = self._text_defaults.get("color", "#111111")
             return {"box_line": False, "border_color": tc, "border_w": 1,
                     "border_alpha": 100,
-                    "line_color": tc, "line_w": 2, "line_alpha": 100}
-        return {"border_color": pen.get("color", "#ff3030"),
+                    "line_color": tc, "line_w": 2, "line_alpha": 100, "text_alpha": 100}
+        return {"color": pen.get("color", "#ff3030"),
+                "text_alpha": int(pen.get("alpha", 100)),
+                "border_color": pen.get("color", "#ff3030"),
                 "border_w": int(pen.get("width", 3)),
                 "border_alpha": int(pen.get("alpha", 100)),
                 "line_color": pen.get("color", "#ff3030"),
@@ -5592,9 +5638,23 @@ class MainView(QWidget):
         """프리셋만 갱신(글자색·크기·배경·박스선 on/off). 테두리/선 스타일은 유지."""
         st.update(self._new_style_fields(name))
 
+    def _photo_text_scale(self, st) -> None:
+        """261116-7(사진 보기 SOT §4.19): 사진 쪽은 1pt = 사진 1픽셀이라 스타일 크기(18pt 등)가 3,000px 사진에서
+        높이의 0.6% 로 너무 작았다. 사진에서는 새 글상자의 글자 크기·자간을 **A4 쪽에서 보이던 비율**로 키운다
+        (사진 높이 ÷ A4 높이). 만든 뒤에는 pt 값 그대로라 저장·다시 열기·평탄화가 같은 크기다."""
+        if not getattr(self._doc, "is_photo", False):
+            return
+        k = self._page_pt_height() / MV_A4_PT_H
+        if k <= 0:
+            return
+        st["size_pt"] = max(MV_SIZE_PT_MIN, min(MV_SIZE_PT_MAX, round(self._style_size_pt(st) * k, 1)))
+        if st.get("spacing_pt"):
+            st["spacing_pt"] = max(MV_SPACING_PT_MIN, min(MV_SPACING_PT_MAX, float(st["spacing_pt"]) * k))
+
     def _new_text_box(self, fnorm):
         st = {"text_box": True, "text": "", "rot": 0.0, "style": self._text_style}
         st.update(self._text_defaults)
+        self._photo_text_scale(st)
         st.update(self._pen_style_fields())
         st["rect"] = [fnorm[0], fnorm[1], fnorm[0] + 0.12, fnorm[1] + 0.04]
         self._page_strokes.append(st)
@@ -5629,6 +5689,7 @@ class MainView(QWidget):
         bx, by = box_anchor
         st = {"leader": True, "text": "", "rot": 0.0, "style": self._text_style}
         st.update(self._leader_defaults)
+        self._photo_text_scale(st)
         st.update(self._pen_style_fields())
         st["rect"] = [bx, by - 0.04, bx + 0.12, by]
         st["box_anchor"] = [bx, by]
@@ -5845,12 +5906,12 @@ class MainView(QWidget):
         ed.setWordWrapMode(QTextOption.WrapMode.WrapAtWordBoundaryOrAnywhere)
         ed.document().setDocumentMargin(0.0)
         ed.setFont(self._text_qfont(st, pr))
-        c = QColor(st.get("color", "#111111"))
+        c = text_qcolor(st)                       # 261116-7: 쓰는 중에도 글자 투명도 그대로
         bg = st.get("bg")
         ed.setStyleSheet(
             # 261112-8(§4.6.13): 테두리 없이 투명 — 고른 표시는 오버레이의 파란 상자 하나, 바탕도 오버레이가 깐다
-            "QTextEdit{color:%s;background:transparent;border:none;padding:%dpx;}"
-            % (c.name(), self.TEXT_PAD))
+            "QTextEdit{color:rgba(%d,%d,%d,%d);background:transparent;border:none;padding:%dpx;}"
+            % (c.red(), c.green(), c.blue(), c.alpha(), self.TEXT_PAD))
         ed.viewport().setAutoFillBackground(False)
         ed.setPlainText(st.get("text", ""))
         ed.installEventFilter(self)
@@ -6063,7 +6124,7 @@ class MainView(QWidget):
             self._draw_overlay.update()
 
     def _commit_text_editor(self):
-        ed = getattr(self, "_text_editor", None)
+        ed = self._text_editor
         if ed is None:
             return
         idx = self._text_edit_idx

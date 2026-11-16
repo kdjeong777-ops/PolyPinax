@@ -1157,13 +1157,13 @@ msgstr ""
 msgid "책갈피를 만드는 중입니다. 끝나거나 중단한 뒤 다시 시도하세요."
 msgstr ""
 
+#: viewer/app.py viewer/study_controller.py
+msgid "먼저 PDF를 여세요."
+msgstr ""
+
 #: viewer/app.py viewer/edit_controller.py viewer/photo_controller.py
 #: viewer/widgets/bookmark_tree.py viewer/widgets/hyperlink_dialog.py
 msgid "안내"
-msgstr ""
-
-#: viewer/app.py
-msgid "입력 PDF를 지정하세요."
 msgstr ""
 
 #: viewer/app.py
@@ -1276,10 +1276,6 @@ msgstr ""
 
 #: viewer/app.py
 msgid "단계"
-msgstr ""
-
-#: viewer/app.py viewer/study_controller.py
-msgid "먼저 PDF를 여세요."
 msgstr ""
 
 #: viewer/app.py

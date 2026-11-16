@@ -32,12 +32,17 @@ from viewer.i18n import tr
 
 
 class BookmarkerDialog(QDialog):
-    """입력 PDF/모드/오프셋/출력옵션 선택. 외부 모듈 미발견 시 OK 비활성."""
+    """모드/오프셋/출력옵션 선택. 외부 모듈 미발견 시 OK 비활성.
+
+    261116-1(마스터 §4.4.2 ⓪', 사용자 지시): 대상 PDF 는 호출부가 고른 파일(`default_pdf`) 하나 — 창에서 바꾸지 않는다.
+    """
 
     def __init__(self, *, default_pdf: Optional[Path] = None,
                  prefs: Optional[dict] = None, parent=None):
         super().__init__(parent)
-        self.setWindowTitle(tr("책갈피 자동 생성"))
+        self._pdf = Path(default_pdf) if default_pdf else None
+        # 261116-1(디자인 SOT §2.12): 파일 이름은 다른 파일 대상 창처럼 창 제목에만
+        self.setWindowTitle(tr("책갈피 자동 생성") + (f" — {self._pdf.name}" if self._pdf else ""))
         self.setMinimumWidth(560)
         p = dict(prefs or {})
 
@@ -51,23 +56,8 @@ class BookmarkerDialog(QDialog):
         self.warn.setVisible(False)
         layout.addWidget(self.warn)
 
-        # ── 입력 ───────────────────────────────────────────────────
-        grp_in = QGroupBox(tr("입력"))
-        fi = QFormLayout(grp_in)
-
-        self.edit_input = QLineEdit(str(default_pdf) if default_pdf else "")
-        self.edit_input.setPlaceholderText(tr("PDF 파일 경로"))
-        btn_browse_in = QPushButton(tr("찾아보기"))     # 261107-20(디자인 SOT §2.7): 글자 끝 '…' 없이 — 다른 창의 경로 단추와 같은 이름
-        btn_browse_in.clicked.connect(self._browse_input)
-        row_in = QHBoxLayout()
-        row_in.addWidget(self.edit_input, 1)
-        row_in.addWidget(btn_browse_in)
-        fi.addRow(tr("PDF 파일:"), row_in)
-
-        # 260905(§4.4.6.1): '모듈 경로(선택)' 입력칸 삭제 — 내장본을 쓰므로 외부 버전을
-        #   가리킬 이유가 없고, 잘못 지정하면 로드만 깨진다(설정 bookmarker_path 도 제거).
-
-        layout.addWidget(grp_in)
+        # 261116-1(사용자 지시 '파일을 선택하여 책갈피를 만드므로 필요없음'): '입력' 묶음(PDF 파일 칸·[찾아보기])을 없앴다 —
+        #   대상은 책갈피창·본문에서 고른 파일이고, 고른 PDF 가 없으면 호출부가 창을 열지 않는다.
 
         # ── 260904-10: 기존 책갈피가 있으면 새로 만들지 / 고칠지 ──────────
         self.grp_exist = QGroupBox(tr("기존 책갈피"))
@@ -220,12 +210,6 @@ class BookmarkerDialog(QDialog):
         self._recheck_timer.setSingleShot(True)
         self._recheck_timer.setInterval(300)
         self._recheck_timer.timeout.connect(self._recheck_module)
-        # 260904-10: 입력 PDF 가 바뀌면 기존 책갈피 개수를 다시 센다(300ms 디바운스)
-        self._exist_timer = QTimer(self)
-        self._exist_timer.setSingleShot(True)
-        self._exist_timer.setInterval(300)
-        self._exist_timer.timeout.connect(self._recheck_existing)
-        self.edit_input.textChanged.connect(lambda _t: self._exist_timer.start())
         # 초기 1회 확인
         self._recheck_module()
         self._recheck_existing()
@@ -260,8 +244,8 @@ class BookmarkerDialog(QDialog):
 
     # --- 260904-10: 기존 책갈피 ---------------------------------------
     def _recheck_existing(self):
-        """입력 PDF 의 기존 책갈피 개수를 세어 선택 그룹을 보이거나 감춘다."""
-        fn = self.edit_input.text().strip()
+        """대상 PDF 의 기존 책갈피 개수를 세어 선택 그룹을 보이거나 감춘다."""
+        fn = self._pdf_str()
         n = 0
         if fn and Path(fn).exists() and fn.lower().endswith(".pdf"):
             try:
@@ -305,13 +289,8 @@ class BookmarkerDialog(QDialog):
             self._schedule_fit()
 
     # --- helpers ----------------------------------------------------
-    def _browse_input(self):
-        start = self.edit_input.text() or ""
-        fn, _ = QFileDialog.getOpenFileName(self, tr("PDF 선택"), start, "PDF (*.pdf)")
-        if fn:
-            self.edit_input.setText(fn)
-            if not self.edit_outdir.text():
-                self.edit_outdir.setText(str(Path(fn).parent))
+    def _pdf_str(self) -> str:
+        return str(self._pdf) if self._pdf else ""
 
     def _browse_outdir(self):
         start = self.edit_outdir.text() or ""
@@ -346,7 +325,7 @@ class BookmarkerDialog(QDialog):
 
     def _detect_toc_pages(self):
         """260904-1: 내장 탐지기로 목차 쪽 후보를 채운다(없으면 안내)."""
-        fn = self.edit_input.text().strip()
+        fn = self._pdf_str()
         if not fn or not Path(fn).exists():
             self.edit_toc_pages.setPlaceholderText(tr("먼저 PDF 파일을 지정하세요"))
             return
@@ -364,7 +343,7 @@ class BookmarkerDialog(QDialog):
 
     def toc_pages(self) -> list:
         """입력한 목차 쪽 목록(1-based). 비면 []."""
-        fn = self.edit_input.text().strip()
+        fn = self._pdf_str()
         n = 10 ** 6
         try:
             import fitz
@@ -378,7 +357,7 @@ class BookmarkerDialog(QDialog):
     def result_options(self) -> dict:
         edit = self.editing_existing()                        # 260904-10
         return {
-            "input_pdf": self.edit_input.text().strip(),
+            "input_pdf": self._pdf_str(),
             "toc_pages": [] if edit else self.toc_pages(),     # 260904-1
             "review": True if edit else self.chk_review.isChecked(),
             "mode": "existing" if edit else self._mode(),

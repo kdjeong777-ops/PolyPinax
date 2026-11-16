@@ -1176,14 +1176,14 @@ msgstr "The file is already in the list."
 msgid "책갈피를 만드는 중입니다. 끝나거나 중단한 뒤 다시 시도하세요."
 msgstr "Bookmarks are being generated. Try again after it finishes or is stopped."
 
+#: viewer/app.py viewer/study_controller.py
+msgid "먼저 PDF를 여세요."
+msgstr "Open a PDF first."
+
 #: viewer/app.py viewer/edit_controller.py viewer/photo_controller.py
 #: viewer/widgets/bookmark_tree.py viewer/widgets/hyperlink_dialog.py
 msgid "안내"
 msgstr "Information"
-
-#: viewer/app.py
-msgid "입력 PDF를 지정하세요."
-msgstr "Specify the input PDF."
 
 #: viewer/app.py
 msgid "책갈피 생성 취소(검토 표에서 취소) — PDF 는 그대로입니다"
@@ -1303,10 +1303,6 @@ msgstr "Save Word"
 #: viewer/app.py
 msgid "단계"
 msgstr "Step"
-
-#: viewer/app.py viewer/study_controller.py
-msgid "먼저 PDF를 여세요."
-msgstr "Open a PDF first."
 
 #: viewer/app.py
 msgid "저장을 취소했습니다 — 원본은 그대로입니다."

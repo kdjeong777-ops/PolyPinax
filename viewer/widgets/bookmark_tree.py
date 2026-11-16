@@ -138,10 +138,34 @@ class _EditableTree(QTreeWidget):
             e.acceptProposedAction(); self._set_drop_hl(True); return
         super().dragEnterEvent(e)
 
+    drop_allowed = None             # 261116-3(책갈피창·저장 SOT §4.7.28): BookmarkTree._drop_allowed — 책갈피는 그 파일 밖으로 못 놓는다
+
+    def _internal_drop_ok(self, e) -> bool:
+        """트리 안 끌기(자기 줄 끌기)를 이 자리에 놓아도 되나 — 판정은 BookmarkTree 한 곳."""
+        fn = self.drop_allowed
+        if not callable(fn):
+            return True
+        md = e.mimeData()
+        if md is None or not any(md.hasFormat(t) for t in self.model().mimeTypes()):
+            return True
+        pos = e.position().toPoint()
+        it = self.itemAt(pos)
+        P = QAbstractItemView.DropIndicatorPosition
+        ind = self.dropIndicatorPosition()
+        if it is None or ind == P.OnViewport:
+            dest = None
+        elif ind == P.OnItem:
+            dest = it
+        else:
+            dest = it.parent()
+        return bool(fn(self.selectedItems(), dest))
+
     def dragMoveEvent(self, e):
         if self._ext_paths(e.mimeData()):
             e.acceptProposedAction(); return
         super().dragMoveEvent(e)
+        if not self._internal_drop_ok(e):             # 261116-3: 파일 밖 — 금지 표시
+            e.ignore()
 
     def dragLeaveEvent(self, e):
         self._set_drop_hl(False)
@@ -155,6 +179,9 @@ class _EditableTree(QTreeWidget):
             #   첫 항목만 넘겨 그 파일 하나로 목록을 새로 열었다 → 전부 넘기고 앱이 목록에 더한다.
             self.pathsDropped.emit(list(paths))
             e.acceptProposedAction()
+            return
+        if not self._internal_drop_ok(e):             # 261116-3(§4.7.28): 파일 밖 — 놓아도 아무 일 없다
+            e.ignore()
             return
         super().dropEvent(e)
         self.dropped.emit()
@@ -818,6 +845,7 @@ class BookmarkTree(QWidget):
         self.tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.tree.customContextMenuRequested.connect(self._on_tree_context_menu)
         self.tree.dropped.connect(self._on_tree_dropped)
+        self.tree.drop_allowed = self._drop_allowed          # 261116-3(§4.7.28): 책갈피는 그 파일 밖으로 못 놓는다
         self.tree.delPressed.connect(self._on_del_key)    # 260611-56: DEL=선택 삭제
         # 260618-27: 외부 PDF/폴더 드롭 → 이 책갈피창(=해당 메인 창)에 등록. 비편집 모드에서도
         #   외부 드롭은 받도록 acceptDrops 상시 ON(내부 재배치 드래그는 편집모드에서만).
@@ -3146,6 +3174,24 @@ class BookmarkTree(QWidget):
         self._dirty = True
         self._bm_record()                    # 261012-10(§4.6.8)
         self._emit_changed()
+
+    def _drop_allowed(self, items, dest) -> bool:
+        """261116-3(책갈피창·저장 SOT §4.7.28, 사용자 지시): 끈 줄들을 `dest` 아래(None = 맨 위)에 놓아도 되나 — 판정 한 곳.
+        책갈피는 같은 파일의 파일 줄이나 그 파일 안 책갈피 아래로만, 파일 줄은 파일·책갈피 아래로는 안 된다."""
+        dest_file = self._file_node_of(dest) if dest is not None else None
+        for it in items or []:
+            if it is None or it.data(0, self.DATA_IS_TOC_PLACEHOLDER):
+                continue
+            if self._is_file_node(it):
+                if dest_file is not None:
+                    return False                     # 파일이 다른 파일·책갈피 아래로(폴더 줄 아래는 종전대로)
+                continue
+            own = self._file_node_of(it)
+            if own is None:
+                continue                             # 폴더 줄 등 — 종전대로
+            if dest_file is not own:
+                return False                         # 그 파일 밖(파일 목록 단계·다른 파일)
+        return True
 
     def _on_tree_dropped(self):
         if self._edit_mode:

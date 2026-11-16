@@ -3178,25 +3178,26 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             QMessageBox.information(self, tr("책갈피 자동 생성"),
                                     tr("책갈피를 만드는 중입니다. 끝나거나 중단한 뒤 다시 시도하세요."))
             return
+        # 261116-1(마스터 §4.4.2 ⓪', 사용자 지시): 대상은 고른 파일 하나 — 우클릭한 파일 > 본문에 연 PDF. 창에서 고르지 않으므로
+        #   고른 PDF 가 없으면(도구 메뉴를 PDF 없이) 창도 편집 모드 묻기도 없이 안내만.
+        if default_file and str(default_file).lower().endswith(".pdf"):
+            default_pdf = Path(default_file)
+        else:
+            cur = self.main_view.current_file() if self.main_view else None
+            default_pdf = Path(cur) if cur and cur.lower().endswith(".pdf") else None
+        if default_pdf is None:
+            QMessageBox.information(self, tr("책갈피 자동 생성"), tr("먼저 PDF를 여세요."))
+            return
         bt = bt or self._bm_tree_for_pane()
         # 261019-2(마스터 §4.7.0, 사용자 지시): 책갈피를 만드는 일은 편집 모드에서만 — 아니면 켤지 묻는다
         if not bt.ensure_edit_mode(tr("책갈피 자동 생성")):
             return
         self._bookmarker_bt = bt
         self._lite_heavy_notice(tr("책갈피 자동 생성"))     # 261021-1(응답성 SOT §4.7)
-        # 지정 파일 > 현재 메인 PDF 를 입력 기본값으로
-        if default_file and str(default_file).lower().endswith(".pdf"):
-            default_pdf = Path(default_file)
-        else:
-            cur = self.main_view.current_file() if self.main_view else None
-            default_pdf = Path(cur) if cur and cur.lower().endswith(".pdf") else None
         dlg = BookmarkerDialog(default_pdf=default_pdf, prefs=self._prefs, parent=self)
         if dlg.exec() != dlg.DialogCode.Accepted:
             return
         opts = dlg.result_options()
-        if not opts["input_pdf"]:
-            QMessageBox.warning(self, tr("안내"), tr("입력 PDF를 지정하세요."))
-            return
         in_pdf = Path(opts["input_pdf"])
         if not in_pdf.exists() or in_pdf.suffix.lower() != ".pdf":
             QMessageBox.warning(self, tr("안내"), tr('PDF 파일이 아닙니다: {name}').format(name=in_pdf.name))

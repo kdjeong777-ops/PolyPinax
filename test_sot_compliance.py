@@ -248,6 +248,7 @@ OWNER_RULES = [
     (("test_convert_",), "형식 변환"),
     (("test_vprinter_",), "가상 프린터"),          # 261017 신설
     (("test_photo_",), "사진 보기"),                # 261103-19 신설
+    (("test_bizcard_",), "명함"),                   # 261117-2 신설
 ]
 
 
@@ -293,6 +294,7 @@ if HAVE_SOT:
         "형식 변환": "형식 변환 작업 계획서.md",
         "가상 프린터": "가상 프린터 작업 계획서.md",
         "사진 보기": "사진 보기(PolyPix) 작업 계획서.md",
+        "명함": "명함 작업 계획서.md",
         "검사 작성": TEST_SOT,
     }
     for owner, sot_name in NAMED.items():

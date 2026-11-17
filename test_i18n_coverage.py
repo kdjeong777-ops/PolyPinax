@@ -44,6 +44,7 @@ DATA = {
     "viewer/i18n.py", "viewer/_vendor/",
     "viewer/photo_tags.py",                      # 261105-6(태그 SOT §5.7): 사진 태그 값(스크린샷·영수증 …)·판별 낱말 — auto_tag 형식 이름처럼 저장 데이터
     "viewer/kr_dong.py",                         # 261105-13(태그 SOT §5.7): 행정동 이름에서 시·군·구를 고르는 정규식 — 화면 문구 아님
+    "viewer/bizcard/recognize.py",               # 261117-2(명함 SOT §5.2.1): 성씨·직함·법인 꼴 사전과 태그 값(한글·영어) — 명함 글을 가르는 데이터, 화면 문구 아님
 }
 _FONTS = {"맑은 고딕", "굴림", "바탕", "돋움"}
 _REGEX = re.compile(r"\\[sdbwSDW*]|\[[^\]]*가-힣|\(\?[:=!<]")   # \s·\*·[가-힣]·(?: 가 들면 정규식

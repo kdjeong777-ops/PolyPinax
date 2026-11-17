@@ -2044,6 +2044,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             (tr("자동 태그 전체 삭제"), self._autotag_clear_all),
             (tr("없는 파일 항목 정리"), self._autotag_prune_missing)), "tools.autotag")
         _act(tr("인덱스"), self.action_reindex, "tools.reindex", tip=tr("인덱스 재구축 — 열린 폴더의 검색 색인을 처음부터 다시 만듭니다"))   # 261031-16: 종전 '인덱스 재구축'
+        # 261117-8(명함 SOT §5.10, D11): 명함 ▾ — 들이기(P2). 명함찾기는 P4 에서 더한다
+        _sub(tr("명함"), (
+            (tr("명함 들이기..."), lambda: self._action_bizcard_import()),), "tools.bizcard")
         # PDF
         m_tools.addSeparator()
         _mk_pdf = RibbonIconMark(self, None, tr("PDF 만들기·합치기·암호·서명"), tr("PDF"))
@@ -2870,6 +2873,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             _bt.trash_runner = self._trash_bg                        # 261117-4(사진 보기 SOT §4.25.1)·261117-6(PDF 도) — 휴지통은 배경·잠깐 잡히면 다시
             _bt.save_first_check = self._copy_blocked                # 261107-21(§4.7.13): 저장 ▸ 사본 넷은 저장 전 쪽 편집이 있으면 먼저 저장
             _bt.pdf_backup_of = self._pdf_backup_of                  # 261107-29(§4.7.5): '원본으로 되돌리기' 는 처음 원본 백업이 있을 때만
+            _bt.bizcard_import = self._action_bizcard_import         # 261117-8(명함 SOT §5.10, D11): 사진 모드 폴더 줄 우클릭 '명함 들이기'
             _bt.xfer_quick = self._xfer_fill_quick                   # 261112-18: 폴더로 복사·이동 맨 위 즐겨찾기 폴더 + 최근 폴더(사진과 한 함수)
             _bt.xfer_done = self._xfer_remember
         self.page_thumbs.convertPagesRequested.connect(
@@ -7494,6 +7498,18 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         worker.error.connect(self._on_index_db_error)  # 261009-14: 색인 손상이면 스스로 복구
         self._attach_indexing_dialog(worker)          # 260902-6: 폴더 인덱싱 진행 창
         run_in_thread(worker, self._thread_keep)
+
+    def _action_bizcard_import(self, folder=None):
+        """261117-8(명함 SOT §5.10): 명함 들이기 — 확인 표 창. 대상은 준 폴더, 없으면 열린 폴더(D11)."""
+        folder = folder or self._folder
+        if not folder or not os.path.isdir(str(folder)):
+            QMessageBox.information(self, tr("명함 들이기"), tr("먼저 명함 그림이 있는 폴더를 여세요."))
+            return
+        from viewer.widgets.bizcard_import_dialog import BizcardImportDialog
+        dlg = BizcardImportDialog(folder, self)
+        self._bizcard_dlg = dlg                      # 검사가 찾는다
+        dlg.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
+        dlg.show()
 
     def action_reindex(self, verify: bool = True):
         """'도구 → 인덱스 재구축'. 261009-14(응답성 SOT §4 ⑤): 같은 DB 에 다시 넣기만 하면 **손상된 색인은

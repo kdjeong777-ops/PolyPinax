@@ -9,6 +9,7 @@ E. 원천 — 그림 폴더의 하위 `pdf\\<앞부분>.pdf` 가 있으면 PDF �
 F. 그린 가짜 명함(그림·PDF)을 로컬 Tesseract 로 끝까지(없으면 SKIP)
 """
 import os, sys, tempfile, shutil
+os.environ["QT_QPA_PLATFORM"] = "offscreen"          # 검사 작성 SOT §14.7 — Qt 를 쓰는 검사는 오프스크린
 sys.stdout.reconfigure(encoding="utf-8")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from pathlib import Path

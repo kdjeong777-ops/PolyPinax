@@ -660,6 +660,7 @@ class BookmarkTree(QWidget):
         self._probe_total = 0        # 260906-4: 이번 묶음 진행 표시용
         self._probe_done = 0
         self.probe_provider = None   # 앱이 주입: (path,size,mtime) -> (enc,has_toc,auth)|None
+        self.bizcard_import = None    # 261117-8(명함 SOT §5.10, D11): 앱이 주입 — (폴더) 명함 들이기 창
         self.photo_menu_fill = None   # 앱이 주입: (메뉴, 사진 경로들, 'tree', 책갈피창 줄) — 사진 세 메뉴 한 함수(사진 보기 SOT §4.20, 261107-2)
         self.view_only = None           # 앱이 주입: () -> True 면 보기만(섞은 2단의 아래 창, 사진 보기 SOT §4.47, 261116-19) — 우클릭·Del·이름 변경 막음
         self.view_only_menu = None      # 앱이 주입: (파일 경로|None, 전역 좌표) — 보기만일 때의 우클릭 메뉴('그 모드로 보기')
@@ -3955,6 +3956,10 @@ class BookmarkTree(QWidget):
             menu.exec(gpos)
             return
         # ── PDF 모드(·사진 모드 폴더 줄) ──
+        if pm and _folder_row is not None and self.bizcard_import is not None:   # 261117-8(명함 SOT §5.10, D11)
+            menu.group("bizcard")
+            _bz = menu.addAction(tr("명함 들이기..."))
+            _bz.triggered.connect(lambda _c=False, f=str(_folder_row): self.bizcard_import(f))
         is_file = self._is_file_node(item)
         is_bookmark = (not is_file and not self._is_folder_node(item) and bool(item.data(0, self.DATA_FILE)))
         files = [str(it.data(0, self.DATA_FILE)) for it in self._selected_file_nodes()]

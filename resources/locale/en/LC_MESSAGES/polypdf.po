@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-17 16:38+0900\n"
+"POT-Creation-Date: 2026-11-17 18:26+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -452,6 +452,10 @@ msgid "인덱스"
 msgstr "Index"
 
 #: viewer/app.py
+msgid "명함"
+msgstr "Business Cards"
+
+#: viewer/app.py
 msgid "PDF 만들기·합치기·암호·서명"
 msgstr "Create, merge, encrypt and sign PDFs"
 
@@ -555,11 +559,12 @@ msgstr "Bookmark Generation Stopped"
 
 #: viewer/app.py viewer/compare_controller.py viewer/jobs_controller.py
 #: viewer/photo_controller.py viewer/print_controller.py
-#: viewer/update_controller.py viewer/widgets/glossary_edit_dialog.py
-#: viewer/widgets/hyperlink_dialog.py viewer/widgets/image_tune_dialog.py
-#: viewer/widgets/stamp_dialog.py viewer/widgets/tag_apply_dialog.py
-#: viewer/widgets/translate_dialog.py viewer/widgets/translate_files_dialog.py
-#: viewer/widgets/update_dialog.py viewer/widgets/vprinter_dialog.py
+#: viewer/update_controller.py viewer/widgets/bizcard_import_dialog.py
+#: viewer/widgets/glossary_edit_dialog.py viewer/widgets/hyperlink_dialog.py
+#: viewer/widgets/image_tune_dialog.py viewer/widgets/stamp_dialog.py
+#: viewer/widgets/tag_apply_dialog.py viewer/widgets/translate_dialog.py
+#: viewer/widgets/translate_files_dialog.py viewer/widgets/update_dialog.py
+#: viewer/widgets/vprinter_dialog.py
 msgid "닫기"
 msgstr "Close"
 
@@ -1589,6 +1594,14 @@ msgstr "(No recent files)"
 msgid "검색 색인을 고치지 못했습니다. PolyPinax 를 다시 시작한 뒤 '도구 → 인덱스' 로 다시 만들어 주세요."
 msgstr "The search index could not be repaired. Restart PolyPinax, then rebuild it with 'Tools → Index'."
 
+#: viewer/app.py viewer/widgets/bizcard_import_dialog.py
+msgid "명함 들이기"
+msgstr "Import Business Cards"
+
+#: viewer/app.py
+msgid "먼저 명함 그림이 있는 폴더를 여세요."
+msgstr "Open a folder with business card images first."
+
 #: viewer/app.py
 msgid "인덱싱 중단 — 다음에 폴더를 열면 남은 파일부터 이어서 색인합니다."
 msgstr "Indexing stopped — the next time you open the folder, indexing continues with the remaining files."
@@ -1849,6 +1862,10 @@ msgstr "Delete All Automatic Tags"
 #: viewer/app.py
 msgid "없는 파일 항목 정리"
 msgstr "Clean Up Missing File Entries"
+
+#: viewer/app.py viewer/widgets/bookmark_tree.py
+msgid "명함 들이기..."
+msgstr "Import Business Cards..."
 
 #: viewer/app.py viewer/doc_info.py viewer/sign_controller.py
 #: viewer/sign_draft_controller.py viewer/widgets/bookmark_tree.py
@@ -3499,7 +3516,7 @@ msgstr "Changed"
 msgid "지움"
 msgstr "Deleted"
 
-#: viewer/compare.py
+#: viewer/compare.py viewer/widgets/bizcard_import_dialog.py
 msgid "넣음"
 msgstr "Inserted"
 
@@ -3850,9 +3867,9 @@ msgstr "Keywords"
 msgid "있음"
 msgstr "Yes"
 
-#: viewer/doc_info.py viewer/twoup.py viewer/widgets/image_tune_dialog.py
-#: viewer/widgets/pres_timer.py viewer/widgets/sign_dialogs.py
-#: viewer/widgets/stamp_dialog.py
+#: viewer/doc_info.py viewer/twoup.py viewer/widgets/bizcard_import_dialog.py
+#: viewer/widgets/image_tune_dialog.py viewer/widgets/pres_timer.py
+#: viewer/widgets/sign_dialogs.py viewer/widgets/stamp_dialog.py
 msgid "없음"
 msgstr "None"
 
@@ -4807,10 +4824,6 @@ msgstr "Name folders automatically — save without asking next time"
 msgid "다시 물으려면 Shift 를 누른 채 공유용 사본을 고르세요."
 msgstr "To be asked again, hold Shift while choosing Sharing copy."
 
-#: viewer/photo_controller.py
-msgid "사진 지우기"
-msgstr "Delete Photos"
-
 #: viewer/photo_controller.py viewer/widgets/bookmark_tree.py
 #: viewer/widgets/convert_dialog.py viewer/widgets/image_tune_dialog.py
 msgid "형식"
@@ -5113,6 +5126,10 @@ msgid "공유용 사본을 만들지 못했습니다 — 원본은 그대로입�
 msgstr "Could not make the sharing copy — the original is unchanged."
 
 #: viewer/photo_controller.py
+msgid "사진 지우기"
+msgstr "Delete Photos"
+
+#: viewer/photo_controller.py
 msgid "파일 지우기"
 msgstr "Delete Files"
 
@@ -5317,11 +5334,6 @@ msgstr "Where to put {n} sharing copies"
 #: viewer/photo_controller.py
 msgid "(폴더 이름을 물으려면 Shift 를 누른 채 고르세요)"
 msgstr "(Hold Shift while choosing to be asked for the folder name)"
-
-#: viewer/photo_controller.py
-#, python-brace-format
-msgid "휴지통으로 보내는 중: {n}장"
-msgstr "Moving {n} photo(s) to the Recycle Bin"
 
 #: viewer/photo_controller.py
 #, python-brace-format
@@ -5550,6 +5562,11 @@ msgstr "Made {n} sharing copies: {folder}"
 #, python-brace-format
 msgid "공유용 사본 {n}장을 만들고 {m}장은 만들지 못했습니다."
 msgstr "Made {n} sharing copies; {m} could not be made."
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "휴지통으로 보내는 중: {n}장"
+msgstr "Moving {n} photo(s) to the Recycle Bin"
 
 #: viewer/photo_controller.py
 #, python-brace-format
@@ -6770,9 +6787,9 @@ msgstr "Signature Places"
 msgid "이 파일의 서명 자리를 모두 지울까요?"
 msgstr "Remove all signature places of this file?"
 
-#: viewer/sign_draft_controller.py viewer/widgets/capture_settings.py
-#: viewer/widgets/image_to_pdf_dialog.py viewer/widgets/sign_dialogs.py
-#: viewer/widgets/stamp_dialog.py
+#: viewer/sign_draft_controller.py viewer/widgets/bizcard_import_dialog.py
+#: viewer/widgets/capture_settings.py viewer/widgets/image_to_pdf_dialog.py
+#: viewer/widgets/sign_dialogs.py viewer/widgets/stamp_dialog.py
 msgid "이름"
 msgstr "Name"
 
@@ -7941,6 +7958,135 @@ msgstr "Print_{stamp}"
 msgid "변환 도구 오류(코드 {rc})"
 msgstr "Conversion tool error (code {rc})"
 
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "확인 필요만"
+msgstr "Needs review only"
+
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "스캔일 일괄"
+msgstr "Set Scan Date"
+
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "고른 줄의 스캔일을 왼쪽 날짜로 바꿉니다"
+msgstr "Sets the scan date of the selected rows to the date on the left"
+
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "읽는 중 %v / %m"
+msgstr "Reading %v / %m"
+
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "영문 칸 — 뒷면 등에서 읽은 영문"
+msgstr "English fields — English text read from the back side, etc."
+
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "바꾸기..."
+msgstr "Change..."
+
+#: viewer/widgets/bizcard_import_dialog.py viewer/widgets/crop_dialog.py
+#: viewer/widgets/line_text_settings_dialog.py
+#: viewer/widgets/photo_label_dialog.py viewer/widgets/tag_apply_dialog.py
+#: viewer/widgets/view_settings_dialog.py
+msgid "적용"
+msgstr "Apply"
+
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "체크한 명함을 정리 폴더에 '성명_회사명.jpg' 로 만듭니다 — 원본은 그대로 둡니다"
+msgstr "Creates the checked cards as 'Name_Company.jpg' in the output folder — the originals are left as they are"
+
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "정리 폴더"
+msgstr "Output Folder"
+
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "회사"
+msgstr "Company"
+
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "직함"
+msgstr "Title"
+
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "휴대폰"
+msgstr "Mobile"
+
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "전화"
+msgstr "Phone"
+
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "메일"
+msgstr "Email"
+
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "뒷면"
+msgstr "Back"
+
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "스캔일"
+msgstr "Scan Date"
+
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "새 파일 이름"
+msgstr "New File Name"
+
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "정리 폴더:"
+msgstr "Output folder:"
+
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "(이름 없음)"
+msgstr "(no name)"
+
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "날짜를 YYYY-MM-DD 꼴로 적으세요."
+msgstr "Enter the date as YYYY-MM-DD."
+
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "명함 그림이 없습니다"
+msgstr "No business card images"
+
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "다 읽음 %v / %m"
+msgstr "Done %v / %m"
+
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "멈춤 %v / %m"
+msgstr "Stopped %v / %m"
+
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "적용할 명함이 없습니다 — 이름이 있고 '적용' 이 체크된 줄만 만듭니다."
+msgstr "No cards to apply — only rows that have a name and are checked in 'Apply' are created."
+
+#: viewer/widgets/bizcard_import_dialog.py
+#, python-brace-format
+msgid "폴더: {path}  ·  명함 {n}장"
+msgstr "Folder: {path}  ·  {n} cards"
+
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "(읽는 중)"
+msgstr "(reading)"
+
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "정리본 만드는 중"
+msgstr "Creating cards"
+
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "정리본을 만들지 못했습니다."
+msgstr "Could not create the cards."
+
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "넣지 않음"
+msgstr "Leave out"
+
+#: viewer/widgets/bizcard_import_dialog.py
+#, python-brace-format
+msgid ""
+"명함 {n}장을 정리 폴더에 만들었습니다.\n"
+"{path}"
+msgstr ""
+"Created {n} cards in the output folder.\n"
+"{path}"
+
 #: viewer/widgets/bookmark_tree.py
 msgid "전자서명 있음 — 열면 본문 위 띠에 검증 결과가 보입니다."
 msgstr "Digitally signed — open it to see the verification result in the band above the page."
@@ -7961,15 +8107,6 @@ msgstr "No permission (read-only or protected folder)"
 #: viewer/widgets/bookmark_tree.py
 msgid "암호화 설정 파일"
 msgstr "Encrypted file"
-
-#: viewer/widgets/bookmark_tree.py
-#, python-brace-format
-msgid "사진 {n}장을 지우지 못했습니다 — 목록에 그대로 둡니다."
-msgstr "Could not delete {n} photo(s) — they stay in the list."
-
-#: viewer/widgets/bookmark_tree.py
-msgid "사진 앱·탐색기 미리 보기·동기화 프로그램 등을 닫은 뒤 다시 지우세요."
-msgstr "Close photo apps, the File Explorer preview pane, sync programs and the like, then try again."
 
 #: viewer/widgets/bookmark_tree.py viewer/widgets/search_panel.py
 msgid "책갈피 순"
@@ -8143,6 +8280,15 @@ msgstr "Rename File"
 #: viewer/widgets/bookmark_tree.py
 msgid "<small>변경 시 디스크상 파일이 함께 이름이 바뀝니다. 메인 뷰어에서 열려 있으면 잠시 다른 파일로 전환 후 시도하세요.</small>"
 msgstr "<small>The file on disk is renamed too. If it is open in the main viewer, switch to another file briefly and try again.</small>"
+
+#: viewer/widgets/bookmark_tree.py
+#, python-brace-format
+msgid "사진 {n}장을 지우지 못했습니다 — 목록에 그대로 둡니다."
+msgstr "Could not delete {n} photo(s) — they stay in the list."
+
+#: viewer/widgets/bookmark_tree.py
+msgid "사진 앱·탐색기 미리 보기·동기화 프로그램 등을 닫은 뒤 다시 지우세요."
+msgstr "Close photo apps, the File Explorer preview pane, sync programs and the like, then try again."
 
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format
@@ -8407,11 +8553,6 @@ msgid "변경 실패"
 msgstr "Rename failed"
 
 #: viewer/widgets/bookmark_tree.py
-#, python-brace-format
-msgid "… 외 {n}장"
-msgstr "… and {n} more"
-
-#: viewer/widgets/bookmark_tree.py
 msgid "펼치면 안의 PDF 가 보입니다(누르면 사본으로 엽니다) — 우클릭으로 풀기"
 msgstr "Expand to see the PDFs inside (clicking opens a copy) — right-click to extract"
 
@@ -8596,6 +8737,11 @@ msgstr ""
 #: viewer/widgets/bookmark_tree.py
 msgid "책갈피 쓰는 중…"
 msgstr "Writing bookmarks…"
+
+#: viewer/widgets/bookmark_tree.py
+#, python-brace-format
+msgid "… 외 {n}장"
+msgstr "… and {n} more"
 
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format
@@ -9282,12 +9428,6 @@ msgstr "The area left after cropping is split at the split lines. Drag the blue 
 #: viewer/widgets/crop_dialog.py
 msgid "적용할 쪽을 원래 쪽 크기로 되돌립니다"
 msgstr "Restores the target pages to their original size"
-
-#: viewer/widgets/crop_dialog.py viewer/widgets/line_text_settings_dialog.py
-#: viewer/widgets/photo_label_dialog.py viewer/widgets/tag_apply_dialog.py
-#: viewer/widgets/view_settings_dialog.py
-msgid "적용"
-msgstr "Apply"
 
 #: viewer/widgets/crop_dialog.py
 msgid "내용이 없어 자르지 않습니다"
@@ -17062,4 +17202,7 @@ msgstr "Getting Started"
 
 #~ msgid "이미지 (PNG)"
 #~ msgstr "Images (PNG)"
+
+#~ msgid "영문 칸(R7) — 뒷면 등에서 읽은 영문"
+#~ msgstr ""
 

@@ -202,7 +202,27 @@ try:
             shown.update(crop=crop, text=text, fld=fld)
             return text
         dlg._confirm_region = fake_confirm
-        val = dlg.set_region(r0, (0.56, 0.48, 0.86, 0.66), "name")       # 오른쪽 가운데 이름 자리
+        from PyQt6.QtCore import QTimer as _QT
+        _gaps, _last = [], [time.monotonic()]
+
+        def _beat():
+            n = time.monotonic(); _gaps.append(n - _last[0]); _last[0] = n
+        _hb = _QT(); _hb.timeout.connect(_beat); _hb.start(20)
+        def region(rr, box, fld):                                    # 배경에서 읽고 신호로 잇는다(261117-14) — 끝날 때까지 돌린다
+            dlg.set_region(rr, box, fld)
+            pump(lambda: not dlg.region_busy, timeout=60)
+            return dlg.last_region
+        dlg.set_region(r0, (0.56, 0.48, 0.86, 0.66), "name")              # 오른쪽 가운데 이름 자리
+        busy_now = dlg.region_busy and not dlg.table.isEnabled() and not dlg.btn_apply.isEnabled()
+        dlg.set_region(r1, (0.1, 0.1, 0.2, 0.2), "name")                  # 읽는 중 다시 — 받지 않는다
+        same_ctx = dlg._region_ctx[0] == r0
+        pump(lambda: not dlg.region_busy, timeout=60)
+        val = dlg.last_region
+        _hb.stop()
+        chk(max(_gaps or [0]) < 0.5, "F 자리를 읽는 동안 메인이 멈추지 않는다(배경 — '응답 없음' 결함, 261117-14)",
+            "%.2f" % max(_gaps or [0]))
+        chk(busy_now and same_ctx and dlg.table.isEnabled() and dlg.btn_apply.isEnabled(),
+            "F 읽는 동안 표·[적용]·새 자리를 막고, 끝나면 다시 켠다(재진입 없음)")
         src = dlg._source_image(dlg._items[r0])
         cw, chh = shown["crop"].size
         chk(abs(cw - 0.30 * src.size[0]) <= 2 and abs(chh - 0.18 * src.size[1]) <= 2,
@@ -224,17 +244,22 @@ try:
         print("SKIP - F 위치 지정 OCR(Tesseract·한글 글꼴 없음)")
     if have_ocr:                                                         # 교정 배우기(§5.15)
         dlg._confirm_region = lambda crop, text, fld: "홍길순"           # 사람이 고침
-        dlg.set_region(r0, (0.56, 0.48, 0.86, 0.66), "name")
+        region(r0, (0.56, 0.48, 0.86, 0.66), "name")
         st = S.BizcardStore()
         cor = st.corrections()
         st.close()
         chk(cor.get("name", {}).get("홍길동") == "홍길순" and dlg.cell(r0, 1) == "홍길순", "F 고쳐 넣은 글은 교정으로 배운다(이 PC DB)", str(cor))
         dlg._load_learned()
         dlg._confirm_region = lambda crop, text, fld: shown.update(text2=text) or text
-        dlg.set_region(r0, (0.56, 0.48, 0.86, 0.66), "name")
+        region(r0, (0.56, 0.48, 0.86, 0.66), "name")
         chk(shown.get("text2") == "홍길순", "F 같은 오인식은 다음부터 고친 글을 먼저 보인다", repr(shown.get("text2")))
         dlg._confirm_region = lambda crop, text, fld: None
-        chk(dlg.set_region(r0, (0.56, 0.48, 0.86, 0.66), "name") == "" and dlg.cell(r0, 1) == "홍길순", "F 확인 창 [취소] 면 칸을 바꾸지 않는다")
+        chk(region(r0, (0.56, 0.48, 0.86, 0.66), "name") == "" and dlg.cell(r0, 1) == "홍길순", "F 확인 창 [취소] 면 칸을 바꾸지 않는다")
+        dlg.set_region(r0, (0.56, 0.48, 0.86, 0.66), "name")              # 읽는 중에 창을 닫으면 결과를 버린다
+        dlg._closing = True
+        pump(lambda: not dlg.region_busy, timeout=60)
+        chk(dlg.last_region is None and dlg.cell(r0, 1) == "홍길순", "F 읽는 중 창을 닫으면 결과를 버린다(칸 그대로)")
+        dlg._closing = False
     dlg.set_cell(r0, 2, "예시기술")
     dlg.set_cell(r1, 2, "예시기술")
     pump(timeout=0.2)
@@ -249,6 +274,32 @@ try:
     st.close()
     dlg.close(); pump(timeout=0.5)
     mw.close()
+
+    # ── H. 고른 자리 읽기(261117-14) ──
+    print()
+    print("=== H. 고른 자리 ===")
+    from viewer.widgets.bizcard_import_dialog import pil_to_qimage
+    odd = Image.new("RGB", (101, 37), (10, 200, 30))
+    odd.putpixel((100, 36), (250, 5, 5))
+    qi = pil_to_qimage(odd)
+    c1, c2 = qi.pixelColor(0, 0), qi.pixelColor(100, 36)
+    chk((c1.red(), c1.green(), c1.blue()) == (10, 200, 30) and (c2.red(), c2.green(), c2.blue()) == (250, 5, 5),
+        "H 폭이 4의 배수가 아닌 그림도 어긋나지 않게(사선 무늬 결함)")
+    if have_ocr:
+        im = Image.new("RGB", (1075, 591), "white")
+        dr = ImageDraw.Draw(im)
+        dr.text((620, 60), "홍  길  동", font=ImageFont.truetype(KRFONT, 60), fill="black")   # 한 글자씩 띄운 큰 이름
+        dr.text((60, 300), "(주)가나다기술", font=ImageFont.truetype(KRFONT, 44), fill="black")
+        dr.text((60, 500), "user@example.com", font=ImageFont.truetype(KRFONT, 30), fill="black")
+        v1, crop1 = R.read_box(im, (0.56, 0.08, 0.92, 0.24), "name")
+        chk(v1 == "홍길동", "H 띄운 큰 이름 자리 → 붙여 읽음", repr(v1))
+        v2, _ = R.read_box(im, (0.04, 0.48, 0.50, 0.62), "company")
+        chk(v2 == "가나다기술", "H 회사 자리 → 법인 꼴 없이", repr(v2))
+        v3, _ = R.read_box(im, (0.04, 0.82, 0.50, 0.92), "email")
+        chk(v3 == "user@example.com", "H 메일 자리", repr(v3))
+        chk(abs(crop1.size[0] - 0.36 * 1075) <= 2, "H 자른 그림은 그린 상자 그대로", str(crop1.size))
+    else:
+        print("SKIP - H OCR")
 
     # ── G ──
     print("\n=== G. 세로로 누운 명함 ===")

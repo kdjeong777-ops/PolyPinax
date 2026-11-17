@@ -9,7 +9,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from PyQt6.QtCore import Qt, QTimer, QRect, QPoint, QSize, pyqtSignal
+from PyQt6.QtCore import Qt, QTimer, QRect, QPoint, QSize, pyqtSignal, QObject
 from PyQt6.QtGui import QColor, QPixmap, QImage, QTransform
 from PyQt6.QtWidgets import (QRubberBand, QMenu,
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QTableWidget, QTableWidgetItem, QComboBox, QCheckBox,
@@ -72,6 +72,15 @@ class RegionLabel(QLabel):
 
 
 _KEEP = []                 # 앱 밖(검사)에서 쓸 때의 스레드 참조 보관
+
+
+def pil_to_qimage(im) -> QImage:
+    """PIL → QImage(**복사본**). 261117-14 사용자 보고: `ImageQt(RGB)` 는 폭이 4의 배수가 아니면 줄 바이트 수가 어긋나 사선 무늬로
+    보였고, 바탕 버퍼를 빌려 쓰는 QImage 라 창이 '응답 없음' 이 될 수 있었다 — 줄 바이트 수를 밝히고 곧바로 `copy()` 한다."""
+    rgb = im.convert("RGB")
+    w, h = rgb.size
+    data = rgb.tobytes("raw", "RGB")
+    return QImage(data, w, h, 3 * w, QImage.Format.Format_RGB888).copy()
 CHOICES = Qt.ItemDataRole.UserRole + 1     # 칸의 고르기 후보(이름·회사 후보, 뒷면 넣음/넣지 않음)
 FREE = Qt.ItemDataRole.UserRole + 2        # 후보 밖 글을 직접 쓸 수 있나
 FILL_BUDGET_MS = 40        # 한 번에 표를 채우는 시간 상한 — 남은 것은 다음 틱(응답성 SOT §4 ④, 메인 정지 < 1초)
@@ -103,6 +112,27 @@ class ChoiceDelegate(QStyledItemDelegate):
             super().setModelData(editor, model, index)
 
 
+class RegionWorker(QObject):
+    """고른 자리 읽기(§5.16) — 원천 그림 그리기·OCR 을 배경에서, 끝나면 `done({val, crop})`(run_in_thread)."""
+    done = pyqtSignal(dict)
+    finished = pyqtSignal()
+
+    def __init__(self, source_fn, item, box, fld):
+        super().__init__()
+        self._src, self._it, self._box, self._fld = source_fn, item, box, fld
+
+    def run(self):
+        out = {}
+        try:
+            im = self._src(self._it)
+            if im is not None:
+                out["val"], out["crop"] = R.read_box(im, self._box, self._fld)
+        except Exception as e:                     # 명함 글은 싣지 않는다 — 종류만
+            out["err"] = type(e).__name__
+        self.done.emit(out)
+        self.finished.emit()
+
+
 def _first(phones, kinds):
     for k, n in phones or []:
         if k in kinds:
@@ -118,6 +148,9 @@ class BizcardImportDialog(QDialog):
         self._db = db
         self._items = scan_folder(self._folder)
         self._worker = None
+        self.region_busy = False                  # 고른 자리를 배경에서 읽는 중(§5.16) — 그동안 다른 자리·줄·[적용] 막음
+        self.last_region = None
+        self._closing = False
         self._loading = False
         self.setWindowTitle(tr("명함 관리"))
         # 261117-13(사용자 지시 '전체화면으로도'): 최대화 단추 + F11 전체 화면
@@ -485,36 +518,13 @@ class BizcardImportDialog(QDialog):
         return im
 
     def read_region(self, r, box, fld):
-        """그림 비율 상자 → 그 자리만 OCR → 칸에 넣을 값(못 읽으면 "")."""
-        it = self._items[r]
-        im = self._source_image(it)
-        if im is None:
-            return ""
-        W, H = im.size
-        x0, y0, x1, y1 = box
-        # 261117-13(사용자 보고 '선택하지 않은 / 가 들어감'): 종전에는 사방 1%(폭 기준 약 10픽셀) 넓혀 읽어 옆 글자가 들어왔다 — 그린 그대로
-        crop = im.crop((int(max(0.0, x0) * W), int(max(0.0, y0) * H), int(min(1.0, x1) * W) + 1, int(min(1.0, y1) * H) + 1))
-        self._last_crop = crop
-        lines = R.ocr_lines(crop, 6) or R.ocr_lines(crop, R.NAME_EXTRA_PSM)
-        text = " ".join(ln.text for ln in lines).strip()
-        if fld == "name":
-            t = R.merge_spaced(text)
-            toks = [x for x in t.split() if not R.title_token(x)]
-            ko = R.clean_name_ko(" ".join(toks))
-            return ko if ko else R.clean_name_en(text)
-        if fld == "company":
-            return R.strip_corp(text)
-        if fld == "dept":
-            return " ".join(t for t in R.merge_spaced(text).split() if not R.title_token(t)) or R.merge_spaced(text)
-        if fld in ("cell", "tel"):
-            ph = R.find_phones(text)
-            return ph[0][1] if ph else ""
-        if fld == "email":
-            em = R.find_emails(text)
-            return em[0] if em else ""
-        return R.merge_spaced(text)
+        """시험·도구용 — 같은 스레드에서 바로 읽는다(창에서는 `set_region` 이 배경에서 부른다). (칸 값, 자른 그림)."""
+        im = self._source_image(self._items[r])
+        return R.read_box(im, box, fld) if im is not None else ("", None)
 
     def _on_region(self, x0, y0, x1, y1, gpos):
+        if self.region_busy:
+            return                                 # 읽는 중에는 새 자리를 받지 않는다
         r = self.table.currentRow()
         if r < 0 or not self._items[r].result:
             return
@@ -537,12 +547,11 @@ class BizcardImportDialog(QDialog):
     def region_dialog(self, crop, text):
         """확인 창 만들기(검사가 안을 본다) — (창, 글 칸)."""
         from PyQt6.QtWidgets import QDialogButtonBox
-        from PIL.ImageQt import ImageQt
         dlg = QDialog(self)
         dlg.setWindowTitle(tr("고른 자리"))
         v = QVBoxLayout(dlg)
         pic = QLabel()
-        pm = QPixmap.fromImage(ImageQt(crop.convert("RGB")))
+        pm = QPixmap.fromImage(pil_to_qimage(crop))
         pic.setPixmap(pm.scaled(min(720, max(240, pm.width())), min(260, max(60, pm.height())),
                                 Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
         pic.setFrameShape(QLabel.Shape.Box)
@@ -563,18 +572,40 @@ class BizcardImportDialog(QDialog):
         return dlg, ed
 
     def set_region(self, r, box, fld, confirm: bool = True):
-        """지정한 자리를 읽어(그린 그대로) 확인 창에서 고친 뒤 칸을 채운다. 고친 글은 교정으로 배우고(이 PC),
-        이름·회사·직함 자리는 같은 회사 양식으로 기억한다(같은 열쇠의 다른 줄도 다시 매김)."""
-        from PyQt6.QtWidgets import QApplication
-        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
-        try:
-            raw = self.read_region(r, box, fld)
-        finally:
-            QApplication.restoreOverrideCursor()
+        """지정한 자리를 **배경에서** 읽기 시작한다 — 끝나면 신호로 `_region_done` 이 확인 창·칸 채우기를 잇는다
+        (261117-14: 지역 루프로 기다리지 않는다 — 응답성 SOT '루프로 버티기' 금지). 읽는 동안은 다른 자리·줄·[적용] 을 막고,
+        창을 닫으면 결과를 버린다. 끝난 값은 `last_region`(검사가 본다)."""
+        if self.region_busy:
+            return
+        from viewer.workers import run_in_thread
+        self.region_busy = True
+        self.last_region = None
+        self._region_ctx = (r, box, fld, confirm)
+        for w in (self.table, self.pv_front, self.btn_apply):
+            w.setEnabled(False)
+        self.setCursor(Qt.CursorShape.BusyCursor)
+        wk = RegionWorker(self._source_image, self._items[r], box, fld)
+        wk.done.connect(self._region_done)         # 창의 메서드 — 창이 지워지면 Qt 가 연결을 끊는다
+        keep = getattr(self._mw, "_thread_keep", None)
+        run_in_thread(wk, keep if keep is not None else _KEEP)
+        self._region_worker = wk
+
+    def _region_done(self, out: dict):
+        self.region_busy = False
+        for w in (self.table, self.pv_front, self.btn_apply):
+            w.setEnabled(True)
+        self.unsetCursor()
+        if self._closing:
+            return                                  # 닫는 중이면 버린다
+        r, box, fld, confirm = self._region_ctx
+        self.last_region = self._finish_region(r, box, fld, confirm, out.get("val", ""), out.get("crop"))
+
+    def _finish_region(self, r, box, fld, confirm, raw, crop):
+        """읽은 글 → 확인 창(고쳐서 넣기) → 칸 채우기 → 교정·양식 배우기. 넣은 값(또는 "")."""
         corr = (getattr(self, "_learned", None) or {}).get("corrections", {}).get(fld, {})
         val = corr.get(raw, raw)                  # 전에 고친 적이 있는 오인식이면 고친 글을 먼저
+        self._last_crop = crop
         if confirm:
-            crop = getattr(self, "_last_crop", None)
             got = self._confirm_region(crop if crop is not None else self._source_image(self._items[r]), val, fld)
             if got is None:
                 return ""
@@ -681,6 +712,7 @@ class BizcardImportDialog(QDialog):
         self._refit()
 
     def closeEvent(self, e):
+        self._closing = True                       # 자리 읽기가 돌고 있으면 결과를 버린다(§5.16)
         self._stop_worker()
         st = getattr(self, "_st", None)
         if st is not None:

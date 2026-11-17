@@ -957,6 +957,84 @@ def merge_sides(front: Optional[SideResult], back: Optional[SideResult], hint_na
     return c
 
 
+# ── 고른 자리 읽기(§5.15·§5.16) ────────────────────────────────────────────
+BOX_PAD = 12             # 자른 그림 둘레에 붙이는 흰 여백(픽셀) — 글자가 가장자리에 붙으면 OCR 이 못 읽는다
+BOX_MIN_H = 90           # 자른 그림 높이가 이보다 작으면 이만큼 되게 키운다(상한 NAME_UPSCALE 배)
+BOX_PSMS = (7, 6, NAME_EXTRA_PSM)   # 한 줄 → 여러 줄 → 흩어진 글 차례로 읽어 칸에 맞는 것을 고른다
+
+
+def _box_value(text: str, fld: str) -> str:
+    if fld == "name":
+        t = merge_spaced(text)
+        toks = [x for x in t.split() if not title_token(x)]
+        ko = clean_name_ko(" ".join(toks))
+        return ko if ko else clean_name_en(text)
+    if fld == "company":
+        return strip_corp(merge_spaced(text))
+    if fld == "dept":
+        t = merge_spaced(text)
+        return " ".join(x for x in t.split() if not title_token(x)) or t
+    if fld in ("cell", "tel"):
+        ph = find_phones(text)
+        return ph[0][1] if ph else ""
+    if fld == "email":
+        em = find_emails(text)
+        return em[0] if em else ""
+    return merge_spaced(text).strip()
+
+
+def _box_good(val: str, fld: str, conf: float) -> float:
+    """칸에 맞는 정도 — 이름은 한글 2~4자(또는 영문 이름), 그 밖은 읽은 글자 수·신뢰도."""
+    if not val:
+        return -1.0
+    if fld == "name":
+        if re.fullmatch(r"[가-힣]{2,4}", val):
+            return 3.0 + conf / 100 + (1.0 if val[0] in SURNAMES else 0.0)
+        return 1.0 + conf / 100 if re.fullmatch(r"[A-Za-z][A-Za-z .'\-]{2,40}", val) else 0.1
+    if fld in ("cell", "tel", "email"):
+        return 3.0 + conf / 100
+    han = len(_HANGUL.findall(val))
+    junk = len(re.findall(r"[^가-힣A-Za-z0-9 ()·&.,\-]", val))
+    return 1.0 + min(han, 12) * 0.2 + conf / 100 - junk * 0.5
+
+
+def prep_box(crop):
+    """자른 그림 → 읽기 좋은 그림: 작으면 키우고 둘레에 흰 여백."""
+    Image, ImageOps = _pil()
+    g = crop.convert("RGB")
+    if g.height < BOX_MIN_H:
+        k = min(float(NAME_UPSCALE), BOX_MIN_H / max(1, g.height))
+        g = g.resize((max(1, int(g.width * k)), max(1, int(g.height * k))), Image.LANCZOS)
+    return ImageOps.expand(g, border=BOX_PAD, fill="white")
+
+
+def read_box(im, box, fld: str) -> tuple:
+    """그림(PIL)에서 비율 상자 자리만 읽는다 → (칸 값, 자른 그림). OCR 을 부르니 **배경에서** 부른다(응답성 SOT §4).
+    그린 그대로 자르고(넓히지 않음), 키우고 여백을 붙여 한 줄·여러 줄·흩어진 글로 읽어 칸에 가장 맞는 결과를 고른다.
+    메일 칸은 대체 언어(영어)로도 읽는다(§5.15)."""
+    W, H = im.size
+    x0, y0, x1, y1 = box
+    crop = im.crop((int(max(0.0, x0) * W), int(max(0.0, y0) * H),
+                    min(W, int(min(1.0, x1) * W) + 1), min(H, int(min(1.0, y1) * H) + 1)))
+    g = prep_box(crop)
+    best, best_s = "", -1.0
+    langs = [""] + ([O_FALLBACK()] if fld in ("email", "cell", "tel") else [])
+    for lang in langs:
+        for psm in BOX_PSMS:
+            lines = ocr_lines(g, psm, lang=lang)
+            if not lines:
+                continue
+            text = " ".join(ln.text for ln in lines).strip()
+            conf = sum(ln.conf for ln in lines) / len(lines)
+            val = _box_value(text, fld)
+            s = _box_good(val, fld, conf)
+            if s > best_s:
+                best, best_s = val, s
+            if fld == "name" and s >= 3.5:
+                break                              # 이름 꼴이 나오면 더 읽지 않는다
+    return best, crop
+
+
 def recognize(path, ui_lang: str = "ko") -> CardResult:
     """명함 하나(앞면 그림·원본 PDF 어느 경로든) → `CardResult`. 배경 스레드에서 부른다(응답성 SOT §4)."""
     src = card_sources(path)

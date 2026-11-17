@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-11-17 22:25+0900\n"
+"POT-Creation-Date: 2026-11-17 22:36+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -7772,11 +7772,7 @@ msgid "고른 줄의 스캔일을 왼쪽 날짜로 바꿉니다"
 msgstr ""
 
 #: viewer/widgets/bizcard_import_dialog.py
-msgid "다시 읽기"
-msgstr ""
-
-#: viewer/widgets/bizcard_import_dialog.py
-msgid "고른 줄(없으면 모두)을 지금의 인식으로 다시 읽습니다 — 손으로 고친 칸은 그대로 둡니다"
+msgid "지금의 인식으로 다시 읽습니다 — 고른 줄만 또는 모두. 손으로 고친 칸은 그대로 둡니다"
 msgstr ""
 
 #: viewer/widgets/bizcard_import_dialog.py viewer/widgets/photo_crop_dialog.py
@@ -7820,6 +7816,10 @@ msgstr ""
 
 #: viewer/widgets/bizcard_import_dialog.py
 msgid "정리 폴더"
+msgstr ""
+
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "다시 읽기"
 msgstr ""
 
 #: viewer/widgets/bizcard_import_dialog.py
@@ -7917,6 +7917,16 @@ msgstr ""
 
 #: viewer/widgets/bizcard_import_dialog.py
 msgid "(읽는 중)"
+msgstr ""
+
+#: viewer/widgets/bizcard_import_dialog.py
+#, python-brace-format
+msgid "고른 줄 다시 읽기 ({n}장)"
+msgstr ""
+
+#: viewer/widgets/bizcard_import_dialog.py
+#, python-brace-format
+msgid "모두 다시 읽기 ({n}장)"
 msgstr ""
 
 #: viewer/widgets/bizcard_import_dialog.py

@@ -175,9 +175,13 @@ class BizcardImportDialog(QDialog):
         self.btn_date.setToolTip(tr("고른 줄의 스캔일을 왼쪽 날짜로 바꿉니다"))
         self.btn_date.clicked.connect(lambda _c=False: self._set_dates())
         top.addWidget(self.btn_date)
-        self.btn_reread = QPushButton(tr("다시 읽기"))
-        self.btn_reread.setToolTip(tr("고른 줄(없으면 모두)을 지금의 인식으로 다시 읽습니다 — 손으로 고친 칸은 그대로 둡니다"))
-        self.btn_reread.clicked.connect(lambda _c=False: self.reread())
+        # 261117-16(사용자 보고 '늘 한 줄만 다시 읽힘' — 표에는 늘 한 줄이 골라져 있다, 사용자 결정 '단추를 둘로'):
+        #   [다시 읽기 ▾] → '고른 줄 다시 읽기 (n장)' · '모두 다시 읽기 (N장)'
+        self.btn_reread = QPushButton(tr("다시 읽기") + " ▾")
+        self.btn_reread.setToolTip(tr("지금의 인식으로 다시 읽습니다 — 고른 줄만 또는 모두. 손으로 고친 칸은 그대로 둡니다"))
+        self._reread_menu = QMenu(self)
+        self._reread_menu.aboutToShow.connect(self._fill_reread_menu)
+        self.btn_reread.setMenu(self._reread_menu)
         top.addWidget(self.btn_reread)
         self.btn_full = QPushButton(tr("전체 화면"))
         self.btn_full.setToolTip(tr("명함 관리 창을 화면 가득 — 다시 누르거나 F11·Esc 로 돌아옵니다"))
@@ -453,6 +457,21 @@ class BizcardImportDialog(QDialog):
         """손으로 고친 칸 = 인식값과 다른 칸만."""
         auto = self._auto_values(r)
         return {k: vals[k] for k in self.EDIT_KEYS if k in vals and vals[k] != auto.get(k)}
+
+    def selected_rows_idx(self) -> list:
+        return sorted({i.row() for i in self.table.selectedIndexes()})
+
+    def _fill_reread_menu(self):
+        m = self._reread_menu
+        m.clear()
+        sel = self.selected_rows_idx()
+        busy = self._worker is not None and not self._worker.done_event.is_set()   # 읽는 중에는 둘 다 끔
+        a1 = m.addAction(tr("고른 줄 다시 읽기 ({n}장)").format(n=len(sel)))
+        a1.setEnabled(bool(sel) and not busy)                                       # 고른 줄이 없으면 끔(숨기지 않음)
+        a1.triggered.connect(lambda _c=False, rs=list(sel): self.reread(rs))
+        a2 = m.addAction(tr("모두 다시 읽기 ({n}장)").format(n=len(self._items)))
+        a2.setEnabled(bool(self._items) and not busy)
+        a2.triggered.connect(lambda _c=False: self.reread(list(range(len(self._items)))))
 
     def reread(self, rows=None, ask: bool = True):
         """[다시 읽기](261117-15 사용자 지시) — 고른 줄(없으면 모두)을 캐시를 건너뛰고 지금의 인식으로 다시 읽는다.

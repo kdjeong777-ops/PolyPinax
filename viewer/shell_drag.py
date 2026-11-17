@@ -329,10 +329,13 @@ def make_async_data_object(paths, on_end=None):
     return AsyncDataObject(inner, on_end) if inner else None
 
 
-def drag_files(paths, hwnd=0, on_move_drop=None, on_done=None) -> dict:
+def drag_files(paths, hwnd=0, on_move_drop=None, on_done=None,
+               effects=DROPEFFECT_COPY | DROPEFFECT_MOVE, mark_own=True) -> dict:
     """파일들을 셸 끌기로 끈다 — 놓거나 취소할 때까지 메인에서 돈다(끄는 동안만). 복사·이동은 대상(탐색기)이 자기 스레드에서.
     - `on_move_drop(paths)`: 놓는 순간 Shift(이동)면 놓기 전에 — 앱이 연 파일을 놓게.
     - `on_done(effect)`: 대상이 끝냈을 때 한 번(비동기면 나중에 EndOperation 에서, 아니면 곧바로). 취소면 DROPEFFECT_NONE.
+    - `effects`: 허락할 효과(261117-7 — 스크린샷 스트립은 앱 저장 폴더라 복사만).
+    - `mark_own`: False 면 `is_own` 표식을 세우지 않는다(책갈피창이 종전처럼 받는다 — 스크린샷 카드).
     돌려줌: {"result": "drop"|"cancel"|"error", "shift", "effect", "async": 대상이 비동기로 받았나}."""
     global _active
     paths = [str(p) for p in paths]
@@ -356,14 +359,14 @@ def drag_files(paths, hwnd=0, on_move_drop=None, on_done=None) -> dict:
 
     src = DropSource(_on_drop)
     from viewer.pathutil import norm_key
-    _active = {norm_key(p) for p in paths}
+    _active = {norm_key(p) for p in paths} if mark_own else None
     eff = W.DWORD(0)
     try:
         sh = ctypes.windll.shell32
         sh.SHDoDragDrop.argtypes = [W.HWND, ctypes.c_void_p, ctypes.c_void_p, W.DWORD, ctypes.POINTER(W.DWORD)]
         sh.SHDoDragDrop.restype = ctypes.c_long
         hr = sh.SHDoDragDrop(W.HWND(int(hwnd or 0)), ado.ptr, src.ptr,
-                             DROPEFFECT_COPY | DROPEFFECT_MOVE, ctypes.byref(eff))
+                             int(effects), ctypes.byref(eff))
     finally:
         _active = None
         ado._release()                                    # 만든 참조 — 대상이 쥐고 있으면 더 산다

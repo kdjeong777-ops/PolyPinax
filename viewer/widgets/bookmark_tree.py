@@ -3331,23 +3331,26 @@ class BookmarkTree(QWidget):
         if it is None or not self._is_file_node(it):
             return True                          # 보기 모드의 책갈피 줄 — 끌지 않는다
         paths = self._drag_paths()
+        if paths:
+            self.drag_out(paths)
+        return True
+
+    def drag_out(self, paths) -> dict:
+        """261117-7: 파일들을 앱 밖으로 끄는 한 길 — 책갈피창 파일 줄(`_start_file_drag`)과 사진 썸네일 줄이 부른다(사용자 결정 D2:
+        그냥 = 복사, Shift = 이동). 놓는 순간 Shift 면 본문이 연 그 파일만 먼저 놓고, 이동이면 원본이 없어지는지 배경에서 봐
+        이 책갈피창의 한 길(`_on_file_drag_moved` → 줄 빼기·`fileOpCompleted(old, "")`)로, 아니면 놓았던 파일을 다시 연다.
+        놓거나 취소하면 곧바로 돌아온다(복사·이동은 탐색기가). 돌려줌: `shell_drag.drag_files` 의 결과(못 끌면 result 'error')."""
         from viewer import shell_drag
+        paths = [str(p) for p in paths or []]
         if not paths or not shell_drag.available():
-            return True
+            return {"result": "error", "shift": False, "effect": 0, "async": False}
         drag = {"paths": paths, "released": [], "done": False}
 
         def on_move(ps):
             # 이동은 본문이 연 파일이면 막힌다 — 놓기 전에 그 파일만 놓는다(휴지통 길과 같은 핸드셰이크). 앱의 놓음 기억은
             #   하나라(`_released_state` — 부를 때마다 새로) 연 파일 하나만 부른다
             from viewer.pathutil import norm_key
-            cur = None
-            for fn in (self._shown_file_fn, self._current_file_getter):
-                try:
-                    cur = fn() if callable(fn) else None
-                except Exception:
-                    cur = None
-                if cur:
-                    break
+            cur = self._open_file_now()
             for p in ps:
                 if cur and norm_key(str(p)) == norm_key(str(cur)):
                     self.releaseFileRequested.emit(p)
@@ -3363,7 +3366,7 @@ class BookmarkTree(QWidget):
             self._watch_moved(drag)              # 끝은 배경 확인이 알린다
         elif drag["released"]:
             self._fileDragMoved.emit(drag, [], list(drag["paths"]))   # 이동이 아니었다 — 놓았던 파일을 다시 연다
-        return True
+        return r
 
     def _on_file_drag_done(self, drag, eff) -> None:
         drag["done"] = True                      # 대상이 끝을 알렸다(비동기 EndOperation 또는 곧바로) — 배경 확인이 곧 마무리

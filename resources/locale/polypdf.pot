@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-11-16 22:12+0900\n"
+"POT-Creation-Date: 2026-11-17 16:38+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -457,7 +457,8 @@ msgstr ""
 msgid "PDF"
 msgstr ""
 
-#: viewer/app.py viewer/widgets/image_to_pdf_dialog.py
+#: viewer/app.py viewer/convert/__init__.py viewer/widgets/convert_dialog.py
+#: viewer/widgets/image_to_pdf_dialog.py
 msgid "이미지"
 msgstr ""
 
@@ -3526,6 +3527,22 @@ msgid "Word 로 변환"
 msgstr ""
 
 #: viewer/convert/__init__.py
+msgid "높음"
+msgstr ""
+
+#: viewer/convert/__init__.py viewer/twoup.py viewer/widgets/read_aloud.py
+msgid "보통"
+msgstr ""
+
+#: viewer/convert/__init__.py
+msgid "작게"
+msgstr ""
+
+#: viewer/convert/__init__.py
+msgid "크게"
+msgstr ""
+
+#: viewer/convert/__init__.py
 msgid "Word (원본 모양)"
 msgstr ""
 
@@ -3554,7 +3571,7 @@ msgid "Excel (표)"
 msgstr ""
 
 #: viewer/convert/__init__.py
-msgid "이미지 (PNG)"
+msgid "문서"
 msgstr ""
 
 #: viewer/convert/proc.py
@@ -5615,7 +5632,8 @@ msgstr ""
 msgid "상세"
 msgstr ""
 
-#: viewer/photo_label.py viewer/widgets/pres_timer.py
+#: viewer/photo_label.py viewer/widgets/convert_dialog.py
+#: viewer/widgets/pres_timer.py
 msgid "크기"
 msgstr ""
 
@@ -7298,10 +7316,6 @@ msgstr ""
 msgid "이미 만든 목차 {n}쪽이 있습니다 — 새 목차로 바꿀까요?"
 msgstr ""
 
-#: viewer/twoup.py viewer/widgets/read_aloud.py
-msgid "보통"
-msgstr ""
-
 #: viewer/twoup.py
 msgid "넓게"
 msgstr ""
@@ -8777,6 +8791,10 @@ msgid "{lbl} 내용 검색"
 msgstr ""
 
 #: viewer/widgets/convert_dialog.py
+msgid "화질"
+msgstr ""
+
+#: viewer/widgets/convert_dialog.py
 msgid "범위"
 msgstr ""
 
@@ -8810,6 +8828,11 @@ msgstr ""
 #: viewer/widgets/convert_dialog.py
 #, python-brace-format
 msgid "쪽 범위는 1~{n} 안에서 3-12 처럼 적어 주세요."
+msgstr ""
+
+#: viewer/widgets/convert_dialog.py
+#, python-brace-format
+msgid "{name} ({dpi} dpi)"
 msgstr ""
 
 #: viewer/widgets/crop_dialog.py

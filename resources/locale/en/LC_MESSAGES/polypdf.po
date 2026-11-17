@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-16 22:12+0900\n"
+"POT-Creation-Date: 2026-11-17 16:38+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -459,7 +459,8 @@ msgstr "Create, merge, encrypt and sign PDFs"
 msgid "PDF"
 msgstr "PDF"
 
-#: viewer/app.py viewer/widgets/image_to_pdf_dialog.py
+#: viewer/app.py viewer/convert/__init__.py viewer/widgets/convert_dialog.py
+#: viewer/widgets/image_to_pdf_dialog.py
 msgid "이미지"
 msgstr "Images"
 
@@ -3652,6 +3653,22 @@ msgid "Word 로 변환"
 msgstr "Converting with Word"
 
 #: viewer/convert/__init__.py
+msgid "높음"
+msgstr "High"
+
+#: viewer/convert/__init__.py viewer/twoup.py viewer/widgets/read_aloud.py
+msgid "보통"
+msgstr "Normal"
+
+#: viewer/convert/__init__.py
+msgid "작게"
+msgstr "Small"
+
+#: viewer/convert/__init__.py
+msgid "크게"
+msgstr "Large"
+
+#: viewer/convert/__init__.py
 msgid "Word (원본 모양)"
 msgstr "Word (Original layout)"
 
@@ -3680,8 +3697,8 @@ msgid "Excel (표)"
 msgstr "Excel (tables)"
 
 #: viewer/convert/__init__.py
-msgid "이미지 (PNG)"
-msgstr "Images (PNG)"
+msgid "문서"
+msgstr "Documents"
 
 #: viewer/convert/proc.py
 msgid "변환 프로세스를 띄우지 못했습니다"
@@ -5774,7 +5791,8 @@ msgstr "Date + name"
 msgid "상세"
 msgstr "Detailed"
 
-#: viewer/photo_label.py viewer/widgets/pres_timer.py
+#: viewer/photo_label.py viewer/widgets/convert_dialog.py
+#: viewer/widgets/pres_timer.py
 msgid "크기"
 msgstr "Size"
 
@@ -7507,10 +7525,6 @@ msgstr "Inserted {k} table of contents page(s) from page {p} and saved → {name
 msgid "이미 만든 목차 {n}쪽이 있습니다 — 새 목차로 바꿀까요?"
 msgstr "There are already {n} table of contents page(s) — replace them with a new one?"
 
-#: viewer/twoup.py viewer/widgets/read_aloud.py
-msgid "보통"
-msgstr "Normal"
-
 #: viewer/twoup.py
 msgid "넓게"
 msgstr "Wide"
@@ -9076,6 +9090,10 @@ msgid "{lbl} 내용 검색"
 msgstr "Search {lbl} content"
 
 #: viewer/widgets/convert_dialog.py
+msgid "화질"
+msgstr "Quality"
+
+#: viewer/widgets/convert_dialog.py
 msgid "범위"
 msgstr "Range"
 
@@ -9110,6 +9128,11 @@ msgstr "Selected pages ({n})"
 #, python-brace-format
 msgid "쪽 범위는 1~{n} 안에서 3-12 처럼 적어 주세요."
 msgstr "Enter a page range within 1–{n}, such as 3-12."
+
+#: viewer/widgets/convert_dialog.py
+#, python-brace-format
+msgid "{name} ({dpi} dpi)"
+msgstr "{name} ({dpi} dpi)"
 
 #: viewer/widgets/crop_dialog.py
 msgid "세로긴 쪽"
@@ -17008,4 +17031,7 @@ msgstr "Getting Started"
 
 #~ msgid "0° 로 돌린 뒤 크롭합니다"
 #~ msgstr "Rotate it back to 0° to crop"
+
+#~ msgid "이미지 (PNG)"
+#~ msgstr "Images (PNG)"
 

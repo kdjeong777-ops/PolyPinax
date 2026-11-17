@@ -41,18 +41,34 @@ def write_txt(ps, pages, dst: Path, tick) -> None:
     Path(dst).write_text("\n\n\n".join(parts), encoding="utf-8-sig")
 
 
-def write_png(ps, pages, dst: Path, tick) -> None:
-    """같은 이름의 폴더 안에 `<이름>_p0001.png`(§2.3). 쪽 그림은 이 스레드의 문서로 그린다."""
+def write_png(ps, pages, dst: Path, tick, opts=None) -> None:
+    """이미지(§2.3.1, 261117-5) — `dst` 가 폴더면 그 안에 `<이름>_p0001.<확장자>`, 파일 이름이면(한 장) 그 파일 하나.
+    `opts`={"fmt": jpg·png·webp, "quality": high·normal, "dpi"}. 쪽 그림은 이 스레드의 문서로 그린다(흰 바탕 — 투명 없음)."""
     import fitz
-    from viewer.convert import IMAGE_DPI
+    from PIL import Image
+    from viewer.convert import IMAGE_QUALITY, image_ext, image_opts
+    o = image_opts(opts)
+    q = next(v for k, _n, v in IMAGE_QUALITY if k == o["quality"])
     dst = Path(dst)
-    dst.mkdir(parents=True, exist_ok=False)
+    one = bool(dst.suffix) and len(pages) == 1
+    if not one:
+        dst.mkdir(parents=True, exist_ok=False)
     stem = Path(ps.path).stem
-    zoom = IMAGE_DPI / 72.0
+    zoom = o["dpi"] / 72.0
     for i, pg in enumerate(pages):
         tick(i, len(pages), page_step(ps, pages, i))
         pix = ps.doc.load_page(int(pg)).get_pixmap(matrix=fitz.Matrix(zoom, zoom), alpha=False)
-        pix.save(str(dst / f"{stem}_p{pg + 1:04d}.png"))
+        out = dst if one else dst / f"{stem}_p{pg + 1:04d}{image_ext(o['fmt'])}"
+        if o["fmt"] == "png":
+            pix.set_dpi(o["dpi"], o["dpi"])
+            pix.save(str(out))
+            continue
+        im = Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
+        dpi = (o["dpi"], o["dpi"])
+        if o["fmt"] == "webp":
+            im.save(str(out), "WEBP", quality=q, method=4)
+        else:
+            im.save(str(out), "JPEG", quality=q, dpi=dpi, optimize=True)
     tick(len(pages), len(pages), step_text("save"))
 
 

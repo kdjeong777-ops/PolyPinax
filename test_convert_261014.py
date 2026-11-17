@@ -121,8 +121,8 @@ try:
     # ── C. 이미지 ─────────────────────────────────────────────────
     mw.action_convert(fmt="png"); spin(3)
     imgdir = root / "A"
-    pngs = sorted(p.name for p in imgdir.glob("*.png")) if imgdir.is_dir() else []
-    chk(pngs == ["A_p0001.png", "A_p0002.png", "A_p0003.png"], "C 같은 이름의 폴더에 쪽마다 PNG", str(pngs))
+    pngs = sorted(p.name for p in imgdir.glob("*.jpg")) if imgdir.is_dir() else []    # 261117-5: 처음 형식 JPG(§2.3.1)
+    chk(pngs == ["A_p0001.jpg", "A_p0002.jpg", "A_p0003.jpg"], "C 같은 이름의 폴더에 쪽마다 그림(처음 형식 JPG)", str(pngs))
 
     # ── D. 이름 겹침 ──────────────────────────────────────────────
     mw.action_convert(fmt="txt"); spin(3)

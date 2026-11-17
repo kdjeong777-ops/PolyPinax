@@ -64,12 +64,13 @@ class ConvertMixin:
             d.close()
         except Exception:
             n = 0
-        dlg = ConvertDialog(self, files=files, page_count=n, preset=fmt, picked_pages=pages)
+        dlg = ConvertDialog(self, files=files, page_count=n, preset=fmt, picked_pages=pages,
+                            prefs=self._prefs.setdefault("convert_image", {}))      # 261117-5(§2.3.1) 이미지 고른 값 기억
         if dlg.exec() != dlg.DialogCode.Accepted:
             return False
         key = dlg.format_key()
         sel = dlg.pages() if len(files) == 1 else None
-        return self._run_convert(files, key, sel)
+        return self._run_convert(files, key, sel, image=dlg.image_options())
 
     def _photo_convert(self, files, fmt=None) -> bool:
         """사진 모드 '변환'(사진 보기 SOT §4.46, 261112-15 사용자 결정 '창 하나에 두 묶음') — 변환 창: 그림으로 저장(형식·바탕 지우기·
@@ -129,7 +130,7 @@ class ConvertMixin:
         return self._run_convert(files, dlg.format_key(), None, rots={f: self._photo_rot_for(f) for f in files},
                                  crops={f: self._photo_crop_for(f) for f in files})     # 보기 크롭(사진 보기 SOT §4.40)
 
-    def _run_convert(self, files, key, pages, rots=None, crops=None) -> bool:
+    def _run_convert(self, files, key, pages, rots=None, crops=None, image=None) -> bool:
         from viewer import convert
         from viewer.text_word import snapshot_fixes
         from viewer.twoup import MergeCancelled
@@ -152,7 +153,8 @@ class ConvertMixin:
                                     f"{_head}\n{label}" if label else _head)
                 try:
                     out = convert.run(src, key, pages, fixes=fixes, forced_pages=forced, progress=prog,
-                                      photo_rot=int((rots or {}).get(src, 0) or 0), photo_crop=(crops or {}).get(src))
+                                      photo_rot=int((rots or {}).get(src, 0) or 0), photo_crop=(crops or {}).get(src),
+                                      image=image)
                     results.append((src, out, None))
                 except convert.Cancelled:
                     raise MergeCancelled()

@@ -10513,6 +10513,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             "shot_save_dir": str(prefs.get("shot_save_dir", old.get("shot_save_dir", "")) or ""),
             # 261113-4(사진 보기 SOT §4.46 '창 배치·기억'): 변환·다듬기 창 — 바탕 지우기 마지막 값(bg_photo·bg_shot)·가리기 색 막대(mask_bar)
             "image_tune": dict(prefs.get("image_tune", old.get("image_tune", {})) or {}),
+            # 261117-5(형식 변환 SOT §2.3.1): 변환 창 이미지 — 마지막 형식·화질·크기(fmt·quality·dpi)
+            "convert_image": dict(prefs.get("convert_image", old.get("convert_image", {})) or {}),
             # 261017-15(§8.2, 점검): 환경설정 창이 모르는 기능 설정 — 빠져 있어 재시작·[확인] 뒤 사라졌다.
             #   값 모양은 그 기능이 소유(가상 프린터 SOT §4.3·마스터 §4.7.15) — 여기서는 그대로 넘긴다
             "vprinter": prefs.get("vprinter", old.get("vprinter")),

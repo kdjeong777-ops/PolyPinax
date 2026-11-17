@@ -99,7 +99,8 @@ def lib_read(key: str, path: Path) -> dict:
     if key == "txt":
         return {"text": path.read_text(encoding="utf-8", errors="replace")}
     if key == "png":
-        files = sorted(path.glob("*.png"))
+        # 261117-5(형식 변환 SOT §2.3.1): 처음 형식 JPG, 한 장이면 폴더 없이 파일 하나
+        files = [path] if path.is_file() else sorted(p for p in path.iterdir() if p.suffix.lower() in (".jpg", ".png", ".webp"))
         return {"files": len(files), "text": ""}
     return {"text": ""}
 

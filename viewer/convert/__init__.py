@@ -16,7 +16,29 @@ from pathlib import Path
 from viewer.i18n import tr, tr_noop
 from viewer.progress_text import step
 
-IMAGE_DPI = 150
+IMAGE_DPI = 150     # 크기 '보통'(처음 값)
+
+# 261117-5(§2.3.1, 사용자 결정): 이미지 형식·화질·크기 — 쪽 그림은 흰 바탕(alpha=False)이라 JPG·WebP 로 잃는 것이 없다
+IMAGE_FORMATS = (("jpg", "JPG", ".jpg"), ("png", "PNG", ".png"), ("webp", "WebP", ".webp"))   # (키, 이름, 확장자) — 맨 앞이 처음 값
+IMAGE_QUALITY = (("high", tr_noop("높음"), 92), ("normal", tr_noop("보통"), 80))              # JPG·WebP 압축 품질(PNG 는 손실 없음)
+IMAGE_SIZES = ((96, tr_noop("작게")), (150, tr_noop("보통")), (300, tr_noop("크게")))          # dpi
+IMAGE_DEFAULT = {"fmt": "jpg", "quality": "high", "dpi": IMAGE_DPI}
+
+
+def image_opts(raw=None) -> dict:
+    """이미지 선택값을 바로잡는다(모르는 값은 처음 값) — {"fmt", "quality", "dpi"}."""
+    raw = raw if isinstance(raw, dict) else {}
+    out = dict(IMAGE_DEFAULT)
+    if raw.get("fmt") in {k for k, _n, _e in IMAGE_FORMATS}:
+        out["fmt"] = raw["fmt"]
+    if raw.get("quality") in {k for k, _n, _q in IMAGE_QUALITY}:
+        out["quality"] = raw["quality"]
+    try:
+        if int(raw.get("dpi")) in {d for d, _n in IMAGE_SIZES}:
+            out["dpi"] = int(raw["dpi"])
+    except (TypeError, ValueError):
+        pass
+    return out
 
 
 class Cancelled(Exception):
@@ -31,8 +53,9 @@ class NothingToWrite(Exception):
 class Format:
     key: str
     label: str          # tr_noop — 화면에서 tr() 로 옮긴다(다국어 SOT §6)
-    ext: str            # 확장자 — 이미지는 폴더
+    ext: str            # 확장자 — 이미지는 고른 형식·장 수로 정한다(`image_out`)
     ready: bool
+    group: str = "doc"  # 변환 창 왼쪽 분류 — "doc" 문서 · "image" 이미지(261117-5, §5)
 
 
 # 261026-2(§2.1, 사용자 지시): 형식마다 '모양 그대로' 가 위 — 맨 위가 변환 창의 처음 고른 형식
@@ -47,8 +70,9 @@ FORMATS = (
     Format("pptx_shape", tr_noop("PowerPoint (원본 모양)"), ".pptx", True),     # 261014-19(§1)
     Format("xlsx", tr_noop("Excel (표)"), ".xlsx", True),
     Format("txt", tr_noop("텍스트"), ".txt", True),
-    Format("png", tr_noop("이미지 (PNG)"), "", True),
+    Format("png", tr_noop("이미지"), "", True, "image"),    # 261117-5: 키는 그대로, 형식(JPG·PNG·WebP)은 창에서(§2.3.1)
 )
+GROUPS = (("doc", tr_noop("문서")), ("image", tr_noop("이미지")))    # 변환 창 왼쪽 분류 차례(§5)
 
 
 # 진행 창 2줄의 단계 이름(§5, 261026-2) — 엔진 내부 이름(pdf2docx parse/make)·날 글(p.12)은 화면에 내지 않는다
@@ -105,11 +129,24 @@ def fmt(key: str) -> Format:
 
 
 def out_path(src, key: str) -> Path:
-    """같은 폴더·같은 이름 — 이미 있으면 ` (2)`, ` (3)` …(형식 변환 SOT §2.3). 이미지는 폴더."""
+    """같은 폴더·같은 이름 — 이미 있으면 ` (2)`, ` (3)` …(형식 변환 SOT §2.3). 이미지는 폴더(장 수에 따른 자리는 `image_out`)."""
     from viewer.pathutil import unique_path
     s = Path(src)
     f = fmt(key)
     return unique_path(s.with_name(s.stem + f.ext) if f.ext else s.with_name(s.stem), first=2)
+
+
+def image_ext(fmt_key: str) -> str:
+    return next((e for k, _n, e in IMAGE_FORMATS if k == fmt_key), ".jpg")
+
+
+def image_out(src, pages, opts) -> Path:
+    """이미지 결과 자리(§2.3.1) — 여러 장이면 `<이름>` 폴더(있으면 ` (2)`), 한 장이면 폴더 없이 `<이름>_p<쪽>.<확장자>`(겹치면 ` (2)`)."""
+    from viewer.pathutil import unique_path
+    s = Path(src)
+    if len(pages) == 1:
+        return unique_path(s.with_name(f"{s.stem}_p{int(pages[0]) + 1:04d}{image_ext(opts['fmt'])}"), first=2)
+    return unique_path(s.with_name(s.stem), first=2)
 
 
 def parse_range(text: str, n: int) -> list:
@@ -137,13 +174,14 @@ def parse_range(text: str, n: int) -> list:
 PHOTO_KEYS = ("docx_shape", "docx_edit", "hwpx_shape", "hwpx_edit", "txt")   # 사진에 뜻 있는 형식(사진 보기 SOT §4.35)
 
 
-def run(src, key: str, pages=None, *, fixes=None, forced_pages=(), progress=None, photo_rot: int = 0, photo_crop=None) -> Path:
-    """한 파일을 변환해 결과 경로를 돌려준다. 배경 스레드에서 부른다. 사진이면 `photo_rot`(보기 회전)·`photo_crop`(보기 크롭)대로 구운 1쪽으로."""
+def run(src, key: str, pages=None, *, fixes=None, forced_pages=(), progress=None, photo_rot: int = 0, photo_crop=None,
+        image=None) -> Path:
+    """한 파일을 변환해 결과 경로를 돌려준다. 배경 스레드에서 부른다. 사진이면 `photo_rot`(보기 회전)·`photo_crop`(보기 크롭)대로 구운 1쪽으로.
+    이미지(`png` 키)는 `image`={"fmt","quality","dpi"}(§2.3.1, 없으면 처음 값)."""
     from viewer.convert import writers
     from viewer.convert.source import PageSource
     if not available(key):
         raise RuntimeError(tr(WORD_REQUIRED))
-    dst = out_path(src, key)
 
     def tick(i, n, label=""):
         if progress is not None and progress(i, n, label) is False:
@@ -151,8 +189,15 @@ def run(src, key: str, pages=None, *, fixes=None, forced_pages=(), progress=None
 
     with PageSource(src, fixes=fixes, forced_pages=forced_pages, photo_rot=photo_rot, photo_crop=photo_crop) as ps:
         pg = list(pages) if pages else list(range(ps.page_count))
+        if key == "png":
+            opts = image_opts(image)
+            dst = image_out(src, pg, opts)
+            write = lambda *a: writers.WRITERS[key](*a, opts=opts)  # noqa: E731
+        else:
+            dst = out_path(src, key)
+            write = writers.WRITERS[key]
         try:
-            writers.WRITERS[key](ps, pg, dst, tick)
+            write(ps, pg, dst, tick)
         except BaseException:
             _remove(dst)
             raise

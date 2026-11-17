@@ -435,6 +435,8 @@ class BizcardImportDialog(QDialog):
         v = self._row_values(r)
         edit = self._manual_of(r, v)                # 261117-15: 인식값과 **다른** 칸만 — [다시 읽기] 가 손으로 고친 칸을 가려 지킨다
         self._items[r].edit = edit
+        if self._learn_table_edits(r, edit):         # 261117-17: 표에서 고친 오인식도 교정으로 — 곧바로 쓰이게 다시 불러옴
+            self._load_learned()
         try:
             self._store().edit_put(self._items[r].key, edit)
         except Exception:
@@ -457,6 +459,25 @@ class BizcardImportDialog(QDialog):
         """손으로 고친 칸 = 인식값과 다른 칸만."""
         auto = self._auto_values(r)
         return {k: vals[k] for k in self.EDIT_KEYS if k in vals and vals[k] != auto.get(k)}
+
+    LEARN_FIELDS = ("name", "company", "dept", "title")
+    LEARN_SIMILAR = 0.5        # 인식값과 이만큼 닮았으면 '오인식을 고친 것' 으로 배운다(아니면 다른 후보를 고른 것)
+
+    def _learn_table_edits(self, r, manual: dict):
+        """표에서 직접 고친 칸도 교정으로 배운다(261117-17 사용자 질문 '고친 방법을 학습해 적용하나') — 인식값과 닮은 것만
+        (몇 글자 오인식 → 고친 글). 전혀 다른 값은 다른 후보를 고른 것이라 배우지 않는다. 이 PC 의 bizcard.db 에만."""
+        import difflib
+        auto = self._auto_values(r)
+        n = 0
+        for k in self.LEARN_FIELDS:
+            a, b = (auto.get(k) or "").strip(), (manual.get(k) or "").strip()
+            if a and b and a != b and difflib.SequenceMatcher(None, a, b).ratio() >= self.LEARN_SIMILAR:
+                try:
+                    self._store().correction_put(k, a, b)
+                    n += 1
+                except Exception:
+                    pass
+        return n
 
     def selected_rows_idx(self) -> list:
         return sorted({i.row() for i in self.table.selectedIndexes()})
@@ -488,17 +509,22 @@ class BizcardImportDialog(QDialog):
                 self, tr("다시 읽기"), tr("명함 {n}장을 다시 읽습니다 — 한 장에 몇 초씩 걸립니다. 손으로 고친 칸은 그대로 둡니다.").format(n=len(rows))) \
                 != QMessageBox.StandardButton.Yes:
             return False
+        learned_n = 0
         for r in rows:                              # 옛 기록에서도 손으로 고친 칸만 남긴다
             it = self._items[r]
             if it.result and it.edit:
                 vals = dict(self._auto_values(r))
                 vals.update(it.edit)
                 it.edit = self._manual_of(r, vals)
+                learned_n += self._learn_table_edits(r, it.edit)   # 지금까지 표에서 고친 것도 배운다(261117-17)
                 try:
                     self._store().edit_put(it.key, it.edit)
                 except Exception:
                     pass
             self.table.item(r, C_FILE).setText(tr("(다시 읽는 중)"))
+        if learned_n:
+            self._load_learned()                    # 다시 읽은 결과에 곧바로 쓰이게
+        self.reread_learned = learned_n
         self._start(rows)
         return True
 

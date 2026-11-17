@@ -84,6 +84,19 @@ for line, want in (("대표 이사 홍 길 동", "대표이사"), ("전무 이�
     chk(rt.titles_ko[:1] == [want], "C 직함은 줄이지 않는다 — '%s' → %s" % (line, want), str(rt.titles_ko))
 rt2 = R.parse_lines([L("한국가나다기술연구원", 0.10, 90, 0.05), L("홍길동 과장", 0.12, 90, 0.4)])
 chk(rt2.titles_ko == ["과장"], "C 기관 이름 속 '연구원' 은 직함이 아니다", str(rt2.titles_ko))
+rq = R.parse_lines([L("(주)가나다건설", 0.10, 90, 0.05), L("공학박사 홍길동", 0.14, 90, 0.4), L("토목구조기술사", 0.06, 90, 0.5),
+                    L("상무이사", 0.06, 90, 0.6)])
+chk(rq.titles_ko[:1] == ["상무이사"] and not any(q in t for t in rq.titles_ko for q in ("박사", "기술사")),
+    "C 공학박사·기술사는 직함이 아니다(261117-17)", str(rq.titles_ko))
+chk(rq.names_ko and rq.names_ko[0].text == "홍길동", "C 이름 앞 '공학박사' 는 떼고 이름만", str([c.text for c in rq.names_ko[:2]]))
+chk(R.rescore({"title": "공학박사", "name_cands": [], "company_cands": []})["title"] == ""
+    and R.rescore({"title": "상무이사", "name_cands": [], "company_cands": []})["title"] == "상무이사",
+    "C 옛 캐시에 직함으로 남은 자격은 다시 매기기에서 비운다(직함은 그대로)")
+for line, want in (("(주) 가나다 기술 품질팀", "가나다기술"), ("가나다 기술(주)", "가나다기술"), ("기술연구소 가나다기술(주)", "가나다기술"),
+                   ("(유) 라마바 대표이사", "라마바"), ("㈜사아자건설", "사아자건설")):
+    rc_ = R.parse_lines([L(line, 0.08, 90, 0.1), L("홍길동", 0.14, 90, 0.4), L("가나다기술연구원장 김철수", 0.05, 90, 0.7)])
+    chk(rc_.companies_ko and rc_.companies_ko[0].text == want, "C (주)·(유) 가 앞뒤에 붙은 낱말이 회사 — '%s' → %s" % (line, want),
+        str([c.text for c in rc_.companies_ko[:2]]))
 chk(R.nospace_ko("품질 관리 팀") == "품질관리팀" and R.nospace_ko("ABC 기술") == "ABC 기술", "C 한글 사이 띄어쓰기만 없앤다")
 rg = R.parse_lines([L("국토교통부", 0.12, 90, 0.05), L("도로정책과", 0.06, 90, 0.3), L("홍길동 주무관", 0.14, 90, 0.4)])
 chk(rg.dept_ko == "도로정책과", "C 기관 이름(…부)은 부서가 아니고 그 아래 과가 부서", rg.dept_ko)

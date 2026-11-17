@@ -39,8 +39,9 @@ SURNAMES = set("김이박최정강조윤장임한오서신권황안송류유홍�
 COMPOUND_SURNAMES = ("남궁", "황보", "제갈", "선우", "독고", "사공", "서문", "동방")
 TITLES_KO = ("대표이사", "전무이사", "상무이사", "사외이사", "대표", "부대표", "회장", "부회장", "사장", "부사장", "전무", "상무", "이사", "감사", "본부장", "실장",
              "센터장", "원장", "소장", "단장", "처장", "국장", "부장", "차장", "과장", "대리", "주임", "사원", "팀장",
-             "파트장", "책임", "선임", "수석", "연구원", "연구위원", "위원", "교수", "부교수", "조교수", "박사", "공학박사",
-             "기술사", "감리단장", "현장소장", "매니저", "프로", "고문", "자문위원", "사무관", "주무관", "서기관", "과장대리")
+             "파트장", "책임", "선임", "수석", "연구원", "연구위원", "위원", "교수", "부교수", "조교수", "감리단장", "현장소장", "매니저", "프로", "고문", "자문위원", "사무관", "주무관", "서기관", "과장대리")
+# 자격·학위(261117-17 사용자 지시 '공학박사, 기술사 등은 직함이 아니야') — 직함 칸에 넣지 않고, 이름 앞뒤에 붙으면 떼기만 한다
+QUALS = ("공학박사", "이학박사", "공학석사", "박사", "석사", "기술사")
 DEPT_KO = ("부", "팀", "실", "본부", "센터", "연구소", "사업단", "사업부", "그룹", "처", "과", "국", "학과")
 # 부서 끝말(긴 것 먼저) — 261117-11(사용자 지시 '부서도 추가해'). '부'·'처'·'국' 처럼 짧은 끝말은 기관 이름(…교통부)과 겹쳐
 #   회사·기관 후보와 같은 낱말이면 부서로 보지 않는다
@@ -477,6 +478,15 @@ def merge_spaced(text: str) -> str:
 
 
 _TITLES_LONG = sorted(TITLES_KO, key=len, reverse=True)
+_STRIP_LONG = sorted(TITLES_KO + QUALS, key=len, reverse=True)     # 이름에서 뗄 것(직함 + 자격)
+
+
+def qual_token(tok: str) -> str:
+    """자격·학위 낱말인가('공학박사'·'토목구조기술사' 처럼 자격으로 끝나는 짧은 한글 낱말)."""
+    t = re.sub(r"[^가-힣]", "", tok)
+    if not t or len(t) > 9:
+        return ""
+    return t if any(t.endswith(q) for q in QUALS) else ""
 
 
 def title_token(tok: str) -> str:
@@ -498,14 +508,14 @@ def name_candidates_ko(lines: list, emails: list, hint: str = "", weights: Optio
         raw = merge_spaced(ln.text)
         near = " ".join(x.text for x in lines[max(0, idx - 1): idx + 2])
         pieces = set()
-        whole = clean_name_ko(" ".join(t for t in raw.split() if not title_token(t)))
+        whole = clean_name_ko(" ".join(t for t in raw.split() if not (title_token(t) or qual_token(t))))
         if 2 <= len(whole) <= 4 and len(re.sub(r"[^가-힣\s]", "", raw).split()) <= 4:
             pieces.add(whole)                       # '홍 길 동' · '홍길동 부장' → '홍길동'
-        for run in re.findall(r"[가-힣]+", " ".join(t for t in raw.split() if not title_token(t))):
+        for run in re.findall(r"[가-힣]+", " ".join(t for t in raw.split() if not (title_token(t) or qual_token(t)))):
             if 2 <= len(run) <= 4:
                 pieces.add(run)
             elif len(run) > 4:                      # '홍길동부장'·'기술연구소홍길동' — 성씨 자리에서 3·2자 조각
-                bare = re.sub("|".join(_TITLES_LONG), "", run)     # '대표이사홍길동' → '홍길동'(붙은 직함을 뗀 통째 — 조각이 아니다)
+                bare = re.sub("|".join(_STRIP_LONG), "", run)     # '대표이사홍길동' → '홍길동'(붙은 직함을 뗀 통째 — 조각이 아니다)
                 if 2 <= len(bare) <= 4 and bare != run:
                     pieces.add(bare)
                 for i, ch in enumerate(run):
@@ -514,7 +524,7 @@ def name_candidates_ko(lines: list, emails: list, hint: str = "", weights: Optio
                             if i + L <= len(run):
                                 pieces.add(run[i:i + L])
         for n in pieces:
-            if n in TITLES_KO or title_token(n) or any(n.endswith(d) and len(n) > 2 for d in ("회사", "기술", "건설", "산업")):
+            if n in TITLES_KO or title_token(n) or qual_token(n) or any(n.endswith(d) and len(n) > 2 for d in ("회사", "기술", "건설", "산업")):
                 continue
             cx, cy = ln.center()
             f = {"bias": 1.0, "h": round(ln.height / hmax, 3),
@@ -525,7 +535,7 @@ def name_candidates_ko(lines: list, emails: list, hint: str = "", weights: Optio
                  "mail": 1.0 if _email_hint(n, emails) else 0.0, "hint": float(bool(hint) and n == hint),
                  "conf": round(ln.conf / 100.0, 3),
                  "frag": float(n not in re.findall(r"[가-힣]+", raw) and n != whole
-                          and n != re.sub("|".join(_TITLES_LONG), "", re.sub(r"[^가-힣]", "", raw))),
+                          and n != re.sub("|".join(_STRIP_LONG), "", re.sub(r"[^가-힣]", "", raw))),
                  "both": 0.0, "tpl": 0.0, "cx": round(cx, 3), "cy": round(cy, 3)}
             why = tuple(k for k in ("title", "mail", "hint") if f[k])
             sc = name_score(f, weights)
@@ -562,6 +572,41 @@ def name_candidates_en(lines: list, emails: list, hint: str = "") -> list:
     return sorted(cands.values(), key=lambda c: (-c.score, c.text))   # 같은 점수는 글자 차례(실행마다 같게 — set 차례는 실행마다 다르다)
 
 
+_MARK = r"(?:\(\s*[주유사재株]\s*\)|㈜|주식회사|유한회사|사단법인|재단법인)"
+_MARK_RX = re.compile(_MARK)
+_WORD_OK = re.compile(r"[가-힣A-Za-z0-9&·\-]+")
+
+
+def _corp_word_stop(tok: str) -> bool:
+    """회사명 낱말 잇기를 멈출 자리 — 부서·직함·자격 낱말, 숫자·연락처·누리집."""
+    return bool(dept_token(tok) or title_token(tok) or qual_token(tok) or re.search(r"\d{3}|@|www|\.kr|\.com", tok, re.I)
+                or not _WORD_OK.fullmatch(tok))
+
+
+def corp_adjacent(text: str) -> list:
+    """(주)·(유)·㈜·주식회사 … 가 **앞이나 뒤에 붙은 낱말들** = 회사 이름(261117-17 사용자 지시). 법인 꼴에서 바깥쪽으로
+    낱말을 잇다가 부서·직함·자격·연락처를 만나면 멈춘다(같은 줄의 부서·직함은 섞지 않는다). 한글은 붙여 쓴다."""
+    t = merge_spaced(_nfc(text))
+    out = []
+    for m in _MARK_RX.finditer(t):
+        after = t[m.end():].split()
+        before = t[:m.start()].split()
+        words = []
+        for tok in after:                              # 뒤로 — '(주) 가나다 기술 품질팀' → 가나다·기술
+            if _MARK_RX.search(tok) or _corp_word_stop(tok):
+                break
+            words.append(tok)
+        if not words:
+            for tok in reversed(before):               # 앞으로 — '가나다 기술(주)' → 가나다·기술
+                if _MARK_RX.search(tok) or _corp_word_stop(tok):
+                    break
+                words.insert(0, tok)
+        c = strip_corp(nospace_ko(" ".join(words)))
+        if 2 <= len(c) <= 30 and c not in out:
+            out.append(c)
+    return out
+
+
 def company_candidates_ko(lines: list, emails: list, urls: list, hint: str = "") -> list:
     cands = {}
     hmax = max((ln.height for ln in lines), default=1) or 1
@@ -569,6 +614,11 @@ def company_candidates_ko(lines: list, emails: list, urls: list, hint: str = "")
         raw = ln.text
         if not _HANGUL.search(raw) or _ADDR_KO.search(raw) or find_phones(raw) or "@" in raw:
             continue
+        cx, cy = ln.center()
+        for c in corp_adjacent(raw):                   # 법인 꼴이 붙은 낱말이 1위(줄 통째보다 앞)
+            s = 3.5 + 1.0 * (ln.height / hmax) + (1.5 if hint and c == hint.replace(" ", "") else 0.0)
+            if c not in cands or cands[c].score < s:
+                cands[c] = Cand(c, round(s, 3), ("법인",), {"cx": round(cx, 3), "cy": round(cy, 3)})
         has_mark = any(m in raw for m in CORP_MARKS_KO)
         org = _is_orgish(raw)
         if not (has_mark or org):
@@ -864,6 +914,8 @@ def rescore(res: dict, weights: Optional[dict] = None, layouts: Optional[dict] =
     for fld in ("dept", "title", "company"):       # 붙여 쓰기(261117-15) — 옛 캐시 값도
         if r.get(fld):
             r[fld] = nospace_ko(r[fld])
+    if r.get("title") and qual_token(r["title"]):  # 자격은 직함이 아니다(261117-17) — 옛 캐시에 직함으로 남은 '공학박사' 등은 비운다
+        r["title"] = ""
     corr = corrections or {}
     for fld in ("dept", "title"):                  # 교정(§5.15) — 전에 사람이 고친 오인식은 고친 글로
         if r.get(fld) in corr.get(fld, {}):

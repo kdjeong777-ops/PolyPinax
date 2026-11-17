@@ -244,6 +244,25 @@ try:
     chk(dlg.table.item(rk, BD.C_FILE).text() == "박영수_라마바.jpg", "D 이름을 고치면 새 파일 이름이 바로", dlg.table.item(rk, BD.C_FILE).text())
     chk(dlg.table.horizontalHeaderItem(BD.C_DEPT).text() == "부서", "D 확인 표에 '부서' 열(261117-11)")
     dlg.table.item(rk, BD.C_DEPT).setText("품질팀")
+    # 261117-17(사용자 질문 '고친 방법을 학습해 적용하나'): 표에서 고친 칸도 — 인식값과 닮았으면 오인식 교정으로 배운다
+    rs = next(i for i, it in enumerate(dlg._items) if it.base == "사아자_이영희")
+    auto_c = dlg._auto_values(rs)["company"]
+    dlg.set_cell(rs, BD.C_COMP, auto_c + "건설")                       # 닮음(몇 글자 더함) → 배움
+    pump(timeout=0.2)
+    st5 = S.BizcardStore()
+    cor5 = st5.corrections().get("company", {})
+    st5.close()
+    chk(cor5.get(auto_c) == auto_c + "건설", "D 표에서 고친 오인식(닮은 값)은 교정으로 배운다", str(cor5))
+    dlg.set_cell(rs, BD.C_COMP, "전혀다른값")                           # 다른 후보를 고른 것 → 배우지 않음
+    pump(timeout=0.2)
+    st5 = S.BizcardStore()
+    cor6 = st5.corrections().get("company", {})
+    st5.close()
+    chk(cor6.get(auto_c) == auto_c + "건설" and "전혀다른값" not in cor6.values(), "D 전혀 다른 값으로 바꾼 것은 배우지 않는다", str(cor6))
+    dlg.set_cell(rs, BD.C_COMP, auto_c)
+    pump(timeout=0.2)
+    chk(dlg._rescore({"company": auto_c, "company_cands": [{"text": auto_c, "score": 3.0, "feat": {}}], "name_cands": []})["company"]
+        == auto_c + "건설", "D 배운 교정은 다시 매기기·다시 읽기에 곧바로 쓰인다")
     st = S.BizcardStore()
     hit = st.recog_get(dlg._items[rk].key, S.source_sig([dlg._items[rk].pdf, dlg._items[rk].front, dlg._items[rk].back]))
     chk(hit and hit["edit"].get("name") == "박영수", "D 고친 값은 캐시에(다시 열면 이어서)")

@@ -8336,6 +8336,11 @@ msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format
+msgid "파일 {n}개를 옮겼습니다"
+msgstr ""
+
+#: viewer/widgets/bookmark_tree.py
+#, python-brace-format
 msgid "인쇄 ({n}개 파일)"
 msgstr ""
 

@@ -8601,6 +8601,11 @@ msgstr "File missing: {name}"
 
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format
+msgid "파일 {n}개를 옮겼습니다"
+msgstr "Moved {n} file(s)"
+
+#: viewer/widgets/bookmark_tree.py
+#, python-brace-format
 msgid "인쇄 ({n}개 파일)"
 msgstr "Print ({n} files)"
 

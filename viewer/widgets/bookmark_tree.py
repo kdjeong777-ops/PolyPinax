@@ -10,6 +10,7 @@ v1.6.2: 각 PDF 파일 리프에 PDF 자체의 내부 책갈피(TOC)가 있으�
 from __future__ import annotations
 
 import json
+import os
 from viewer.i18n import tr, tr_noop, korea_only_visible  # 261008: 화면 문구(다국어 SOT §6·§7)
 from pathlib import Path
 from typing import Optional
@@ -152,7 +153,72 @@ class _EditableTree(QTreeWidget):
         else:
             self.setStyleSheet(getattr(self, "_base_ss", ""))
 
+    @staticmethod
+    def _own_drag(md) -> bool:
+        """261117-3(§4.7.30): 이 앱이 책갈피창에서 밖으로 끄는 파일 — 책갈피창에 다시 놓으면 아무 일도 하지 않는다."""
+        if md is None or not md.hasUrls():
+            return False
+        from viewer import shell_drag
+        return shell_drag.is_own([u.toLocalFile() for u in md.urls() if u.isLocalFile()])
+
+    file_drag = None                # 261117-3(§4.7.30): BookmarkTree._start_file_drag — 파일 줄이면 셸 끌기로 맡고 True
+    internal_drag_ok = None         # 261117-3: 트리 안 끌기(책갈피 옮기기·복사)를 시작해도 되나 — 편집 모드만
+
+    def startDrag(self, actions):
+        """261117-3(책갈피창·저장 SOT §4.7.30): 보기 모드의 파일 줄 = 파일 탐색기로(셸 끌기), 편집 모드 = 트리 안 끌기(종전)."""
+        fn = self.file_drag
+        if callable(fn) and fn():
+            return
+        ok = self.internal_drag_ok
+        if callable(ok) and not ok():
+            return
+        super().startDrag(actions)
+
+    @staticmethod
+    def _copy_mod(e) -> bool:
+        return bool(e.modifiers() & Qt.KeyboardModifier.ControlModifier)
+
+    def _drop_dest(self, e):
+        """놓을 자리 — (부모 줄|None=맨 위, 그 안 자리). 줄 위면 그 줄의 끝, 줄 사이면 그 줄 앞·뒤."""
+        it = self.itemAt(e.position().toPoint())
+        P = QAbstractItemView.DropIndicatorPosition
+        ind = self.dropIndicatorPosition()
+        if it is None or ind == P.OnViewport:
+            return None, self.topLevelItemCount()
+        if ind == P.OnItem:
+            return it, it.childCount()
+        par = it.parent()
+        idx = par.indexOfChild(it) if par is not None else self.indexOfTopLevelItem(it)
+        return par, idx + (1 if ind == P.BelowItem else 0)
+
+    def _copy_bookmarks(self, e) -> bool:
+        """261117-3(사용자 지시 '책갈피의 위치만 복사, 이동 가능'): Ctrl+끌어 놓기 = 책갈피 줄 **복사**(같은 쪽을 가리키는 책갈피 하나 더).
+        실제 쪽은 건드리지 않는다. 고른 줄만(하위 책갈피는 따라가지 않는다), 파일 줄은 복사하지 않는다."""
+        own = self.is_file_row
+        items = [x for x in self.selectedItems() if not (callable(own) and own(x))]
+        if not items or len(items) != len(self.selectedItems()):
+            return False
+        par, idx = self._drop_dest(e)
+        if par is None:
+            return False
+        clones = []
+        for x in items:
+            c = x.clone()
+            c.takeChildren()
+            clones.append(c)
+        par.insertChildren(min(idx, par.childCount()), clones)
+        par.setExpanded(True)
+        self.clearSelection()
+        for c in clones:
+            c.setSelected(True)
+        self.setCurrentItem(clones[0])
+        return True
+
+    is_file_row = None              # 261117-3: BookmarkTree._is_file_node
+
     def dragEnterEvent(self, e):
+        if self._own_drag(e.mimeData()):
+            e.ignore(); return                       # 261117-3: 제가 밖으로 끄는 파일
         if self._ext_paths(e.mimeData()):
             e.acceptProposedAction(); self._set_drop_hl(True); return
         super().dragEnterEvent(e)
@@ -180,17 +246,24 @@ class _EditableTree(QTreeWidget):
         return bool(fn(self.selectedItems(), dest))
 
     def dragMoveEvent(self, e):
+        if self._own_drag(e.mimeData()):
+            e.ignore(); return
         if self._ext_paths(e.mimeData()):
             e.acceptProposedAction(); return
         super().dragMoveEvent(e)
         if not self._internal_drop_ok(e):             # 261116-3: 파일 밖 — 금지 표시
             e.ignore()
+        elif e.isAccepted() and self._copy_mod(e):
+            e.setDropAction(Qt.DropAction.CopyAction)   # 261117-3: Ctrl = 책갈피 위치 복사('+')
 
     def dragLeaveEvent(self, e):
         self._set_drop_hl(False)
         super().dragLeaveEvent(e)
 
     def dropEvent(self, e):
+        if self._own_drag(e.mimeData()):
+            self._set_drop_hl(False)
+            e.ignore(); return                       # 261117-3: 끈 파일을 책갈피창에 다시 놓음 — 아무 일도 없다
         paths = self._ext_paths(e.mimeData())
         if paths:
             self._set_drop_hl(False)
@@ -201,6 +274,15 @@ class _EditableTree(QTreeWidget):
             return
         if not self._internal_drop_ok(e):             # 261116-3(§4.7.28): 파일 밖 — 놓아도 아무 일 없다
             e.ignore()
+            return
+        if self._copy_mod(e):                         # 261117-3(§4.7.30): Ctrl = 책갈피 위치 복사
+            md = e.mimeData()
+            if md is not None and any(md.hasFormat(t) for t in self.model().mimeTypes()) and self._copy_bookmarks(e):
+                e.setDropAction(Qt.DropAction.CopyAction)
+                e.accept()
+                self.dropped.emit()
+            else:
+                e.ignore()
             return
         super().dropEvent(e)
         self.dropped.emit()
@@ -282,6 +364,8 @@ class BookmarkTree(QWidget):
     bookmarksEdited = pyqtSignal(str, str)   # v1.6.18: (src_pdf, edited_pdf) 저장 완료
     editCancelled = pyqtSignal()             # 260611-9: 편집 취소(저장 전 수정 되돌리기)
     dragHoverOpen = pyqtSignal(str, int)       # 261012-12(마스터 §4.7.18): 썸네일·스크린샷을 끌고 파일·책갈피 위에 머묾 → (파일, 쪽)
+    _fileDragDone = pyqtSignal(object, int)    # 261117-3(§4.7.30): 끌기 하나(dict), 대상이 돌려준 효과 — 다른 스레드에서 올 수 있다
+    _fileDragMoved = pyqtSignal(object, list, list)  # 261117-3: 끌기 하나, 옮겨져 없어진 파일들, 그대로인 파일들(배경 확인 결과)
     bookmarksUndoable = pyqtSignal(str, object, object)  # 261012-10(§4.6.8): (파일, 전, 후) — 편집 되돌리기 기록
     bookmarksChanged = pyqtSignal(str)       # 261019-3(마스터 §4.7.21): 그 파일의 책갈피를 이 창에서 바꿨다 — 다른 책갈피창이 같은 파일이면 따라간다
     bookmarksReverted = pyqtSignal()         # 261019-3: 저장 전 고침을 버렸다(취소·편집 끝 '저장 안 함') — 따라간 창은 디스크로 되돌린다
@@ -868,10 +952,18 @@ class BookmarkTree(QWidget):
         self.tree.customContextMenuRequested.connect(self._on_tree_context_menu)
         self.tree.dropped.connect(self._on_tree_dropped)
         self.tree.drop_allowed = self._drop_allowed          # 261116-3(§4.7.28): 책갈피는 그 파일 밖으로 못 놓는다
+        self.tree.file_drag = self._start_file_drag          # 261117-3(§4.7.30): 보기 모드 파일 줄 → 파일 탐색기
+        self.tree.internal_drag_ok = lambda: bool(self._edit_mode)
+        self.tree.is_file_row = self._is_file_node
+        self._fileDragDone.connect(self._on_file_drag_done)
+        self._fileDragMoved.connect(self._on_file_drag_moved)
         self.tree.delPressed.connect(self._on_del_key)    # 260611-56: DEL=선택 삭제
         # 260618-27: 외부 PDF/폴더 드롭 → 이 책갈피창(=해당 메인 창)에 등록. 비편집 모드에서도
         #   외부 드롭은 받도록 acceptDrops 상시 ON(내부 재배치 드래그는 편집모드에서만).
         self.tree.setAcceptDrops(True)
+        self.tree.setDragDropMode(QAbstractItemView.DragDropMode.DragDrop)   # 261117-3(§4.7.30): 보기 모드 = 파일 끌어내기
+        self.tree.setDragEnabled(True)
+        self.tree.setDropIndicatorShown(False)
         self.tree.pathDropped.connect(self.pathDropped.emit)
         self.tree.pathsDropped.connect(self.pathsDropped.emit)
         # v1.6.2: 갈매기(▸) 펼침 시 PDF 내부 TOC lazy load
@@ -3162,6 +3254,11 @@ class BookmarkTree(QWidget):
                 self._drag_hover_timer.stop()
                 self._drag_hover_item = None
                 return False
+            if self.tree._own_drag(event.mimeData()):
+                self._drag_hover_timer.stop()    # 261117-3(§4.7.30): 제가 끄는 파일(사진) — 머묾 열기도 놓기도 없다
+                self._drag_hover_item = None
+                event.ignore()
+                return True
             if not self._is_page_drag(event.mimeData()):
                 return False                     # 책갈피 옮기기 등 — 종전대로
             if event.type() == QEvent.Type.Drop:
@@ -3196,6 +3293,130 @@ class BookmarkTree(QWidget):
         self._dirty = True
         self._bm_record()                    # 261012-10(§4.6.8)
         self._emit_changed()
+
+    # ===== 261117-3(책갈피창·저장 SOT §4.7.30, 사용자 지시·결정 A·가): 파일 줄 → 파일 탐색기 =====
+    MOVE_WATCH_S = 600          # 이동(Shift) 뒤 원본이 없어지는지 배경에서 지켜보는 최대 시간(드라이브 넘어 큰 파일 이동)
+
+    def _drag_paths(self) -> list:
+        """끌어낼 파일들 — 누른 줄이 파일 줄이면 고른 파일 줄들(누른 줄이 고른 것에 없으면 그 줄 하나). 실제 파일만
+        (zip 안·휴대 장치 사진·자리 줄은 빠진다 — 가상 파일을 만들지 않는다)."""
+        it = self.tree.currentItem()
+        if it is None or not self._is_file_node(it) or it.data(0, self.DATA_IS_TOC_PLACEHOLDER):
+            return []
+        sel = [x for x in self.tree.selectedItems() if self._is_file_node(x)]
+        nodes = sel if it in sel else [it]
+        out = []
+        for n in nodes:
+            p = str(n.data(0, self.DATA_FILE) or "")
+            try:
+                if p and os.path.isfile(p):
+                    out.append(p)
+            except (OSError, ValueError):
+                pass
+        return out
+
+    def _start_file_drag(self) -> bool:
+        """`_EditableTree.startDrag` 이 부른다 — 보기 모드의 파일 줄이면 셸 끌기로 맡고 True(트리 안 끌기는 하지 않는다).
+        그냥 끌기 = 복사, Shift = 이동(놓는 순간 그 파일을 앱이 놓는다). 복사·이동은 탐색기가 자기 스레드에서 —
+        이 함수는 놓거나 취소하면 곧바로 돌아온다(메인이 복사를 기다리지 않는다, 응답성 SOT §4.8)."""
+        if self._edit_mode:
+            return False                         # 편집 모드 = 트리 안 끌기(종전)
+        it = self.tree.currentItem()
+        if it is None or not self._is_file_node(it):
+            return True                          # 보기 모드의 책갈피 줄 — 끌지 않는다
+        paths = self._drag_paths()
+        from viewer import shell_drag
+        if not paths or not shell_drag.available():
+            return True
+        drag = {"paths": paths, "released": [], "done": False}
+
+        def on_move(ps):
+            # 이동은 본문이 연 파일이면 막힌다 — 놓기 전에 그 파일만 놓는다(휴지통 길과 같은 핸드셰이크). 앱의 놓음 기억은
+            #   하나라(`_released_state` — 부를 때마다 새로) 연 파일 하나만 부른다
+            from viewer.pathutil import norm_key
+            cur = None
+            for fn in (self._shown_file_fn, self._current_file_getter):
+                try:
+                    cur = fn() if callable(fn) else None
+                except Exception:
+                    cur = None
+                if cur:
+                    break
+            for p in ps:
+                if cur and norm_key(str(p)) == norm_key(str(cur)):
+                    self.releaseFileRequested.emit(p)
+                    drag["released"].append(p)
+
+        try:
+            hwnd = int(self.tree.window().winId())
+        except Exception:
+            hwnd = 0
+        r = shell_drag.drag_files(paths, hwnd, on_move, lambda eff, d=drag: self._fileDragDone.emit(d, int(eff)))
+        drag.update(r)
+        if r.get("result") == "drop" and (r.get("shift") or (r.get("effect", 0) & shell_drag.DROPEFFECT_MOVE)):
+            self._watch_moved(drag)              # 끝은 배경 확인이 알린다
+        elif drag["released"]:
+            self._fileDragMoved.emit(drag, [], list(drag["paths"]))   # 이동이 아니었다 — 놓았던 파일을 다시 연다
+        return True
+
+    def _on_file_drag_done(self, drag, eff) -> None:
+        drag["done"] = True                      # 대상이 끝을 알렸다(비동기 EndOperation 또는 곧바로) — 배경 확인이 곧 마무리
+
+    def _watch_moved(self, drag) -> None:
+        """이동 뒤 원본이 없어지는지 배경에서 본다(탐색기는 놓은 곳을 알려 주지 않는다). 메인은 stat 하지 않는다."""
+        import threading, time as _t
+        paths = list(drag["paths"])
+        cap = float(self.MOVE_WATCH_S)
+
+        from viewer import shell_drag
+
+        def run():
+            t0 = _t.monotonic()
+            settle = None
+            idle = 0
+            while True:
+                gone = [p for p in paths if not os.path.exists(p)]
+                if len(gone) == len(paths):
+                    break
+                if drag.get("done"):
+                    settle = settle or _t.monotonic()
+                    if _t.monotonic() - settle > 2.0:     # 끝났다고 한 뒤 2초 — 남은 것은 옮기지 않았다(취소·실패·충돌 건너뜀)
+                        break
+                # 끝 알림(EndOperation)이 오지 않는 대상도 있다(실측 — 셸 놓기 대상이 같은 프로세스일 때) → 3초 뒤부터 남은 원본을
+                #   아무도 열고 있지 않은 채 2초(4번)가 지나면 옮기는 중이 아니다(드라이브를 넘는 이동은 복사 동안 원본을 연다)
+                left = [p for p in paths if p not in gone]
+                if _t.monotonic() - t0 > 3.0 and left and not any(shell_drag.in_use(p) for p in left):
+                    idle += 1
+                    if idle >= 4:
+                        break
+                else:
+                    idle = 0
+                if _t.monotonic() - t0 > cap:
+                    break
+                _t.sleep(0.5)
+            gone = [p for p in paths if not os.path.exists(p)]
+            self._fileDragMoved.emit(drag, gone, [p for p in paths if p not in gone])
+
+        threading.Thread(target=run, name="bm-drag-move-watch", daemon=True).start()
+
+    def _on_file_drag_moved(self, drag, gone, stayed) -> None:
+        """이동 결과 — 없어진 파일은 삭제와 같은 한 길(`fileOpCompleted(old, "")` — 목록·본문), 그대로면 놓았던 파일을 다시 연다."""
+        from viewer.pathutil import norm_key
+        released = {norm_key(p) for p in drag.get("released") or []}
+        keys = {norm_key(p): p for p in gone}
+        for node in list(self._iter_file_nodes()):
+            d = node.data(0, self.DATA_FILE)
+            if d and norm_key(str(d)) in keys:
+                self._take_node(node)
+                if self._mode == "flat":
+                    self._pdfs_flat = [q for q in self._pdfs_flat if norm_key(str(q)) != norm_key(str(d))]
+        for p in gone:
+            self.fileOpCompleted.emit(str(p), "")
+        for p in stayed:
+            if norm_key(p) in released:
+                self.fileOpCompleted.emit(str(p), str(p))   # 옮기지 않았다 — 원본 다시 열기
+        if gone:
+            self._notice(tr("파일 {n}개를 옮겼습니다").format(n=len(gone)))
 
     def _drop_allowed(self, items, dest) -> bool:
         """261116-3(책갈피창·저장 SOT §4.7.28, 사용자 지시): 끈 줄들을 `dest` 아래(None = 맨 위)에 놓아도 되나 — 판정 한 곳.
@@ -3939,11 +4160,12 @@ class BookmarkTree(QWidget):
             self.tree.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
             self.tree.setDropIndicatorShown(True)
         else:
-            # 260618-27: 비편집 모드에서도 외부 PDF/폴더 드롭은 받도록 DropOnly 유지
-            #   (내부 재배치 드래그만 비활성).
-            self.tree.setDragEnabled(False)
+            # 260618-27: 비편집 모드에서도 외부 PDF/폴더 드롭은 받는다(내부 재배치 드래그만 비활성).
+            # 261117-3(§4.7.30): 보기 모드에서는 파일 줄을 파일 탐색기로 끌어낸다 — 끌기를 켜되 시작은
+            #   `_EditableTree.startDrag` 가 파일 줄만 셸 끌기로 맡고, 트리 안 끌기는 하지 않는다(`internal_drag_ok`).
+            self.tree.setDragDropMode(QAbstractItemView.DragDropMode.DragDrop)
+            self.tree.setDragEnabled(True)
             self.tree.setAcceptDrops(True)
-            self.tree.setDragDropMode(QAbstractItemView.DragDropMode.DropOnly)
             self.tree.setDropIndicatorShown(False)
 
     def _sync_selection_mode(self, *_):

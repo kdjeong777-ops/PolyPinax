@@ -22,7 +22,7 @@ from viewer.bizcard import recognize as R
 from viewer.bizcard.importer import scan_folder, ImportWorker, OUT_DIR
 
 # 열 차례
-C_ON, C_NAME, C_COMP, C_TITLE, C_CELL, C_TEL, C_MAIL, C_BACK, C_DATE, C_FILE = range(10)
+C_ON, C_NAME, C_COMP, C_DEPT, C_TITLE, C_CELL, C_TEL, C_MAIL, C_BACK, C_DATE, C_FILE = range(11)   # 261117-11: 부서
 NEED_BG = QColor(255, 244, 200)          # '확인 필요' 칸(디자인 SOT §2.5 의 옅은 노랑 계열)
 PREVIEW_W = 460
 
@@ -117,15 +117,15 @@ class BizcardImportDialog(QDialog):
 
         split = QSplitter(Qt.Orientation.Horizontal)
         split.splitterMoved.connect(lambda *_: QTimer.singleShot(0, self._refit))   # 칸 폭을 바꿔도 다시 맞춤
-        self.table = QTableWidget(len(self._items), 10)
-        self.table.setHorizontalHeaderLabels([tr("적용"), tr("이름"), tr("회사"), tr("직함"), tr("휴대폰"), tr("전화"),
+        self.table = QTableWidget(len(self._items), 11)
+        self.table.setHorizontalHeaderLabels([tr("적용"), tr("이름"), tr("회사"), tr("부서"), tr("직함"), tr("휴대폰"), tr("전화"),
                                               tr("메일"), tr("뒷면"), tr("스캔일"), tr("새 파일 이름")])
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.verticalHeader().setVisible(False)
         hh = self.table.horizontalHeader()
         hh.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
         hh.setStretchLastSection(True)
-        for c, w in ((C_ON, 44), (C_NAME, 110), (C_COMP, 160), (C_TITLE, 80), (C_CELL, 120), (C_TEL, 120),
+        for c, w in ((C_ON, 44), (C_NAME, 110), (C_COMP, 160), (C_DEPT, 110), (C_TITLE, 80), (C_CELL, 120), (C_TEL, 120),
                      (C_MAIL, 170), (C_BACK, 90), (C_DATE, 90)):
             self.table.setColumnWidth(c, w)
         self.table.itemChanged.connect(self._on_item_changed)
@@ -184,7 +184,7 @@ class BizcardImportDialog(QDialog):
                 on.setFlags(Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
                 on.setCheckState(Qt.CheckState.Unchecked)
                 self.table.setItem(r, C_ON, on)
-                for c in (C_TITLE, C_CELL, C_TEL, C_MAIL, C_DATE):
+                for c in (C_DEPT, C_TITLE, C_CELL, C_TEL, C_MAIL, C_DATE):
                     self.table.setItem(r, c, QTableWidgetItem(""))
                 self.table.item(r, C_DATE).setText(it.scanned)
                 f = QTableWidgetItem(tr("(읽는 중)"))
@@ -238,6 +238,7 @@ class BizcardImportDialog(QDialog):
             self.table.setCellWidget(r, C_NAME, cn)
             self.table.setCellWidget(r, C_COMP, cc)
             ph = [tuple(x) for x in (val.get("phones") or [])]
+            self.table.item(r, C_DEPT).setText(val.get("dept", ""))
             self.table.item(r, C_TITLE).setText(val.get("title", ""))
             self.table.item(r, C_CELL).setText(val.get("cell", _first(ph, ("cell",))))
             self.table.item(r, C_TEL).setText(val.get("tel", _first(ph, ("work",))))
@@ -296,7 +297,8 @@ class BizcardImportDialog(QDialog):
         emails = [mail] + [e for e in (res.get("emails") or []) if e != mail] if mail else list(res.get("emails") or [])
         cands = res.get("name_cands") or []
         return {"key": it.key, "front": it.front, "back": it.back, "pdf": it.pdf, "keep_back": keep,
-                "name": name, "company": comp, "title": self.table.item(r, C_TITLE).text().strip(),
+                "name": name, "company": comp, "dept": self.table.item(r, C_DEPT).text().strip(),
+                "title": self.table.item(r, C_TITLE).text().strip(),
                 "phones": out_ph, "emails": emails, "urls": res.get("urls") or [], "address": res.get("address", ""),
                 "en": res.get("en") or {}, "langs": res.get("langs") or [], "scanned": self.table.item(r, C_DATE).text().strip(),
                 "top1": (bool(cands) and cands[0].get("text") == name) if name else None,
@@ -320,7 +322,7 @@ class BizcardImportDialog(QDialog):
         finally:
             self._loading = False
         v = self._row_values(r)
-        edit = {k: v[k] for k in ("name", "company", "title", "cell", "tel", "email", "scanned", "on")}
+        edit = {k: v[k] for k in ("name", "company", "dept", "title", "cell", "tel", "email", "scanned", "on")}
         edit["keep_back"] = v["keep_back"]
         self._items[r].edit = edit
         try:
@@ -431,6 +433,8 @@ class BizcardImportDialog(QDialog):
             return ko if ko else R.clean_name_en(text)
         if fld == "company":
             return R.strip_corp(text)
+        if fld == "dept":
+            return " ".join(t for t in R.merge_spaced(text).split() if not R.title_token(t)) or R.merge_spaced(text)
         if fld in ("cell", "tel"):
             ph = R.find_phones(text)
             return ph[0][1] if ph else ""
@@ -444,7 +448,7 @@ class BizcardImportDialog(QDialog):
         if r < 0 or not self._items[r].result:
             return
         m = QMenu(self)
-        labels = (("name", tr("이름")), ("company", tr("회사")), ("title", tr("직함")), ("cell", tr("휴대폰")),
+        labels = (("name", tr("이름")), ("company", tr("회사")), ("dept", tr("부서")), ("title", tr("직함")), ("cell", tr("휴대폰")),
                   ("tel", tr("전화")), ("email", tr("메일")))
         acts = {m.addAction(label): fld for fld, label in labels}
         a = m.exec(gpos)
@@ -463,14 +467,14 @@ class BizcardImportDialog(QDialog):
         if not val:
             QMessageBox.information(self, tr("명함 관리"), tr("그 자리에서 글자를 읽지 못했습니다 — 상자를 조금 넓혀 다시 그리세요."))
             return ""
-        col = {"name": C_NAME, "company": C_COMP, "title": C_TITLE, "cell": C_CELL, "tel": C_TEL, "email": C_MAIL}[fld]
+        col = {"name": C_NAME, "company": C_COMP, "dept": C_DEPT, "title": C_TITLE, "cell": C_CELL, "tel": C_TEL, "email": C_MAIL}[fld]
         w = self.table.cellWidget(r, col)
         if w is not None:
             w.setCurrentText(val)
         else:
             self.table.item(r, col).setText(val)
         self._on_edit(r)
-        if fld in ("name", "company", "title"):
+        if fld in ("name", "company", "title"):         # 부서 자리는 칸만 채운다 — 다시 매기기가 쓰는 양식은 이름·회사(§5.13)
             v = self._row_values(r)
             key = R.layout_key(v["emails"], v["urls"], v["company"])
             if key:

@@ -18,7 +18,7 @@ from viewer import dbutil
 
 DB_NAME = "bizcard.db"
 SCHEMA_VER = 1
-_TEXT_COLS = ("name", "company", "title", "address", "memo", "scanned")
+_TEXT_COLS = ("name", "company", "dept", "title", "address", "memo", "scanned")
 
 
 def db_path() -> Path:
@@ -84,6 +84,9 @@ class BizcardStore:
         CREATE TABLE IF NOT EXISTS domain_org(domain TEXT PRIMARY KEY, org TEXT, n INTEGER, updated REAL);
         CREATE TABLE IF NOT EXISTS samples(src_key TEXT PRIMARY KEY, data TEXT, updated REAL);
         """)
+        cols = {r[1] for r in c.execute("PRAGMA table_info(cards)")}
+        if "dept" not in cols:                       # 261117-11: 부서 칸(옛 DB 는 열만 더한다)
+            c.execute("ALTER TABLE cards ADD COLUMN dept TEXT")
         c.execute("INSERT OR IGNORE INTO meta(k, v) VALUES('schema', ?)", (str(SCHEMA_VER),))
         c.commit()
 
@@ -110,7 +113,7 @@ class BizcardStore:
     @staticmethod
     def _body(d: dict) -> str:
         en = d.get("en") or {}
-        parts = [d.get("name"), d.get("company"), d.get("title"), d.get("memo"), d.get("address"),
+        parts = [d.get("name"), d.get("company"), d.get("dept"), d.get("title"), d.get("memo"), d.get("address"),
                  " ".join(d.get("emails") or []), " ".join(n for _, n in (d.get("phones") or [])),
                  " ".join(str(v) for v in en.values()), " ".join(d.get("tags") or [])]
         return " ".join(str(x) for x in parts if x)
@@ -149,13 +152,13 @@ class BizcardStore:
         if old:
             cid = old["id"]
             self.con.execute("UPDATE cards SET back=?, src_key=?, src_pdf=?, name=?, company=?, title=?, phones=?, "
-                             "emails=?, urls=?, address=?, en=?, memo=?, tags=?, scanned=?, top1=?, updated=? WHERE id=?",
-                             args + (now, cid))
+                             "emails=?, urls=?, address=?, en=?, memo=?, tags=?, scanned=?, top1=?, updated=?, dept=? WHERE id=?",
+                             args + (now, vals["dept"], cid))
             self.con.execute("DELETE FROM cards_fts WHERE rowid=?", (cid,))
         else:
             cur = self.con.execute("INSERT INTO cards(front, back, src_key, src_pdf, name, company, title, phones, "
-                                   "emails, urls, address, en, memo, tags, scanned, top1, created, updated) "
-                                   "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", (front,) + args + (now, now))
+                                   "emails, urls, address, en, memo, tags, scanned, top1, created, updated, dept) "
+                                   "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", (front,) + args + (now, now, vals["dept"]))
             cid = cur.lastrowid
         self.con.execute("INSERT INTO cards_fts(rowid, body) VALUES(?,?)", (cid, self._body(d)))
         self.con.commit()

@@ -74,6 +74,12 @@ chk(r.names_ko and r.names_ko[0].text == "홍길동", "C 띄운 이름이 큰 �
 chk(r.companies_ko and r.companies_ko[0].text == "가나다기술", "C 회사 1위", str([c.text for c in r.companies_ko[:3]]))
 chk(r.address_ko.startswith("서울특별시"), "C 주소")
 chk(r.titles_ko == ["부장"], "C 직함", str(r.titles_ko))
+chk(r.dept_ko == "기술연구소", "C 부서(직함 앞 부서 낱말)", r.dept_ko)                      # 261117-11
+rd = R.parse_lines([L("(주)가나다건설", 0.10, 90, 0.05), L("기술본부 품질관리팀", 0.06, 90, 0.3), L("홍길동 과장", 0.14, 90, 0.4),
+                    L("서울특별시 가나구 다라로 12", 0.05, 90, 0.8)])
+chk(rd.dept_ko == "기술본부 품질관리팀" and rd.titles_ko == ["과장"], "C 부서 둘을 이어 씀·회사·주소 줄은 부서가 아님", rd.dept_ko)
+rg = R.parse_lines([L("국토교통부", 0.12, 90, 0.05), L("도로정책과", 0.06, 90, 0.3), L("홍길동 주무관", 0.14, 90, 0.4)])
+chk(rg.dept_ko == "도로정책과", "C 기관 이름(…부)은 부서가 아니고 그 아래 과가 부서", rg.dept_ko)
 chk(r.phones == [("cell", "010-0000-0001")] and r.emails == ["hong@example.com"], "C 연락처")
 lines2 = [L("가나다건설", 0.12, 90, 0.1), L("대표이사홍길동", 0.10, 70, 0.4), L("010-0000-0002", 0.05, 90, 0.9)]
 r2 = R.parse_lines(lines2)
@@ -91,6 +97,7 @@ back = R.parse_lines([L("Gildong Hong", 0.12, 90, 0.3), L("Senior Manager", 0.06
 c = R.merge_sides(front, back)
 chk(c.name == "홍길동" and c.company == "가나다기술", "D 한글판 — 한글이 주", c.name + "/" + c.company)
 chk(c.en.get("name") == "Gildong Hong" and "Ganada" in c.en.get("company", ""), "D 영문은 en 칸에 따로", str(c.en))
+chk(c.dept == "기술연구소", "D 합친 결과에 부서", c.dept)
 chk(c.phones == [("cell", "010-0000-0001")], "D 같은 번호는 한 번", str(c.phones))
 chk(set(c.langs) == {"한글", "영어"}, "D 해시태그 언어 둘 다", str(c.langs))
 chk(c.back_promo is False, "D 연락처 있는 뒷면은 홍보 면이 아니다")

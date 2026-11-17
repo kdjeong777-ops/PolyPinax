@@ -132,6 +132,26 @@ try:
     chk([d["name"] for d in st.search("", since="2026-01-01")] == ["홍길동"], "B 스캔일 범위")
     chk(st.top1_ratio() == (1, 2), "B 이름 1위 비율(참·거짓만)", str(st.top1_ratio()))
     st.close()
+    # 261117-11: 부서 열이 없던 옛 DB — 열은 한 번만 더하고, 옛 행은 그대로, 옛 판의 넣기(열 이름을 적은 INSERT)도 된다
+    import sqlite3
+    olddb = TMP / "old.db"
+    con = sqlite3.connect(olddb)
+    con.executescript("""CREATE TABLE cards(id INTEGER PRIMARY KEY, front TEXT UNIQUE NOT NULL, back TEXT, src_key TEXT, src_pdf TEXT,
+        name TEXT, company TEXT, title TEXT, phones TEXT, emails TEXT, urls TEXT, address TEXT, en TEXT, memo TEXT, tags TEXT,
+        scanned TEXT, top1 INTEGER, created REAL, updated REAL);
+        INSERT INTO cards(front, name, company) VALUES('a.jpg', '홍길동', '가나다');""")
+    con.commit(); con.close()
+    for _ in range(2):
+        so = S.BizcardStore(olddb)
+        so.close()
+    con = sqlite3.connect(olddb)
+    cols = [r[1] for r in con.execute("PRAGMA table_info(cards)")]
+    con.execute("INSERT INTO cards(front, name, company) VALUES('b.jpg', '김철수', '라마바')")   # 옛 판의 꼴
+    con.commit()
+    rows = con.execute("SELECT name, dept FROM cards ORDER BY id").fetchall()
+    con.close()
+    chk(cols.count("dept") == 1 and rows == [("홍길동", None), ("김철수", None)],
+        "B 옛 DB — 부서 열은 한 번만, 옛 행 그대로, 옛 판 넣기도 된다", "%s %s" % (cols.count("dept"), rows))
 
     # ── C ──
     print("\n=== C. 적용 ===")
@@ -209,7 +229,10 @@ try:
     chk(cb is not None and cb.count() >= 2, "D 이름 칸은 후보 풀다운")
     cb.setCurrentText("박영수")
     pump(timeout=0.2)
-    chk(dlg.table.item(rk, 9).text() == "박영수_라마바.jpg", "D 이름을 고치면 새 파일 이름이 바로", dlg.table.item(rk, 9).text())
+    from viewer.widgets import bizcard_import_dialog as BD
+    chk(dlg.table.item(rk, BD.C_FILE).text() == "박영수_라마바.jpg", "D 이름을 고치면 새 파일 이름이 바로", dlg.table.item(rk, BD.C_FILE).text())
+    chk(dlg.table.horizontalHeaderItem(BD.C_DEPT).text() == "부서", "D 확인 표에 '부서' 열(261117-11)")
+    dlg.table.item(rk, BD.C_DEPT).setText("품질팀")
     st = S.BizcardStore()
     hit = st.recog_get(dlg._items[rk].key, S.source_sig([dlg._items[rk].pdf, dlg._items[rk].front, dlg._items[rk].back]))
     chk(hit and hit["edit"].get("name") == "박영수", "D 고친 값은 캐시에(다시 열면 이어서)")
@@ -227,6 +250,11 @@ try:
     made = sorted(os.listdir(out2))
     chk("박영수_라마바.jpg" in made and "홍길동_가나다.jpg" in made and not any(n.startswith("20250101") for n in made),
         "D [적용] — 체크한 줄만 정리본", str(made))
+    st2 = S.BizcardStore()
+    row2 = st2.card_by_front(out2 / "박영수_라마바.jpg")
+    chk(row2 is not None and row2.get("dept") == "품질팀" and [d["name"] for d in st2.search("품질팀")] == ["박영수"],
+        "D 부서가 명함 DB 에 들어가고 찾기로 나온다", str(row2 and row2.get("dept")))
+    st2.close()
     tags = mw.bookmark_tree._tags.get(str(out2 / "박영수_라마바.jpg"))
     chk(tags[:3] == ["명함", "라마바", "한글"], "D 해시태그는 앱의 태그 저장소에", str(tags))
     from PyQt6.QtGui import QPixmap

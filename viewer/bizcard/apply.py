@@ -104,7 +104,7 @@ def apply_cards(rows: list, out_dir, db=None, progress=None) -> list:
             tags = tags_for(r)
             st.upsert({"front": str(front), "back": str(back) if back else "", "src_key": r["key"],
                        "src_pdf": r.get("pdf", ""), "name": r.get("name", ""), "company": R.strip_corp(r.get("company") or ""),
-                       "title": r.get("title", ""), "phones": r.get("phones") or [], "emails": r.get("emails") or [],
+                       "title": r.get("title", ""), "dept": r.get("dept", ""), "phones": r.get("phones") or [], "emails": r.get("emails") or [],
                        "urls": r.get("urls") or [], "address": r.get("address", ""), "en": r.get("en") or {},
                        "tags": tags, "scanned": r.get("scanned", ""), "top1": r.get("top1"),
                        "memo": (old or {}).get("memo", "")})          # 다시 적용해도 메모는 지키기

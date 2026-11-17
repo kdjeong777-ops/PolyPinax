@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-11-17 20:47+0900\n"
+"POT-Creation-Date: 2026-11-17 20:59+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -7796,6 +7796,10 @@ msgstr ""
 
 #: viewer/widgets/bizcard_import_dialog.py
 msgid "회사"
+msgstr ""
+
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "부서"
 msgstr ""
 
 #: viewer/widgets/bizcard_import_dialog.py

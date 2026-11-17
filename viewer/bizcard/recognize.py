@@ -42,6 +42,11 @@ TITLES_KO = ("대표이사", "대표", "회장", "부회장", "사장", "부사�
              "파트장", "책임", "선임", "수석", "연구원", "연구위원", "위원", "교수", "부교수", "조교수", "박사", "공학박사",
              "기술사", "감리단장", "현장소장", "매니저", "프로", "고문", "자문위원", "사무관", "주무관", "서기관", "과장대리")
 DEPT_KO = ("부", "팀", "실", "본부", "센터", "연구소", "사업단", "사업부", "그룹", "처", "과", "국", "학과")
+# 부서 끝말(긴 것 먼저) — 261117-11(사용자 지시 '부서도 추가해'). '부'·'처'·'국' 처럼 짧은 끝말은 기관 이름(…교통부)과 겹쳐
+#   회사·기관 후보와 같은 낱말이면 부서로 보지 않는다
+DEPT_SUFFIX = ("사업본부", "연구본부", "기술본부", "사업단", "사업부", "사업소", "사무소", "연구소", "연구실", "연구팀",
+               "본부", "센터", "그룹", "파트", "지사", "지점", "학과", "팀", "실", "부", "처", "과", "국", "단")
+DEPT_EN = re.compile(r"\b(dept\.?|department|division|div\.|team|center|centre|office|lab(oratory)?|group|bureau|section)\b", re.I)
 TITLES_EN = ("ceo", "president", "director", "manager", "engineer", "professor", "researcher", "chairman", "vice",
              "executive", "general", "senior", "principal", "head", "chief", "officer", "ph.d", "phd", "dr.",
              "team leader", "leader", "consultant", "associate", "assistant")
@@ -113,6 +118,8 @@ class SideResult:
     titles_en: list = field(default_factory=list)
     address_ko: str = ""
     address_en: str = ""
+    dept_ko: str = ""
+    dept_en: str = ""
     hangul: int = 0
     latin: int = 0
     conf: float = 0.0
@@ -128,6 +135,7 @@ class SideResult:
 class CardResult:
     name: str = ""
     company: str = ""
+    dept: str = ""                                     # 부서(261117-11)
     title: str = ""
     phones: list = field(default_factory=list)
     emails: list = field(default_factory=list)
@@ -606,6 +614,36 @@ def titles_of(lines: list) -> tuple:
     return ko, en
 
 
+def dept_token(tok: str) -> str:
+    """부서 낱말인가 — 한글 2~12자이고 부서 끝말로 끝나며 직위가 아닌 것('품질관리팀'·'기술연구소'·'도로시설과')."""
+    t = re.sub(r"[^가-힣]", "", tok)
+    if not (2 <= len(t) <= 12) or title_token(t):
+        return ""
+    for k in DEPT_SUFFIX:
+        if t.endswith(k) and len(t) > len(k):
+            return t
+    return ""
+
+
+def dept_of(lines: list, companies=()) -> tuple:
+    """부서(한글, 영문) — 회사·기관 후보와 같은 낱말·법인 꼴이 든 줄·주소 줄은 뺀다. 한 줄에 여럿이면 이어 쓴다('기술본부 품질팀')."""
+    comp = {re.sub(r"\s", "", c) for c in companies if c}
+    ko = en = ""
+    for ln in lines:
+        raw = merge_spaced(ln.text)
+        if _ADDR_KO.search(raw) or any(m in raw for m in CORP_MARKS_KO) or find_phones(raw) or "@" in raw:
+            continue
+        toks = [dept_token(t) for t in raw.split()]
+        toks = [t for t in toks if t and t not in comp and not any(t in c or c in t for c in comp if len(c) >= 3)]
+        if toks and not ko:
+            ko = " ".join(dict.fromkeys(toks))
+        t = ln.text.strip()
+        if not en and not _HANGUL.search(t) and DEPT_EN.search(t) and len(t) < 60 and not re.search(r"\d{3}", t) \
+                and not CORP_MARKS_EN.search(t):
+            en = t
+    return ko, en
+
+
 def address_of(lines: list) -> tuple:
     ko = en = ""
     for ln in lines:
@@ -640,6 +678,7 @@ def parse_lines(lines: list, hint_name: str = "", hint_company: str = "", name_e
     r.companies_ko = company_candidates_ko(lines, r.emails, r.urls, hint_company)
     r.companies_en = company_candidates_en(lines, r.emails, r.urls)
     r.titles_ko, r.titles_en = titles_of(lines)
+    r.dept_ko, r.dept_en = dept_of(lines, [c.text for c in r.companies_ko[:1]] + [hint_company])   # 회사 1위만 뺀다(부서 줄도 기관꼴 후보가 된다)
     r.address_ko, r.address_en = address_of(lines)
     r.conf = sum(ln.conf for ln in lines) / len(lines) if lines else 0.0
     return r
@@ -837,12 +876,15 @@ def merge_sides(front: Optional[SideResult], back: Optional[SideResult], hint_na
     te = [t for s in sides for t in s.titles_en]
     ak = next((s.address_ko for s in sides if s.address_ko), "")
     ae = next((s.address_en for s in sides if s.address_en), "")
-    en = {"name": ne[0].text if ne else "", "company": ce[0].text if ce else "",
+    dk = next((s.dept_ko for s in sides if s.dept_ko), "")
+    de = next((s.dept_en for s in sides if s.dept_en), "")
+    en = {"name": ne[0].text if ne else "", "company": ce[0].text if ce else "", "dept": de,
           "title": te[0] if te else "", "address": ae}
     ko_ok = bool(nk) and hangul >= 4
     if ui_lang == "en" or not ko_ok:
         # 영문판이거나 한글이 없는 명함(외국인 등) — 영문이 주
         c.name, c.company, c.title, c.address = en["name"], en["company"], en["title"], en["address"] or ak
+        c.dept = de or dk
         c.name_cands, c.company_cands = ne[:CAND_KEEP] or nk[:CAND_KEEP], ce[:CAND_KEEP] or ck[:CAND_KEEP]
         c.en = {}
         if ui_lang == "en" and not c.name and nk:
@@ -851,6 +893,7 @@ def merge_sides(front: Optional[SideResult], back: Optional[SideResult], hint_na
         c.name = nk[0].text
         c.company = ck[0].text if ck else ""
         c.title = tk[0] if tk else ""
+        c.dept = dk
         c.address = ak
         c.name_cands, c.company_cands = nk[:CAND_KEEP], ck[:CAND_KEEP]
         org = org_from_domains(c.emails, c.urls, domain_map)

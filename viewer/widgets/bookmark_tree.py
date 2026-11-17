@@ -57,8 +57,8 @@ def _trash_fn():
 TRASH_FAIL_SHOW = 10    # 못 지운 사진 이름을 이만큼까지 적는다(나머지는 '외 n장')
 
 
-def _trash_fail_text(failed) -> str:
-    """261117-4(사진 보기 SOT §4.25.1): 못 지운 사진 [(경로, 예외)] → 창 글 — 이름과 까닭. 셸 오류 문자열(OLE error 0x…)을 그대로 보이지 않는다."""
+def _trash_fail_text(failed, photo: bool = True) -> str:
+    """261117-4(사진 보기 SOT §4.25.1) · 261117-6(PDF 도): 못 지운 파일 [(경로, 예외)] → 창 글 — 이름과 까닭. 셸 오류 문자열(OLE error 0x…)을 그대로 보이지 않는다."""
     from viewer.pathutil import trash_error_kind
     why = {"busy": tr("다른 프로그램이 쓰고 있습니다"), "denied": tr("권한이 없습니다(읽기 전용·보호된 폴더)")}
     lines, kinds = [], set()
@@ -66,10 +66,16 @@ def _trash_fail_text(failed) -> str:
         k = trash_error_kind(e)
         kinds.add(k)
         lines.append("· %s — %s" % (Path(p).name, why.get(k) or tr("휴지통으로 보내지 못했습니다 ({err})").format(err=e)))
-    if len(failed) > TRASH_FAIL_SHOW:
-        lines.append(tr("… 외 {n}장").format(n=len(failed) - TRASH_FAIL_SHOW))
-    head = tr("사진 {n}장을 지우지 못했습니다 — 목록에 그대로 둡니다.").format(n=len(failed))
-    tail = [tr("사진 앱·탐색기 미리 보기·동기화 프로그램 등을 닫은 뒤 다시 지우세요.")] if "busy" in kinds else []
+    more = len(failed) - TRASH_FAIL_SHOW
+    if more > 0:
+        lines.append((tr("… 외 {n}장") if photo else tr("… 외 {n}개")).format(n=more))
+    if photo:
+        head = tr("사진 {n}장을 지우지 못했습니다 — 목록에 그대로 둡니다.").format(n=len(failed))
+        tail = [tr("사진 앱·탐색기 미리 보기·동기화 프로그램 등을 닫은 뒤 다시 지우세요.")] if "busy" in kinds else []
+    else:
+        head = tr("PDF 파일 {n}개를 지우지 못했습니다 — 목록에 그대로 둡니다.").format(n=len(failed))
+        tail = [tr("그 PDF 를 연 다른 프로그램(PDF 뷰어·탐색기 미리 보기·동기화 프로그램 등)을 닫은 뒤 다시 지우세요.")] \
+            if "busy" in kinds else []
     return "\n".join([head, ""] + lines + ([""] + tail if tail else []))
 
 
@@ -4616,51 +4622,76 @@ class BookmarkTree(QWidget):
         if bookmarks:
             self._mark_dirty()
 
-        if files and self.trash_runner is not None and self._photo_on():
-            self._trash_photos(files)
-            return
-        # 파일 삭제 (휴지통) — v1.6.21: 작업 직전 핸들 해제 핸드셰이크
-        trashed = 0
-        for it in files:
-            p = Path(it.data(0, self.DATA_FILE))
-            self.releaseFileRequested.emit(str(p))
-            QApplication.processEvents()
-            try:
-                _send2trash(str(p))
-                trashed += 1
-                self._take_node(it)          # 260901-2: 트리 보기(폴더 자식)도 제거
-                # 평탄 모드 캐시 동기화
-                if self._mode == "flat":
-                    self._pdfs_flat = [q for q in self._pdfs_flat if q != p]
-                self.fileOpCompleted.emit(str(p), "")        # 삭제 — 메인 비움 유지
-            except Exception as e:
-                QMessageBox.warning(self, tr("휴지통 이동 실패"), f"{p.name}: {e}")
-                self.fileOpCompleted.emit(str(p), str(p))    # revert → 원본 재로드
-        if trashed:
-            self._notice(tr('파일 {trashed}개 휴지통으로 이동됨').format(trashed=trashed))
+        if files:
+            self._trash_files(files)
 
-    def _trash_photos(self, files) -> None:
-        """261117-4(사진 보기 SOT §4.25.1): 사진 휴지통 보내기 — 앱의 `trash_runner`(배경·잠깐 잡히면 다시)로 한 번에.
-        사진은 파일을 잡지 않으므로 칸 비우기(`releaseFileRequested`)는 **지운 뒤** 지운 사진에만 — 못 지운 사진은 보던 그대로,
-        목록에도 남기고 창 하나로 이름·까닭을 알린다. 지운 것은 종전 한 길(줄 빼기 → `fileOpCompleted(경로, "")`)."""
+    def _open_file_now(self):
+        """이 책갈피창의 창 본문에 열린 파일(없으면 앱의 지금 본문 파일) — 없으면 None."""
+        for fn in (self._shown_file_fn, self._current_file_getter):
+            try:
+                cur = fn() if callable(fn) else None
+            except Exception:
+                cur = None
+            if cur:
+                return str(cur)
+        return None
+
+    def _trash_files(self, files) -> None:
+        """261117-4(사진 보기 SOT §4.25.1) · 261117-6(§4.7.17.1, PDF 도 같은 길): 파일 휴지통 보내기 한 길 — 앱의
+        `trash_runner`(배경 `_file_op_bg`·잠깐 잡히면 다시 `trash_when_free`)로 한 번에. 못 지운 파일은 목록에 남기고 창 하나로
+        이름·까닭(셸 오류 문자열을 그대로 보이지 않는다). 지운 것은 줄 빼기 → `fileOpCompleted(경로, "")`.
+        - **PDF** 는 본문이 열면 파일을 잡는다 → 보내기 **전에** 본문에 열린 그 파일만 놓는다(v1.6.21 핸드셰이크 — 앱의 놓음 기억이 하나라
+          연 파일 하나만), 못 지웠으면 다시 연다(`fileOpCompleted(경로, 경로)`).
+        - **사진** 은 파일을 잡지 않는다 → 칸 비우기는 **지운 뒤** 지운 사진에만(못 지운 사진은 보던 그대로)."""
+        photo = self._photo_on()
         paths = [str(it.data(0, self.DATA_FILE)) for it in files]
-        res = self.trash_runner(paths) or {}
+        released = []
+        if not photo:
+            from viewer.pathutil import norm_key
+            cur = self._open_file_now()
+            for p in paths:
+                if cur and norm_key(p) == norm_key(cur):
+                    self.releaseFileRequested.emit(p)
+                    released.append(p)
+            if released:
+                QApplication.processEvents()
+        runner = self.trash_runner if callable(self.trash_runner) else self._trash_here
+        try:
+            res = runner(paths, photo=photo) or {}
+        except TypeError:
+            res = runner(paths) or {}                 # 옛 꼴 주입(검사 등)
         trashed, failed = 0, []
         for it, p in zip(files, paths):
             err = res.get(p, RuntimeError("?"))
             if err is not None:
                 failed.append((p, err))
+                if p in released:
+                    self.fileOpCompleted.emit(p, p)   # 못 지움 — 놓았던 원본 다시 열기
                 continue
-            self.releaseFileRequested.emit(p)
+            if photo:
+                self.releaseFileRequested.emit(p)
             trashed += 1
-            self._take_node(it)
+            self._take_node(it)                       # 260901-2: 트리 보기(폴더 자식)도
             if self._mode == "flat":
                 self._pdfs_flat = [q for q in self._pdfs_flat if str(q) != p]
-            self.fileOpCompleted.emit(p, "")
+            self.fileOpCompleted.emit(p, "")          # 삭제 — 메인 비움 유지
         if trashed:
             self._notice(tr('파일 {trashed}개 휴지통으로 이동됨').format(trashed=trashed))
         if failed:
-            QMessageBox.warning(self, tr("휴지통 이동 실패"), _trash_fail_text(failed))
+            QMessageBox.warning(self, tr("휴지통 이동 실패"), _trash_fail_text(failed, photo=photo))
+
+    @staticmethod
+    def _trash_here(paths, photo=False) -> dict:
+        """앱이 `trash_runner` 를 주지 않은 책갈피창(앱 밖 검사 등) — 그 자리에서 한 번씩. {경로: None|예외}."""
+        trash = _trash_fn()
+        out = {}
+        for p in paths:
+            try:
+                trash(p)
+                out[p] = None
+            except Exception as e:                    # noqa: BLE001
+                out[p] = e
+        return out
 
     def _take_node(self, it: QTreeWidgetItem):
         """260901-2: 트리에서 노드 제거 — 최상위/폴더 자식 어느 쪽이든.

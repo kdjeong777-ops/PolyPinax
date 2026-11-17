@@ -3761,9 +3761,10 @@ class PhotoMixin:
             msg = tr("공유용 사본을 만들지 못했습니다 — 원본은 그대로입니다.")
         self.status.showMessage(msg, 6000)
 
-    def _photo_trash_bg(self, paths) -> dict:
-        """261117-4(4.25.1): 사진을 휴지통으로 — **배경**(`_file_op_bg`)에서 한 번에, 잠깐 잡힌 파일은 기다렸다 다시(`trash_when_free`).
-        지운 것은 사진 정보 색인 행도 그 자리에서 뺀다(사진 검색에 남지 않게). {경로: None(지움)|예외}."""
+    def _trash_bg(self, paths, photo: bool = True) -> dict:
+        """261117-4(4.25.1): 파일을 휴지통으로 — **배경**(`_file_op_bg`)에서 한 번에, 잠깐 잡힌 파일은 기다렸다 다시(`trash_when_free`).
+        책갈피창 삭제 한 길(`BookmarkTree._trash_files` — 261117-6 부터 PDF 도, 책갈피창·저장 SOT §4.7.17.1)의 `trash_runner`.
+        사진이면 지운 것의 사진 정보 색인 행도 그 자리에서 뺀다(사진 검색에 남지 않게). {경로: None(지움)|예외}."""
         import viewer.widgets.bookmark_tree as _btm
         from viewer.pathutil import trash_when_free
         trash = _btm._trash_fn()
@@ -3778,7 +3779,7 @@ class PhotoMixin:
                     done.append(p)
                 except Exception as e:                    # noqa: BLE001
                     out[p] = e
-            if done:
+            if done and photo:
                 try:
                     from viewer import photo_index
                     con = photo_index.connect()
@@ -3790,7 +3791,10 @@ class PhotoMixin:
                 except Exception:
                     pass
 
-        err = self._file_op_bg(job, tr('휴지통으로 보내는 중: {n}장').format(n=len(paths)), tr("사진 지우기"))
+        if photo:
+            err = self._file_op_bg(job, tr('휴지통으로 보내는 중: {n}장').format(n=len(paths)), tr("사진 지우기"))
+        else:
+            err = self._file_op_bg(job, tr('휴지통으로 보내는 중: {n}개').format(n=len(paths)), tr("파일 지우기"))
         for p in paths:
             out.setdefault(str(p), err or RuntimeError(tr("휴지통으로 보내지 못했습니다")))
         return out

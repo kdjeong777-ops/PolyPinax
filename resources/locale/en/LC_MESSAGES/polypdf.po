@@ -5113,6 +5113,10 @@ msgid "공유용 사본을 만들지 못했습니다 — 원본은 그대로입�
 msgstr "Could not make the sharing copy — the original is unchanged."
 
 #: viewer/photo_controller.py
+msgid "파일 지우기"
+msgstr "Delete Files"
+
+#: viewer/photo_controller.py
 msgid "편집 모드에서 지울 수 있습니다."
 msgstr "You can delete in edit mode."
 
@@ -5546,6 +5550,11 @@ msgstr "Made {n} sharing copies: {folder}"
 #, python-brace-format
 msgid "공유용 사본 {n}장을 만들고 {m}장은 만들지 못했습니다."
 msgstr "Made {n} sharing copies; {m} could not be made."
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "휴지통으로 보내는 중: {n}개"
+msgstr "Moving {n} file(s) to the Recycle Bin"
 
 #: viewer/photo_controller.py
 msgid "휴지통으로 보내지 못했습니다"
@@ -8136,6 +8145,15 @@ msgid "<small>변경 시 디스크상 파일이 함께 이름이 바뀝니다. �
 msgstr "<small>The file on disk is renamed too. If it is open in the main viewer, switch to another file briefly and try again.</small>"
 
 #: viewer/widgets/bookmark_tree.py
+#, python-brace-format
+msgid "PDF 파일 {n}개를 지우지 못했습니다 — 목록에 그대로 둡니다."
+msgstr "Could not delete {n} PDF file(s) — they stay in the list."
+
+#: viewer/widgets/bookmark_tree.py
+msgid "그 PDF 를 연 다른 프로그램(PDF 뷰어·탐색기 미리 보기·동기화 프로그램 등)을 닫은 뒤 다시 지우세요."
+msgstr "Close other programs that have the PDF open (PDF viewers, the File Explorer preview pane, sync programs and the like), then try again."
+
+#: viewer/widgets/bookmark_tree.py
 msgid "고른 파일만 고른 폴더에 풉니다."
 msgstr "Extracts only the selected files to a folder you choose."
 
@@ -8578,6 +8596,11 @@ msgstr ""
 #: viewer/widgets/bookmark_tree.py
 msgid "책갈피 쓰는 중…"
 msgstr "Writing bookmarks…"
+
+#: viewer/widgets/bookmark_tree.py
+#, python-brace-format
+msgid "… 외 {n}개"
+msgstr "… and {n} more"
 
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format

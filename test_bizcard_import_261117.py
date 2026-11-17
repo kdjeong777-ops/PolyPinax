@@ -229,6 +229,13 @@ try:
         "D [적용] — 체크한 줄만 정리본", str(made))
     tags = mw.bookmark_tree._tags.get(str(out2 / "박영수_라마바.jpg"))
     chk(tags[:3] == ["명함", "라마바", "한글"], "D 해시태그는 앱의 태그 저장소에", str(tags))
+    from PyQt6.QtGui import QPixmap
+    for w0, h0, what in ((420, 1200, "세로 명함"), (4000, 2200, "큰 그림")):      # 261117-10 사용자 보고: 크거나 세로면 넘쳤다
+        dlg._fit(dlg.pv_front, QPixmap(w0, h0))
+        pm = dlg.pv_front.pixmap()
+        chk(pm.height() <= dlg.pv_front.height() and pm.width() <= dlg.pv_front.width()
+            and abs(pm.width() / pm.height() - w0 / h0) < 0.02, "D 미리 보기는 칸 안에 비율대로 — " + what,
+            "%dx%d in %dx%d" % (pm.width(), pm.height(), dlg.pv_front.width(), dlg.pv_front.height()))
     dlg.close()
     pump(timeout=0.5)
     mw.close()

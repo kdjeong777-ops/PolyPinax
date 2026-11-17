@@ -6,6 +6,7 @@ v1.6.2: 히스토리 패널 제거 — 관련 옵션(`restore_history`, `history
 `ShortcutsPanel`·`RibbonCustomizePanel`). 설정 키 이름은 그대로.
 """
 from __future__ import annotations
+import os
 
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from viewer.i18n import tr, trp, tr_noop, korea_only_visible
@@ -883,6 +884,25 @@ class SettingsDialog(QDialog):
         row.addWidget(self.sp_slide_s)
         row.addStretch(1)
         pl.addLayout(row)
+        # 261117-10(명함 SOT §5.12, 사용자 지시): 명함 폴더 — '명함 관리…' 가 먼저 여는 폴더, 다른 폴더로 이전
+        pl.addWidget(QLabel(tr("명함 폴더:")))
+        row_bz = QHBoxLayout()
+        self.ed_bizcard = QLineEdit(str(self._pic.get("bizcard_folder") or ""))
+        self.ed_bizcard.setReadOnly(True)
+        self.ed_bizcard.setPlaceholderText(tr("지정하지 않음 — '명함 관리' 는 열린 폴더"))
+        self.ed_bizcard.setToolTip(tr("명함 사진이 있는 폴더 — 도구 › 명함 › 명함 관리 가 이 폴더를 엽니다"))
+        row_bz.addWidget(self.ed_bizcard, 1)
+        b_bz = QPushButton(tr("고르기"))
+        b_bz.clicked.connect(lambda _c=False: self._pick_bizcard())
+        b_bz_mv = QPushButton(tr("다른 폴더로 이전"))
+        b_bz_mv.setToolTip(tr("명함 폴더 안의 모든 것(원본·PDF·정리·인물 사진)을 새 폴더로 옮기고, 명함 기록·해시태그의 경로도 바꿉니다"))
+        b_bz_mv.clicked.connect(lambda _c=False: self._move_bizcard())
+        self.btn_bizcard_move = b_bz_mv
+        b_bz_clr = QPushButton(tr("지정 안 함"))
+        b_bz_clr.clicked.connect(lambda _c=False: self.ed_bizcard.setText(""))
+        for b in (b_bz, b_bz_mv, b_bz_clr):
+            row_bz.addWidget(b)
+        pl.addLayout(row_bz)
         layout.addWidget(grp)
 
     def _build_tags(self, layout):
@@ -1246,6 +1266,27 @@ class SettingsDialog(QDialog):
             self.ed_startup_path.setText(f)
             self.rb_start_path.setChecked(True)
 
+    def _pick_bizcard(self) -> None:
+        d = QFileDialog.getExistingDirectory(self, tr("명함 폴더"), self.ed_bizcard.text() or "")
+        if d:
+            self.ed_bizcard.setText(d)
+
+    def _move_bizcard(self) -> None:
+        """명함 폴더 이전(§5.12) — 앱이 배경에서 옮기고 경로를 바꾼다. 끝나면 새 자리를 칸에(설정에도 이미 저장됨)."""
+        src = self.ed_bizcard.text().strip()
+        if not src or not os.path.isdir(src):
+            QMessageBox.information(self, tr("명함 폴더"), tr("먼저 지금의 명함 폴더를 고르세요."))
+            return
+        dst = QFileDialog.getExistingDirectory(self, tr("새 명함 폴더"), os.path.dirname(src))
+        if not dst:
+            return
+        fn = getattr(self._host, "_bizcard_relocate", None)
+        if fn is None:
+            return
+        new = fn(src, dst, parent=self)
+        if new:
+            self.ed_bizcard.setText(new)
+
     def _pick_warp_backup(self) -> None:
         d = QFileDialog.getExistingDirectory(self, tr("원본 백업 폴더"), self.ed_warp_backup.text() or "")
         if d:
@@ -1271,7 +1312,8 @@ class SettingsDialog(QDialog):
             "lite_flip": str(self.cmb_lite_flip.currentData() or "auto"),  # 261021-1(응답성 SOT §4.7)
             "picture": dict(self._pic, view_kind=str(self.cmb_view_kind.currentData() or "mixed"),
                             slide_interval_s=int(self.sp_slide_s.value()),    # 261104-2 · 261104-7
-                            warp_backup_dir=self.ed_warp_backup.text().strip()),   # 261106-15
+                            warp_backup_dir=self.ed_warp_backup.text().strip(),    # 261106-15
+                            bizcard_folder=self.ed_bizcard.text().strip()),        # 261117-10(명함 SOT §5.12)
             "page_scroll_mode": self.cmb_page_scroll_mode.currentData() or "page",
             "hyperlink_top_offset_px": int(self.spin_hl_offset.value()),   # 260609-11(C8)
             "theme": self.cmb_theme.currentData(),                          # 260606-13

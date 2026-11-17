@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-17 20:13+0900\n"
+"POT-Creation-Date: 2026-11-17 20:47+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -800,6 +800,10 @@ msgstr "Images (*.png *.jpg *.jpeg *.bmp *.gif *.webp *.tif *.tiff)"
 #: viewer/app.py
 msgid "검색 색인이 손상되어 새로 만듭니다. 끝나면 다시 검색해 주세요."
 msgstr "The search index is damaged and is being rebuilt. Please search again when it finishes."
+
+#: viewer/app.py
+msgid "명함 폴더 이전"
+msgstr "Move Business Card Folder"
 
 #: viewer/app.py
 msgid "인덱싱 완료"
@@ -1601,6 +1605,10 @@ msgstr "Business Card Manager"
 #: viewer/app.py
 msgid "먼저 명함 그림이 있는 폴더를 여세요."
 msgstr "Open a folder with business card images first."
+
+#: viewer/app.py
+msgid "옮기지 못했습니다."
+msgstr "Could not move the folder."
 
 #: viewer/app.py
 msgid "인덱싱 중단 — 다음에 폴더를 열면 남은 파일부터 이어서 색인합니다."
@@ -2939,6 +2947,30 @@ msgstr "Indexing — {what}"
 #: viewer/app.py
 #, python-brace-format
 msgid ""
+"명함 폴더의 파일 {n}개를 옮깁니다.\n"
+"{src}\n"
+"→ {dst}"
+msgstr ""
+"Move {n} files of the business card folder?\n"
+"{src}\n"
+"→ {dst}"
+
+#: viewer/app.py
+msgid "명함 옮기는 중"
+msgstr "Moving cards"
+
+#: viewer/app.py
+#, python-brace-format
+msgid ""
+"파일 {n}개를 옮겼습니다.\n"
+"{dst}"
+msgstr ""
+"Moved {n} files.\n"
+"{dst}"
+
+#: viewer/app.py
+#, python-brace-format
+msgid ""
 "{get}개 파일을 살펴봤습니다.\n"
 "\n"
 "· {n_auto}개 파일에 태그를 붙였습니다 (기존 태그 {get2}종 사용)\n"
@@ -3219,6 +3251,22 @@ msgstr "Right folder loaded: {folder}"
 #, python-brace-format
 msgid "폴더 로드: {folder}"
 msgstr "Folder loaded: {folder}"
+
+#: viewer/app.py
+msgid "같은 폴더입니다."
+msgstr "It is the same folder."
+
+#: viewer/app.py
+msgid "새 폴더가 지금 명함 폴더 안에 있습니다."
+msgstr "The new folder is inside the current business card folder."
+
+#: viewer/app.py
+msgid "지금의 명함 폴더가 없습니다."
+msgstr "The current business card folder does not exist."
+
+#: viewer/app.py
+msgid "새 자리에 같은 이름의 파일이 있어 옮기지 않았습니다 — 아무것도 바꾸지 않았습니다."
+msgstr "Files with the same names already exist in the new location, so nothing was moved — nothing was changed."
 
 #: viewer/app.py viewer/workers.py
 #, python-brace-format
@@ -6883,7 +6931,7 @@ msgid "원본 파일에는 서명을 저장하지 않습니다 — 다른 이름
 msgstr "Signatures are not saved into the original file — choose another name."
 
 #: viewer/sign_draft_controller.py viewer/toc_page_flow.py
-#: viewer/widgets/sign_dialogs.py
+#: viewer/widgets/bizcard_import_dialog.py viewer/widgets/sign_dialogs.py
 msgid "바꾸기"
 msgstr "Replace"
 
@@ -7981,10 +8029,6 @@ msgstr "Reading %v / %m"
 #: viewer/widgets/bizcard_import_dialog.py
 msgid "영문 칸 — 뒷면 등에서 읽은 영문"
 msgstr "English fields — English text read from the back side, etc."
-
-#: viewer/widgets/bizcard_import_dialog.py
-msgid "바꾸기..."
-msgstr "Change..."
 
 #: viewer/widgets/bizcard_import_dialog.py viewer/widgets/crop_dialog.py
 #: viewer/widgets/line_text_settings_dialog.py
@@ -12496,6 +12540,26 @@ msgid "사진 모드에서 발표보기(F5)로 연 슬라이드쇼가 이 간격
 msgstr "A slideshow opened with Presentation (F5) in photo mode moves to the next photo at this interval. 0 turns it off."
 
 #: viewer/widgets/settings_dialog.py
+msgid "지정하지 않음 — '명함 관리' 는 열린 폴더"
+msgstr "Not set — 'Business Card Manager' uses the open folder"
+
+#: viewer/widgets/settings_dialog.py
+msgid "명함 사진이 있는 폴더 — 도구 › 명함 › 명함 관리 가 이 폴더를 엽니다"
+msgstr "Folder with the business card images — Tools › Business Cards › Business Card Manager opens this folder"
+
+#: viewer/widgets/settings_dialog.py
+msgid "다른 폴더로 이전"
+msgstr "Move to Another Folder"
+
+#: viewer/widgets/settings_dialog.py
+msgid "명함 폴더 안의 모든 것(원본·PDF·정리·인물 사진)을 새 폴더로 옮기고, 명함 기록·해시태그의 경로도 바꿉니다"
+msgstr "Moves everything in the business card folder (originals, PDFs, output, photos of people) to the new folder and updates the paths of card records and hashtags"
+
+#: viewer/widgets/settings_dialog.py
+msgid "지정 안 함"
+msgstr "Clear"
+
+#: viewer/widgets/settings_dialog.py
 msgid "자동 해시태그"
 msgstr "Automatic hashtags"
 
@@ -12573,6 +12637,14 @@ msgstr "Save current settings as defaults (for distribution)"
 #: viewer/widgets/settings_dialog.py
 msgid "설정 초기화(기본값으로 되돌리기)"
 msgstr "Reset settings (restore defaults)"
+
+#: viewer/widgets/settings_dialog.py
+msgid "명함 폴더"
+msgstr "Business Card Folder"
+
+#: viewer/widgets/settings_dialog.py
+msgid "새 명함 폴더"
+msgstr "New Business Card Folder"
 
 #: viewer/widgets/settings_dialog.py
 msgid "외부 언어팩 사용"
@@ -12663,6 +12735,10 @@ msgstr "Turn off for more vertical space in the main viewer. Clicking a menu tab
 msgid "슬라이드쇼 자동 넘김:"
 msgstr "Slideshow auto-advance:"
 
+#: viewer/widgets/settings_dialog.py
+msgid "명함 폴더:"
+msgstr "Business card folder:"
+
 # | 수가 한도를 넘으면 자동으로 한도가 늘어납니다.</small>"
 #: viewer/widgets/settings_dialog.py
 msgid "한도 변경은 즉시 반영됩니다. 줄이면 가장 오래된 항목부터 자동 제거됩니다.<br>검색결과 일괄 캡쳐 시 결과 수가 한도를 넘으면 자동으로 한도가 늘어납니다."
@@ -12676,6 +12752,10 @@ msgstr "The capture list always starts empty. On exit, you will be asked whether
 #: viewer/widgets/settings_dialog.py
 msgid "둘 다 지금 저장된 설정을 다룹니다 — 이 창에서 바꾼 것은 [적용] 뒤에 들어갑니다. 초기화하면 PolyPinax 를 다시 시작합니다."
 msgstr "Both work on the currently saved settings — changes made in this window take effect after [Apply]. Resetting restarts PolyPinax."
+
+#: viewer/widgets/settings_dialog.py
+msgid "먼저 지금의 명함 폴더를 고르세요."
+msgstr "Choose the current business card folder first."
 
 #: viewer/widgets/settings_dialog.py
 msgid "모듈 없음"
@@ -17216,4 +17296,7 @@ msgstr "Getting Started"
 
 #~ msgid "명함 들이기"
 #~ msgstr "Import Business Cards"
+
+#~ msgid "바꾸기..."
+#~ msgstr "Change..."
 

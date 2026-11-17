@@ -14,7 +14,7 @@ from PyQt6.QtGui import QColor, QPixmap, QImage, QTransform
 from PyQt6.QtWidgets import (QRubberBand, QMenu,
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QTableWidget, QTableWidgetItem, QComboBox, QCheckBox,
     QPushButton, QProgressBar, QSplitter, QWidget, QLineEdit, QFileDialog, QMessageBox, QHeaderView,
-    QAbstractItemView, QPlainTextEdit,
+    QAbstractItemView, QPlainTextEdit, QSizePolicy,
 )
 
 from viewer.i18n import tr, language
@@ -71,6 +71,9 @@ class RegionLabel(QLabel):
         super().mouseReleaseEvent(e)
 
 
+_KEEP = []                 # 앱 밖(검사)에서 쓸 때의 스레드 참조 보관
+
+
 def _first(phones, kinds):
     for k, n in phones or []:
         if k in kinds:
@@ -113,6 +116,7 @@ class BizcardImportDialog(QDialog):
         v.addWidget(self.bar)
 
         split = QSplitter(Qt.Orientation.Horizontal)
+        split.splitterMoved.connect(lambda *_: QTimer.singleShot(0, self._refit))   # 칸 폭을 바꿔도 다시 맞춤
         self.table = QTableWidget(len(self._items), 10)
         self.table.setHorizontalHeaderLabels([tr("적용"), tr("이름"), tr("회사"), tr("직함"), tr("휴대폰"), tr("전화"),
                                               tr("메일"), tr("뒷면"), tr("스캔일"), tr("새 파일 이름")])
@@ -133,10 +137,12 @@ class BizcardImportDialog(QDialog):
         rv.setContentsMargins(6, 0, 0, 0)
         self.pv_front = RegionLabel()
         self.pv_front.regionPicked.connect(self._on_region)
-        self.pv_front.setMinimumSize(PREVIEW_W, int(PREVIEW_W * 0.58))
+        self.pv_front.setMinimumSize(int(PREVIEW_W * 0.6), int(PREVIEW_W * 0.4))
+        self.pv_front.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Ignored)   # 그림 크기가 칸을 키우지 않게
         self.pv_front.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.pv_back = QLabel()
-        self.pv_back.setMinimumSize(int(PREVIEW_W * 0.6), int(PREVIEW_W * 0.35))
+        self.pv_back.setMinimumSize(int(PREVIEW_W * 0.4), int(PREVIEW_W * 0.25))
+        self.pv_back.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Ignored)
         self.pv_back.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.pv_en = QPlainTextEdit()
         self.pv_en.setReadOnly(True)
@@ -154,7 +160,7 @@ class BizcardImportDialog(QDialog):
         bot.addWidget(QLabel(tr("정리 폴더:")))
         self.ed_out = QLineEdit(str(out_dir or (self._folder / OUT_DIR)))
         bot.addWidget(self.ed_out, 1)
-        b_out = QPushButton(tr("바꾸기..."))
+        b_out = QPushButton(tr("바꾸기"))
         b_out.clicked.connect(lambda _c=False: self._pick_out())
         bot.addWidget(b_out)
         self.btn_apply = QPushButton(tr("적용"))
@@ -370,7 +376,17 @@ class BizcardImportDialog(QDialog):
         ang = int((it.result or {}).get("rotated") or 0) if not back else 0
         if ang:                                            # 돌려 읽은 명함은 돌린 그대로 보인다(PIL rotate = 반시계)
             img = img.transformed(QTransform().rotate(-ang))
-        return QPixmap.fromImage(img).scaledToWidth(w, Qt.TransformationMode.SmoothTransformation)
+        return QPixmap.fromImage(img)
+
+    @staticmethod
+    def _fit(lbl, pm):
+        """칸 안에 비율 그대로 맞춘다 — 큰 그림·세로 명함도 넘치지 않게(사용자 보고 261117-10, 종전엔 폭에만 맞춰 세로가 넘쳤다)."""
+        if pm is None or pm.isNull():
+            lbl.setPixmap(QPixmap())
+            return
+        sz = lbl.contentsRect().size()
+        w, h = max(80, sz.width() - 4), max(60, sz.height() - 4)
+        lbl.setPixmap(pm.scaled(w, h, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
 
     # ── 위치 지정(§5.11) ──
 
@@ -477,8 +493,9 @@ class BizcardImportDialog(QDialog):
         if r < 0 or r >= len(self._items):
             return
         it = self._items[r]
-        self.pv_front.setPixmap(self._pix(it, False, max(200, self.pv_front.width() - 8)))
-        self.pv_back.setPixmap(self._pix(it, True, max(160, self.pv_back.width() - 8)))
+        self._pv_src = (self._pix(it, False, 0), self._pix(it, True, 0))      # 원본 크기 — 창 크기가 바뀌면 다시 맞춘다
+        self._fit(self.pv_front, self._pv_src[0])
+        self._fit(self.pv_back, self._pv_src[1])
         en = (it.result or {}).get("en") or {}
         self.pv_en.setPlainText("\n".join("%s: %s" % (k, v) for k, v in en.items() if v))
 
@@ -491,10 +508,17 @@ class BizcardImportDialog(QDialog):
         from viewer.workers import run_in_thread
         self._worker = ImportWorker(self._items, self._db, lang)
         self._worker.itemDone.connect(self._set_row)
-        self._worker.progressed.connect(lambda d, t: self.bar.setValue(d))
+        self._worker.progressed.connect(self._on_progress)    # ★ 창의 메서드로 — 창이 지워지면 Qt 가 연결을 끊는다(람다는 남아 죽었다)
         self._worker.finishedAll.connect(self._on_done)
-        self._keep = []
-        run_in_thread(self._worker, self._keep)
+        # ★ 스레드 참조는 창이 아니라 앱(오래 사는 쪽)에 둔다 — 읽는 도중 창을 닫으면(WA_DeleteOnClose) 창과 함께
+        #   아직 끝나는 중인 QThread 가 지워져 프로세스가 죽었다(261117-10 검사가 잡음, 종료 코드 127)
+        keep = getattr(self._mw, "_thread_keep", None)
+        if keep is None:
+            keep = _KEEP
+        run_in_thread(self._worker, keep)
+
+    def _on_progress(self, d, t):
+        self.bar.setValue(d)
 
     def _on_done(self, ok):
         self.bar.setFormat(tr("다 읽음 %v / %m") if ok else tr("멈춤 %v / %m"))
@@ -503,9 +527,25 @@ class BizcardImportDialog(QDialog):
 
     def _stop_worker(self):
         w = self._worker
-        if w is not None and not w.done_event.is_set():
-            w.request_cancel()
-            w.done_event.wait(15)          # 한 장 읽기가 끝나야 멈춘다(최대 몇 초)
+        if w is None or w.done_event.is_set():
+            return                         # 끝난 워커는 이미 지워졌을 수 있다(deleteLater) — 건드리지 않는다
+        for sig in (w.itemDone, w.progressed, w.finishedAll):   # 아직 도는 워커 — 닫기 전에 신호부터 끊는다(261117-10)
+            try:
+                sig.disconnect()
+            except (TypeError, RuntimeError):
+                pass
+        w.request_cancel()
+        w.done_event.wait(15)              # 한 장 읽기가 끝나야 멈춘다(최대 몇 초)
+
+    def _refit(self):
+        src = getattr(self, "_pv_src", None)
+        if src:
+            self._fit(self.pv_front, src[0])
+            self._fit(self.pv_back, src[1])
+
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        self._refit()
 
     def closeEvent(self, e):
         self._stop_worker()

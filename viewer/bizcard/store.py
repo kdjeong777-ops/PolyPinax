@@ -40,6 +40,16 @@ def source_sig(paths) -> str:
     return ";".join(out)
 
 
+def sig_tail(sig: str) -> str:
+    """지문에서 폴더를 뗀 꼴 — 폴더를 통째 옮겨도(§5.12) 같은 파일이면 같은 지문(이름·크기·수정 시각)."""
+    out = []
+    for part in (sig or "").split(";"):
+        bits = part.split("|")
+        bits[0] = os.path.basename(bits[0])
+        out.append("|".join(bits))
+    return ";".join(out)
+
+
 def _key(p) -> str:
     return os.path.normcase(os.path.abspath(str(p)))
 
@@ -80,7 +90,7 @@ class BizcardStore:
     # ── 인식 캐시 ──
     def recog_get(self, src, sig: str) -> Optional[dict]:
         r = self.con.execute("SELECT sig, result, edit FROM recog WHERE src_key=?", (_key(src),)).fetchone()
-        if r is None or r["sig"] != sig:
+        if r is None or sig_tail(r["sig"]) != sig_tail(sig):
             return None
         return {"result": json.loads(r["result"] or "{}"), "edit": json.loads(r["edit"] or "{}")}
 

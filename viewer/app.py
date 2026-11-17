@@ -7501,7 +7501,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
 
     def _action_bizcard_import(self, folder=None):
         """261117-8(명함 SOT §5.10): 명함 관리(261117-9 — 종전 '명함 들이기') — 확인 표 창. 대상은 준 폴더, 없으면 열린 폴더(D11)."""
-        folder = folder or self._folder
+        if not folder:                                # 261117-10(§5.12, 사용자 결정 '지정 폴더 우선')
+            pic = self._prefs.get("picture") if isinstance(self._prefs.get("picture"), dict) else {}
+            bz = str(pic.get("bizcard_folder") or "")
+            folder = bz if bz and os.path.isdir(bz) else self._folder
         if not folder or not os.path.isdir(str(folder)):
             QMessageBox.information(self, tr("명함 관리"), tr("먼저 명함 그림이 있는 폴더를 여세요."))
             return
@@ -7510,6 +7513,65 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self._bizcard_dlg = dlg                      # 검사가 찾는다
         dlg.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
         dlg.show()
+
+    def _bizcard_relocate(self, src, dst, parent=None):
+        """261117-10(명함 SOT §5.12, 사용자 결정 '폴더 통째'): 명함 폴더를 새 자리로 — 파일 옮김·명함 DB 경로는 배경,
+        해시태그·색인·보던 파일은 메인에서 한 길(`TagStore.rehome`·`filesRelocated`). 반환 = 새 폴더 또는 None."""
+        from pathlib import Path as _P
+        from viewer.bizcard import relocate as RL
+        par = parent or self
+        dst = str(_P(dst) / _P(src).name) if os.path.isdir(dst) and os.listdir(dst) else str(dst)
+        try:
+            n = len(RL.check(src, dst))
+        except RL.RelocateError as e:
+            msg = {"same": tr("같은 폴더입니다."), "inside": tr("새 폴더가 지금 명함 폴더 안에 있습니다."),
+                   "missing": tr("지금의 명함 폴더가 없습니다."),
+                   "exists": tr("새 자리에 같은 이름의 파일이 있어 옮기지 않았습니다 — 아무것도 바꾸지 않았습니다.")}.get(str(e), str(e))
+            QMessageBox.warning(par, tr("명함 폴더 이전"), msg)
+            return None
+        if QMessageBox.question(par, tr("명함 폴더 이전"),
+                                tr("명함 폴더의 파일 {n}개를 옮깁니다.\n{src}\n→ {dst}").format(n=n, src=src, dst=dst)) \
+                != QMessageBox.StandardButton.Yes:
+            return None
+        box = {"pairs": []}
+
+        def job(progress):
+            from viewer.bizcard.store import BizcardStore
+            box["pairs"] = RL.move_folder(src, dst, lambda d, t: progress(d, t, tr("명함 옮기는 중")))
+            st = BizcardStore()
+            try:
+                RL.relocate_db(st, src, dst)
+            finally:
+                st.close()
+        res = self._run_merge_job(job, tr("명함 폴더 이전"))
+        pairs = box["pairs"]
+        if pairs:
+            # 앱 상태는 책갈피창의 파일 옮기기와 같은 길(§4.7.14) — 태그 승계 `_after_move` → `filesRelocated` → 목록 다시 읽기
+            bt = self.bookmark_tree
+            store = getattr(bt, "_tags", None)
+            ctx = store.bulk() if store is not None else None
+            if ctx is not None:
+                ctx.__enter__()
+            try:
+                for o, nw in pairs:
+                    bt._after_move(_P(o), _P(nw))
+            finally:
+                if ctx is not None:
+                    ctx.__exit__(None, None, None)
+            pic = self._prefs.get("picture") if isinstance(self._prefs.get("picture"), dict) else {}
+            pic["bizcard_folder"] = dst
+            self._prefs["picture"] = pic
+            self._save_settings_now()
+            try:
+                bt.filesRelocated.emit([[o, nw] for o, nw in pairs])   # 색인·보던 파일(§4.7.14 한 길)
+                bt._sync_after_transfer(_P(dst))
+            except Exception:
+                pass
+            QMessageBox.information(par, tr("명함 폴더 이전"), tr("파일 {n}개를 옮겼습니다.\n{dst}").format(n=len(pairs), dst=dst))
+            return dst
+        if not res.get("ok"):
+            QMessageBox.warning(par, tr("명함 폴더 이전"), tr("옮기지 못했습니다."))
+        return None
 
     def action_reindex(self, verify: bool = True):
         """'도구 → 인덱스 재구축'. 261009-14(응답성 SOT §4 ⑤): 같은 DB 에 다시 넣기만 하면 **손상된 색인은

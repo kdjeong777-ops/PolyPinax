@@ -77,7 +77,8 @@ SURNAME_ROMAN = {"김": ("kim", "gim"), "이": ("lee", "yi", "rhee", "ri"), "박
 
 _HANGUL = re.compile(r"[가-힣]")
 _LATIN = re.compile(r"[A-Za-z]")
-_PHONE = re.compile(r"(?<!\d)(\+?82[\s.\-)]*)?\(?0?(\d{1,3})\)?[\s.\-)]{0,3}(\d{3,4})[\s.\-]{1,3}(\d{4})(?!\d)")
+_SEP = r"\s.\-·•∙・‧,"                 # 번호 구분자 — 점·가운뎃점·쉼표도(사용자 지시 261117-9 '010.0000.0000')
+_PHONE = re.compile(r"(?<!\d)(\+?82[%s)]*)?\(?0?(\d{1,3})\)?[%s)]{0,3}(\d{3,4})[%s]{1,3}(\d{4})(?!\d)" % (_SEP, _SEP, _SEP))
 _EMAIL = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9\-]+(?:\.[A-Za-z0-9\-]+)+")
 _URL = re.compile(r"\b(?:https?://)?(?:www\.)[A-Za-z0-9\-]+(?:\.[A-Za-z0-9\-]+)+(?:/\S*)?", re.I)
 _ADDR_KO = re.compile(r"(특별시|광역시|특별자치시|특별자치도|[가-힣]+도\b|[가-힣]+시\b|[가-힣]+군\b|[가-힣]+구\b)"
@@ -96,6 +97,7 @@ class Cand:
     text: str
     score: float
     why: tuple = ()
+    feat: dict = field(default_factory=dict)   # 점수 특징(§5.11) — 학습·다시 매기기, 'cx'·'cy' = 줄 가운데(그림 비율)
 
 
 @dataclass
@@ -114,6 +116,8 @@ class SideResult:
     hangul: int = 0
     latin: int = 0
     conf: float = 0.0
+
+    rotated: int = 0                                   # 세로로 누운 명함을 돌려 읽었으면 그 각도(§5.11)
 
     @property
     def has_contact(self) -> bool:
@@ -136,6 +140,7 @@ class CardResult:
     back_promo: Optional[bool] = None                  # 뒷면이 연락처 없는 홍보 면이면 True, 뒷면이 없으면 None
     need_check: tuple = ()                             # 사람 확인이 필요한 칸 이름들
     sources: dict = field(default_factory=dict)        # {"front": 경로, "back": 경로, "pdf": 경로}
+    rotated: int = 0                                   # 앞면을 돌려 읽었으면 그 각도(세로로 누운 명함, §5.11)
 
 
 # ── 이름·회사 다듬기 ──────────────────────────────────────────────────────
@@ -214,13 +219,12 @@ def card_sources(path, pdf_dir_name: str = "pdf") -> dict:
     p = Path(path)
     if p.suffix.lower() == ".pdf":
         pdf = p
-        folder = p.parent.parent if p.parent.name.lower() == pdf_dir_name else p.parent
+        folder = p.parent.parent if p.parent.name.lower() == pdf_dir_name.lower() else p.parent
         base = p.stem
     else:
         folder = p.parent
         base = _stem_base(p)
-        cand = folder / pdf_dir_name / (base + ".pdf")
-        pdf = cand if cand.exists() else None
+        pdf = next((c for c in (folder / pdf_dir_name / (base + ".pdf"), folder / (base + ".pdf")) if c.exists()), None)
     front = back = None
     for suf in FRONT_SUFFIXES:
         for ext in IMG_EXTS:
@@ -292,6 +296,11 @@ class Line:
     height: float          # 줄에서 가장 큰 낱말 높이(그림 픽셀 ÷ 그림 높이 — 그림 크기와 무관한 비율)
     conf: float
     y: float               # 줄 위치(그림 높이 비율)
+    cx: float = 0.5        # 줄 가운데(그림 너비 비율) — 양식 위치(§5.11)
+    cy: float = -1.0       # 줄 가운데(그림 높이 비율), 음수면 y + height/2
+
+    def center(self):
+        return self.cx, (self.cy if self.cy >= 0 else self.y + self.height / 2)
 
 
 NAME_EXTRA_PSM = 11      # 이름용 덧읽기 — 흩어진 글(sparse). 기본 읽기에 없던 이름 26 중 9 를 찾았다(명함 SOT §4.4)
@@ -326,12 +335,15 @@ def ocr_lines(im, psm: int = 0, invert: bool = False) -> list:
         if k not in groups:
             groups[k] = []
             order.append(k)
-        groups[k].append((d["left"][i], w, float(d["height"][i]), c, float(d["top"][i])))
+        groups[k].append((d["left"][i], w, float(d["height"][i]), c, float(d["top"][i]), float(d["width"][i])))
+    W = float(g.width or 1)
     out = []
     for k in order:
         ws = sorted(groups[k])
+        x0 = min(x[0] for x in ws); x1 = max(x[0] + x[5] for x in ws)
+        y0 = min(x[4] for x in ws); y1 = max(x[4] + x[2] for x in ws)
         out.append(Line(" ".join(x[1] for x in ws), max(x[2] for x in ws) / H,
-                        sum(x[3] for x in ws) / len(ws), min(x[4] for x in ws) / H))
+                        sum(x[3] for x in ws) / len(ws), y0 / H, (x0 + x1) / 2 / W, (y0 + y1) / 2 / H))
     return out
 
 
@@ -345,7 +357,7 @@ def _fix_digits(s: str) -> str:
     def fix(m):
         t = m.group(0)
         return t.translate(_DIGIT_FIX) if len(re.findall(r"\d", t)) >= 5 else t
-    return re.sub(r"[\d(+][\dOoQDIl|iSBZ\s.\-)]{7,}[\dOoQDIl|iSBZ]", fix, s)
+    return re.sub(r"[\d(+][\dOoQDIl|iSBZ%s)]{7,}[\dOoQDIl|iSBZ]" % _SEP, fix, s)
 
 
 def norm_phone(area: str, mid: str, last: str, intl: bool = False) -> Optional[str]:
@@ -421,18 +433,59 @@ def _email_hint(n: str, emails: list) -> float:
     return 0.0
 
 
-def name_candidates_ko(lines: list, emails: list, hint: str = "") -> list:
-    """한글 이름 후보(R3) — 큰 글자·성씨·직함 이웃·메일 아이디·파일 이름 힌트로 점수(명함 SOT §5.2 의 3)."""
+# 이름 점수 가중치(§5.11) — 기본값은 P1 의 손 규칙 그대로. 확정한 명함이 쌓이면 `learn.train` 이 이 PC 에서 고친다.
+NAME_FEATS = ("bias", "h", "sur", "title", "org", "len2", "len3", "len4", "mail", "hint", "conf", "frag", "both", "tpl")
+NAME_W = {"bias": -1.5, "h": 2.0, "sur": 2.5, "title": 1.2, "org": -2.0, "len2": 0.1, "len3": 0.6, "len4": -0.4,
+          "mail": 0.8, "hint": 1.5, "conf": 1.0, "frag": -0.5, "both": 0.7, "tpl": 3.0}
+
+
+def name_score(f: dict, w: Optional[dict] = None) -> float:
+    w = w or NAME_W
+    return round(sum(w.get(k, 0.0) * float(f.get(k, 0.0)) for k in NAME_FEATS), 3)
+
+
+def merge_spaced(text: str) -> str:
+    """한 글자씩 띄운 한글을 붙인다 — '시험실장 홍  길  동' → '시험실장 홍길동'(사용자 지시 261117-9)."""
+    toks = text.split()
+    out, run = [], []
+    for t in toks + [""]:
+        if len(t) == 1 and _HANGUL.match(t):
+            run.append(t)
+            continue
+        if run:
+            out.append("".join(run) if len(run) >= 2 else run[0])
+            run = []
+        if t:
+            out.append(t)
+    return " ".join(out)
+
+
+_TITLES_LONG = sorted(TITLES_KO, key=len, reverse=True)
+
+
+def title_token(tok: str) -> str:
+    """낱말이 직위인가 — '시험실장'·'품질팀장'·'기술이사' 처럼 직함으로 끝나는 짧은 한글 낱말이면 그 낱말."""
+    t = re.sub(r"[^가-힣]", "", tok)
+    if not t or len(t) > 9:
+        return ""
+    for k in _TITLES_LONG:
+        if t.endswith(k):
+            return t if len(t) - len(k) <= 4 else ""      # '가나다시험연구원' 은 기관 이름 — 앞말이 길면 직위가 아니다
+    return ""
+
+
+def name_candidates_ko(lines: list, emails: list, hint: str = "", weights: Optional[dict] = None) -> list:
+    """한글 이름 후보(R3) — 특징(크기·성씨·직함 이웃·메일 아이디·파일 이름 힌트 …)의 가중합(명함 SOT §5.2 의 3·§5.11)."""
     cands = {}
     hmax = max((ln.height for ln in lines), default=1) or 1
     for idx, ln in enumerate(lines):
-        raw = ln.text
+        raw = merge_spaced(ln.text)
         near = " ".join(x.text for x in lines[max(0, idx - 1): idx + 2])
         pieces = set()
-        whole = clean_name_ko(re.sub("|".join(TITLES_KO), " ", raw))
+        whole = clean_name_ko(" ".join(t for t in raw.split() if not title_token(t)))
         if 2 <= len(whole) <= 4 and len(re.sub(r"[^가-힣\s]", "", raw).split()) <= 4:
             pieces.add(whole)                       # '홍 길 동' · '홍길동 부장' → '홍길동'
-        for run in re.findall(r"[가-힣]+", re.sub("|".join(sorted(TITLES_KO, key=len, reverse=True)), " ", raw)):
+        for run in re.findall(r"[가-힣]+", " ".join(t for t in raw.split() if not title_token(t))):
             if 2 <= len(run) <= 4:
                 pieces.add(run)
             elif len(run) > 4:                      # '홍길동부장'·'기술연구소홍길동' — 성씨 자리에서 3·2자 조각
@@ -442,30 +495,22 @@ def name_candidates_ko(lines: list, emails: list, hint: str = "") -> list:
                             if i + L <= len(run):
                                 pieces.add(run[i:i + L])
         for n in pieces:
-            if n in TITLES_KO or any(n.endswith(d) and len(n) > 2 for d in ("회사", "기술", "건설", "산업")):
+            if n in TITLES_KO or title_token(n) or any(n.endswith(d) and len(n) > 2 for d in ("회사", "기술", "건설", "산업")):
                 continue
-            s = 0.0
-            why = []
-            s += 2.0 * (ln.height / hmax); why.append("크기")
-            s += _surname_score(n)
-            if _is_titleish(near):
-                s += 1.2; why.append("직함")
-            if _is_orgish(raw) or _ADDR_KO.search(raw):
-                s -= 2.0
-            if n not in re.findall(r"[가-힣]+", raw) and n != whole:
-                s -= 0.5                            # 긴 낱말에서 떼어 낸 조각
-            if len(n) == 3:
-                s += 0.6
-            elif len(n) == 2:
-                s += 0.1
-            elif len(n) == 4:
-                s -= 0.4
-            s += _email_hint(n, emails)
-            if hint and n == hint:
-                s += 1.5; why.append("파일이름")
-            s += 0.01 * ln.conf
-            if n not in cands or cands[n].score < s:
-                cands[n] = Cand(n, round(s, 3), tuple(why))
+            cx, cy = ln.center()
+            f = {"bias": 1.0, "h": round(ln.height / hmax, 3),
+                 "sur": 1.0 if _surname_score(n) > 0 else 0.0,
+                 "title": 1.0 if (_is_titleish(near) or any(title_token(t) for t in near.split())) else 0.0,
+                 "org": 1.0 if (_is_orgish(raw.replace(n, "")) or _ADDR_KO.search(raw)) else 0.0,
+                 "len2": float(len(n) == 2), "len3": float(len(n) == 3), "len4": float(len(n) == 4),
+                 "mail": 1.0 if _email_hint(n, emails) else 0.0, "hint": float(bool(hint) and n == hint),
+                 "conf": round(ln.conf / 100.0, 3),
+                 "frag": float(n not in re.findall(r"[가-힣]+", raw) and n != whole),
+                 "both": 0.0, "tpl": 0.0, "cx": round(cx, 3), "cy": round(cy, 3)}
+            why = tuple(k for k in ("title", "mail", "hint") if f[k])
+            sc = name_score(f, weights)
+            if n not in cands or cands[n].score < sc:
+                cands[n] = Cand(n, sc, why, f)
     return sorted(cands.values(), key=lambda c: -c.score)
 
 
@@ -515,8 +560,9 @@ def company_candidates_ko(lines: list, emails: list, urls: list, hint: str = "")
         s = 1.0 * (ln.height / hmax) + (2.0 if has_mark else 0.8)
         if hint and (c.replace(" ", "") == hint.replace(" ", "")):
             s += 1.5
+        cx, cy = ln.center()
         if c not in cands or cands[c].score < s:
-            cands[c] = Cand(c, round(s, 3))
+            cands[c] = Cand(c, round(s, 3), (), {"cx": round(cx, 3), "cy": round(cy, 3)})
     if hint and hint not in cands and _HANGUL.search(hint):
         cands[hint] = Cand(hint, 0.5, ("파일이름",))
     return sorted(cands.values(), key=lambda c: -c.score)
@@ -540,11 +586,17 @@ def company_candidates_en(lines: list, emails: list, urls: list) -> list:
 
 
 def titles_of(lines: list) -> tuple:
-    ko, en = [], []
+    ko, en, sub = [], [], []
     for ln in lines:
+        for tok in merge_spaced(ln.text).split():
+            tt = title_token(tok)
+            if tt and tt not in ko and not _ADDR_KO.search(ln.text):
+                ko.append(tt)                          # '시험실장 홍길동' → 직위 '시험실장'(낱말 통째가 먼저)
         for t in TITLES_KO:
-            if t in ln.text and t not in ko:
-                ko.append(t)
+            if t in ln.text and t not in sub:
+                sub.append(t)                          # 줄 안에 든 직함 글자(기관 이름 속 '연구원' 일 수 있어 뒤로)
+    ko += [t for t in sub if t not in ko and not any(t in k for k in ko)]
+    for ln in lines:
         low = ln.text.lower()
         if not _HANGUL.search(ln.text) and any(k in low for k in TITLES_EN) and len(ln.text) < 60 \
                 and not re.search(r"\d{3}", ln.text):
@@ -619,9 +671,19 @@ def read_side(images: list, hint_name: str = "", hint_company: str = "", extra: 
         both = set.intersection(*sets) if sets else set()
         for c in r.names_ko:
             if c.text in both:
-                c.score = round(c.score + 0.7, 3)
+                c.feat["both"] = 1.0
+                c.score = name_score(c.feat)
                 c.why = tuple(c.why) + ("두판",)
         r.names_ko.sort(key=lambda c: -c.score)
+    if extra and not r.has_contact and images:
+        # 세로로 누운 명함(사용자 지시 261117-9) — 0도에서 연락처를 못 찾았을 때만 90·270도로 돌려 본다(명함 SOT §5.11)
+        for ang in (180, 90, 270):              # 실측(가로 592장): 돌려야 읽힌 14장 중 180도 10·90도 3·270도 1
+            rot = [im.rotate(ang, expand=True) for im in images]
+            rl = [ln for im in rot for ln in ocr_lines(im)]
+            rr = parse_lines(rl, hint_name, hint_company)
+            if rr.has_contact:
+                rr.rotated = ang
+                return rr
     return r
 
 
@@ -635,8 +697,109 @@ def is_promo(side: Optional[SideResult]) -> Optional[bool]:
     return not strong_name
 
 
+CAND_KEEP = 8            # 후보를 이만큼 남긴다 — 확인 표는 위 셋을 보이고, 다시 매기기(§5.11)는 모두 쓴다
+
+# 누리집·메일 도메인 → 직장(§5.11, 사용자 지시 261117-9 'www.seoul.go.kr 이면 서울시청').
+#   기본 표는 공공 기관 일부 — 확인 표에서 회사를 확정하면 그 도메인을 이 PC 의 명함 DB 에 배워 더한다(`domain_map`).
+DOMAIN_ORG = {
+    "seoul.go.kr": "서울시청", "busan.go.kr": "부산시청", "daegu.go.kr": "대구시청", "incheon.go.kr": "인천시청",
+    "gwangju.go.kr": "광주시청", "daejeon.go.kr": "대전시청", "ulsan.go.kr": "울산시청", "sejong.go.kr": "세종시청",
+    "gg.go.kr": "경기도청", "gwd.go.kr": "강원도청", "provin.gangwon.kr": "강원도청", "chungbuk.go.kr": "충청북도청",
+    "chungnam.go.kr": "충청남도청", "jeonbuk.go.kr": "전북도청", "jeonnam.go.kr": "전라남도청",
+    "gb.go.kr": "경상북도청", "gyeongnam.go.kr": "경상남도청", "jeju.go.kr": "제주도청",
+    "molit.go.kr": "국토교통부", "me.go.kr": "환경부", "moef.go.kr": "기획재정부", "mois.go.kr": "행정안전부",
+    "motie.go.kr": "산업통상자원부", "msit.go.kr": "과학기술정보통신부", "mof.go.kr": "해양수산부",
+    "ex.co.kr": "한국도로공사", "lh.or.kr": "한국토지주택공사", "kict.re.kr": "한국건설기술연구원",
+    "kalis.or.kr": "국토안전관리원", "kcl.re.kr": "한국건설생활환경시험연구원", "ktr.or.kr": "한국화학융합시험연구원",
+    "koroad.or.kr": "도로교통공단", "korail.com": "한국철도공사", "kr.or.kr": "국가철도공단", "krihs.re.kr": "국토연구원",
+}
+
+
+def domain_of(s: str) -> str:
+    s = (s or "").lower().strip()
+    s = s.split("@", 1)[1] if "@" in s else re.sub(r"^(https?://)?(www\d?\.)?", "", s).split("/")[0]
+    return s.strip(".")
+
+
+def org_from_domains(emails, urls, learned: Optional[dict] = None) -> str:
+    """메일·누리집 도메인 → 직장. 배운 표가 먼저, 다음이 기본 표. 개인 메일(gmail 등)은 보지 않는다.
+    'xx.seoul.go.kr' 처럼 아래 도메인이면 위로 올라가며 찾는다."""
+    for raw in list(urls or []) + list(emails or []):
+        d = domain_of(raw)
+        if not d or any(d == f or d.startswith(f + ".") for f in FREE_MAIL):
+            continue
+        parts = d.split(".")
+        for i in range(len(parts) - 1):
+            k = ".".join(parts[i:])
+            if learned and k in learned:
+                return learned[k]
+            if k in DOMAIN_ORG:
+                return DOMAIN_ORG[k]
+    return ""
+
+
+def layout_key(emails, urls, company: str = "") -> str:
+    """같은 양식(같은 회사의 명함)을 알아보는 열쇠 — 회사 도메인, 없으면 회사명(법인 꼴 없이)."""
+    for raw in list(emails or []) + list(urls or []):
+        d = domain_of(raw)
+        if d and not any(d == f or d.startswith(f + ".") for f in FREE_MAIL) and not d.endswith("korea.kr"):
+            return "d:" + d
+    c = strip_corp(company or "")
+    return ("c:" + c) if c else ""
+
+
+def _in_box(f: dict, box) -> bool:
+    if not box or f.get("back"):
+        return False
+    x, y = f.get("cx", -1), f.get("cy", -1)
+    return box[0] <= x <= box[2] and box[1] <= y <= box[3]
+
+
+def rescore(res: dict, weights: Optional[dict] = None, layouts: Optional[dict] = None,
+            domain_map: Optional[dict] = None) -> dict:
+    """캐시에 남은 인식 결과(사전)를 지금의 가중치·양식·도메인 표로 다시 매긴다 — OCR 은 다시 하지 않는다(§5.11).
+    이름·회사 1위가 바뀌면 `name`·`company` 도 바꾼다(확인 표가 사용자가 고친 값을 따로 지킨다)."""
+    r = dict(res)
+    lay = (layouts or {}).get(layout_key(r.get("emails"), r.get("urls"), r.get("company", ""))) or {}
+    names = []
+    for c in r.get("name_cands") or []:
+        c = dict(c)
+        f = dict(c.get("feat") or {})
+        if f:
+            f["tpl"] = 1.0 if _in_box(f, lay.get("name")) else 0.0
+            c["score"] = name_score(f, weights)
+            c["feat"] = f
+        names.append(c)
+    names.sort(key=lambda c: -c["score"])
+    comps = []
+    for c in r.get("company_cands") or []:
+        c = dict(c)
+        if _in_box(c.get("feat") or {}, lay.get("company")):
+            c["score"] = round(float(c.get("score", 0)) + 3.0, 3)
+        comps.append(c)
+    org = org_from_domains(r.get("emails"), r.get("urls"), domain_map)
+    if org and not any(c["text"] == org for c in comps) and (not comps or comps[0]["score"] < 2.0):
+        comps.insert(0, {"text": org, "score": 2.5, "why": ["도메인"], "feat": {}})
+    comps.sort(key=lambda c: -c["score"])
+    if names and r.get("name") in [c["text"] for c in names] + [""]:
+        r["name"] = names[0]["text"]
+    if comps:
+        r["company"] = comps[0]["text"]
+    r["name_cands"], r["company_cands"] = names, comps
+    need = list(r.get("need_check") or [])
+    if any(c.get("feat") for c in names):          # 특징이 있을 때만 다시 판정(없으면 처음 판정 그대로)
+        need = [x for x in need if x != "name"]
+        if not names or (len(names) > 1 and names[0]["score"] - names[1]["score"] < NAME_GAP) \
+                or names[0]["score"] < NAME_STRONG:
+            need.insert(0, "name")
+    if r.get("company") and "company" in need:
+        need.remove("company")
+    r["need_check"] = need
+    return r
+
+
 def merge_sides(front: Optional[SideResult], back: Optional[SideResult], hint_name: str = "",
-                hint_company: str = "", ui_lang: str = "ko") -> CardResult:
+                hint_company: str = "", ui_lang: str = "ko", domain_map: Optional[dict] = None) -> CardResult:
     """앞뒤 합치기(R7) — 한글 칸이 주, 영문은 `en` 에 따로. 영문판(ui_lang='en')이면 영문이 주."""
     sides = [s for s in (front, back) if s is not None]
     c = CardResult()
@@ -651,10 +814,13 @@ def merge_sides(front: Optional[SideResult], back: Optional[SideResult], hint_na
 
     def pool(attr):
         d = {}
-        for s in sides:
+        for si, s in enumerate(sides):
             for cd in getattr(s, attr):
+                f = dict(cd.feat or {})
+                if s is back:
+                    f["back"] = 1.0                    # 뒷면 후보 — 양식 위치는 앞면 기준(§5.11)
                 if cd.text not in d or d[cd.text].score < cd.score:
-                    d[cd.text] = Cand(cd.text, cd.score, cd.why)
+                    d[cd.text] = Cand(cd.text, cd.score, cd.why, f)
         return sorted(d.values(), key=lambda x: -x.score)
 
     nk, ne = pool("names_ko"), pool("names_en")
@@ -677,16 +843,22 @@ def merge_sides(front: Optional[SideResult], back: Optional[SideResult], hint_na
     if ui_lang == "en" or not ko_ok:
         # 영문판이거나 한글이 없는 명함(외국인 등) — 영문이 주
         c.name, c.company, c.title, c.address = en["name"], en["company"], en["title"], en["address"] or ak
-        c.name_cands, c.company_cands = ne[:3] or nk[:3], ce[:3] or ck[:3]
+        c.name_cands, c.company_cands = ne[:CAND_KEEP] or nk[:CAND_KEEP], ce[:CAND_KEEP] or ck[:CAND_KEEP]
         c.en = {}
         if ui_lang == "en" and not c.name and nk:
-            c.name, c.name_cands = nk[0].text, nk[:3]
+            c.name, c.name_cands = nk[0].text, nk[:CAND_KEEP]
     else:
         c.name = nk[0].text
-        c.company = ck[0].text if ck else (hint_company or "")
+        c.company = ck[0].text if ck else ""
         c.title = tk[0] if tk else ""
         c.address = ak
-        c.name_cands, c.company_cands = nk[:3], ck[:3]
+        c.name_cands, c.company_cands = nk[:CAND_KEEP], ck[:CAND_KEEP]
+        org = org_from_domains(c.emails, c.urls, domain_map)
+        if org and (not ck or ck[0].score < 2.0):      # 회사 줄이 없거나 약하면 누리집·메일 도메인으로(사용자 지시 261117-9)
+            c.company = org
+            c.company_cands = [Cand(org, 2.5, ("도메인",))] + [x for x in c.company_cands if x.text != org]
+        if not c.company and hint_company:
+            c.company = hint_company
         c.en = {k: v for k, v in en.items() if v}
     need = []
     top = c.name_cands
@@ -698,6 +870,7 @@ def merge_sides(front: Optional[SideResult], back: Optional[SideResult], hint_na
         need.append("contact")
     c.need_check = tuple(need)
     c.back_promo = is_promo(back)
+    c.rotated = int(getattr(front, "rotated", 0) or 0) if front is not None else 0
     return c
 
 

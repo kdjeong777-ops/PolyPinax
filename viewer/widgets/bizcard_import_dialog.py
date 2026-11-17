@@ -1,4 +1,4 @@
-"""명함 들이기 — 확인 표 창 (명함 SOT §5.10, P2 · D10·D11·D12).
+"""명함 관리 — 확인 표 창 (명함 SOT §5.10, P2 · D10·D11·D12 · §5.11 위치 지정·배우기, 261117-9).
 
 왼쪽 표(이름·회사 후보 풀다운 + 직접 입력), 오른쪽 고른 명함 크게. 인식은 배경(`ImportWorker`), 고친 값은
 그때마다 `recog` 캐시에. [적용] 은 정리 폴더에 새 JPG(원본 그대로) — 배경 진행창(`_run_merge_job`).
@@ -9,9 +9,9 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from PyQt6.QtCore import Qt, QTimer
-from PyQt6.QtGui import QColor, QPixmap, QImage
-from PyQt6.QtWidgets import (
+from PyQt6.QtCore import Qt, QTimer, QRect, QPoint, QSize, pyqtSignal
+from PyQt6.QtGui import QColor, QPixmap, QImage, QTransform
+from PyQt6.QtWidgets import (QRubberBand, QMenu,
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QTableWidget, QTableWidgetItem, QComboBox, QCheckBox,
     QPushButton, QProgressBar, QSplitter, QWidget, QLineEdit, QFileDialog, QMessageBox, QHeaderView,
     QAbstractItemView, QPlainTextEdit,
@@ -25,6 +25,50 @@ from viewer.bizcard.importer import scan_folder, ImportWorker, OUT_DIR
 C_ON, C_NAME, C_COMP, C_TITLE, C_CELL, C_TEL, C_MAIL, C_BACK, C_DATE, C_FILE = range(10)
 NEED_BG = QColor(255, 244, 200)          # '확인 필요' 칸(디자인 SOT §2.5 의 옅은 노랑 계열)
 PREVIEW_W = 460
+
+
+class RegionLabel(QLabel):
+    """미리 보기 — 끌어서 상자를 그리면 `regionPicked(그림 비율 x0, y0, x1, y1, 전역 위치)`(§5.11 위치 지정)."""
+    regionPicked = pyqtSignal(float, float, float, float, QPoint)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._band = QRubberBand(QRubberBand.Shape.Rectangle, self)
+        self._org = None
+        self.setCursor(Qt.CursorShape.CrossCursor)
+        self.setToolTip(tr("명함 위를 끌어 이름·회사 등의 자리를 지정하면 그 자리만 다시 읽어 칸을 채우고, 같은 회사 명함에 기억합니다"))
+
+    def _pix_rect(self) -> QRect:
+        pm = self.pixmap()
+        if pm is None or pm.isNull():
+            return QRect()
+        r = QRect(QPoint(0, 0), pm.size())
+        r.moveCenter(self.rect().center())
+        return r
+
+    def mousePressEvent(self, e):
+        if e.button() == Qt.MouseButton.LeftButton and self._pix_rect().contains(e.position().toPoint()):
+            self._org = e.position().toPoint()
+            self._band.setGeometry(QRect(self._org, QSize()))
+            self._band.show()
+        super().mousePressEvent(e)
+
+    def mouseMoveEvent(self, e):
+        if self._org is not None:
+            self._band.setGeometry(QRect(self._org, e.position().toPoint()).normalized())
+        super().mouseMoveEvent(e)
+
+    def mouseReleaseEvent(self, e):
+        if self._org is not None:
+            box = QRect(self._org, e.position().toPoint()).normalized().intersected(self._pix_rect())
+            self._org = None
+            self._band.hide()
+            pr = self._pix_rect()
+            if box.width() > 4 and box.height() > 4 and pr.width() > 0:
+                self.regionPicked.emit((box.left() - pr.left()) / pr.width(), (box.top() - pr.top()) / pr.height(),
+                                       (box.right() - pr.left()) / pr.width(), (box.bottom() - pr.top()) / pr.height(),
+                                       self.mapToGlobal(box.bottomLeft()))
+        super().mouseReleaseEvent(e)
 
 
 def _first(phones, kinds):
@@ -43,7 +87,7 @@ class BizcardImportDialog(QDialog):
         self._items = scan_folder(self._folder)
         self._worker = None
         self._loading = False
-        self.setWindowTitle(tr("명함 들이기"))
+        self.setWindowTitle(tr("명함 관리"))
         self.resize(1280, 760)
         v = QVBoxLayout(self)
 
@@ -87,7 +131,8 @@ class BizcardImportDialog(QDialog):
         right = QWidget()
         rv = QVBoxLayout(right)
         rv.setContentsMargins(6, 0, 0, 0)
-        self.pv_front = QLabel()
+        self.pv_front = RegionLabel()
+        self.pv_front.regionPicked.connect(self._on_region)
         self.pv_front.setMinimumSize(PREVIEW_W, int(PREVIEW_W * 0.58))
         self.pv_front.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.pv_back = QLabel()
@@ -153,8 +198,28 @@ class BizcardImportDialog(QDialog):
         cb.setCurrentText(cur or "")
         return cb
 
+    def _load_learned(self):
+        """배운 것(§5.11) — 이름 가중치·양식 위치·도메인 표. 메인에서 짧게 읽는다(UI 대기 상한)."""
+        try:
+            from viewer.bizcard.learn import weights_of
+            st = self._store()
+            self._learned = {"weights": weights_of(st), "layouts": st.layouts(), "domains": st.domain_map()}
+        except Exception:
+            self._learned = {"weights": None, "layouts": {}, "domains": {}}
+
+    def _rescore(self, res):
+        lr = getattr(self, "_learned", None)
+        if lr is None:
+            self._load_learned()
+            lr = self._learned
+        if not res or res.get("error"):
+            return res
+        return R.rescore(res, lr["weights"], lr["layouts"], lr["domains"])
+
     def _set_row(self, r, res, edit):
         it = self._items[r]
+        it.raw = res
+        res = self._rescore(res)
         it.result, it.edit = res, dict(edit or {})
         val = dict(res)
         val.update(it.edit)
@@ -203,8 +268,10 @@ class BizcardImportDialog(QDialog):
     def _row_values(self, r) -> dict:
         it = self._items[r]
         res = it.result or {}
-        name = self.table.cellWidget(r, C_NAME).currentText().strip() if self.table.cellWidget(r, C_NAME) else ""
-        comp = self.table.cellWidget(r, C_COMP).currentText().strip() if self.table.cellWidget(r, C_COMP) else ""
+        # ★ `is not None` 로 — 빈 QComboBox 는 len()==0 이라 거짓이다(후보 없는 회사 칸에 쓴 값이 빠졌다, 261117-9)
+        wn, wc = self.table.cellWidget(r, C_NAME), self.table.cellWidget(r, C_COMP)
+        name = wn.currentText().strip() if wn is not None else ""
+        comp = wc.currentText().strip() if wc is not None else ""
         bk = self.table.cellWidget(r, C_BACK)
         keep = bool(bk is not None and bk.isEnabled() and bk.currentIndex() == 0)
         cell = self.table.item(r, C_CELL).text().strip()
@@ -300,7 +367,111 @@ class BizcardImportDialog(QDialog):
             img = QImage(path)
         if img is None or img.isNull():
             return QPixmap()
+        ang = int((it.result or {}).get("rotated") or 0) if not back else 0
+        if ang:                                            # 돌려 읽은 명함은 돌린 그대로 보인다(PIL rotate = 반시계)
+            img = img.transformed(QTransform().rotate(-ang))
         return QPixmap.fromImage(img).scaledToWidth(w, Qt.TransformationMode.SmoothTransformation)
+
+    # ── 위치 지정(§5.11) ──
+
+    def _source_image(self, it):
+        """다시 읽을 앞면 그림(PIL) — PDF 는 300 dpi, 작은 그림은 3배, 돌려 읽었으면 같은 각도로."""
+        from PIL import Image
+        import io
+        im = None
+        if it.pdf:
+            import fitz
+            doc = fitz.open(it.pdf)
+            try:
+                im = Image.open(io.BytesIO(doc[0].get_pixmap(dpi=R.CONTACT_DPI).tobytes("png")))
+            finally:
+                doc.close()
+        elif it.front:
+            im = Image.open(it.front)
+            im.load()
+            if max(im.size) < R.SMALL_SIDE:
+                im = R._upscale(im, R.NAME_UPSCALE)
+        ang = int((it.result or {}).get("rotated") or 0)
+        if im is not None and ang:
+            im = im.rotate(ang, expand=True)
+        return im
+
+    def read_region(self, r, box, fld):
+        """그림 비율 상자 → 그 자리만 OCR → 칸에 넣을 값(못 읽으면 "")."""
+        it = self._items[r]
+        im = self._source_image(it)
+        if im is None:
+            return ""
+        W, H = im.size
+        x0, y0, x1, y1 = box
+        pad = 0.01
+        crop = im.crop((int(max(0, x0 - pad) * W), int(max(0, y0 - pad) * H), int(min(1, x1 + pad) * W), int(min(1, y1 + pad) * H)))
+        lines = R.ocr_lines(crop, 6) or R.ocr_lines(crop, R.NAME_EXTRA_PSM)
+        text = " ".join(ln.text for ln in lines).strip()
+        if fld == "name":
+            t = R.merge_spaced(text)
+            toks = [x for x in t.split() if not R.title_token(x)]
+            ko = R.clean_name_ko(" ".join(toks))
+            return ko if ko else R.clean_name_en(text)
+        if fld == "company":
+            return R.strip_corp(text)
+        if fld in ("cell", "tel"):
+            ph = R.find_phones(text)
+            return ph[0][1] if ph else ""
+        if fld == "email":
+            em = R.find_emails(text)
+            return em[0] if em else ""
+        return R.merge_spaced(text)
+
+    def _on_region(self, x0, y0, x1, y1, gpos):
+        r = self.table.currentRow()
+        if r < 0 or not self._items[r].result:
+            return
+        m = QMenu(self)
+        labels = (("name", tr("이름")), ("company", tr("회사")), ("title", tr("직함")), ("cell", tr("휴대폰")),
+                  ("tel", tr("전화")), ("email", tr("메일")))
+        acts = {m.addAction(label): fld for fld, label in labels}
+        a = m.exec(gpos)
+        if a is None:
+            return
+        self.set_region(r, (x0, y0, x1, y1), acts[a])
+
+    def set_region(self, r, box, fld):
+        """지정한 자리를 읽어 칸을 채우고, 이름·회사·직함 자리는 같은 회사 양식으로 기억한다(같은 열쇠의 다른 줄도 다시 매김)."""
+        from PyQt6.QtWidgets import QApplication
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        try:
+            val = self.read_region(r, box, fld)
+        finally:
+            QApplication.restoreOverrideCursor()
+        if not val:
+            QMessageBox.information(self, tr("명함 관리"), tr("그 자리에서 글자를 읽지 못했습니다 — 상자를 조금 넓혀 다시 그리세요."))
+            return ""
+        col = {"name": C_NAME, "company": C_COMP, "title": C_TITLE, "cell": C_CELL, "tel": C_TEL, "email": C_MAIL}[fld]
+        w = self.table.cellWidget(r, col)
+        if w is not None:
+            w.setCurrentText(val)
+        else:
+            self.table.item(r, col).setText(val)
+        self._on_edit(r)
+        if fld in ("name", "company", "title"):
+            v = self._row_values(r)
+            key = R.layout_key(v["emails"], v["urls"], v["company"])
+            if key:
+                try:
+                    self._store().layout_put(key, fld, box, manual=True)
+                except Exception:
+                    pass
+                self._load_learned()
+                self._rescore_others(r)
+        return val
+
+    def _rescore_others(self, skip=-1):
+        """배운 것이 바뀌면 사람이 아직 고치지 않은 줄을 다시 매긴다(OCR 없이)."""
+        for i, it in enumerate(self._items):
+            if i == skip or not getattr(it, "raw", None) or it.edit.get("name"):
+                continue
+            self._set_row(i, it.raw, it.edit)
 
     def _show_preview(self, r):
         if r < 0 or r >= len(self._items):
@@ -363,12 +534,13 @@ class BizcardImportDialog(QDialog):
     def _apply(self):
         rows = self.selected_rows()
         if not rows:
-            QMessageBox.information(self, tr("명함 들이기"), tr("적용할 명함이 없습니다 — 이름이 있고 '적용' 이 체크된 줄만 만듭니다."))
+            QMessageBox.information(self, tr("명함 관리"), tr("적용할 명함이 없습니다 — 이름이 있고 '적용' 이 체크된 줄만 만듭니다."))
             return
         out = Path(self.ed_out.text().strip() or (self._folder / OUT_DIR))
         from viewer.bizcard.apply import apply_cards, ApplyCancelled
         from viewer.twoup import MergeCancelled
         box = {"done": []}
+        results = {it.key: it.result for it in self._items if it.result}
 
         def job(progress):
             def _p(d, t):
@@ -377,20 +549,35 @@ class BizcardImportDialog(QDialog):
                 box["done"] = apply_cards(rows, out, self._db, _p)
             except ApplyCancelled:
                 raise MergeCancelled()
+            # 배우기(§5.11) — 이 PC 의 bizcard.db 에만. 배경 스레드에서 자기 연결로
+            try:
+                from viewer.bizcard.learn import learn_from
+                from viewer.bizcard.store import BizcardStore
+                st = BizcardStore(self._db)
+                try:
+                    box["learn"] = learn_from(st, rows, results)
+                finally:
+                    st.close()
+            except Exception as e:                 # 명함 글은 싣지 않는다 — 종류만
+                box["learn_err"] = type(e).__name__
 
         runner = getattr(self._mw, "_run_merge_job", None)
         if runner is not None:
-            res = runner(job, tr("명함 들이기"))
+            res = runner(job, tr("명함 관리"))
         else:                                   # 앱 밖(검사) — 바로
             job(lambda d, t, l: True)
             res = {"ok": True}
         done = box["done"]
+        self._apply_box = box                     # 검사가 본다(배우기 오류 종류)
         self._tag(done)
+        self.learned = box.get("learn")
+        self._load_learned()
+        self._rescore_others()
         if done:
-            QMessageBox.information(self, tr("명함 들이기"),
+            QMessageBox.information(self, tr("명함 관리"),
                                     tr("명함 {n}장을 정리 폴더에 만들었습니다.\n{path}").format(n=len(done), path=str(out)))
         elif not res.get("ok"):
-            QMessageBox.warning(self, tr("명함 들이기"), tr("정리본을 만들지 못했습니다."))
+            QMessageBox.warning(self, tr("명함 관리"), tr("정리본을 만들지 못했습니다."))
         self.applied = done
 
     def _tag(self, done):

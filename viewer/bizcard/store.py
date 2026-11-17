@@ -69,6 +69,10 @@ class BizcardStore:
         CREATE VIRTUAL TABLE IF NOT EXISTS cards_fts USING fts5(body, tokenize='unicode61');
         CREATE TABLE IF NOT EXISTS recog(src_key TEXT PRIMARY KEY, sig TEXT, result TEXT, edit TEXT, updated REAL);
         CREATE TABLE IF NOT EXISTS meta(k TEXT PRIMARY KEY, v TEXT);
+        CREATE TABLE IF NOT EXISTS layouts(key TEXT, field TEXT, x0 REAL, y0 REAL, x1 REAL, y1 REAL, n INTEGER,
+            manual INTEGER, updated REAL, PRIMARY KEY(key, field));
+        CREATE TABLE IF NOT EXISTS domain_org(domain TEXT PRIMARY KEY, org TEXT, n INTEGER, updated REAL);
+        CREATE TABLE IF NOT EXISTS samples(src_key TEXT PRIMARY KEY, data TEXT, updated REAL);
         """)
         c.execute("INSERT OR IGNORE INTO meta(k, v) VALUES('schema', ?)", (str(SCHEMA_VER),))
         c.commit()
@@ -146,6 +150,64 @@ class BizcardStore:
         self.con.execute("INSERT INTO cards_fts(rowid, body) VALUES(?,?)", (cid, self._body(d)))
         self.con.commit()
         return cid
+
+    # ── 배운 것(§5.11) — 모두 이 PC 의 bizcard.db 에만 ──
+    def meta_get(self, k: str, default=None):
+        r = self.con.execute("SELECT v FROM meta WHERE k=?", (k,)).fetchone()
+        return json.loads(r["v"]) if r else default
+
+    def meta_set(self, k: str, v):
+        self.con.execute("INSERT INTO meta(k, v) VALUES(?, ?) ON CONFLICT(k) DO UPDATE SET v=excluded.v",
+                         (k, json.dumps(v, ensure_ascii=False)))
+        self.con.commit()
+
+    def layout_put(self, key: str, field: str, box, manual: bool = False):
+        """양식 위치 — 사용자가 그린 상자(manual)는 그대로 덮고, 자동은 평균에 섞는다."""
+        if not key or not box:
+            return
+        x0, y0, x1, y1 = [float(v) for v in box]
+        r = self.con.execute("SELECT * FROM layouts WHERE key=? AND field=?", (key, field)).fetchone()
+        if r is None or manual:
+            n = 1 if r is None else int(r["n"]) + 1
+            self.con.execute("INSERT INTO layouts(key, field, x0, y0, x1, y1, n, manual, updated) VALUES(?,?,?,?,?,?,?,?,?) "
+                             "ON CONFLICT(key, field) DO UPDATE SET x0=excluded.x0, y0=excluded.y0, x1=excluded.x1, "
+                             "y1=excluded.y1, n=excluded.n, manual=MAX(layouts.manual, excluded.manual), updated=excluded.updated",
+                             (key, field, x0, y0, x1, y1, n, int(manual), time.time()))
+        elif not r["manual"]:
+            n = int(r["n"])
+            m = lambda a, b: (a * n + b) / (n + 1)
+            self.con.execute("UPDATE layouts SET x0=?, y0=?, x1=?, y1=?, n=?, updated=? WHERE key=? AND field=?",
+                             (m(r["x0"], x0), m(r["y0"], y0), m(r["x1"], x1), m(r["y1"], y1), n + 1, time.time(), key, field))
+        self.con.commit()
+
+    def layouts(self, min_auto: int = 2) -> dict:
+        """{열쇠: {칸: (x0, y0, x1, y1)}} — 자동으로 배운 것은 `min_auto` 번 넘게 맞았을 때만 쓴다."""
+        out = {}
+        for r in self.con.execute("SELECT * FROM layouts"):
+            if r["manual"] or int(r["n"]) >= min_auto:
+                out.setdefault(r["key"], {})[r["field"]] = (r["x0"], r["y0"], r["x1"], r["y1"])
+        return out
+
+    def domain_put(self, domain: str, org: str):
+        if not domain or not org:
+            return
+        self.con.execute("INSERT INTO domain_org(domain, org, n, updated) VALUES(?,?,1,?) ON CONFLICT(domain) DO UPDATE "
+                         "SET n=CASE WHEN domain_org.org=excluded.org THEN domain_org.n+1 ELSE 1 END, org=excluded.org, "
+                         "updated=excluded.updated", (domain, org, time.time()))
+        self.con.commit()
+
+    def domain_map(self) -> dict:
+        return {r["domain"]: r["org"] for r in self.con.execute("SELECT domain, org FROM domain_org")}
+
+    def sample_put(self, src, data: dict):
+        """이름 점수 학습 표본 — 후보 특징과 '확정한 것인가' 만(이름 글자는 남기지 않는다)."""
+        self.con.execute("INSERT INTO samples(src_key, data, updated) VALUES(?,?,?) ON CONFLICT(src_key) DO UPDATE "
+                         "SET data=excluded.data, updated=excluded.updated",
+                         (_key(src), json.dumps(data, ensure_ascii=False), time.time()))
+        self.con.commit()
+
+    def samples(self) -> list:
+        return [json.loads(r["data"]) for r in self.con.execute("SELECT data FROM samples")]
 
     def count(self) -> int:
         return self.con.execute("SELECT COUNT(*) FROM cards").fetchone()[0]

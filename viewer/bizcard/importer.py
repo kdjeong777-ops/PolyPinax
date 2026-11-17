@@ -65,6 +65,9 @@ def scan_folder(folder) -> list:
         return []
     for n in names:
         p = folder / n
+        if p.is_file() and p.suffix.lower() == ".pdf":
+            groups.setdefault(p.stem, {}).setdefault("pdf", str(p))    # 261117-9: 원본 PDF 가 그림 옆에 있어도(사용자가 옮김)
+            continue
         if not p.is_file() or p.suffix.lower() not in R.IMG_EXTS:
             continue
         base, side = _split(p.stem)
@@ -75,7 +78,7 @@ def scan_folder(folder) -> list:
         for n in sorted(os.listdir(pdir)):
             p = pdir / n
             if p.is_file() and p.suffix.lower() == ".pdf":
-                groups.setdefault(p.stem, {})["pdf"] = str(p)
+                groups.setdefault(p.stem, {}).setdefault("pdf", str(p))
     out = []
     for base in sorted(groups):
         g = groups[base]

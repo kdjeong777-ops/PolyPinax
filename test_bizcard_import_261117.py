@@ -102,6 +102,14 @@ try:
     chk(g is not None and g.pdf.endswith("가나다_홍길동.pdf") and g.key == g.pdf, "A 하위 pdf 원본이 원천 열쇠")
     chk(by["사아자_이영희"].back.endswith("_2.jpg") and by["라마바_김철수"].back == "", "A 앞뒤 짝")
     chk(all(len(it.scanned) == 10 for it in items), "A 스캔일(파일 날짜) YYYY-MM-DD")
+    F3 = TMP / "cards_flat"                  # 261117-9: 원본 PDF 를 그림 옆(같은 폴더)으로 옮긴 꼴
+    F3.mkdir()
+    png(F3 / "가나다_홍길동_p0001.png"); pdf2(str(F3 / "가나다_홍길동.pdf")); pdf2(str(F3 / "PDF만_있음.pdf"))
+    (F3 / "PDF").mkdir()
+    it3 = {it.base: it for it in I.scan_folder(F3)}
+    chk(sorted(it3) == ["PDF만_있음", "가나다_홍길동"] and it3["가나다_홍길동"].pdf.endswith("가나다_홍길동.pdf")
+        and it3["가나다_홍길동"].key == it3["가나다_홍길동"].pdf, "A 같은 폴더의 원본 PDF 도 짝·원천(PDF 만 있는 명함 포함)", str(sorted(it3)))
+    chk(str(R.card_sources(F3 / "가나다_홍길동_p0001.png")["pdf"]).endswith("가나다_홍길동.pdf"), "A 인식 원천도 같은 폴더 PDF")
 
     # ── B ──
     print("\n=== B. DB ===")

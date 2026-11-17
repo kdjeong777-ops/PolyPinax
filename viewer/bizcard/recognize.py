@@ -906,11 +906,29 @@ def _in_box(f: dict, box) -> bool:
     return box[0] <= x <= box[2] and box[1] <= y <= box[3]
 
 
+def correction_ok(field: str, wrong: str, right: str) -> bool:
+    """교정으로 배울·쓸 만한가(261117-18 사용자 보고 '이사는 대표이사가 아니고 대표이사는 그냥 이사가 아니야, 선임은 선임'):
+    교정은 **오인식**(`다표이사` → `대표이사`)만이다. 다른 값을 고른 것은 교정이 아니다 —
+    ① 한쪽이 다른 쪽을 그대로 품으면(`선임` ↔ `선임컨설턴트`, `대표이사` ↔ `이사`) 늘이거나 줄인 것
+    ② 직함 칸에서 고치기 전 값이 이미 올바른 직함·자격 낱말이면(`이사` → `대표이사`) 다른 직함을 고른 것."""
+    w = nospace_ko(re.sub(r"[^가-힣A-Za-z0-9@.\- ]", "", wrong or "")).strip()
+    r = nospace_ko(re.sub(r"[^가-힣A-Za-z0-9@.\- ]", "", right or "")).strip()
+    if not w or not r or w == r:
+        return False
+    if w in r or r in w:
+        return False
+    if field == "title" and (w in TITLES_KO or qual_token(w)):   # 목록 그대로의 직함·자격(이사·선임 …) — '다표이사' 같은 오인식은 배운다
+        return False
+    return True
+
+
 def rescore(res: dict, weights: Optional[dict] = None, layouts: Optional[dict] = None,
             domain_map: Optional[dict] = None, corrections: Optional[dict] = None) -> dict:
     """캐시에 남은 인식 결과(사전)를 지금의 가중치·양식·도메인 표로 다시 매긴다 — OCR 은 다시 하지 않는다(§5.11).
     이름·회사 1위가 바뀌면 `name`·`company` 도 바꾼다(확인 표가 사용자가 고친 값을 따로 지킨다)."""
     r = dict(res)
+    corrections = {f: {w: v for w, v in (m or {}).items() if correction_ok(f, w, v)}   # 잘못 배운 교정(다른 값을 고른 것)은 쓰지 않는다
+                   for f, m in (corrections or {}).items()}
     for fld in ("dept", "title", "company"):       # 붙여 쓰기(261117-15) — 옛 캐시 값도
         if r.get(fld):
             r[fld] = nospace_ko(r[fld])

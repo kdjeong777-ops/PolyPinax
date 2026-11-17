@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-17 22:36+0900\n"
+"POT-Creation-Date: 2026-11-18 04:22+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -2852,7 +2852,8 @@ msgstr "Could not create the new page: %s"
 msgid "앞 작업이 끝난 뒤에 다시 하세요."
 msgstr "Please try again after the current task finishes."
 
-#: viewer/app.py viewer/photo_controller.py viewer/widgets/favorites_dialog.py
+#: viewer/app.py viewer/photo_controller.py
+#: viewer/widgets/bizcard_import_dialog.py viewer/widgets/favorites_dialog.py
 #: viewer/widgets/hyperlink_dialog.py viewer/widgets/image_to_pdf_dialog.py
 #: viewer/widgets/line_text_settings_dialog.py viewer/widgets/merge_dialog.py
 #: viewer/widgets/merge_preview.py viewer/widgets/strip.py
@@ -8026,6 +8027,10 @@ msgstr "Sets the scan date of the selected rows to the date on the left"
 msgid "지금의 인식으로 다시 읽습니다 — 고른 줄만 또는 모두. 손으로 고친 칸은 그대로 둡니다"
 msgstr "Reads cards again with the current recognition — selected rows only or all. Fields you edited by hand are kept"
 
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "고른 명함의 원본 그림·PDF 와 만든 정리본을 휴지통으로 보내고 기록을 지웁니다 (Delete)"
+msgstr "Moves the selected cards' original images/PDFs and created output files to the Recycle Bin and deletes their records (Delete)"
+
 #: viewer/widgets/bizcard_import_dialog.py viewer/widgets/photo_crop_dialog.py
 msgid "전체 화면"
 msgstr "Full Screen"
@@ -8121,6 +8126,10 @@ msgstr "(no name)"
 msgid "지금 읽는 중입니다 — 다 읽은 뒤에 다시 하세요."
 msgstr "Reading is in progress — try again when it finishes."
 
+#: viewer/widgets/bizcard_import_dialog.py viewer/widgets/bookmark_tree.py
+msgid "휴지통 이동 실패"
+msgstr "Failed to move to Recycle Bin"
+
 #: viewer/widgets/bizcard_import_dialog.py
 msgid "(다시 읽는 중)"
 msgstr "(reading again)"
@@ -8200,6 +8209,11 @@ msgid ""
 msgstr ""
 "Created {n} cards in the output folder.\n"
 "{path}"
+
+#: viewer/widgets/bizcard_import_dialog.py
+#, python-brace-format
+msgid "명함 {n}장을 지웁니다 — 원본 파일까지 휴지통으로 보냅니다(원본 {f}개·정리본 {o}개). 인식 기록도 지웁니다."
+msgstr "Delete {n} cards? The original files will also be moved to the Recycle Bin ({f} original file(s), {o} output file(s)), and their recognition records deleted."
 
 #: viewer/widgets/bizcard_import_dialog.py
 #, python-brace-format
@@ -8605,10 +8619,6 @@ msgstr "There is nothing to delete."
 #: viewer/widgets/bookmark_tree.py
 msgid "삭제 확인"
 msgstr "Confirm Delete"
-
-#: viewer/widgets/bookmark_tree.py
-msgid "휴지통 이동 실패"
-msgstr "Failed to move to Recycle Bin"
 
 #: viewer/widgets/bookmark_tree.py
 msgid "먼저 폴더를 열어 주세요."
@@ -17358,4 +17368,7 @@ msgstr "Getting Started"
 
 #~ msgid "바꾸기..."
 #~ msgstr "Change..."
+
+#~ msgid "파일 {n}개를 휴지통으로 보내지 못했습니다 — 다른 프로그램이 쓰고 있으면 닫고 다시 하세요."
+#~ msgstr "Could not move {n} file(s) to the Recycle Bin — close any program using them and try again."
 

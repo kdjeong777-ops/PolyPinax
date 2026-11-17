@@ -97,6 +97,14 @@ for line, want in (("(주) 가나다 기술 품질팀", "가나다기술"), ("�
     rc_ = R.parse_lines([L(line, 0.08, 90, 0.1), L("홍길동", 0.14, 90, 0.4), L("가나다기술연구원장 김철수", 0.05, 90, 0.7)])
     chk(rc_.companies_ko and rc_.companies_ko[0].text == want, "C (주)·(유) 가 앞뒤에 붙은 낱말이 회사 — '%s' → %s" % (line, want),
         str([c.text for c in rc_.companies_ko[:2]]))
+# 261117-18: 교정은 오인식만 — 다른 값을 고른 것(이사 ↔ 대표이사, 선임 → 선임컨설턴트)은 배우지도 쓰지도 않는다
+chk(not R.correction_ok("title", "이사", "대표이사") and not R.correction_ok("title", "대표이사", "이사")
+    and not R.correction_ok("title", "선임", "선임컨설턴트") and not R.correction_ok("company", "가나다", "가나다기술")
+    and R.correction_ok("title", "다표이사", "대표이사") and R.correction_ok("company", "가나다기슬", "가나다기술"),
+    "C 교정 판정 — 오인식만 배운다(늘이기·줄이기·다른 직함은 아님)")
+bad = {"title": {"이사": "대표이사", "대표이사": "이사", "선임": "선임컨설턴트", "다표이사": "대표이사"}}
+chk([R.rescore({"title": t, "name_cands": [], "company_cands": []}, None, None, None, bad)["title"] for t in ("이사", "대표이사", "선임", "다표이사")]
+    == ["이사", "대표이사", "선임", "대표이사"], "C 이미 잘못 배운 교정은 쓰지 않는다 — 이사는 이사, 대표이사는 대표이사, 선임은 선임")
 chk(R.nospace_ko("품질 관리 팀") == "품질관리팀" and R.nospace_ko("ABC 기술") == "ABC 기술", "C 한글 사이 띄어쓰기만 없앤다")
 rg = R.parse_lines([L("국토교통부", 0.12, 90, 0.05), L("도로정책과", 0.06, 90, 0.3), L("홍길동 주무관", 0.14, 90, 0.4)])
 chk(rg.dept_ko == "도로정책과", "C 기관 이름(…부)은 부서가 아니고 그 아래 과가 부서", rg.dept_ko)

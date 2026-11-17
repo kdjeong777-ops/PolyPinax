@@ -157,6 +157,7 @@ class BizcardImportDialog(QDialog):
         self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowMaximizeButtonHint | Qt.WindowType.WindowMinimizeButtonHint)
         from PyQt6.QtGui import QShortcut, QKeySequence
         QShortcut(QKeySequence("F11"), self, activated=self.toggle_full)
+        self._del_key = (QShortcut, QKeySequence)
         self.resize(1280, 760)
         v = QVBoxLayout(self)
 
@@ -183,6 +184,10 @@ class BizcardImportDialog(QDialog):
         self._reread_menu.aboutToShow.connect(self._fill_reread_menu)
         self.btn_reread.setMenu(self._reread_menu)
         top.addWidget(self.btn_reread)
+        self.btn_del = QPushButton(tr("삭제"))
+        self.btn_del.setToolTip(tr("고른 명함의 원본 그림·PDF 와 만든 정리본을 휴지통으로 보내고 기록을 지웁니다 (Delete)"))
+        self.btn_del.clicked.connect(lambda _c=False: self.delete_selected())
+        top.addWidget(self.btn_del)
         self.btn_full = QPushButton(tr("전체 화면"))
         self.btn_full.setToolTip(tr("명함 관리 창을 화면 가득 — 다시 누르거나 F11·Esc 로 돌아옵니다"))
         self.btn_full.clicked.connect(lambda _c=False: self.toggle_full())
@@ -207,6 +212,9 @@ class BizcardImportDialog(QDialog):
                      (C_MAIL, 170), (C_BACK, 90), (C_DATE, 90)):
             self.table.setColumnWidth(c, w)
         self.table.setItemDelegate(ChoiceDelegate(self.table))
+        _QS, _QK = self._del_key
+        _dk = _QS(_QK(_QK.StandardKey.Delete), self.table, activated=self.delete_selected)
+        _dk.setContext(Qt.ShortcutContext.WidgetShortcut)              # 표에서만(칸을 고치는 중이면 글 칸이 먼저 받는다)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.DoubleClicked | QAbstractItemView.EditTrigger.SelectedClicked
                                    | QAbstractItemView.EditTrigger.EditKeyPressed | QAbstractItemView.EditTrigger.AnyKeyPressed)
         self.table.itemChanged.connect(self._on_item_changed)
@@ -471,13 +479,99 @@ class BizcardImportDialog(QDialog):
         n = 0
         for k in self.LEARN_FIELDS:
             a, b = (auto.get(k) or "").strip(), (manual.get(k) or "").strip()
-            if a and b and a != b and difflib.SequenceMatcher(None, a, b).ratio() >= self.LEARN_SIMILAR:
+            if a and b and a != b and difflib.SequenceMatcher(None, a, b).ratio() >= self.LEARN_SIMILAR                     and R.correction_ok(k, a, b):        # 다른 값을 고른 것(늘이기·다른 직함)은 배우지 않는다(261117-18)
                 try:
                     self._store().correction_put(k, a, b)
                     n += 1
                 except Exception:
                     pass
         return n
+
+    def delete_selected(self, rows=None, ask: bool = True) -> int:
+        """고른 명함 삭제(261117-19 사용자 지시·결정 '원본 파일까지 휴지통') — 원본 그림(앞·뒤)·원본 PDF·만든 정리본을
+        **휴지통**으로(앱의 `_trash_bg` — 배경·잠깐 잡히면 다시), 인식 기록·학습 표본·명함 DB 행을 지우고 표에서 뺀다.
+        확인 창을 거친다. 읽는 중·자리 읽는 중에는 하지 않는다. 반환 = 지운 명함 수."""
+        if (self._worker is not None and not self._worker.done_event.is_set()) or self.region_busy:
+            QMessageBox.information(self, tr("삭제"), tr("지금 읽는 중입니다 — 다 읽은 뒤에 다시 하세요."))
+            return 0
+        rows = sorted(set(rows if rows is not None else self.selected_rows_idx()))
+        rows = [r for r in rows if 0 <= r < len(self._items)]
+        if not rows:
+            return 0
+        st = self._store()
+        files = []
+        outs_of = {}
+        for r in rows:
+            it = self._items[r]
+            files += [p for p in (it.front, it.back, it.pdf) if p and os.path.exists(p)]
+            old = st.card_by_src(it.key)
+            outs_of[r] = [os.path.realpath(p) for p in ((old or {}).get("front"), (old or {}).get("back")) if p]   # DB 는 소문자 열쇠 — 실제 경로로
+        outs = [p for r in rows for p in outs_of[r] if os.path.exists(p)]
+        if ask and QMessageBox.question(
+                self, tr("삭제"),
+                tr("명함 {n}장을 지웁니다 — 원본 파일까지 휴지통으로 보냅니다(원본 {f}개·정리본 {o}개). 인식 기록도 지웁니다.").format(
+                    n=len(rows), f=len(files), o=len(outs))) != QMessageBox.StandardButton.Yes:
+            return 0
+        # 지우는 길은 하나(261117-4·-6 공용 — 책갈피창 `_trash_files` 와 같은 꼴): 열린 PDF 는 먼저 놓고 → 앱 `_trash_bg`
+        #   (배경·`pathutil.trash_when_free` — 잠깐 잡히면 다시) → 지운 것은 `fileOpCompleted(경로, "")`, 놓았는데 못 지운 것은 `(경로, 경로)`
+        from viewer.pathutil import norm_key, trash_when_free
+        import viewer.widgets.bookmark_tree as _btm
+        targets = list(dict.fromkeys(files + outs))
+        bt = getattr(self._mw, "bookmark_tree", None)
+        released = []
+        if bt is not None:
+            try:
+                cur = bt._open_file_now()
+            except Exception:
+                cur = None
+            for p in targets:
+                if cur and norm_key(p) == norm_key(cur):
+                    bt.releaseFileRequested.emit(p)
+                    released.append(p)
+            if released:
+                from PyQt6.QtWidgets import QApplication
+                QApplication.processEvents()
+        runner = getattr(self._mw, "_trash_bg", None)
+        if runner is not None:
+            res = runner(targets, photo=True) or {}
+        else:                                       # 앱 밖(검사) — 같은 휴지통 함수·같은 '잠깐 잡히면 다시'
+            fn = _btm._trash_fn()
+            res = {}
+            for p in targets:
+                try:
+                    trash_when_free(p, fn)
+                    res[p] = None
+                except Exception as e:              # noqa: BLE001
+                    res[p] = e
+        failed = [(p, e) for p, e in res.items() if e is not None]
+        failed_set = {p for p, _e in failed}
+        for p in targets:
+            if bt is None:
+                break
+            if p in failed_set:
+                if p in released:
+                    bt.fileOpCompleted.emit(p, p)    # 못 지움 — 놓았던 원본 다시 열기
+            else:
+                bt.fileOpCompleted.emit(p, "")       # 지움 — 책갈피창·사진 목록·본문(한 길)
+        gone = []
+        for r in rows:                              # 한 파일이라도 못 지운 명함은 기록을 남긴다(일부만 휴지통으로 간 경우)
+            it = self._items[r]
+            mine = [p for p in (it.front, it.back, it.pdf) if p] + outs_of.get(r, [])
+            if any(p in failed_set for p in mine):
+                continue
+            try:
+                st.delete_src(it.key)
+            except Exception:
+                pass
+            gone.append(r)
+        for r in sorted(gone, reverse=True):
+            self.table.removeRow(r)
+            del self._items[r]
+        self.lbl_folder.setText(tr("폴더: {path}  ·  명함 {n}장").format(path=str(self._folder), n=len(self._items)))
+        if failed:
+            QMessageBox.warning(self, tr("휴지통 이동 실패"), _btm._trash_fail_text(failed, photo=True))
+        self.last_deleted = len(gone)
+        return len(gone)
 
     def selected_rows_idx(self) -> list:
         return sorted({i.row() for i in self.table.selectedIndexes()})
@@ -698,13 +792,13 @@ class BizcardImportDialog(QDialog):
     def _finish_region(self, r, box, fld, confirm, raw, crop):
         """읽은 글 → 확인 창(고쳐서 넣기) → 칸 채우기 → 교정·양식 배우기. 넣은 값(또는 "")."""
         corr = (getattr(self, "_learned", None) or {}).get("corrections", {}).get(fld, {})
-        val = corr.get(raw, raw)                  # 전에 고친 적이 있는 오인식이면 고친 글을 먼저
+        val = corr.get(raw, raw) if R.correction_ok(fld, raw, corr.get(raw, "")) else raw   # 전에 고친 오인식이면 고친 글을 먼저
         self._last_crop = crop
         if confirm:
             got = self._confirm_region(crop if crop is not None else self._source_image(self._items[r]), val, fld)
             if got is None:
                 return ""
-            if raw and got and got != raw:
+            if raw and got and got != raw and R.correction_ok(fld, raw, got):
                 try:
                     self._store().correction_put(fld, raw, got)       # 교정 배우기(§5.15) — 이 PC 의 bizcard.db 에만
                 except Exception:

@@ -240,6 +240,19 @@ class BizcardStore:
     def samples(self) -> list:
         return [json.loads(r["data"]) for r in self.con.execute("SELECT data FROM samples")]
 
+    def delete_src(self, src) -> list:
+        """명함 하나 지우기(261117-19) — 그 원천의 인식 기록·학습 표본·사람 행. 반환 = 지운 사람 행의 정리본 [앞, 뒤]."""
+        k = _key(src)
+        outs = []
+        for r in self.con.execute("SELECT id, front, back FROM cards WHERE src_key=?", (k,)).fetchall():
+            outs += [x for x in (r["front"], r["back"]) if x]
+            self.con.execute("DELETE FROM cards_fts WHERE rowid=?", (r["id"],))
+        self.con.execute("DELETE FROM cards WHERE src_key=?", (k,))
+        self.con.execute("DELETE FROM recog WHERE src_key=?", (k,))
+        self.con.execute("DELETE FROM samples WHERE src_key=?", (k,))
+        self.con.commit()
+        return outs
+
     def count(self) -> int:
         return self.con.execute("SELECT COUNT(*) FROM cards").fetchone()[0]
 

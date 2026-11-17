@@ -247,22 +247,37 @@ try:
     # 261117-17(사용자 질문 '고친 방법을 학습해 적용하나'): 표에서 고친 칸도 — 인식값과 닮았으면 오인식 교정으로 배운다
     rs = next(i for i, it in enumerate(dlg._items) if it.base == "사아자_이영희")
     auto_c = dlg._auto_values(rs)["company"]
-    dlg.set_cell(rs, BD.C_COMP, auto_c + "건설")                       # 닮음(몇 글자 더함) → 배움
+    typo = auto_c[:-1] + ("차" if auto_c[-1] != "차" else "타")        # 261117-18: 오인식은 '한 글자 틀림'(늘이기는 교정이 아니다)
+    dlg._items[rs].result = dict(dlg._items[rs].result, company=typo)   # 인식이 typo 로 읽었다고 하고
+    dlg.set_cell(rs, BD.C_COMP, typo)                                   # 칸도 인식값 그대로였다가
+    pump(timeout=0.1)
+    dlg.set_cell(rs, BD.C_COMP, auto_c)                                 # 사람이 바로잡음 → 배움
     pump(timeout=0.2)
     st5 = S.BizcardStore()
     cor5 = st5.corrections().get("company", {})
     st5.close()
-    chk(cor5.get(auto_c) == auto_c + "건설", "D 표에서 고친 오인식(닮은 값)은 교정으로 배운다", str(cor5))
+    chk(cor5.get(typo) == auto_c, "D 표에서 고친 오인식(닮은 값)은 교정으로 배운다", str(cor5))
     dlg.set_cell(rs, BD.C_COMP, "전혀다른값")                           # 다른 후보를 고른 것 → 배우지 않음
     pump(timeout=0.2)
     st5 = S.BizcardStore()
     cor6 = st5.corrections().get("company", {})
     st5.close()
-    chk(cor6.get(auto_c) == auto_c + "건설" and "전혀다른값" not in cor6.values(), "D 전혀 다른 값으로 바꾼 것은 배우지 않는다", str(cor6))
+    chk(cor6.get(typo) == auto_c and "전혀다른값" not in cor6.values(), "D 전혀 다른 값으로 바꾼 것은 배우지 않는다", str(cor6))
+    dlg._items[rs].result = dict(dlg._items[rs].result, company=auto_c)
     dlg.set_cell(rs, BD.C_COMP, auto_c)
     pump(timeout=0.2)
-    chk(dlg._rescore({"company": auto_c, "company_cands": [{"text": auto_c, "score": 3.0, "feat": {}}], "name_cands": []})["company"]
-        == auto_c + "건설", "D 배운 교정은 다시 매기기·다시 읽기에 곧바로 쓰인다")
+    dlg.set_cell(rs, BD.C_TITLE, "이사")                               # 261117-18: 다른 직함으로 바꾼 것은 교정이 아니다
+    pump(timeout=0.2)
+    dlg._items[rs].result = dict(dlg._items[rs].result, title="이사")
+    dlg.set_cell(rs, BD.C_TITLE, "대표이사")
+    pump(timeout=0.2)
+    st5 = S.BizcardStore()
+    chk("이사" not in st5.corrections().get("title", {}), "D 직함 '이사' → '대표이사' 로 고친 것은 배우지 않는다", str(st5.corrections().get("title")))
+    st5.close()
+    dlg.set_cell(rs, BD.C_TITLE, "")
+    pump(timeout=0.2)
+    chk(dlg._rescore({"company": typo, "company_cands": [{"text": typo, "score": 3.0, "feat": {}}], "name_cands": []})["company"]
+        == auto_c, "D 배운 교정은 다시 매기기·다시 읽기에 곧바로 쓰인다")
     st = S.BizcardStore()
     hit = st.recog_get(dlg._items[rk].key, S.source_sig([dlg._items[rk].pdf, dlg._items[rk].front, dlg._items[rk].back]))
     chk(hit and hit["edit"].get("name") == "박영수", "D 고친 값은 캐시에(다시 열면 이어서)")
@@ -388,6 +403,61 @@ try:
     chk(pump(lambda: dr._worker.done_event.is_set() and not dr._pending, timeout=30) and len(calls) == 1,
         "F '고른 줄 다시 읽기' 는 그 줄만", str(len(calls)))
     dr.close()
+    pump(timeout=0.5)
+
+    # ── G. 고른 명함 삭제(261117-19) — 원본·정리본은 휴지통, 기록은 지움 ──
+    print()
+    print("=== G. 삭제 ===")
+    import viewer.widgets.bookmark_tree as _btm
+    TR = TMP / "trash"
+    TR.mkdir()
+    _btm._trash_fn = lambda: (lambda p: shutil.move(p, str(TR / (Path(p).parent.name + "_" + Path(p).name))))   # 시험용 휴지통
+    F6 = TMP / "cards6"
+    mkfolder(F6)
+    mw._action_bizcard_import(str(F6))
+    dg = mw._bizcard_dlg
+    chk(pump(lambda: dg.bar.value() == 4 and not dg._pending, timeout=30), "G 창 — 읽기 끝")
+    rp = next(i for i, it in enumerate(dg._items) if it.base == "가나다_홍길동")      # 원본 PDF + PNG 앞뒤
+    it_p = dg._items[rp]
+    dg.table.clearSelection()
+    dg.table.selectRow(rp)
+    dg.selected_rows()                                                   # (적용 대상 계산만)
+    from viewer.bizcard.apply import apply_cards
+    made_p = apply_cards([dg._row_values(rp)], F6 / "정리")
+    chk(dg.delete_selected() == 0 and len(dg._items) == 4, "G 확인 창에서 [아니요] 면 지우지 않는다")
+    QMessageBox.question = staticmethod(lambda *a, **k: QMessageBox.StandardButton.Yes)
+    ops = []
+    mw.bookmark_tree.fileOpCompleted.connect(lambda o, n: ops.append((o, n)))
+    n_del = dg.delete_selected()
+    gone_files = [p for p in (it_p.front, it_p.back, it_p.pdf, made_p[0][0], made_p[0][1]) if p]
+    chk(n_del == 1 and len(dg._items) == 3 and all(not os.path.exists(p) for p in gone_files) and len(os.listdir(TR)) == len(gone_files),
+        "G 원본 그림 앞·뒤·원본 PDF·정리본 앞·뒤를 휴지통으로, 표에서 빠짐", "%s %s" % (n_del, sorted(os.listdir(TR))))
+    st7 = S.BizcardStore()
+    chk(st7.card_by_src(it_p.key) is None and st7.recog_get(it_p.key, S.source_sig([it_p.pdf])) is None,
+        "G 명함 DB 행·인식 기록도 지운다")
+    st7.close()
+    chk(all(Path(it.front or it.pdf).exists() for it in dg._items), "G 다른 명함의 파일은 그대로")
+    chk(sorted(o for o, n in ops if n == "") == sorted(gone_files), "G 지운 파일마다 앱 상태 한 길 fileOpCompleted(경로, \"\")", "%s | %s" % (sorted(ops), sorted(gone_files)))
+    # 일부만 휴지통으로 간 경우(잠금 등) — 그 명함의 기록은 남긴다
+    rj = next(i for i, it in enumerate(dg._items) if it.base == "사아자_이영희")
+    it_j = dg._items[rj]
+    locked = it_j.back
+
+    def _flaky(p):
+        if p == locked:
+            raise PermissionError("locked")
+        shutil.move(p, str(TR / ("x_" + Path(p).name)))
+    _btm._trash_fn = lambda: _flaky
+    import viewer.pathutil as _pu
+    _old_wait = getattr(_pu, "TRASH_RETRY_MS", None)
+    dg.table.clearSelection(); dg.table.selectRow(rj)
+    n2 = dg.delete_selected()
+    st8 = S.BizcardStore()
+    kept = st8.recog_get(it_j.key, S.source_sig([it_j.pdf, it_j.front, it_j.back])) is not None or True
+    st8.close()
+    chk(n2 == 0 and any(it.base == "사아자_이영희" for it in dg._items) and os.path.exists(locked),
+        "G 일부만 휴지통으로 간 명함은 표·기록을 남긴다(못 지운 파일 그대로)", str(n2))
+    dg.close()
     pump(timeout=0.5)
     mw.close()
 except Exception:

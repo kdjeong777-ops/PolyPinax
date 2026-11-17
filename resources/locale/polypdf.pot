@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-11-17 22:36+0900\n"
+"POT-Creation-Date: 2026-11-18 04:22+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -2771,7 +2771,8 @@ msgstr ""
 msgid "앞 작업이 끝난 뒤에 다시 하세요."
 msgstr ""
 
-#: viewer/app.py viewer/photo_controller.py viewer/widgets/favorites_dialog.py
+#: viewer/app.py viewer/photo_controller.py
+#: viewer/widgets/bizcard_import_dialog.py viewer/widgets/favorites_dialog.py
 #: viewer/widgets/hyperlink_dialog.py viewer/widgets/image_to_pdf_dialog.py
 #: viewer/widgets/line_text_settings_dialog.py viewer/widgets/merge_dialog.py
 #: viewer/widgets/merge_preview.py viewer/widgets/strip.py
@@ -7775,6 +7776,10 @@ msgstr ""
 msgid "지금의 인식으로 다시 읽습니다 — 고른 줄만 또는 모두. 손으로 고친 칸은 그대로 둡니다"
 msgstr ""
 
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "고른 명함의 원본 그림·PDF 와 만든 정리본을 휴지통으로 보내고 기록을 지웁니다 (Delete)"
+msgstr ""
+
 #: viewer/widgets/bizcard_import_dialog.py viewer/widgets/photo_crop_dialog.py
 msgid "전체 화면"
 msgstr ""
@@ -7870,6 +7875,10 @@ msgstr ""
 msgid "지금 읽는 중입니다 — 다 읽은 뒤에 다시 하세요."
 msgstr ""
 
+#: viewer/widgets/bizcard_import_dialog.py viewer/widgets/bookmark_tree.py
+msgid "휴지통 이동 실패"
+msgstr ""
+
 #: viewer/widgets/bizcard_import_dialog.py
 msgid "(다시 읽는 중)"
 msgstr ""
@@ -7946,6 +7955,11 @@ msgstr ""
 msgid ""
 "명함 {n}장을 정리 폴더에 만들었습니다.\n"
 "{path}"
+msgstr ""
+
+#: viewer/widgets/bizcard_import_dialog.py
+#, python-brace-format
+msgid "명함 {n}장을 지웁니다 — 원본 파일까지 휴지통으로 보냅니다(원본 {f}개·정리본 {o}개). 인식 기록도 지웁니다."
 msgstr ""
 
 #: viewer/widgets/bizcard_import_dialog.py
@@ -8340,10 +8354,6 @@ msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
 msgid "삭제 확인"
-msgstr ""
-
-#: viewer/widgets/bookmark_tree.py
-msgid "휴지통 이동 실패"
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py

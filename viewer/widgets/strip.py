@@ -154,9 +154,86 @@ class _DragOutList(QListWidget):
     썸네일이 파일 탐색기에서 끌어온 것과 **똑같이** 받아 새 쪽으로 만든다 —
     받는 쪽에 스트립 전용 길을 따로 내지 않는다.
 
-    제 안에서 순서를 바꾸는 것(`InternalMove`)은 종전 그대로다. 받는 쪽이 **복사**로
-    받으므로(`CopyAction`) 밖으로 끌어내도 스트립의 컷은 지워지지 않는다.
+    261117-7: 끌기 자체는 셸 끌기(복사만)라 밖으로 끌어내도 컷·PNG 는 그대로이고,
+    제 안 순서 바꾸기는 `dropEvent` 가 직접 한다(아래).
     """
+
+    # ★ 261117-7(스크린샷 SOT §4, 책갈피창·저장 SOT §4.7.30 D1): 밖으로는 **셸 끌기**(`shell_drag.drag_files`)로 —
+    #   Qt 끌기는 놓기 대상이 놓기 안에서 복사를 끝까지 해 '+'·썸네일이 남고 메인이 묶였다. **복사만**(컷 PNG 는 앱 저장
+    #   폴더의 파일 — 밖으로 옮기면 컷이 원본을 잃는다. 종전 `InternalMove` 끌기는 이동만 내놓았다). 셸 끌기는 Qt 의
+    #   InternalMove 를 거치지 않으므로, 끄는 컷을 제 스트립에 놓으면 여기서 직접 놓은 자리로 옮긴다(`dropEvent`).
+    def _out_items(self):
+        sel = self.selectedItems()
+        cur = self.currentItem()
+        items = sel if (cur is None or cur in sel) else [cur]
+        return sorted(items, key=self.row)
+
+    def startDrag(self, actions):
+        from viewer import shell_drag
+        items = self._out_items()
+        paths = []
+        for it in items:
+            p = it.data(MiniStrip.DATA_PATH)
+            try:
+                if p and Path(str(p)).is_file():
+                    paths.append(str(p))
+            except (OSError, ValueError):
+                pass
+        if not paths or not shell_drag.available():
+            super().startDrag(actions)               # 파일이 없는 컷 — 종전 Qt 끌기(제 안 순서 바꾸기만)
+            return
+        self._dragging = list(items)
+        try:
+            try:
+                hwnd = int(self.window().winId())
+            except Exception:
+                hwnd = 0
+            shell_drag.drag_files(paths, hwnd, effects=shell_drag.DROPEFFECT_COPY, mark_own=False)
+        finally:
+            self._dragging = None
+
+    _dragging = None                                 # 셸 끌기 중인 컷(놓기는 끌기 안에서 온다)
+
+    def _own_out(self, e) -> bool:
+        return bool(self._dragging) and e.mimeData() is not None and e.mimeData().hasUrls()
+
+    def dragEnterEvent(self, e):
+        if self._own_out(e):
+            e.setDropAction(Qt.DropAction.CopyAction); e.accept(); return
+        super().dragEnterEvent(e)
+
+    def dragMoveEvent(self, e):
+        if self._own_out(e):
+            e.setDropAction(Qt.DropAction.CopyAction); e.accept(); return
+        super().dragMoveEvent(e)
+
+    def dropEvent(self, e):
+        if not self._own_out(e):
+            super().dropEvent(e)
+            return
+        pos = e.position().toPoint()
+        tgt = self.itemAt(pos)
+        if tgt is None:
+            dst = self.count()
+        else:
+            r = self.visualItemRect(tgt)
+            dst = self.row(tgt) + (1 if pos.x() > r.center().x() else 0)
+        from PyQt6.QtCore import QModelIndex
+        m = self.model()
+        for it in list(self._dragging):              # 줄 차례대로 — 하나씩 dst 앞으로(rowsMoved → 번호 다시)
+            src = self.row(it)
+            if src < 0:
+                continue
+            if src < dst:
+                if src + 1 != dst:
+                    m.moveRows(QModelIndex(), src, 1, QModelIndex(), dst)
+                # dst 앞에 붙었으니 다음 것은 그 뒤
+            else:
+                if src != dst:
+                    m.moveRows(QModelIndex(), src, 1, QModelIndex(), dst)
+                dst += 1
+        e.setDropAction(Qt.DropAction.CopyAction)    # 파일은 그대로(셸 쪽에 '복사' — 아무것도 옮기지 않는다)
+        e.accept()
 
     def mimeData(self, items):
         md = super().mimeData(items)

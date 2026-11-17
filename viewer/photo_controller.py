@@ -1053,6 +1053,9 @@ class PhotoMixin:
                 lambda v, _s=s: v and v >= _s.verticalScrollBar().maximum() and self._photo_device_next())
             s.rotation_provider = self._photo_rot_for
             s.crop_provider = self._photo_crop_for                   # 261105-4(4.40)
+            from viewer import shell_drag
+            if shell_drag.available():
+                s.drag_out = self._photo_drag_out                    # 261117-7(4.3): 끌어내기 = 책갈피창과 같은 셸 끌기
             self._photo_strip = s
         return s
 
@@ -3090,6 +3093,25 @@ class PhotoMixin:
         """zip 에서 꺼낸 사진·휴대 장치에서 복사한 사진(읽기 전용 — 4.24·4.33)."""
         from viewer import photo_device, photo_zip
         return any(photo_zip.is_cached(p) or photo_device.is_cached(p) for p in paths or [])
+
+    def _photo_drag_out(self, paths) -> None:
+        """썸네일 줄 → 파일 탐색기 등(261117-7, 4.3) — 책갈피창 파일 줄과 한 길(`BookmarkTree.drag_out`: 그냥 = 복사·
+        Shift = 이동·이동 뒤 줄 빼기). zip 안·휴대 장치 사진(꺼낸 캐시 사본)과 없는 파일은 끌지 않는다."""
+        from viewer import photo_device, photo_zip
+        ps = []
+        for p in paths or []:
+            p = str(p)
+            try:
+                if photo_zip.is_cached(p) or photo_device.is_cached(p) or not os.path.isfile(p):
+                    continue
+            except (OSError, ValueError):
+                continue
+            ps.append(p)
+        if not ps:
+            if paths and self._photo_any_cached(paths):
+                self._photo_ro_notice()
+            return
+        self.bookmark_tree.drag_out(ps)
 
     def _photo_ro_notice(self):
         cur = self.main_view.current_file() if self.main_view else None

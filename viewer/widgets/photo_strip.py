@@ -388,6 +388,28 @@ class PhotoStrip(QListWidget):
         if p:
             self.photoActivated.emit(str(p))
 
+    # 261117-7(사진 보기 SOT §4.3, 책갈피창·저장 SOT §4.7.30): 앱이 넣는다 — 끌 사진들(paths)을 셸 끌기로 넘긴다
+    #   (`PhotoMixin._photo_drag_out` → `BookmarkTree.drag_out`). 없으면 종전 Qt 끌기(파일 URL).
+    drag_out = None
+
+    def drag_paths(self) -> list:
+        """끌 사진 — 누른 칸이 고른 칸에 있으면 고른 칸 모두(줄 차례), 아니면 누른 칸 하나."""
+        cur = self.currentItem()
+        sel = self.selected_paths()
+        p = str(cur.data(_PATH_ROLE)) if cur is not None and cur.data(_PATH_ROLE) else None
+        if p and p not in sel:
+            return [p]
+        return sel or ([p] if p else [])
+
+    def startDrag(self, actions):
+        fn = self.drag_out
+        if callable(fn):
+            ps = self.drag_paths()
+            if ps:
+                fn(ps)
+            return                                # Qt 끌기는 하지 않는다(놓기 대상이 메인을 묶는다)
+        super().startDrag(actions)
+
     def mimeData(self, items):
         """끌어내는 자료 — 고른 사진들의 파일 URL(줄 차례)."""
         from PyQt6.QtCore import QMimeData, QUrl

@@ -14,7 +14,7 @@ from PyQt6.QtGui import QColor, QPixmap, QImage, QTransform
 from PyQt6.QtWidgets import (QRubberBand, QMenu,
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QTableWidget, QTableWidgetItem, QComboBox, QCheckBox,
     QPushButton, QProgressBar, QSplitter, QWidget, QLineEdit, QFileDialog, QMessageBox, QHeaderView,
-    QAbstractItemView, QPlainTextEdit, QSizePolicy,
+    QAbstractItemView, QPlainTextEdit, QSizePolicy, QStyledItemDelegate, QDialog,
 )
 
 from viewer.i18n import tr, language
@@ -72,6 +72,35 @@ class RegionLabel(QLabel):
 
 
 _KEEP = []                 # 앱 밖(검사)에서 쓸 때의 스레드 참조 보관
+CHOICES = Qt.ItemDataRole.UserRole + 1     # 칸의 고르기 후보(이름·회사 후보, 뒷면 넣음/넣지 않음)
+FREE = Qt.ItemDataRole.UserRole + 2        # 후보 밖 글을 직접 쓸 수 있나
+FILL_BUDGET_MS = 40        # 한 번에 표를 채우는 시간 상한 — 남은 것은 다음 틱(응답성 SOT §4 ④, 메인 정지 < 1초)
+
+
+class ChoiceDelegate(QStyledItemDelegate):
+    """후보 풀다운은 **고칠 때만** 만든다 — 종전에는 줄마다 QComboBox 위젯 3개(1000장 = 3000개)를 만들고 스타일시트로
+    칠해 표를 채우는 동안 메인이 1초 넘게 섰다('응답 없음', 사용자 보고 261117-12)."""
+
+    def createEditor(self, parent, option, index):
+        ch = index.data(CHOICES)
+        if not ch:
+            return super().createEditor(parent, option, index)
+        cb = QComboBox(parent)
+        cb.setEditable(bool(index.data(FREE)))
+        cb.addItems([str(x) for x in ch])
+        return cb
+
+    def setEditorData(self, editor, index):
+        if isinstance(editor, QComboBox):
+            editor.setCurrentText(str(index.data(Qt.ItemDataRole.DisplayRole) or ""))
+        else:
+            super().setEditorData(editor, index)
+
+    def setModelData(self, editor, model, index):
+        if isinstance(editor, QComboBox):
+            model.setData(index, editor.currentText().strip(), Qt.ItemDataRole.EditRole)
+        else:
+            super().setModelData(editor, model, index)
 
 
 def _first(phones, kinds):
@@ -91,6 +120,10 @@ class BizcardImportDialog(QDialog):
         self._worker = None
         self._loading = False
         self.setWindowTitle(tr("명함 관리"))
+        # 261117-13(사용자 지시 '전체화면으로도'): 최대화 단추 + F11 전체 화면
+        self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowMaximizeButtonHint | Qt.WindowType.WindowMinimizeButtonHint)
+        from PyQt6.QtGui import QShortcut, QKeySequence
+        QShortcut(QKeySequence("F11"), self, activated=self.toggle_full)
         self.resize(1280, 760)
         v = QVBoxLayout(self)
 
@@ -109,6 +142,10 @@ class BizcardImportDialog(QDialog):
         self.btn_date.setToolTip(tr("고른 줄의 스캔일을 왼쪽 날짜로 바꿉니다"))
         self.btn_date.clicked.connect(lambda _c=False: self._set_dates())
         top.addWidget(self.btn_date)
+        self.btn_full = QPushButton(tr("전체 화면"))
+        self.btn_full.setToolTip(tr("명함 관리 창을 화면 가득 — 다시 누르거나 F11·Esc 로 돌아옵니다"))
+        self.btn_full.clicked.connect(lambda _c=False: self.toggle_full())
+        top.addWidget(self.btn_full)
         v.addLayout(top)
         self.bar = QProgressBar()
         self.bar.setRange(0, max(1, len(self._items)))
@@ -128,7 +165,14 @@ class BizcardImportDialog(QDialog):
         for c, w in ((C_ON, 44), (C_NAME, 110), (C_COMP, 160), (C_DEPT, 110), (C_TITLE, 80), (C_CELL, 120), (C_TEL, 120),
                      (C_MAIL, 170), (C_BACK, 90), (C_DATE, 90)):
             self.table.setColumnWidth(c, w)
+        self.table.setItemDelegate(ChoiceDelegate(self.table))
+        self.table.setEditTriggers(QAbstractItemView.EditTrigger.DoubleClicked | QAbstractItemView.EditTrigger.SelectedClicked
+                                   | QAbstractItemView.EditTrigger.EditKeyPressed | QAbstractItemView.EditTrigger.AnyKeyPressed)
         self.table.itemChanged.connect(self._on_item_changed)
+        self._pending = []                       # 배경에서 온 결과 — 시간 상한 안에서 나눠 채운다
+        self._drain = QTimer(self)
+        self._drain.setInterval(15)
+        self._drain.timeout.connect(self._drain_pending)
         self.table.currentCellChanged.connect(lambda r, *_: self._show_preview(r))
         split.addWidget(self.table)
 
@@ -184,7 +228,7 @@ class BizcardImportDialog(QDialog):
                 on.setFlags(Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
                 on.setCheckState(Qt.CheckState.Unchecked)
                 self.table.setItem(r, C_ON, on)
-                for c in (C_DEPT, C_TITLE, C_CELL, C_TEL, C_MAIL, C_DATE):
+                for c in (C_NAME, C_COMP, C_DEPT, C_TITLE, C_CELL, C_TEL, C_MAIL, C_BACK, C_DATE):
                     self.table.setItem(r, c, QTableWidgetItem(""))
                 self.table.item(r, C_DATE).setText(it.scanned)
                 f = QTableWidgetItem(tr("(읽는 중)"))
@@ -193,25 +237,56 @@ class BizcardImportDialog(QDialog):
         finally:
             self._loading = False
 
-    def _combo(self, cands, cur):
-        cb = QComboBox()
-        cb.setEditable(True)
+    @staticmethod
+    def _choices(cands, cur):
         seen = []
         for t in [cur] + [c.get("text", "") for c in cands or []]:
             if t and t not in seen:
                 seen.append(t)
-        cb.addItems(seen)
-        cb.setCurrentText(cur or "")
-        return cb
+        return seen
+
+    def choices(self, r, col) -> list:
+        """그 칸의 고르기 후보(검사·위치 지정이 본다)."""
+        it = self.table.item(r, col)
+        return list(it.data(CHOICES) or []) if it is not None else []
+
+    def cell(self, r, col) -> str:
+        it = self.table.item(r, col)
+        return it.text().strip() if it is not None else ""
+
+    def set_cell(self, r, col, text):
+        """칸 값을 바꾼다 — 사람이 고친 것과 같은 길(itemChanged → `_on_edit`)."""
+        it = self.table.item(r, col)
+        if it is not None:
+            it.setText(text)
+
+    def _on_item_ready(self, r, res, edit):
+        self._pending.append((r, res, edit))
+        if not self._drain.isActive():
+            self._drain.start()
+
+    def _drain_pending(self):
+        from PyQt6.QtCore import QElapsedTimer
+        clock = QElapsedTimer()
+        clock.start()
+        self.table.setUpdatesEnabled(False)
+        try:
+            while self._pending and clock.elapsed() < FILL_BUDGET_MS:
+                self._set_row(*self._pending.pop(0))
+        finally:
+            self.table.setUpdatesEnabled(True)
+        if not self._pending:
+            self._drain.stop()
 
     def _load_learned(self):
         """배운 것(§5.11) — 이름 가중치·양식 위치·도메인 표. 메인에서 짧게 읽는다(UI 대기 상한)."""
         try:
             from viewer.bizcard.learn import weights_of
             st = self._store()
-            self._learned = {"weights": weights_of(st), "layouts": st.layouts(), "domains": st.domain_map()}
+            self._learned = {"weights": weights_of(st), "layouts": st.layouts(), "domains": st.domain_map(),
+                             "corrections": st.corrections()}
         except Exception:
-            self._learned = {"weights": None, "layouts": {}, "domains": {}}
+            self._learned = {"weights": None, "layouts": {}, "domains": {}, "corrections": {}}
 
     def _rescore(self, res):
         lr = getattr(self, "_learned", None)
@@ -220,7 +295,7 @@ class BizcardImportDialog(QDialog):
             lr = self._learned
         if not res or res.get("error"):
             return res
-        return R.rescore(res, lr["weights"], lr["layouts"], lr["domains"])
+        return R.rescore(res, lr["weights"], lr["layouts"], lr["domains"], lr.get("corrections"))
 
     def _set_row(self, r, res, edit):
         it = self._items[r]
@@ -231,12 +306,12 @@ class BizcardImportDialog(QDialog):
         val.update(it.edit)
         self._loading = True
         try:
-            cn = self._combo(res.get("name_cands"), val.get("name", ""))
-            cc = self._combo(res.get("company_cands"), R.strip_corp(val.get("company", "")))
-            cn.currentTextChanged.connect(lambda _t, row=r: self._on_edit(row))
-            cc.currentTextChanged.connect(lambda _t, row=r: self._on_edit(row))
-            self.table.setCellWidget(r, C_NAME, cn)
-            self.table.setCellWidget(r, C_COMP, cc)
+            for col, cands, cur in ((C_NAME, res.get("name_cands"), val.get("name", "")),
+                                    (C_COMP, res.get("company_cands"), R.strip_corp(val.get("company", "")))):
+                itm = self.table.item(r, col)
+                itm.setText(cur or "")
+                itm.setData(CHOICES, self._choices(cands, cur))
+                itm.setData(FREE, True)
             ph = [tuple(x) for x in (val.get("phones") or [])]
             self.table.item(r, C_DEPT).setText(val.get("dept", ""))
             self.table.item(r, C_TITLE).setText(val.get("title", ""))
@@ -245,16 +320,16 @@ class BizcardImportDialog(QDialog):
             self.table.item(r, C_MAIL).setText(val.get("email", (val.get("emails") or [""])[0]))
             if "scanned" in it.edit:
                 self.table.item(r, C_DATE).setText(it.edit["scanned"])
-            bk = QComboBox()
+            bk = self.table.item(r, C_BACK)
             if it.back or (it.pdf and res.get("back_promo") is not None):
-                bk.addItems([tr("넣음"), tr("넣지 않음")])
                 keep = it.edit.get("keep_back", not bool(res.get("back_promo")))
-                bk.setCurrentIndex(0 if keep else 1)
+                bk.setText(tr("넣음") if keep else tr("넣지 않음"))
+                bk.setData(CHOICES, [tr("넣음"), tr("넣지 않음")])
+                bk.setFlags(bk.flags() | Qt.ItemFlag.ItemIsEditable)
             else:
-                bk.addItem(tr("없음"))
-                bk.setEnabled(False)
-            bk.currentIndexChanged.connect(lambda _i, row=r: self._on_edit(row))
-            self.table.setCellWidget(r, C_BACK, bk)
+                bk.setText(tr("없음"))
+                bk.setData(CHOICES, [])
+                bk.setFlags(bk.flags() & ~Qt.ItemFlag.ItemIsEditable)
             on = self.table.item(r, C_ON)
             on.setCheckState(Qt.CheckState.Checked if it.edit.get("on", not res.get("error")) else Qt.CheckState.Unchecked)
             need = set(res.get("need_check") or [])
@@ -262,11 +337,9 @@ class BizcardImportDialog(QDialog):
                 need |= {"name", "company", "contact"}
             it.need = bool(need)
             for c, k in ((C_NAME, "name"), (C_COMP, "company"), (C_CELL, "contact"), (C_MAIL, "contact")):
-                w = self.table.cellWidget(r, c)
-                if w is not None:
-                    w.setStyleSheet("QComboBox { background: %s; color: black; }" % NEED_BG.name() if k in need else "")
-                else:
-                    self.table.item(r, c).setBackground(NEED_BG if k in need else QColor(0, 0, 0, 0))
+                itm = self.table.item(r, c)
+                itm.setBackground(NEED_BG if k in need else QColor(0, 0, 0, 0))
+                itm.setForeground(QColor("black") if k in need else self.table.palette().text().color())
             self._update_file(r)
         finally:
             self._loading = False
@@ -275,12 +348,9 @@ class BizcardImportDialog(QDialog):
     def _row_values(self, r) -> dict:
         it = self._items[r]
         res = it.result or {}
-        # ★ `is not None` 로 — 빈 QComboBox 는 len()==0 이라 거짓이다(후보 없는 회사 칸에 쓴 값이 빠졌다, 261117-9)
-        wn, wc = self.table.cellWidget(r, C_NAME), self.table.cellWidget(r, C_COMP)
-        name = wn.currentText().strip() if wn is not None else ""
-        comp = wc.currentText().strip() if wc is not None else ""
-        bk = self.table.cellWidget(r, C_BACK)
-        keep = bool(bk is not None and bk.isEnabled() and bk.currentIndex() == 0)
+        name = self.cell(r, C_NAME)
+        comp = self.cell(r, C_COMP)
+        keep = self.cell(r, C_BACK) == tr("넣음")
         cell = self.table.item(r, C_CELL).text().strip()
         tel = self.table.item(r, C_TEL).text().strip()
         mail = self.table.item(r, C_MAIL).text().strip()
@@ -422,8 +492,9 @@ class BizcardImportDialog(QDialog):
             return ""
         W, H = im.size
         x0, y0, x1, y1 = box
-        pad = 0.01
-        crop = im.crop((int(max(0, x0 - pad) * W), int(max(0, y0 - pad) * H), int(min(1, x1 + pad) * W), int(min(1, y1 + pad) * H)))
+        # 261117-13(사용자 보고 '선택하지 않은 / 가 들어감'): 종전에는 사방 1%(폭 기준 약 10픽셀) 넓혀 읽어 옆 글자가 들어왔다 — 그린 그대로
+        crop = im.crop((int(max(0.0, x0) * W), int(max(0.0, y0) * H), int(min(1.0, x1) * W) + 1, int(min(1.0, y1) * H) + 1))
+        self._last_crop = crop
         lines = R.ocr_lines(crop, 6) or R.ocr_lines(crop, R.NAME_EXTRA_PSM)
         text = " ".join(ln.text for ln in lines).strip()
         if fld == "name":
@@ -456,23 +527,68 @@ class BizcardImportDialog(QDialog):
             return
         self.set_region(r, (x0, y0, x1, y1), acts[a])
 
-    def set_region(self, r, box, fld):
-        """지정한 자리를 읽어 칸을 채우고, 이름·회사·직함 자리는 같은 회사 양식으로 기억한다(같은 열쇠의 다른 줄도 다시 매김)."""
+    def _confirm_region(self, crop, text, fld):
+        """고른 자리 그림과 읽은 글을 보여 주고 고치게 한다(261117-13 사용자 지시) — 넣을 글 또는 None(취소)."""
+        dlg, ed = self.region_dialog(crop, text)
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return None
+        return ed.text().strip()
+
+    def region_dialog(self, crop, text):
+        """확인 창 만들기(검사가 안을 본다) — (창, 글 칸)."""
+        from PyQt6.QtWidgets import QDialogButtonBox
+        from PIL.ImageQt import ImageQt
+        dlg = QDialog(self)
+        dlg.setWindowTitle(tr("고른 자리"))
+        v = QVBoxLayout(dlg)
+        pic = QLabel()
+        pm = QPixmap.fromImage(ImageQt(crop.convert("RGB")))
+        pic.setPixmap(pm.scaled(min(720, max(240, pm.width())), min(260, max(60, pm.height())),
+                                Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+        pic.setFrameShape(QLabel.Shape.Box)
+        v.addWidget(QLabel(tr("이 자리를 읽었습니다:")))
+        v.addWidget(pic)
+        ed = QLineEdit(text)
+        ed.setPlaceholderText(tr("읽지 못했습니다 — 직접 적으세요"))
+        v.addWidget(QLabel(tr("넣을 글 (틀리면 고치세요 — 고친 것은 이 PC 에서 배웁니다):")))
+        v.addWidget(ed)
+        bb = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        bb.button(QDialogButtonBox.StandardButton.Ok).setText(tr("넣기"))
+        bb.accepted.connect(dlg.accept)
+        bb.rejected.connect(dlg.reject)
+        v.addWidget(bb)
+        ed.selectAll()
+        ed.setFocus()
+        dlg._pic, dlg._edit = pic, ed
+        return dlg, ed
+
+    def set_region(self, r, box, fld, confirm: bool = True):
+        """지정한 자리를 읽어(그린 그대로) 확인 창에서 고친 뒤 칸을 채운다. 고친 글은 교정으로 배우고(이 PC),
+        이름·회사·직함 자리는 같은 회사 양식으로 기억한다(같은 열쇠의 다른 줄도 다시 매김)."""
         from PyQt6.QtWidgets import QApplication
         QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
         try:
-            val = self.read_region(r, box, fld)
+            raw = self.read_region(r, box, fld)
         finally:
             QApplication.restoreOverrideCursor()
+        corr = (getattr(self, "_learned", None) or {}).get("corrections", {}).get(fld, {})
+        val = corr.get(raw, raw)                  # 전에 고친 적이 있는 오인식이면 고친 글을 먼저
+        if confirm:
+            crop = getattr(self, "_last_crop", None)
+            got = self._confirm_region(crop if crop is not None else self._source_image(self._items[r]), val, fld)
+            if got is None:
+                return ""
+            if raw and got and got != raw:
+                try:
+                    self._store().correction_put(fld, raw, got)       # 교정 배우기(§5.15) — 이 PC 의 bizcard.db 에만
+                except Exception:
+                    pass
+            val = got
         if not val:
             QMessageBox.information(self, tr("명함 관리"), tr("그 자리에서 글자를 읽지 못했습니다 — 상자를 조금 넓혀 다시 그리세요."))
             return ""
         col = {"name": C_NAME, "company": C_COMP, "dept": C_DEPT, "title": C_TITLE, "cell": C_CELL, "tel": C_TEL, "email": C_MAIL}[fld]
-        w = self.table.cellWidget(r, col)
-        if w is not None:
-            w.setCurrentText(val)
-        else:
-            self.table.item(r, col).setText(val)
+        self.set_cell(r, col, val)
         self._on_edit(r)
         if fld in ("name", "company", "title"):         # 부서 자리는 칸만 채운다 — 다시 매기기가 쓰는 양식은 이름·회사(§5.13)
             v = self._row_values(r)
@@ -511,7 +627,7 @@ class BizcardImportDialog(QDialog):
         lang = "en" if (language() or "ko").lower().startswith("en") else "ko"
         from viewer.workers import run_in_thread
         self._worker = ImportWorker(self._items, self._db, lang)
-        self._worker.itemDone.connect(self._set_row)
+        self._worker.itemDone.connect(self._on_item_ready)    # 바로 채우지 않고 쌓아 두었다가 시간 상한 안에서(§5.14)
         self._worker.progressed.connect(self._on_progress)    # ★ 창의 메서드로 — 창이 지워지면 Qt 가 연결을 끊는다(람다는 남아 죽었다)
         self._worker.finishedAll.connect(self._on_done)
         # ★ 스레드 참조는 창이 아니라 앱(오래 사는 쪽)에 둔다 — 읽는 도중 창을 닫으면(WA_DeleteOnClose) 창과 함께
@@ -540,6 +656,19 @@ class BizcardImportDialog(QDialog):
                 pass
         w.request_cancel()
         w.done_event.wait(15)              # 한 장 읽기가 끝나야 멈춘다(최대 몇 초)
+
+    def toggle_full(self):
+        if self.isFullScreen():
+            self.showNormal()
+        else:
+            self.showFullScreen()
+        QTimer.singleShot(0, self._refit)
+
+    def keyPressEvent(self, e):
+        if e.key() == Qt.Key.Key_Escape and self.isFullScreen():
+            self.toggle_full()                 # 전체 화면에서 Esc 는 창을 닫지 않고 돌아온다
+            return
+        super().keyPressEvent(e)
 
     def _refit(self):
         src = getattr(self, "_pv_src", None)

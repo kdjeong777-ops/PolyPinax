@@ -100,6 +100,8 @@ try:
     box = (0.6, 0.55, 0.8, 0.75) if other == "김철수" else (0.2, 0.05, 0.4, 0.25)
     rs = R.rescore(res5, None, {key: {"name": box}})
     chk(rs["name_cands"][0]["text"] == other and rs["name"] == other, "D 양식 상자 안 후보가 1위", "%s → %s" % (top0, rs["name"]))
+    rc = R.rescore(res5, None, None, None, {"name": {top0: "고친이름"}, "dept": {"": "x"}})
+    chk(rc["name_cands"][0]["text"] == "고친이름" or any(c["text"] == "고친이름" for c in rc["name_cands"]), "D 교정 표가 후보 글을 고친다")
     w = dict(R.NAME_W); w["h"] = 0.0; w["sur"] = 0.0
     chk(R.rescore(res5, w)["name_cands"][0]["score"] != R.rescore(res5)["name_cands"][0]["score"], "D 가중치를 바꾸면 점수가 바뀐다")
 
@@ -167,25 +169,74 @@ try:
     mw._action_bizcard_import(str(F))
     dlg = mw._bizcard_dlg
     chk(dlg.windowTitle() == "명함 관리", "F 창 제목 '명함 관리'", dlg.windowTitle())
-    chk(pump(lambda: dlg.bar.value() == 2, timeout=30), "F 배경 인식 끝")
+    pump(lambda: dlg._worker is not None, timeout=5)
+    reading = not dlg._worker.done_event.is_set()
+    mw._action_bizcard_import(str(F))                                    # 261117-13: 두 번 눌러도 창은 하나(읽는 중이어도)
+    from viewer.widgets.bizcard_import_dialog import BizcardImportDialog
+    vis = [w for w in QApplication.topLevelWidgets() if isinstance(w, BizcardImportDialog) and w.isVisible()]
+    chk(mw._bizcard_dlg is dlg and len(vis) == 1, "F 명함 관리를 다시 눌러도 창은 하나(앞으로 가져옴)", str(len(vis)))
+    chk(pump(lambda: dlg.bar.value() == 2, timeout=30), "F 읽는 중에 다시 눌러도 읽기는 이어진다(%s)" % ("읽는 중이었음" if reading else "이미 끝"))
+    QTest.keyClick(dlg, Qt.Key.Key_F11)                                  # 명함 창의 F11 — 본 창(발표는 F5)과 겹치지 않는다
+    pump(timeout=0.3)
+    f11 = dlg.isFullScreen() and not mw.isFullScreen()
+    QTest.keyClick(dlg, Qt.Key.Key_F11)
+    pump(timeout=0.3)
+    chk(f11 and not dlg.isFullScreen(), "F 명함 창 F11 — 그 창만 전체 화면 켬·끔")
+    dlg.toggle_full()
+    pump(timeout=0.3)
+    full = dlg.isFullScreen()
+    QTest.keyClick(dlg, Qt.Key.Key_Escape)
+    pump(timeout=0.3)
+    chk(full and not dlg.isFullScreen() and dlg.isVisible(), "F 전체 화면 ↔ Esc 로 돌아옴(창은 닫히지 않음)")
+    chk(bool(dlg.windowFlags() & Qt.WindowType.WindowMaximizeButtonHint), "F 최대화 단추")
+    chk(pump(lambda: dlg.bar.value() == 2 and not dlg._pending, timeout=30), "F 배경 인식 끝")
     r0 = next(i for i, it in enumerate(dlg._items) if "홍길동" in it.base)
     r1 = 1 - r0
-    chk(dlg.table.cellWidget(r0, 1).currentText() == "나무숲", "F 처음에는 미끼가 1위")
+    chk(dlg.cell(r0, 1) == "나무숲", "F 처음에는 미끼가 1위")
     dlg.table.setCurrentCell(r0, 1)
     pump(timeout=0.3)
     if have_ocr:
+        shown = {}
+
+        def fake_confirm(crop, text, fld):                                # 확인 창 — 고른 그림·읽은 글을 받는다
+            shown.update(crop=crop, text=text, fld=fld)
+            return text
+        dlg._confirm_region = fake_confirm
         val = dlg.set_region(r0, (0.56, 0.48, 0.86, 0.66), "name")       # 오른쪽 가운데 이름 자리
-        chk(val == "홍길동" and dlg.table.cellWidget(r0, 1).currentText() == "홍길동", "F 위치 지정 — 그 자리만 읽어 이름 칸", repr(val))
+        src = dlg._source_image(dlg._items[r0])
+        cw, chh = shown["crop"].size
+        chk(abs(cw - 0.30 * src.size[0]) <= 2 and abs(chh - 0.18 * src.size[1]) <= 2,
+            "F 고른 그림은 그린 상자 그대로(넓히지 않음 — 옆 글자가 들어오던 결함)", "%s vs %s" % (shown["crop"].size, src.size))
+        chk(shown.get("text") == "홍길동", "F 확인 창에 고른 그림과 읽은 글", repr(shown.get("text")))
+        rd, red = dlg.region_dialog(shown["crop"], "홍길동")
+        pm = rd._pic.pixmap()
+        chk(pm is not None and not pm.isNull() and red.text() == "홍길동" and red.isEnabled() and not red.isReadOnly(),
+            "F 확인 창 — 고른 그림과 고칠 수 있는 글 칸")
+        rd.deleteLater()
+        chk(val == "홍길동" and dlg.cell(r0, 1) == "홍길동", "F 위치 지정 — 그 자리만 읽어 이름 칸", repr(val))
         st = S.BizcardStore()
         lay = st.layouts()
         st.close()
         chk("d:example.co.kr" in lay and "name" in lay["d:example.co.kr"], "F 같은 회사 양식으로 기억(이 PC DB)", str(list(lay)))
-        chk(dlg.table.cellWidget(r1, 1).currentText() == "김철수", "F 같은 회사의 다른 명함은 다시 매겨 이름 자리 후보가 1위",
-            dlg.table.cellWidget(r1, 1).currentText())
+        chk(dlg.cell(r1, 1) == "김철수", "F 같은 회사의 다른 명함은 다시 매겨 이름 자리 후보가 1위",
+            dlg.cell(r1, 1))
     else:
         print("SKIP - F 위치 지정 OCR(Tesseract·한글 글꼴 없음)")
-    dlg.table.cellWidget(r0, 2).setCurrentText("예시기술")
-    dlg.table.cellWidget(r1, 2).setCurrentText("예시기술")
+    if have_ocr:                                                         # 교정 배우기(§5.15)
+        dlg._confirm_region = lambda crop, text, fld: "홍길순"           # 사람이 고침
+        dlg.set_region(r0, (0.56, 0.48, 0.86, 0.66), "name")
+        st = S.BizcardStore()
+        cor = st.corrections()
+        st.close()
+        chk(cor.get("name", {}).get("홍길동") == "홍길순" and dlg.cell(r0, 1) == "홍길순", "F 고쳐 넣은 글은 교정으로 배운다(이 PC DB)", str(cor))
+        dlg._load_learned()
+        dlg._confirm_region = lambda crop, text, fld: shown.update(text2=text) or text
+        dlg.set_region(r0, (0.56, 0.48, 0.86, 0.66), "name")
+        chk(shown.get("text2") == "홍길순", "F 같은 오인식은 다음부터 고친 글을 먼저 보인다", repr(shown.get("text2")))
+        dlg._confirm_region = lambda crop, text, fld: None
+        chk(dlg.set_region(r0, (0.56, 0.48, 0.86, 0.66), "name") == "" and dlg.cell(r0, 1) == "홍길순", "F 확인 창 [취소] 면 칸을 바꾸지 않는다")
+    dlg.set_cell(r0, 2, "예시기술")
+    dlg.set_cell(r1, 2, "예시기술")
     pump(timeout=0.2)
     chk([dlg._row_values(i)["company"] for i in (r0, r1)] == ["예시기술", "예시기술"],
         "F 후보 없는 회사 칸에 쓴 값도 읽힌다(빈 풀다운은 거짓 — 261117-9 고침)")

@@ -311,10 +311,18 @@ class Line:
         return self.cx, (self.cy if self.cy >= 0 else self.y + self.height / 2)
 
 
+ENG_PASS = True          # 영어만으로 한 번 더 읽기(§5.15) — 언어 값은 단어학습 SOT §14.B 의 대체 언어(`ocr.FALLBACK_LANG`)
+
+
+def O_FALLBACK() -> str:
+    from viewer.study import ocr as O
+    return O.FALLBACK_LANG
+
+
 NAME_EXTRA_PSM = 11      # 이름용 덧읽기 — 흩어진 글(sparse). 기본 읽기에 없던 이름 26 중 9 를 찾았다(명함 SOT §4.4)
 
 
-def ocr_lines(im, psm: int = 0, invert: bool = False) -> list:
+def ocr_lines(im, psm: int = 0, invert: bool = False, lang: str = "") -> list:
     """그림 → [Line]. 언어·기본 psm 은 단어학습 SOT §14.B 기본값(코드 상수). `psm`·`invert` 는 이름 덧읽기용."""
     from viewer.study import ocr as O
     from viewer.study import tess_run
@@ -325,7 +333,7 @@ def ocr_lines(im, psm: int = 0, invert: bool = False) -> list:
     g = ImageOps.autocontrast(im.convert("L"))
     if invert:
         g = ImageOps.invert(g)                         # 어두운 바탕에 흰 글자
-    lang = O.resolve_lang(O.DEFAULT_LANG)
+    lang = O.resolve_lang(lang or O.DEFAULT_LANG)
     d = tess_run.data([g], lang, "--psm %d" % (psm or O.DEFAULT_PSM))[0]
     H = float(g.height or 1)
     groups = {}
@@ -497,6 +505,9 @@ def name_candidates_ko(lines: list, emails: list, hint: str = "", weights: Optio
             if 2 <= len(run) <= 4:
                 pieces.add(run)
             elif len(run) > 4:                      # '홍길동부장'·'기술연구소홍길동' — 성씨 자리에서 3·2자 조각
+                bare = re.sub("|".join(_TITLES_LONG), "", run)     # '대표이사홍길동' → '홍길동'(붙은 직함을 뗀 통째 — 조각이 아니다)
+                if 2 <= len(bare) <= 4 and bare != run:
+                    pieces.add(bare)
                 for i, ch in enumerate(run):
                     if ch in SURNAMES:
                         for L in (3, 2):
@@ -513,13 +524,14 @@ def name_candidates_ko(lines: list, emails: list, hint: str = "", weights: Optio
                  "len2": float(len(n) == 2), "len3": float(len(n) == 3), "len4": float(len(n) == 4),
                  "mail": 1.0 if _email_hint(n, emails) else 0.0, "hint": float(bool(hint) and n == hint),
                  "conf": round(ln.conf / 100.0, 3),
-                 "frag": float(n not in re.findall(r"[가-힣]+", raw) and n != whole),
+                 "frag": float(n not in re.findall(r"[가-힣]+", raw) and n != whole
+                          and n != re.sub("|".join(_TITLES_LONG), "", re.sub(r"[^가-힣]", "", raw))),
                  "both": 0.0, "tpl": 0.0, "cx": round(cx, 3), "cy": round(cy, 3)}
             why = tuple(k for k in ("title", "mail", "hint") if f[k])
             sc = name_score(f, weights)
             if n not in cands or cands[n].score < sc:
                 cands[n] = Cand(n, sc, why, f)
-    return sorted(cands.values(), key=lambda c: -c.score)
+    return sorted(cands.values(), key=lambda c: (-c.score, c.text))   # 같은 점수는 글자 차례(실행마다 같게 — set 차례는 실행마다 다르다)
 
 
 def name_candidates_en(lines: list, emails: list, hint: str = "") -> list:
@@ -547,7 +559,7 @@ def name_candidates_en(lines: list, emails: list, hint: str = "") -> list:
         if hint and n.lower() == hint.lower():
             s += 1.5
         cands[n] = Cand(n, round(s, 3))
-    return sorted(cands.values(), key=lambda c: -c.score)
+    return sorted(cands.values(), key=lambda c: (-c.score, c.text))   # 같은 점수는 글자 차례(실행마다 같게 — set 차례는 실행마다 다르다)
 
 
 def company_candidates_ko(lines: list, emails: list, urls: list, hint: str = "") -> list:
@@ -573,7 +585,7 @@ def company_candidates_ko(lines: list, emails: list, urls: list, hint: str = "")
             cands[c] = Cand(c, round(s, 3), (), {"cx": round(cx, 3), "cy": round(cy, 3)})
     if hint and hint not in cands and _HANGUL.search(hint):
         cands[hint] = Cand(hint, 0.5, ("파일이름",))
-    return sorted(cands.values(), key=lambda c: -c.score)
+    return sorted(cands.values(), key=lambda c: (-c.score, c.text))   # 같은 점수는 글자 차례(실행마다 같게 — set 차례는 실행마다 다르다)
 
 
 def company_candidates_en(lines: list, emails: list, urls: list) -> list:
@@ -590,7 +602,7 @@ def company_candidates_en(lines: list, emails: list, urls: list) -> list:
         dom = e.split("@")[1].split(".")[0]
         if dom and not any(f.split(".")[0] == dom for f in FREE_MAIL):
             cands.setdefault(dom, Cand(dom, 0.3, ("메일",)))
-    return sorted(cands.values(), key=lambda c: -c.score)
+    return sorted(cands.values(), key=lambda c: (-c.score, c.text))   # 같은 점수는 글자 차례(실행마다 같게 — set 차례는 실행마다 다르다)
 
 
 def titles_of(lines: list) -> tuple:
@@ -714,6 +726,28 @@ def read_side(images: list, hint_name: str = "", hint_company: str = "", extra: 
                 c.score = name_score(c.feat)
                 c.why = tuple(c.why) + ("두판",)
         r.names_ko.sort(key=lambda c: -c.score)
+    if ENG_PASS and images:
+        # 261117-13(사용자 보고 '영어와 한글이 같이 있을 때 인식을 잘 못함'): 한글+영어로 읽으면 영문 글이 한글로 깨지는 일이 많다 —
+        #   연락처용 그림을 영어만으로 한 번 더 읽어 메일·누리집·영문 칸(이름·회사·직함·부서·주소)을 보탠다(§5.15)
+        el = ocr_lines(images[0], lang=O_FALLBACK())
+        re_ = parse_lines(el)
+        r.emails += [e for e in re_.emails if e not in r.emails]
+        r.urls += [u for u in re_.urls if u not in r.urls]
+        seen = {n for _k, n in r.phones}
+        r.phones += [(k, n) for k, n in re_.phones if n not in seen]
+        en = {c.text: c for c in r.names_en}
+        for c in re_.names_en:
+            if c.text not in en or en[c.text].score < c.score + 0.3:
+                en[c.text] = Cand(c.text, round(c.score + 0.3, 3), tuple(c.why) + ("영어",), c.feat)
+        r.names_en = sorted(en.values(), key=lambda c: (-c.score, c.text))
+        ce = {c.text: c for c in r.companies_en}
+        for c in re_.companies_en:
+            ce.setdefault(c.text, Cand(c.text, round(c.score + 0.3, 3), ("영어",), c.feat))
+        r.companies_en = sorted(ce.values(), key=lambda c: (-c.score, c.text))
+        r.titles_en = re_.titles_en or r.titles_en
+        r.address_en = re_.address_en or r.address_en
+        r.dept_en = re_.dept_en or r.dept_en
+        r.latin = max(r.latin, re_.latin)
     if extra and not r.has_contact and images:
         # 세로로 누운 명함(사용자 지시 261117-9) — 0도에서 연락처를 못 찾았을 때만 90·270도로 돌려 본다(명함 SOT §5.11)
         for ang in (180, 90, 270):              # 실측(가로 592장): 돌려야 읽힌 14장 중 180도 10·90도 3·270도 1
@@ -795,14 +829,19 @@ def _in_box(f: dict, box) -> bool:
 
 
 def rescore(res: dict, weights: Optional[dict] = None, layouts: Optional[dict] = None,
-            domain_map: Optional[dict] = None) -> dict:
+            domain_map: Optional[dict] = None, corrections: Optional[dict] = None) -> dict:
     """캐시에 남은 인식 결과(사전)를 지금의 가중치·양식·도메인 표로 다시 매긴다 — OCR 은 다시 하지 않는다(§5.11).
     이름·회사 1위가 바뀌면 `name`·`company` 도 바꾼다(확인 표가 사용자가 고친 값을 따로 지킨다)."""
     r = dict(res)
+    corr = corrections or {}
+    for fld in ("dept", "title"):                  # 교정(§5.15) — 전에 사람이 고친 오인식은 고친 글로
+        if r.get(fld) in corr.get(fld, {}):
+            r[fld] = corr[fld][r[fld]]
     lay = (layouts or {}).get(layout_key(r.get("emails"), r.get("urls"), r.get("company", ""))) or {}
     names = []
     for c in r.get("name_cands") or []:
         c = dict(c)
+        c["text"] = corr.get("name", {}).get(c.get("text"), c.get("text"))
         f = dict(c.get("feat") or {})
         if f:
             f["tpl"] = 1.0 if _in_box(f, lay.get("name")) else 0.0
@@ -813,6 +852,7 @@ def rescore(res: dict, weights: Optional[dict] = None, layouts: Optional[dict] =
     comps = []
     for c in r.get("company_cands") or []:
         c = dict(c)
+        c["text"] = corr.get("company", {}).get(c.get("text"), c.get("text"))
         if _in_box(c.get("feat") or {}, lay.get("company")):
             c["score"] = round(float(c.get("score", 0)) + 3.0, 3)
         comps.append(c)

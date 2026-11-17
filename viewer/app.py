@@ -7509,6 +7509,20 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             QMessageBox.information(self, tr("명함 관리"), tr("먼저 명함 그림이 있는 폴더를 여세요."))
             return
         from viewer.widgets.bizcard_import_dialog import BizcardImportDialog
+        old = getattr(self, "_bizcard_dlg", None)          # 261117-13(사용자 보고 '명함 관리가 2개'): 창은 하나
+        try:
+            from PyQt6 import sip
+            alive = old is not None and not sip.isdeleted(old) and old.isVisible()
+        except Exception:
+            alive = False
+        if alive:
+            if os.path.normcase(os.path.abspath(str(old._folder))) == os.path.normcase(os.path.abspath(str(folder))):
+                if old.isMinimized():
+                    old.showNormal()
+                old.raise_()
+                old.activateWindow()
+                return
+            old.close()                                   # 다른 폴더면 앞 창을 닫고(읽기는 멈춤 — 읽은 것은 캐시에) 새로
         dlg = BizcardImportDialog(folder, self)
         self._bizcard_dlg = dlg                      # 검사가 찾는다
         dlg.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)

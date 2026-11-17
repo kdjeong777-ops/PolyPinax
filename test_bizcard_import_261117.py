@@ -150,6 +150,10 @@ try:
     con.commit()
     rows = con.execute("SELECT name, dept FROM cards ORDER BY id").fetchall()
     con.close()
+    con = sqlite3.connect(olddb)
+    tbls = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    con.close()
+    chk({"corrections", "layouts", "domain_org", "samples"} <= tbls, "B 옛 DB 에 배우기·교정 표가 더해진다(261117-13)", str(sorted(tbls)))
     chk(cols.count("dept") == 1 and rows == [("홍길동", None), ("김철수", None)],
         "B 옛 DB — 부서 열은 한 번만, 옛 행 그대로, 옛 판 넣기도 된다", "%s %s" % (cols.count("dept"), rows))
 
@@ -225,11 +229,18 @@ try:
     hb.stop()
     chk(max(gaps or [0]) < 1.0, "D 읽는 동안 메인 정지 < 1초", "%.2f" % max(gaps or [0]))
     rk = next(i for i, it in enumerate(dlg._items) if it.base == "라마바_김철수")
-    cb = dlg.table.cellWidget(rk, 1)
-    chk(cb is not None and cb.count() >= 2, "D 이름 칸은 후보 풀다운")
-    cb.setCurrentText("박영수")
-    pump(timeout=0.2)
     from viewer.widgets import bizcard_import_dialog as BD
+    pump(lambda: not dlg._pending, timeout=10)
+    chk(len(dlg.choices(rk, BD.C_NAME)) >= 2, "D 이름 칸은 후보 고르기", str(len(dlg.choices(rk, BD.C_NAME))))
+    from PyQt6.QtWidgets import QComboBox, QStyleOptionViewItem
+    idx = dlg.table.model().index(rk, BD.C_NAME)
+    ed = dlg.table.itemDelegate().createEditor(dlg.table.viewport(), QStyleOptionViewItem(), idx)
+    chk(isinstance(ed, QComboBox) and ed.isEditable() and ed.count() >= 2, "D 고칠 때 풀다운이 뜬다(후보 + 직접 입력)")
+    ed.deleteLater()
+    chk(not any(dlg.table.cellWidget(r, c) for r in range(dlg.table.rowCount()) for c in range(dlg.table.columnCount())),
+        "D 표에 칸 위젯이 없다 — 줄마다 풀다운 위젯을 만들지 않는다(261117-12 '응답 없음')")
+    dlg.set_cell(rk, BD.C_NAME, "박영수")
+    pump(timeout=0.2)
     chk(dlg.table.item(rk, BD.C_FILE).text() == "박영수_라마바.jpg", "D 이름을 고치면 새 파일 이름이 바로", dlg.table.item(rk, BD.C_FILE).text())
     chk(dlg.table.horizontalHeaderItem(BD.C_DEPT).text() == "부서", "D 확인 표에 '부서' 열(261117-11)")
     dlg.table.item(rk, BD.C_DEPT).setText("품질팀")
@@ -242,6 +253,13 @@ try:
     vis = [r for r in range(dlg.table.rowCount()) if not dlg.table.isRowHidden(r)]
     chk(vis == [rk], "D '확인 필요만' 거르기", str(vis))
     dlg.chk_need.setChecked(False)
+    # 스캔일 일괄(D7) — 고른 줄만 바뀐다(표를 칸 위젯 없이 바꾼 뒤에도, 261117-12)
+    dlg.table.clearSelection()
+    dlg.table.selectRow(rk)
+    dlg.ed_date.setText("2024-05-06")
+    QTest.mouseClick(dlg.btn_date, Qt.MouseButton.LeftButton)
+    others = [dlg.cell(r, BD.C_DATE) for r in range(dlg.table.rowCount()) if r != rk]
+    chk(dlg.cell(rk, BD.C_DATE) == "2024-05-06" and "2024-05-06" not in others, "D 스캔일 일괄 — 고른 줄만")
     r0 = next(i for i, it in enumerate(dlg._items) if it.base == "20250101_120000")
     dlg.table.item(r0, 0).setCheckState(Qt.CheckState.Unchecked)       # 이 줄은 적용하지 않는다
     out2 = TMP / "cards2" / "정리"
@@ -265,6 +283,23 @@ try:
             and abs(pm.width() / pm.height() - w0 / h0) < 0.02, "D 미리 보기는 칸 안에 비율대로 — " + what,
             "%dx%d in %dx%d" % (pm.width(), pm.height(), dlg.pv_front.width(), dlg.pv_front.height()))
     dlg.close()
+    pump(timeout=0.5)
+
+    # ── E. 많은 명함 — 표를 채우는 동안 메인 정지(261117-12 사용자 보고 '응답 없음') ──
+    print()
+    print("=== E. 명함 600장 ===")
+    F5 = TMP / "many"
+    F5.mkdir()
+    for i in range(600):
+        jpg(F5 / ("회사%03d_홍길동_1.jpg" % i))
+    mw._action_bizcard_import(str(F5))
+    dm = mw._bizcard_dlg
+    gaps.clear(); last[0] = time.monotonic()
+    hb.start(20)
+    chk(pump(lambda: dm.bar.value() == 600 and not dm._pending, timeout=120), "E 600장 끝까지", str(dm.bar.value()))
+    hb.stop()
+    chk(max(gaps or [0]) < 0.5, "E 표를 채우는 동안 메인 정지 < 0.5초(종전 1000장 1.9초)", "%.2f" % max(gaps or [0]))
+    dm.close()
     pump(timeout=0.5)
     mw.close()
 except Exception:

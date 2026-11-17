@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-17 20:59+0900\n"
+"POT-Creation-Date: 2026-11-17 21:22+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -8022,6 +8022,14 @@ msgstr "Set Scan Date"
 msgid "고른 줄의 스캔일을 왼쪽 날짜로 바꿉니다"
 msgstr "Sets the scan date of the selected rows to the date on the left"
 
+#: viewer/widgets/bizcard_import_dialog.py viewer/widgets/photo_crop_dialog.py
+msgid "전체 화면"
+msgstr "Full Screen"
+
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "명함 관리 창을 화면 가득 — 다시 누르거나 F11·Esc 로 돌아옵니다"
+msgstr "Fill the screen with the Business Card Manager — click again or press F11/Esc to return"
+
 #: viewer/widgets/bizcard_import_dialog.py
 msgid "읽는 중 %v / %m"
 msgstr "Reading %v / %m"
@@ -8040,6 +8048,18 @@ msgstr "Apply"
 #: viewer/widgets/bizcard_import_dialog.py
 msgid "체크한 명함을 정리 폴더에 '성명_회사명.jpg' 로 만듭니다 — 원본은 그대로 둡니다"
 msgstr "Creates the checked cards as 'Name_Company.jpg' in the output folder — the originals are left as they are"
+
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "고른 자리"
+msgstr "Selected Area"
+
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "읽지 못했습니다 — 직접 적으세요"
+msgstr "Could not read it — type it yourself"
+
+#: viewer/widgets/bizcard_import_dialog.py viewer/widgets/photo_label_dialog.py
+msgid "넣기"
+msgstr "Insert"
 
 #: viewer/widgets/bizcard_import_dialog.py
 msgid "정리 폴더"
@@ -8092,6 +8112,14 @@ msgstr "(no name)"
 #: viewer/widgets/bizcard_import_dialog.py
 msgid "날짜를 YYYY-MM-DD 꼴로 적으세요."
 msgstr "Enter the date as YYYY-MM-DD."
+
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "이 자리를 읽었습니다:"
+msgstr "This area was read:"
+
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "넣을 글 (틀리면 고치세요 — 고친 것은 이 PC 에서 배웁니다):"
+msgstr "Text to enter (fix it if wrong — your fixes are learned on this PC only):"
 
 #: viewer/widgets/bizcard_import_dialog.py
 msgid "그 자리에서 글자를 읽지 못했습니다 — 상자를 조금 넓혀 다시 그리세요."
@@ -11076,10 +11104,6 @@ msgid "비스듬히 찍었거나 가운데가 휜 사진을 테두리에 맞춰 
 msgstr "Flattens a photo taken at an angle or curved in the middle into a rectangle, following its edges."
 
 #: viewer/widgets/photo_crop_dialog.py
-msgid "전체 화면"
-msgstr "Full Screen"
-
-#: viewer/widgets/photo_crop_dialog.py
 msgid "모양 펴기"
 msgstr "Straighten shape"
 
@@ -11118,10 +11142,6 @@ msgstr "Top line"
 #: viewer/widgets/photo_label_dialog.py
 msgid "아랫줄"
 msgstr "Bottom line"
-
-#: viewer/widgets/photo_label_dialog.py
-msgid "넣기"
-msgstr "Insert"
 
 #: viewer/widgets/photo_label_dialog.py
 msgid "미리보기 (지금 사진)"

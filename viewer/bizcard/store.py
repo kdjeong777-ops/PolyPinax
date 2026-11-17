@@ -83,6 +83,8 @@ class BizcardStore:
             manual INTEGER, updated REAL, PRIMARY KEY(key, field));
         CREATE TABLE IF NOT EXISTS domain_org(domain TEXT PRIMARY KEY, org TEXT, n INTEGER, updated REAL);
         CREATE TABLE IF NOT EXISTS samples(src_key TEXT PRIMARY KEY, data TEXT, updated REAL);
+        CREATE TABLE IF NOT EXISTS corrections(field TEXT, wrong TEXT, right TEXT, n INTEGER, updated REAL,
+            PRIMARY KEY(field, wrong));
         """)
         cols = {r[1] for r in c.execute("PRAGMA table_info(cards)")}
         if "dept" not in cols:                       # 261117-11: 부서 칸(옛 DB 는 열만 더한다)
@@ -218,6 +220,22 @@ class BizcardStore:
                          "SET data=excluded.data, updated=excluded.updated",
                          (_key(src), json.dumps(data, ensure_ascii=False), time.time()))
         self.con.commit()
+
+    def correction_put(self, field: str, wrong: str, right: str):
+        """교정(§5.15) — 위치 지정에서 읽은 글(wrong)을 사람이 고친 글(right). 같은 오인식은 다음부터 고친 글로."""
+        if not field or not wrong or not right or wrong == right:
+            return
+        self.con.execute("INSERT INTO corrections(field, wrong, right, n, updated) VALUES(?,?,?,1,?) "
+                         "ON CONFLICT(field, wrong) DO UPDATE SET n=CASE WHEN corrections.right=excluded.right "
+                         "THEN corrections.n+1 ELSE 1 END, right=excluded.right, updated=excluded.updated",
+                         (field, wrong, right, time.time()))
+        self.con.commit()
+
+    def corrections(self) -> dict:
+        out = {}
+        for r in self.con.execute("SELECT field, wrong, right FROM corrections"):
+            out.setdefault(r["field"], {})[r["wrong"]] = r["right"]
+        return out
 
     def samples(self) -> list:
         return [json.loads(r["data"]) for r in self.con.execute("SELECT data FROM samples")]

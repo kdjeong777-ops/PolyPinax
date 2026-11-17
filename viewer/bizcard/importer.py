@@ -104,9 +104,12 @@ class ImportWorker(QObject):
     finishedAll = pyqtSignal(bool)        # True = 끝까지, False = 멈춤
     finished = pyqtSignal()               # run_in_thread 가 스레드를 닫는 신호
 
-    def __init__(self, items: list, db=None, ui_lang: str = "ko"):
+    def __init__(self, items: list, db=None, ui_lang: str = "ko", force: bool = False, rows=None):
+        """force = 캐시를 건너뛰고 다시 읽기(261117-15 [다시 읽기]), rows = 신호에 실을 표 줄 번호(없으면 차례)."""
         super().__init__()
         self._items = list(items)
+        self._force = bool(force)
+        self._rows = list(rows) if rows is not None else list(range(len(self._items)))
         self._db = db
         self._lang = ui_lang
         self._stop = False
@@ -133,15 +136,19 @@ class ImportWorker(QObject):
                     self.finishedAll.emit(False)
                     return
                 sig = source_sig([it.pdf, it.front, it.back])
-                hit = st.recog_get(it.key, sig)
+                hit = None if self._force else st.recog_get(it.key, sig)
                 if hit is None:
                     try:
                         res = result_dict(R.recognize(it.front or it.pdf, ui_lang=self._lang))
                     except Exception as e:        # 명함 글은 싣지 않는다 — 몇 번째·종류만
                         res = {"error": type(e).__name__}
+                    old = st.recog_get(it.key, sig) if self._force else None
                     st.recog_put(it.key, sig, res)
-                    hit = {"result": res, "edit": {}}
-                self.itemDone.emit(i, hit["result"], hit["edit"] or {})
+                    keep = (old or {}).get("edit") or {}          # 다시 읽어도 손으로 고친 칸은 지킨다(창이 거른 것)
+                    if keep:
+                        st.edit_put(it.key, keep)
+                    hit = {"result": res, "edit": keep}
+                self.itemDone.emit(self._rows[i], hit["result"], hit["edit"] or {})
                 self.progressed.emit(i + 1, n)
                 _t.sleep(0.001)                   # 응답성 SOT §4 ④ — 메인에 숨 쉴 틈
             self.finishedAll.emit(True)

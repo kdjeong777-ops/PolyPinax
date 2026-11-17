@@ -301,6 +301,51 @@ try:
     chk(max(gaps or [0]) < 0.5, "E 표를 채우는 동안 메인 정지 < 0.5초(종전 1000장 1.9초)", "%.2f" % max(gaps or [0]))
     dm.close()
     pump(timeout=0.5)
+
+    # ── F. 다시 읽기(261117-15) — 지금의 인식으로 다시, 손으로 고친 칸은 그대로 ──
+    print()
+    print("=== F. 다시 읽기 ===")
+    mw._action_bizcard_import(str(F2))
+    dr = mw._bizcard_dlg
+    chk(pump(lambda: dr.bar.value() == 4 and not dr._pending, timeout=30), "F 다시 연 창 — 캐시에서 채움")
+    rk2 = next(i for i, it in enumerate(dr._items) if it.base == "라마바_김철수")
+    ro2 = next(i for i, it in enumerate(dr._items) if it.base == "가나다_홍길동")
+    chk(dr.cell(rk2, BD.C_NAME) == "박영수", "F 손으로 고친 이름이 캐시에서 되살아난다")
+    calls = []
+
+    def fake_v2(path, ui_lang="ko"):                    # 고친 인식 — 회사·부서가 새로 나온다
+        calls.append(1)
+        c = fake_recognize(path, ui_lang)
+        c.company, c.dept = "새회사", "품질팀"
+        c.company_cands = [R.Cand("새회사", 3.0)]
+        return c
+    R.recognize = fake_v2
+    st4 = S.BizcardStore()
+    st4.correction_put("dept", "품질팀", "품질관리팀")               # 교정 사전(-13) — 다시 읽기에도 쓰인다
+    st4.close()
+    dr._load_learned()
+    gaps.clear(); last[0] = time.monotonic(); hb.start(20)
+    chk(dr.reread([rk2, ro2], ask=False), "F [다시 읽기] 시작")
+    chk(dr.reread([rk2], ask=False) is False, "F 읽는 중에 다시 누르면 받지 않는다")
+    chk(pump(lambda: dr._worker.done_event.is_set() and not dr._pending, timeout=30) and len(calls) == 2,
+        "F 캐시를 건너뛰고 두 장만 다시 읽음", str(len(calls)))
+    hb.stop()
+    chk(max(gaps or [0]) < 0.5, "F 다시 읽는 동안 메인 정지 < 0.5초", "%.2f" % max(gaps or [0]))
+    pump(timeout=0.3)
+    chk(dr.cell(rk2, BD.C_NAME) == "박영수" and dr.cell(rk2, BD.C_COMP) == "새회사" and dr.cell(rk2, BD.C_DEPT) == "품질팀",
+        "F 손으로 고친 이름·부서(D 에서 고침)는 그대로, 손대지 않은 회사는 새 인식", "%s/%s/%s" % (dr.cell(rk2, BD.C_NAME), dr.cell(rk2, BD.C_COMP), dr.cell(rk2, BD.C_DEPT)))
+    chk(dr.cell(ro2, BD.C_COMP) == "새회사" and dr.cell(ro2, BD.C_DEPT) == "품질관리팀",
+        "F 손대지 않은 줄은 새 인식 + 교정 사전 적용(부서 품질팀 → 품질관리팀)", dr.cell(ro2, BD.C_DEPT))
+    en_r = R.rescore({"company": "Korea Expressway Co", "dept": "Road Team", "title": "Senior Manager",
+                      "name_cands": [], "company_cands": [{"text": "Korea Expressway Co", "score": 2.0, "feat": {}}]})
+    chk(en_r["company"] == "Korea Expressway Co" and en_r["dept"] == "Road Team" and en_r["title"] == "Senior Manager",
+        "F 영문 회사·부서·직함의 띄어쓰기는 그대로(한글 사이만 없앰)", str((en_r["company"], en_r["dept"], en_r["title"])))
+    st3 = S.BizcardStore()
+    hit3 = st3.recog_get(dr._items[rk2].key, S.source_sig([dr._items[rk2].pdf, dr._items[rk2].front, dr._items[rk2].back]))
+    st3.close()
+    chk(hit3 and hit3["edit"].get("name") == "박영수" and "company" not in hit3["edit"], "F 기록에는 손으로 고친 칸만 남는다", str(hit3 and hit3["edit"]))
+    dr.close()
+    pump(timeout=0.5)
     mw.close()
 except Exception:
     import traceback

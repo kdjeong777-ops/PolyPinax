@@ -175,6 +175,10 @@ class BizcardImportDialog(QDialog):
         self.btn_date.setToolTip(tr("고른 줄의 스캔일을 왼쪽 날짜로 바꿉니다"))
         self.btn_date.clicked.connect(lambda _c=False: self._set_dates())
         top.addWidget(self.btn_date)
+        self.btn_reread = QPushButton(tr("다시 읽기"))
+        self.btn_reread.setToolTip(tr("고른 줄(없으면 모두)을 지금의 인식으로 다시 읽습니다 — 손으로 고친 칸은 그대로 둡니다"))
+        self.btn_reread.clicked.connect(lambda _c=False: self.reread())
+        top.addWidget(self.btn_reread)
         self.btn_full = QPushButton(tr("전체 화면"))
         self.btn_full.setToolTip(tr("명함 관리 창을 화면 가득 — 다시 누르거나 F11·Esc 로 돌아옵니다"))
         self.btn_full.clicked.connect(lambda _c=False: self.toggle_full())
@@ -425,13 +429,59 @@ class BizcardImportDialog(QDialog):
         finally:
             self._loading = False
         v = self._row_values(r)
-        edit = {k: v[k] for k in ("name", "company", "dept", "title", "cell", "tel", "email", "scanned", "on")}
-        edit["keep_back"] = v["keep_back"]
+        edit = self._manual_of(r, v)                # 261117-15: 인식값과 **다른** 칸만 — [다시 읽기] 가 손으로 고친 칸을 가려 지킨다
         self._items[r].edit = edit
         try:
             self._store().edit_put(self._items[r].key, edit)
         except Exception:
             pass
+
+    EDIT_KEYS = ("name", "company", "dept", "title", "cell", "tel", "email", "scanned", "on", "keep_back")
+
+    def _auto_values(self, r) -> dict:
+        """그 줄의 인식값(사람이 손대지 않았을 때 칸에 들어가는 값)."""
+        it = self._items[r]
+        res = it.result or {}
+        ph = [tuple(x) for x in (res.get("phones") or [])]
+        has_back = bool(it.back or (it.pdf and res.get("back_promo") is not None))
+        return {"name": res.get("name", ""), "company": R.strip_corp(res.get("company", "")), "dept": res.get("dept", ""),
+                "title": res.get("title", ""), "cell": _first(ph, ("cell",)), "tel": _first(ph, ("work",)),
+                "email": (res.get("emails") or [""])[0], "scanned": it.scanned, "on": not res.get("error"),
+                "keep_back": (not bool(res.get("back_promo"))) if has_back else False}
+
+    def _manual_of(self, r, vals: dict) -> dict:
+        """손으로 고친 칸 = 인식값과 다른 칸만."""
+        auto = self._auto_values(r)
+        return {k: vals[k] for k in self.EDIT_KEYS if k in vals and vals[k] != auto.get(k)}
+
+    def reread(self, rows=None, ask: bool = True):
+        """[다시 읽기](261117-15 사용자 지시) — 고른 줄(없으면 모두)을 캐시를 건너뛰고 지금의 인식으로 다시 읽는다.
+        손으로 고친 칸은 지킨다(옛 기록은 인식값과 같은 칸을 '손대지 않음' 으로 본다). 배경·나눠 채우기는 처음 읽기와 같은 길."""
+        if self._worker is not None and not self._worker.done_event.is_set():
+            QMessageBox.information(self, tr("다시 읽기"), tr("지금 읽는 중입니다 — 다 읽은 뒤에 다시 하세요."))
+            return False
+        if rows is None:
+            rows = sorted({i.row() for i in self.table.selectedIndexes()})
+        rows = [r for r in (rows or range(len(self._items))) if 0 <= r < len(self._items)]
+        if not rows:
+            return False
+        if ask and len(rows) > 20 and QMessageBox.question(
+                self, tr("다시 읽기"), tr("명함 {n}장을 다시 읽습니다 — 한 장에 몇 초씩 걸립니다. 손으로 고친 칸은 그대로 둡니다.").format(n=len(rows))) \
+                != QMessageBox.StandardButton.Yes:
+            return False
+        for r in rows:                              # 옛 기록에서도 손으로 고친 칸만 남긴다
+            it = self._items[r]
+            if it.result and it.edit:
+                vals = dict(self._auto_values(r))
+                vals.update(it.edit)
+                it.edit = self._manual_of(r, vals)
+                try:
+                    self._store().edit_put(it.key, it.edit)
+                except Exception:
+                    pass
+            self.table.item(r, C_FILE).setText(tr("(다시 읽는 중)"))
+        self._start(rows)
+        return True
 
     def _store(self):
         if getattr(self, "_st", None) is None:
@@ -651,13 +701,19 @@ class BizcardImportDialog(QDialog):
         self.pv_en.setPlainText("\n".join("%s: %s" % (k, v) for k, v in en.items() if v))
 
     # ── 읽기 ──
-    def _start(self):
+    def _start(self, rows=None):
         if not self._items:
             self.bar.setFormat(tr("명함 그림이 없습니다"))
             return
         lang = "en" if (language() or "ko").lower().startswith("en") else "ko"
         from viewer.workers import run_in_thread
-        self._worker = ImportWorker(self._items, self._db, lang)
+        if rows is None:
+            self._worker = ImportWorker(self._items, self._db, lang)
+        else:                                       # [다시 읽기] — 그 줄들만, 캐시 건너뜀
+            self._worker = ImportWorker([self._items[r] for r in rows], self._db, lang, force=True, rows=rows)
+            self.bar.setRange(0, max(1, len(rows)))
+            self.bar.setValue(0)
+            self.bar.setFormat(tr("다시 읽는 중 %v / %m"))
         self._worker.itemDone.connect(self._on_item_ready)    # 바로 채우지 않고 쌓아 두었다가 시간 상한 안에서(§5.14)
         self._worker.progressed.connect(self._on_progress)    # ★ 창의 메서드로 — 창이 지워지면 Qt 가 연결을 끊는다(람다는 남아 죽었다)
         self._worker.finishedAll.connect(self._on_done)

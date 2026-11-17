@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-17 21:22+0900\n"
+"POT-Creation-Date: 2026-11-17 22:25+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -8022,6 +8022,14 @@ msgstr "Set Scan Date"
 msgid "고른 줄의 스캔일을 왼쪽 날짜로 바꿉니다"
 msgstr "Sets the scan date of the selected rows to the date on the left"
 
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "다시 읽기"
+msgstr "Read Again"
+
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "고른 줄(없으면 모두)을 지금의 인식으로 다시 읽습니다 — 손으로 고친 칸은 그대로 둡니다"
+msgstr "Reads the selected rows (all if none) again with the current recognition — fields you edited by hand are kept"
+
 #: viewer/widgets/bizcard_import_dialog.py viewer/widgets/photo_crop_dialog.py
 msgid "전체 화면"
 msgstr "Full Screen"
@@ -8110,6 +8118,14 @@ msgid "(이름 없음)"
 msgstr "(no name)"
 
 #: viewer/widgets/bizcard_import_dialog.py
+msgid "지금 읽는 중입니다 — 다 읽은 뒤에 다시 하세요."
+msgstr "Reading is in progress — try again when it finishes."
+
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "(다시 읽는 중)"
+msgstr "(reading again)"
+
+#: viewer/widgets/bizcard_import_dialog.py
 msgid "날짜를 YYYY-MM-DD 꼴로 적으세요."
 msgstr "Enter the date as YYYY-MM-DD."
 
@@ -8128,6 +8144,10 @@ msgstr "Could not read any text there — draw the box a little larger and try a
 #: viewer/widgets/bizcard_import_dialog.py
 msgid "명함 그림이 없습니다"
 msgstr "No business card images"
+
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "다시 읽는 중 %v / %m"
+msgstr "Reading again %v / %m"
 
 #: viewer/widgets/bizcard_import_dialog.py
 msgid "다 읽음 %v / %m"
@@ -8170,6 +8190,11 @@ msgid ""
 msgstr ""
 "Created {n} cards in the output folder.\n"
 "{path}"
+
+#: viewer/widgets/bizcard_import_dialog.py
+#, python-brace-format
+msgid "명함 {n}장을 다시 읽습니다 — 한 장에 몇 초씩 걸립니다. 손으로 고친 칸은 그대로 둡니다."
+msgstr "Read {n} cards again? Each card takes a few seconds. Fields you edited by hand are kept."
 
 #: viewer/widgets/bookmark_tree.py
 msgid "전자서명 있음 — 열면 본문 위 띠에 검증 결과가 보입니다."

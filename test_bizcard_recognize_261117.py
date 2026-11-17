@@ -77,7 +77,14 @@ chk(r.titles_ko == ["부장"], "C 직함", str(r.titles_ko))
 chk(r.dept_ko == "기술연구소", "C 부서(직함 앞 부서 낱말)", r.dept_ko)                      # 261117-11
 rd = R.parse_lines([L("(주)가나다건설", 0.10, 90, 0.05), L("기술본부 품질관리팀", 0.06, 90, 0.3), L("홍길동 과장", 0.14, 90, 0.4),
                     L("서울특별시 가나구 다라로 12", 0.05, 90, 0.8)])
-chk(rd.dept_ko == "기술본부 품질관리팀" and rd.titles_ko == ["과장"], "C 부서 둘을 이어 씀·회사·주소 줄은 부서가 아님", rd.dept_ko)
+chk(rd.dept_ko == "기술본부품질관리팀" and rd.titles_ko == ["과장"], "C 부서 둘을 붙여 씀(띄어쓰기 없음, 261117-15)·회사·주소 줄은 부서가 아님", rd.dept_ko)
+for line, want in (("대표 이사 홍 길 동", "대표이사"), ("전무 이사  김철수", "전무이사"), ("상무이사 이영희", "상무이사"),
+                   ("대 표 이 사", "대표이사")):
+    rt = R.parse_lines([L("(주)가나다건설", 0.10, 90, 0.05), L(line, 0.12, 90, 0.4)])
+    chk(rt.titles_ko[:1] == [want], "C 직함은 줄이지 않는다 — '%s' → %s" % (line, want), str(rt.titles_ko))
+rt2 = R.parse_lines([L("한국가나다기술연구원", 0.10, 90, 0.05), L("홍길동 과장", 0.12, 90, 0.4)])
+chk(rt2.titles_ko == ["과장"], "C 기관 이름 속 '연구원' 은 직함이 아니다", str(rt2.titles_ko))
+chk(R.nospace_ko("품질 관리 팀") == "품질관리팀" and R.nospace_ko("ABC 기술") == "ABC 기술", "C 한글 사이 띄어쓰기만 없앤다")
 rg = R.parse_lines([L("국토교통부", 0.12, 90, 0.05), L("도로정책과", 0.06, 90, 0.3), L("홍길동 주무관", 0.14, 90, 0.4)])
 chk(rg.dept_ko == "도로정책과", "C 기관 이름(…부)은 부서가 아니고 그 아래 과가 부서", rg.dept_ko)
 chk(r.phones == [("cell", "010-0000-0001")] and r.emails == ["hong@example.com"], "C 연락처")

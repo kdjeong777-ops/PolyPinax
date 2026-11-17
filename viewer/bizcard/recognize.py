@@ -37,7 +37,7 @@ BACK_SUFFIXES = ("_p0002", "_2")
 # 한국 성씨(인구 상위 + 복성) — 이름 후보 점수용
 SURNAMES = set("김이박최정강조윤장임한오서신권황안송류유홍전고문양손배백허남심노하곽성차주우구민진나지엄채원천방공현함변염여추도소석선설마길연위표명기반왕금옥육인맹제모탁국어은편용예봉경사부황보")
 COMPOUND_SURNAMES = ("남궁", "황보", "제갈", "선우", "독고", "사공", "서문", "동방")
-TITLES_KO = ("대표이사", "대표", "회장", "부회장", "사장", "부사장", "전무", "상무", "이사", "감사", "본부장", "실장",
+TITLES_KO = ("대표이사", "전무이사", "상무이사", "사외이사", "대표", "부대표", "회장", "부회장", "사장", "부사장", "전무", "상무", "이사", "감사", "본부장", "실장",
              "센터장", "원장", "소장", "단장", "처장", "국장", "부장", "차장", "과장", "대리", "주임", "사원", "팀장",
              "파트장", "책임", "선임", "수석", "연구원", "연구위원", "위원", "교수", "부교수", "조교수", "박사", "공학박사",
              "기술사", "감리단장", "현장소장", "매니저", "프로", "고문", "자문위원", "사무관", "주무관", "서기관", "과장대리")
@@ -605,24 +605,52 @@ def company_candidates_en(lines: list, emails: list, urls: list) -> list:
     return sorted(cands.values(), key=lambda c: (-c.score, c.text))   # 같은 점수는 글자 차례(실행마다 같게 — set 차례는 실행마다 다르다)
 
 
+def nospace_ko(s: str) -> str:
+    """한글 사이 띄어쓰기를 없앤다 — 부서·직함·회사명은 붙여 쓴다(사용자 지시 261117-15)."""
+    return re.sub(r"(?<=[가-힣])\s+(?=[가-힣])", "", (s or "").strip())
+
+
+def _titles_in(compact: str) -> list:
+    """띄어쓰기를 지운 한글 줄에서 직함을 **가장 긴 것부터** 겹치지 않게 — '대표 이사' 를 '대표'·'이사' 로 쪼개지 않는다(261117-15)."""
+    out, i = [], 0
+    while i < len(compact):
+        hit = next((t for t in _TITLES_LONG if compact.startswith(t, i)), None)
+        if hit:
+            out.append(hit)
+            i += len(hit)
+        else:
+            i += 1
+    return out
+
+
+_ORG_TAIL = ("연구원", "공사", "공단", "협회", "학회", "대학교", "대학", "기술원", "재단", "조합")
+
+
 def titles_of(lines: list) -> tuple:
     ko, en, sub = [], [], []
     for ln in lines:
-        for tok in merge_spaced(ln.text).split():
+        merged = merge_spaced(ln.text)
+        if _ADDR_KO.search(ln.text):
+            continue
+        for tok in merged.split():
             tt = title_token(tok)
-            if tt and tt not in ko and not _ADDR_KO.search(ln.text):
+            if tt and tt not in ko:
                 ko.append(tt)                          # '시험실장 홍길동' → 직위 '시험실장'(낱말 통째가 먼저)
-        for t in TITLES_KO:
-            if t in ln.text and t not in sub:
-                sub.append(t)                          # 줄 안에 든 직함 글자(기관 이름 속 '연구원' 일 수 있어 뒤로)
+        compact = re.sub(r"[^가-힣]", "", merged)
+        if any(m in ln.text for m in CORP_MARKS_KO) or compact.endswith(_ORG_TAIL):
+            continue                                   # 회사·기관 줄 속 '연구원' 등은 직함이 아니다
+        for t in _titles_in(compact):
+            if t not in sub:
+                sub.append(t)                          # 띄워 읽은 '대표 이사' → '대표이사'(줄이지 않는다)
     ko += [t for t in sub if t not in ko and not any(t in k for k in ko)]
     for ln in lines:
         low = ln.text.lower()
         if not _HANGUL.search(ln.text) and any(k in low for k in TITLES_EN) and len(ln.text) < 60 \
                 and not re.search(r"\d{3}", ln.text):
             en.append(ln.text.strip())
-    # 긴 직함 먼저('대표이사' 가 '대표'·'이사' 를 덮는다)
+    # 긴 직함 먼저('대표이사' 가 '대표'·'이사' 를 덮는다) — 줄이지 않는다
     ko = [t for t in ko if not any(t != u and t in u for u in ko)]
+    ko.sort(key=lambda t: -len(t))
     return ko, en
 
 
@@ -648,7 +676,7 @@ def dept_of(lines: list, companies=()) -> tuple:
         toks = [dept_token(t) for t in raw.split()]
         toks = [t for t in toks if t and t not in comp and not any(t in c or c in t for c in comp if len(c) >= 3)]
         if toks and not ko:
-            ko = " ".join(dict.fromkeys(toks))
+            ko = "".join(dict.fromkeys(toks))          # 부서는 붙여 쓴다(261117-15 — '기술본부품질관리팀')
         t = ln.text.strip()
         if not en and not _HANGUL.search(t) and DEPT_EN.search(t) and len(t) < 60 and not re.search(r"\d{3}", t) \
                 and not CORP_MARKS_EN.search(t):
@@ -833,6 +861,9 @@ def rescore(res: dict, weights: Optional[dict] = None, layouts: Optional[dict] =
     """캐시에 남은 인식 결과(사전)를 지금의 가중치·양식·도메인 표로 다시 매긴다 — OCR 은 다시 하지 않는다(§5.11).
     이름·회사 1위가 바뀌면 `name`·`company` 도 바꾼다(확인 표가 사용자가 고친 값을 따로 지킨다)."""
     r = dict(res)
+    for fld in ("dept", "title", "company"):       # 붙여 쓰기(261117-15) — 옛 캐시 값도
+        if r.get(fld):
+            r[fld] = nospace_ko(r[fld])
     corr = corrections or {}
     for fld in ("dept", "title"):                  # 교정(§5.15) — 전에 사람이 고친 오인식은 고친 글로
         if r.get(fld) in corr.get(fld, {}):
@@ -973,7 +1004,9 @@ def _box_value(text: str, fld: str) -> str:
         return strip_corp(merge_spaced(text))
     if fld == "dept":
         t = merge_spaced(text)
-        return " ".join(x for x in t.split() if not title_token(x)) or t
+        return nospace_ko(" ".join(x for x in t.split() if not title_token(x)) or t)
+    if fld == "title":
+        return nospace_ko(merge_spaced(text))
     if fld in ("cell", "tel"):
         ph = find_phones(text)
         return ph[0][1] if ph else ""

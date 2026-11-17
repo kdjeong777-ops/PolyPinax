@@ -2867,6 +2867,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             _bt.printFilesRequested.connect(self._on_tree_print)        # 261105-12(§4.7.13) 맨 위 '인쇄…'
             _bt.fileActionRequested.connect(lambda k, ps, x, b=_bt: self._on_tree_file_action(k, ps, x, bt=b))   # 261107-2 OCR 로 읽기·발표·서명
             _bt.photo_menu_fill = self._photo_menu_fill              # 261107-2(사진 보기 SOT §4.20) — 아래 창도 사진 세 메뉴 한 함수
+            _bt.trash_runner = self._photo_trash_bg                  # 261117-4(사진 보기 SOT §4.25.1) — 사진 휴지통은 배경·잠깐 잡히면 다시
             _bt.save_first_check = self._copy_blocked                # 261107-21(§4.7.13): 저장 ▸ 사본 넷은 저장 전 쪽 편집이 있으면 먼저 저장
             _bt.pdf_backup_of = self._pdf_backup_of                  # 261107-29(§4.7.5): '원본으로 되돌리기' 는 처음 원본 백업이 있을 때만
             _bt.xfer_quick = self._xfer_fill_quick                   # 261112-18: 폴더로 복사·이동 맨 위 즐겨찾기 폴더 + 최근 폴더(사진과 한 함수)

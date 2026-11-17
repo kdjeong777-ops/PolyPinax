@@ -3761,6 +3761,40 @@ class PhotoMixin:
             msg = tr("공유용 사본을 만들지 못했습니다 — 원본은 그대로입니다.")
         self.status.showMessage(msg, 6000)
 
+    def _photo_trash_bg(self, paths) -> dict:
+        """261117-4(4.25.1): 사진을 휴지통으로 — **배경**(`_file_op_bg`)에서 한 번에, 잠깐 잡힌 파일은 기다렸다 다시(`trash_when_free`).
+        지운 것은 사진 정보 색인 행도 그 자리에서 뺀다(사진 검색에 남지 않게). {경로: None(지움)|예외}."""
+        import viewer.widgets.bookmark_tree as _btm
+        from viewer.pathutil import trash_when_free
+        trash = _btm._trash_fn()
+        out = {}
+
+        def job(_ps=[str(p) for p in paths]):
+            done = []
+            for p in _ps:
+                try:
+                    trash_when_free(p, trash)
+                    out[p] = None
+                    done.append(p)
+                except Exception as e:                    # noqa: BLE001
+                    out[p] = e
+            if done:
+                try:
+                    from viewer import photo_index
+                    con = photo_index.connect()
+                    try:
+                        with con:
+                            photo_index.remove(con, [os.path.normcase(os.path.abspath(p)) for p in done])
+                    finally:
+                        con.close()
+                except Exception:
+                    pass
+
+        err = self._file_op_bg(job, tr('휴지통으로 보내는 중: {n}장').format(n=len(paths)), tr("사진 지우기"))
+        for p in paths:
+            out.setdefault(str(p), err or RuntimeError(tr("휴지통으로 보내지 못했습니다")))
+        return out
+
     def _photo_delete(self, paths):
         """사진 지우기(4.25, 사용자 지시) — 편집 모드에서만. 사진은 쪽이 하나라 **파일을 휴지통으로**.
         책갈피창의 삭제 한 길(`_op_delete` — 확인 창·핸들 놓기·목록에서 빼기)을 그대로 쓰고, 지운 사진이 보던 것이면 다음 사진을 연다."""
@@ -3777,7 +3811,8 @@ class PhotoMixin:
         from viewer.pathutil import norm_key
         want = {norm_key(p) for p in paths}
         nodes = [it for it in bt._iter_file_nodes() if norm_key(str(it.data(0, bt.DATA_FILE))) in want]
-        if not nodes:
+        if not nodes:                                      # 261117-4(4.25.1): 조용히 끝내지 않는다
+            self.status.showMessage(tr("책갈피창 목록에 없는 사진이라 지우지 않았습니다 — 그 폴더를 열고 지우세요."), 5000)
             return
         lst = self._photo_list()
         cur = self.main_view.current_file() if self.main_view else None

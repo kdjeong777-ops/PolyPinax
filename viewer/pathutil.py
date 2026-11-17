@@ -186,3 +186,44 @@ def rename_when_free(src, dst, move: bool = False, wait_s: float = RENAME_WAIT_S
             if not _is_sharing_violation(e) or time.monotonic() >= deadline:
                 raise
         time.sleep(RENAME_STEP_S)
+
+
+# 셸 파일 작업(IFileOperation, send2trash)이 내는 HRESULT — 원본 공유 위반·원본 접근 거부(COPYENGINE_E_*_SRC)
+_SHELL_BUSY = {0x80270027}                       # SHARING_VIOLATION_SRC — 실측(261117, 다른 핸들이 연 파일)
+_SHELL_DENIED = {0x80270021, 0x80270003}         # ACCESS_DENIED_SRC · REQUIRES_ELEVATION
+
+
+def trash_error_kind(e: BaseException) -> str:
+    """261117-4(사진 보기 SOT §4.25.1): 휴지통 보내기 오류를 'busy'(누가 쓰고 있음)·'denied'(권한)·'other' 로.
+    send2trash 의 Windows 판은 `OSError(winerror=HRESULT)` 로 올린다 — 문자열은 `OLE error 0x80270027` 꼴이라 그대로 보이지 않는다."""
+    w = getattr(e, "winerror", None)
+    if isinstance(w, int):
+        h = w & 0xFFFFFFFF
+        if w == 32 or h in _SHELL_BUSY:
+            return "busy"
+        if w == 5 or h in _SHELL_DENIED:
+            return "denied"
+    if isinstance(e, PermissionError):
+        return "denied"
+    return "other"
+
+
+def trash_when_free(path, trash, wait_s: float = RENAME_WAIT_S) -> None:
+    """261117-4(사진 보기 SOT §4.25.1): 휴지통으로 — 잠깐 잡혀 있으면 **기다렸다가 다시**(`rename_when_free` 와 같은 생각).
+
+    사진 폴더를 열면 배경 색인·자동 태그·썸네일이 파일을 하나씩 짧게 연다(지우기 공유 없이) — 그 순간 셸 파일 작업이 공유 위반으로
+    거부된다. 'busy'·'denied' 만 `wait_s` 동안 다시, 그 밖은 바로 올린다. 오류가 났어도 파일이 없어졌으면 지운 것으로 본다.
+    **메인 스레드에서 부르지 않는다**(기다린다)."""
+    import time
+    p = str(path)
+    deadline = time.monotonic() + max(0.0, wait_s)
+    while True:
+        try:
+            trash(p)
+            return
+        except OSError as e:
+            if not os.path.lexists(p):
+                return
+            if trash_error_kind(e) == "other" or time.monotonic() >= deadline:
+                raise
+        time.sleep(RENAME_STEP_S)

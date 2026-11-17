@@ -4790,6 +4790,10 @@ msgstr "Name folders automatically — save without asking next time"
 msgid "다시 물으려면 Shift 를 누른 채 공유용 사본을 고르세요."
 msgstr "To be asked again, hold Shift while choosing Sharing copy."
 
+#: viewer/photo_controller.py
+msgid "사진 지우기"
+msgstr "Delete Photos"
+
 #: viewer/photo_controller.py viewer/widgets/bookmark_tree.py
 #: viewer/widgets/convert_dialog.py viewer/widgets/image_tune_dialog.py
 msgid "형식"
@@ -5095,6 +5099,10 @@ msgstr "Could not make the sharing copy — the original is unchanged."
 msgid "편집 모드에서 지울 수 있습니다."
 msgstr "You can delete in edit mode."
 
+#: viewer/photo_controller.py
+msgid "책갈피창 목록에 없는 사진이라 지우지 않았습니다 — 그 폴더를 열고 지우세요."
+msgstr "This photo is not in the bookmark list, so it was not deleted — open its folder and delete it there."
+
 #: viewer/photo_controller.py viewer/share_controller.py
 msgid "다른 폴더"
 msgstr "Other folder"
@@ -5288,6 +5296,11 @@ msgstr "Where to put {n} sharing copies"
 #: viewer/photo_controller.py
 msgid "(폴더 이름을 물으려면 Shift 를 누른 채 고르세요)"
 msgstr "(Hold Shift while choosing to be asked for the folder name)"
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "휴지통으로 보내는 중: {n}장"
+msgstr "Moving {n} photo(s) to the Recycle Bin"
 
 #: viewer/photo_controller.py
 #, python-brace-format
@@ -5516,6 +5529,10 @@ msgstr "Made {n} sharing copies: {folder}"
 #, python-brace-format
 msgid "공유용 사본 {n}장을 만들고 {m}장은 만들지 못했습니다."
 msgstr "Made {n} sharing copies; {m} could not be made."
+
+#: viewer/photo_controller.py
+msgid "휴지통으로 보내지 못했습니다"
+msgstr "Could not move to the Recycle Bin"
 
 #: viewer/photo_controller.py viewer/widgets/bookmark_tree.py
 #, python-brace-format
@@ -7911,8 +7928,25 @@ msgid "‘{q}’ 에 맞는 파일이 이 목록에 없습니다."
 msgstr "No file in this list matches ‘{q}’."
 
 #: viewer/widgets/bookmark_tree.py
+msgid "다른 프로그램이 쓰고 있습니다"
+msgstr "Another program is using it"
+
+#: viewer/widgets/bookmark_tree.py
+msgid "권한이 없습니다(읽기 전용·보호된 폴더)"
+msgstr "No permission (read-only or protected folder)"
+
+#: viewer/widgets/bookmark_tree.py
 msgid "암호화 설정 파일"
 msgstr "Encrypted file"
+
+#: viewer/widgets/bookmark_tree.py
+#, python-brace-format
+msgid "사진 {n}장을 지우지 못했습니다 — 목록에 그대로 둡니다."
+msgstr "Could not delete {n} photo(s) — they stay in the list."
+
+#: viewer/widgets/bookmark_tree.py
+msgid "사진 앱·탐색기 미리 보기·동기화 프로그램 등을 닫은 뒤 다시 지우세요."
+msgstr "Close photo apps, the File Explorer preview pane, sync programs and the like, then try again."
 
 #: viewer/widgets/bookmark_tree.py viewer/widgets/search_panel.py
 msgid "책갈피 순"
@@ -8276,6 +8310,10 @@ msgid "삭제 확인"
 msgstr "Confirm Delete"
 
 #: viewer/widgets/bookmark_tree.py
+msgid "휴지통 이동 실패"
+msgstr "Failed to move to Recycle Bin"
+
+#: viewer/widgets/bookmark_tree.py
 msgid "먼저 폴더를 열어 주세요."
 msgstr "Open a folder first."
 
@@ -8335,6 +8373,11 @@ msgstr "The file name contains characters that can't be used."
 #: viewer/widgets/bookmark_tree.py
 msgid "변경 실패"
 msgstr "Rename failed"
+
+#: viewer/widgets/bookmark_tree.py
+#, python-brace-format
+msgid "… 외 {n}장"
+msgstr "… and {n} more"
 
 #: viewer/widgets/bookmark_tree.py
 msgid "펼치면 안의 PDF 가 보입니다(누르면 사본으로 엽니다) — 우클릭으로 풀기"
@@ -8584,10 +8627,6 @@ msgstr ""
 "Continue?"
 
 #: viewer/widgets/bookmark_tree.py
-msgid "휴지통 이동 실패"
-msgstr "Failed to move to Recycle Bin"
-
-#: viewer/widgets/bookmark_tree.py
 #, python-brace-format
 msgid "파일 {trashed}개 휴지통으로 이동됨"
 msgstr "Moved {trashed} files to the Recycle Bin"
@@ -8783,6 +8822,11 @@ msgstr "{name}: original missing"
 #: viewer/widgets/bookmark_tree.py
 msgid "변경 사항이 없습니다."
 msgstr "There are no changes."
+
+#: viewer/widgets/bookmark_tree.py
+#, python-brace-format
+msgid "휴지통으로 보내지 못했습니다 ({err})"
+msgstr "Could not move to the Recycle Bin ({err})"
 
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format

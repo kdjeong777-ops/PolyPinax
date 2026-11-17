@@ -53,6 +53,25 @@ def _trash_fn():
         return None
 
 
+TRASH_FAIL_SHOW = 10    # 못 지운 사진 이름을 이만큼까지 적는다(나머지는 '외 n장')
+
+
+def _trash_fail_text(failed) -> str:
+    """261117-4(사진 보기 SOT §4.25.1): 못 지운 사진 [(경로, 예외)] → 창 글 — 이름과 까닭. 셸 오류 문자열(OLE error 0x…)을 그대로 보이지 않는다."""
+    from viewer.pathutil import trash_error_kind
+    why = {"busy": tr("다른 프로그램이 쓰고 있습니다"), "denied": tr("권한이 없습니다(읽기 전용·보호된 폴더)")}
+    lines, kinds = [], set()
+    for p, e in failed[:TRASH_FAIL_SHOW]:
+        k = trash_error_kind(e)
+        kinds.add(k)
+        lines.append("· %s — %s" % (Path(p).name, why.get(k) or tr("휴지통으로 보내지 못했습니다 ({err})").format(err=e)))
+    if len(failed) > TRASH_FAIL_SHOW:
+        lines.append(tr("… 외 {n}장").format(n=len(failed) - TRASH_FAIL_SHOW))
+    head = tr("사진 {n}장을 지우지 못했습니다 — 목록에 그대로 둡니다.").format(n=len(failed))
+    tail = [tr("사진 앱·탐색기 미리 보기·동기화 프로그램 등을 닫은 뒤 다시 지우세요.")] if "busy" in kinds else []
+    return "\n".join([head, ""] + lines + ([""] + tail if tail else []))
+
+
 # 261115-20(마스터 §8.1 · CLAUDE.md §2 · 책갈피창·저장 SOT §4.7.25): 뷰어가 아는 bookmarks.json 형식.
 # 이보다 큰 `version` 은 쓰지 않는다(로드 거부) — 읽는 곳(책갈피창·검색 '책갈피 순')은 모두 read_bookmarks_json 으로.
 BOOKMARKS_JSON_VERSION = 1
@@ -554,6 +573,7 @@ class BookmarkTree(QWidget):
         self.photo_menu_fill = None   # 앱이 주입: (메뉴, 사진 경로들, 'tree', 책갈피창 줄) — 사진 세 메뉴 한 함수(사진 보기 SOT §4.20, 261107-2)
         self.view_only = None           # 앱이 주입: () -> True 면 보기만(섞은 2단의 아래 창, 사진 보기 SOT §4.47, 261116-19) — 우클릭·Del·이름 변경 막음
         self.view_only_menu = None      # 앱이 주입: (파일 경로|None, 전역 좌표) — 보기만일 때의 우클릭 메뉴('그 모드로 보기')
+        self.trash_runner = None        # 앱이 주입: ([경로]) -> {경로: None|예외} — 사진 휴지통 보내기를 배경·다시 시도로(사진 보기 SOT §4.25.1, 261117-4)
         self.xfer_quick = None          # 앱이 주입: (하위 메뉴, run(폴더)) -> bool — 폴더로 복사·이동 맨 위 즐겨찾기·최근 폴더(261112-18)
         self.xfer_done = None           # 앱이 주입: (대상 폴더) — 복사·이동이 되면 최근 폴더 맨 앞에(261112-18)
         self.save_first_check = None    # 앱이 주입: (파일들) -> True 면 저장 전 쪽 편집이 있어 알렸다 — 저장 ▸ 사본 넷 앞(261107-21, 마스터 §4.7.13)
@@ -4374,6 +4394,9 @@ class BookmarkTree(QWidget):
         if bookmarks:
             self._mark_dirty()
 
+        if files and self.trash_runner is not None and self._photo_on():
+            self._trash_photos(files)
+            return
         # 파일 삭제 (휴지통) — v1.6.21: 작업 직전 핸들 해제 핸드셰이크
         trashed = 0
         for it in files:
@@ -4393,6 +4416,29 @@ class BookmarkTree(QWidget):
                 self.fileOpCompleted.emit(str(p), str(p))    # revert → 원본 재로드
         if trashed:
             self._notice(tr('파일 {trashed}개 휴지통으로 이동됨').format(trashed=trashed))
+
+    def _trash_photos(self, files) -> None:
+        """261117-4(사진 보기 SOT §4.25.1): 사진 휴지통 보내기 — 앱의 `trash_runner`(배경·잠깐 잡히면 다시)로 한 번에.
+        사진은 파일을 잡지 않으므로 칸 비우기(`releaseFileRequested`)는 **지운 뒤** 지운 사진에만 — 못 지운 사진은 보던 그대로,
+        목록에도 남기고 창 하나로 이름·까닭을 알린다. 지운 것은 종전 한 길(줄 빼기 → `fileOpCompleted(경로, "")`)."""
+        paths = [str(it.data(0, self.DATA_FILE)) for it in files]
+        res = self.trash_runner(paths) or {}
+        trashed, failed = 0, []
+        for it, p in zip(files, paths):
+            err = res.get(p, RuntimeError("?"))
+            if err is not None:
+                failed.append((p, err))
+                continue
+            self.releaseFileRequested.emit(p)
+            trashed += 1
+            self._take_node(it)
+            if self._mode == "flat":
+                self._pdfs_flat = [q for q in self._pdfs_flat if str(q) != p]
+            self.fileOpCompleted.emit(p, "")
+        if trashed:
+            self._notice(tr('파일 {trashed}개 휴지통으로 이동됨').format(trashed=trashed))
+        if failed:
+            QMessageBox.warning(self, tr("휴지통 이동 실패"), _trash_fail_text(failed))
 
     def _take_node(self, it: QTreeWidgetItem):
         """260901-2: 트리에서 노드 제거 — 최상위/폴더 자식 어느 쪽이든.

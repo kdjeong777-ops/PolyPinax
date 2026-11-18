@@ -23,7 +23,7 @@ sys.stdout.reconfigure(encoding="utf-8")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from PyQt6.QtCore import QStandardPaths, QCoreApplication, Qt, QTimer
 QStandardPaths.setTestModeEnabled(True)             # 검사 작성 SOT §14.7.2
-from PyQt6.QtWidgets import QApplication, QMessageBox
+from PyQt6.QtWidgets import QApplication, QMessageBox, QDialog
 from PyQt6.QtTest import QTest
 from pathlib import Path
 
@@ -148,8 +148,21 @@ try:
         oid = ost.con.execute("SELECT id FROM cards").fetchone()[0]
         ok_old = P.field_srcs(ost, oid) == {}            # 출처 표가 아직 없어도
         ost.delete_card(oid)                              # 즐겨찾기·출처 표 없이 지우기
+        uv0 = ost.con.execute("PRAGMA user_version").fetchone()[0]
         P.fav_init(ost, "즐겨찾기")
-        ok_old = ok_old and len(P.fav_groups(ost)) == 1 and ost.count() == 0
+        P.fav_init(ost, "즐겨찾기")                       # 할 일 열(D26)이 이미 있으면 ALTER 를 건너뜀
+        cols = [r[1] for r in ost.con.execute("PRAGMA table_info(fav_groups)")]
+        ok_old = ok_old and len(P.fav_groups(ost)) == 1 and ost.count() == 0 and cols.count("todo") == 1 \
+            and ost.con.execute("PRAGMA user_version").fetchone()[0] == uv0
+        if not ok_old:
+            print("A2", cols, uv0)
+        ost.close()
+        con = dbutil.connect(old_db, dbutil.BUSY_MS_BG)  # 옛 판(beta.17)의 즐겨찾기 쿼리 — 새 열이 있어도 그대로
+        con.execute("INSERT INTO fav_groups(name, pos) VALUES('옛 판 탭', 1)")
+        ok_old = ok_old and [r[1] for r in con.execute("SELECT id, name FROM fav_groups ORDER BY pos, id")] == ["즐겨찾기", "옛 판 탭"]
+        con.rollback(); con.close()
+        ost = S.BizcardStore(old_db)
+        ok_old = ok_old and len(P.fav_groups(ost, "2026-01-01")) == 1     # 옛 판이 넣은 행(todo 기본 0)은 보통 탭
         ost.close()
         con = dbutil.connect(old_db, dbutil.BUSY_MS_BG)  # 옛 판이 새 DB 를 읽는 꼴 — cards 는 그대로
         ok_old = ok_old and [r[1] for r in con.execute("PRAGMA table_info(cards)")][:3] == ["id", "front", "back"]
@@ -497,6 +510,76 @@ try:
         "I12 창에서 붙인 태그가 명함 DB 태그 칸에(#찾기)")
     st.close()
     chk("가족모임" in (mw.bookmark_tree._tags.get_manual(os.path.realpath(h2["back"])) or []), "I12 뒷면 파일에도 같은 태그")
+    # I14 단추 자리 · 할 일(todo) · 즐겨찾기 사람 호버·메뉴 복사 (D26, 사용자 지시 261119)
+    pb, pd = getattr(dlg, "btn_photo", None), getattr(dlg, "btn_photo_del", None)
+    chk(pb is not None and pd is not None and dlg.photo_split.isAncestorOf(pb) and dlg.photo_split.isAncestorOf(pd)
+        and pb.mapTo(dlg, pb.rect().topLeft()).y() > dlg.photos.mapTo(dlg, dlg.photos.rect().topLeft()).y(),
+        "I14 [사진 추가…]·[사진 삭제] 는 인물 사진 칸 아래")
+    bs, bc = dlg.btn_save, dlg.btn_copy
+    chk(bs.parentWidget() is bc.parentWidget() and abs(bs.y() - bc.y()) <= 2 and bc.x() > bs.x(),
+        "I14 [내용 복사] 는 [저장] 오른쪽")
+    import viewer.widgets.bizcard_find_dialog as _fd
+    td = getattr(_fd, "TodoDialog", None)
+    today_s = datetime.date.today().isoformat()
+    tomorrow = (datetime.date.today() + datetime.timedelta(days=1)).isoformat()
+    yesterday = (datetime.date.today() - datetime.timedelta(days=1)).isoformat()
+    gid = None
+    old_memo = (P.card_by_id(dlg._store(), hong["id"])["memo"] or "").strip()
+    if td is not None and hasattr(dlg, "btn_todo"):
+        def _fake_todo_exec(self):
+            self.ed_title.setText("현장 점검")
+            self.ed_memo.setPlainText("자료 준비")
+            return QDialog.DialogCode.Accepted            # 시작일은 기본(오늘), 종료일 체크 없음 = 계속
+        _orig_td = td.exec
+        td.exec = _fake_todo_exec
+        try:
+            dlg.table.clearSelection()
+            for c in (hong, kim):
+                sm.select(dlg.table.model().index(dlg.row_of_id(c["id"]), 0),
+                          QItemSelectionModel.SelectionFlag.Select | QItemSelectionModel.SelectionFlag.Rows)
+            QTest.mouseClick(dlg.btn_todo, Qt.MouseButton.LeftButton)
+            pump(timeout=0.2)
+        finally:
+            td.exec = _orig_td
+        tabs = [dlg.fav_tabs.tabText(i) for i in range(dlg.fav_tabs.count())]
+        ti = tabs.index("현장 점검") if "현장 점검" in tabs else -1
+        gid = dlg.fav_tabs.tabData(ti) if ti >= 0 else None
+        tip = dlg.fav_tabs.tabToolTip(ti) if ti >= 0 else ""
+        chk(ti >= 0 and "자료 준비" in tip and today_s in tip and sorted(c["name"] for c in P.fav_members(dlg._store(), gid)) == ["김철수", "홍길동"],
+            "I14 [할 일…] → 작업 제목 탭에 고른 사람들, 탭 위 글에 내용·기간", "%s %r" % (tabs, tip))
+        hm = P.card_by_id(dlg._store(), hong["id"])["memo"]
+        chk(old_memo and hm == "[%s ~ 계속] 현장 점검\n자료 준비\n\n%s" % (today_s, old_memo),
+            "I14 할 일에 든 사람 메모 맨 위에 기간·제목·내용, 종전 메모는 그 아래", repr(hm[:60]))
+    else:
+        chk(False, "I14 [할 일…] 단추와 할 일 창")
+    st = dlg._store()
+    g_future = P.todo_add(st, {"title": "다음 주 일", "memo": "", "start": tomorrow, "end": ""}, [kim["id"]], "계속")
+    g_past = P.todo_add(st, {"title": "지난 일", "memo": "", "start": yesterday, "end": yesterday}, [kim["id"]], "계속") \
+        if hasattr(P, "todo_add") else None
+    dlg._fav_fill_tabs(gid)
+    tabs = [dlg.fav_tabs.tabText(i) for i in range(dlg.fav_tabs.count())]
+    hidden = [t for _g, t in P.todo_hidden(st, today_s)]
+    chk("다음 주 일" not in tabs and "지난 일" not in tabs and sorted(hidden) == ["다음 주 일", "지난 일"],
+        "I14 기간 밖(시작 전·끝남) 할 일 탭은 숨기고 지우지 않음", "%s %s" % (tabs, hidden))
+    dlg.todo_edit(g_future, {"title": "다음 주 일", "memo": "", "start": today_s, "end": tomorrow})
+    tabs = [dlg.fav_tabs.tabText(i) for i in range(dlg.fav_tabs.count())]
+    chk("다음 주 일" in tabs and P.todo_info(st, g_future)["end"] == tomorrow, "I14 할 일 고치기 — 기간을 오늘로 당기면 탭이 보임")
+    km = P.card_by_id(st, kim["id"])["memo"]
+    chk(km.startswith("[%s ~ %s] 지난 일" % (yesterday, yesterday)), "I14 최신 할 일이 메모 맨 위", repr(km[:40]))
+    dlg.todo_delete(g_future, ask=False)
+    dlg.todo_delete(g_past, ask=False)
+    # 즐겨찾기 사람 — 호버에 휴대폰·메일, 메뉴 '내용 복사'
+    dlg.fav_tabs.setCurrentIndex([dlg.fav_tabs.tabText(i) for i in range(dlg.fav_tabs.count())].index("현장 점검"))
+    pump(timeout=0.1)
+    hit = next((dlg.fav.item(i) for i in range(dlg.fav.count()) if dlg.fav.item(i).data(Qt.ItemDataRole.UserRole) == hong["id"]), None)
+    chk(hit is not None and "010-0000-0001" in hit.toolTip() and "hong@example.com" in hit.toolTip(),
+        "I14 즐겨찾기 사람 위 글에 휴대폰·메일", hit.toolTip() if hit else "")
+    dlg.fav.clearSelection()
+    if hit is not None:
+        hit.setSelected(True)
+    t = dlg.fav_copy_selected() if hasattr(dlg, "fav_copy_selected") else ""
+    chk("홍길동" in t and "김철수" not in t and QApplication.clipboard().text() == t, "I14 즐겨찾기 사람 메뉴 '내용 복사' = 체크한 칸 글", repr(t[:40]))
+    dlg.todo_delete(gid, ask=False)
     # I8 주소록 가져오기(리멤버 꼴 vCard) — 같은 사람은 빈 칸만, 없는 사람은 그림 없는 명함
     vf = TMP / "contacts.vcf"
     vf.write_text("BEGIN:VCARD\r\nVERSION:3.0\r\nN:;김철수;;;\r\nTEL;TYPE=work,cell:010-0000-0003\r\nEMAIL;TYPE=work:kim@example.com\r\n"

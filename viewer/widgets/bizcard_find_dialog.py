@@ -12,12 +12,12 @@ import math
 import os
 from pathlib import Path
 
-from PyQt6.QtCore import Qt, QTimer, QSize, QObject, QRectF, pyqtSignal
+from PyQt6.QtCore import Qt, QTimer, QSize, QObject, QRectF, QDate, pyqtSignal
 from PyQt6.QtGui import QPixmap, QIcon, QImage, QImageReader, QPainter, QPainterPath, QColor, QFont, QKeySequence, QShortcut
 from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QComboBox, QTableWidget,
     QTableWidgetItem, QAbstractItemView, QHeaderView, QSplitter, QWidget, QFormLayout, QPlainTextEdit, QPushButton,
     QListWidget, QListWidgetItem, QListView, QMessageBox, QFileDialog, QSizePolicy, QCheckBox, QTabBar, QToolButton,
-    QMenu, QInputDialog, QApplication)
+    QMenu, QInputDialog, QApplication, QDateEdit, QDialogButtonBox)
 
 from viewer.i18n import tr, tr_noop
 from viewer.bizcard import people as P
@@ -37,6 +37,62 @@ IMG_FILTER = " ".join("*" + e for e in R.IMG_EXTS)
 FIELDS = (("name", tr_noop("이름")), ("company", tr_noop("회사")), ("dept", tr_noop("부서")), ("title", tr_noop("직함")), ("cell", tr_noop("휴대폰")), ("work", tr_noop("전화")),
           ("fax", tr_noop("팩스")), ("email", tr_noop("메일")), ("address", tr_noop("주소")), ("url", tr_noop("누리집")))
 MEMO_LABEL = tr_noop("메모")
+
+
+def _today() -> str:
+    import datetime
+    return datetime.date.today().isoformat()
+
+
+class TodoDialog(QDialog):
+    """할 일(D26) — 작업 제목·내용·시작일(기본 오늘)·종료일(체크하지 않으면 계속)."""
+
+    def __init__(self, parent=None, info=None, title=""):
+        super().__init__(parent)
+        info = info or {}
+        self.setWindowTitle(title or tr("할 일"))
+        f = QFormLayout(self)
+        self.ed_title = QLineEdit(info.get("title", ""))
+        self.ed_title.setPlaceholderText(tr("작업 제목 — 즐겨찾기 탭 이름이 됩니다"))
+        f.addRow(tr("작업 제목"), self.ed_title)
+        self.ed_memo = QPlainTextEdit(info.get("memo", ""))
+        self.ed_memo.setFixedHeight(90)
+        f.addRow(tr("내용"), self.ed_memo)
+        self.d_start = QDateEdit(QDate.fromString(info.get("start") or _today(), "yyyy-MM-dd"))
+        self.d_start.setCalendarPopup(True)
+        self.d_start.setDisplayFormat("yyyy-MM-dd")
+        f.addRow(tr("시작일"), self.d_start)
+        erow = QHBoxLayout()
+        self.chk_end = QCheckBox(tr("종료일"))
+        self.chk_end.setToolTip(tr("체크하지 않으면 시작일부터 계속"))
+        self.d_end = QDateEdit(QDate.fromString(info.get("end") or info.get("start") or _today(), "yyyy-MM-dd"))
+        self.d_end.setCalendarPopup(True)
+        self.d_end.setDisplayFormat("yyyy-MM-dd")
+        self.chk_end.toggled.connect(self.d_end.setEnabled)
+        self.chk_end.setChecked(bool(info.get("end")))
+        self.d_end.setEnabled(bool(info.get("end")))
+        erow.addWidget(self.chk_end)
+        erow.addWidget(self.d_end, 1)
+        f.addRow(erow)
+        bb = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        bb.accepted.connect(self._ok)
+        bb.rejected.connect(self.reject)
+        f.addRow(bb)
+        self.resize(380, self.sizeHint().height())
+
+    def _ok(self):
+        if not self.ed_title.text().strip():
+            self.ed_title.setFocus()
+            return
+        if self.chk_end.isChecked() and self.d_end.date() < self.d_start.date():
+            QMessageBox.information(self, tr("할 일"), tr("종료일이 시작일보다 앞입니다."))
+            return
+        self.accept()
+
+    def info(self) -> dict:
+        return {"title": self.ed_title.text().strip(), "memo": self.ed_memo.toPlainText().strip(),
+                "start": self.d_start.date().toString("yyyy-MM-dd"),
+                "end": self.d_end.date().toString("yyyy-MM-dd") if self.chk_end.isChecked() else ""}
 
 
 def _read(path: str, w: int, h: int) -> QImage:
@@ -359,7 +415,13 @@ class BizcardFindDialog(QDialog):
         self.btn_save.setToolTip(tr("고친 칸·메모를 명함 DB 에 저장합니다 — 이름·회사를 바꾸면 정리본 파일 이름도 '성명_회사명' 으로"))
         self.btn_save.clicked.connect(lambda _c=False: self.save())
         self.btn_save.setEnabled(False)
-        rv.addWidget(self.btn_save)
+        self.btn_copy = QPushButton(tr("내용 복사"))
+        self.btn_copy.setToolTip(tr("고른 명함들의 체크한 칸을 '항목: 값' 글로 복사합니다"))
+        self.btn_copy.clicked.connect(lambda _c=False: self.copy_selected())
+        srow = QHBoxLayout()                               # [저장] 오른쪽에 [내용 복사](§5.24, 사용자 지시 261119)
+        srow.addWidget(self.btn_save, 1)
+        srow.addWidget(self.btn_copy, 1)
+        rv.addLayout(srow)
         mid.addWidget(detail)
         mid.setStretchFactor(0, 3)
         mid.setStretchFactor(1, 2)
@@ -410,6 +472,17 @@ class BizcardFindDialog(QDialog):
         self.photos.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.photos.customContextMenuRequested.connect(self._photo_menu)
         pvl.addWidget(self.photos)
+        prow = QHBoxLayout()                               # 인물 사진 칸 아래 단추(§5.24 '단추', 사용자 지시 261119)
+        self.btn_photo = QPushButton(tr("사진 추가..."))
+        self.btn_photo.setToolTip(tr("인물 사진을 '인물' 폴더에 정리본과 같은 이름의 JPG 로 넣습니다 — 위치 정보 등 EXIF 는 뺍니다"))
+        self.btn_photo.clicked.connect(lambda _c=False: self._pick_photos())
+        self.btn_photo_del = QPushButton(tr("사진 삭제"))
+        self.btn_photo_del.setToolTip(tr("썸네일 줄에서 고른 인물 사진(없으면 큰 화면의 사진)을 휴지통으로"))
+        self.btn_photo_del.clicked.connect(lambda _c=False: self.delete_shown_photos())
+        prow.addWidget(self.btn_photo)
+        prow.addWidget(self.btn_photo_del)
+        prow.addStretch(1)
+        pvl.addLayout(prow)
         self.photo_split.addWidget(photow)
         self.photo_split.setStretchFactor(0, 2)
         self.photo_split.setStretchFactor(1, 3)
@@ -424,9 +497,6 @@ class BizcardFindDialog(QDialog):
         v.addWidget(self.split, 1)
 
         bot = QHBoxLayout()
-        self.btn_photo = QPushButton(tr("사진 추가..."))
-        self.btn_photo.setToolTip(tr("인물 사진을 '인물' 폴더에 정리본과 같은 이름의 JPG 로 넣습니다 — 위치 정보 등 EXIF 는 뺍니다"))
-        self.btn_photo.clicked.connect(lambda _c=False: self._pick_photos())
         self.btn_open = QPushButton(tr("명함 보기"))                     # D19: 종전 '사진 모드에서 열기' — 동작 그대로
         self.btn_open.setToolTip(tr("이 명함을 사진 모드에서 엽니다"))
         self.btn_open.clicked.connect(lambda _c=False: self.open_in_photo())
@@ -442,9 +512,9 @@ class BizcardFindDialog(QDialog):
         self.btn_tags = QPushButton(tr("해시태그..."))
         self.btn_tags.setToolTip(tr("고른 명함들에 해시태그를 붙이거나 뗍니다 — 정리본 파일에도 같이, 찾기 칸에서 #낱말로 찾습니다"))
         self.btn_tags.clicked.connect(lambda _c=False: self.edit_tags())
-        self.btn_copy = QPushButton(tr("내용 복사"))
-        self.btn_copy.setToolTip(tr("고른 명함들의 체크한 칸을 '항목: 값' 글로 복사합니다"))
-        self.btn_copy.clicked.connect(lambda _c=False: self.copy_selected())
+        self.btn_todo = QPushButton(tr("할 일..."))
+        self.btn_todo.setToolTip(tr("고른 명함들로 할 일(제목·내용·기간)을 만듭니다 — 기간 동안 제목 이름의 즐겨찾기 탭에, 메모 맨 위에 기록"))
+        self.btn_todo.clicked.connect(lambda _c=False: self.todo_new())
         self.btn_fav_add = QPushButton(tr("즐겨찾기에 넣기"))
         self.btn_fav_add.setToolTip(tr("표에서 고른 명함 모두를 지금 즐겨찾기 탭에 넣습니다"))
         self.btn_fav_add.clicked.connect(lambda _c=False: self.fav_add_selected())
@@ -453,7 +523,7 @@ class BizcardFindDialog(QDialog):
         self.btn_del.clicked.connect(lambda _c=False: self.delete_cards())
         b_close = QPushButton(tr("닫기"))
         b_close.clicked.connect(lambda _c=False: self.close())
-        for b in (self.btn_photo, self.btn_open, self.btn_tags, self.btn_copy, self.btn_fav_add, self.btn_vcard, self.btn_del):
+        for b in (self.btn_open, self.btn_tags, self.btn_todo, self.btn_fav_add, self.btn_vcard, self.btn_del):
             bot.addWidget(b)
         bot.addStretch(1)
         bot.addWidget(b_close)
@@ -667,6 +737,8 @@ class BizcardFindDialog(QDialog):
         finally:
             self.photos.blockSignals(False)
         self._show_photo()
+        if hasattr(self, "btn_photo_del"):
+            self.btn_photo_del.setEnabled(bool(self._card) and not V.is_contact(self._card) and self.photos.count() > 0)
 
     def photo_paths(self) -> list:
         return [self.photos.item(i).data(ROLE) for i in range(self.photos.count())]
@@ -707,11 +779,12 @@ class BizcardFindDialog(QDialog):
 
     def _enable_card_buttons(self, on: bool):
         img = on and not V.is_contact(self._card)            # 주소록에서 가져온 명함 — 그림·인물 사진 없음
-        for b in (self.btn_tags, self.btn_copy, self.btn_fav_add, self.btn_del):
+        for b in (self.btn_tags, self.btn_copy, self.btn_todo, self.btn_fav_add, self.btn_del):
             b.setEnabled(on)
         for b in (self.btn_photo, self.btn_open):
             b.setEnabled(img)
         self.photos.setEnabled(img)
+        self.btn_photo_del.setEnabled(img and self.photos.count() > 0)
 
     def _ask_save(self) -> bool:
         """저장 안 한 고침 — 저장·버리기·취소. True = 넘어가도 됨."""
@@ -831,8 +904,9 @@ class BizcardFindDialog(QDialog):
             store.set(p, list(dict.fromkeys(cur + list(new_tags))))
 
     # ── 체크한 칸 복사 (§5.24, D21) ──
-    def copy_text(self) -> str:
-        cards = self.selected_cards() or ([self._card] if self._card else [])
+    def copy_text(self, cards=None) -> str:
+        if cards is None:
+            cards = self.selected_cards() or ([self._card] if self._card else [])
         fields = {k for k, cb in self.chk.items() if cb.isChecked()}
         labels = dict({k: tr(lb) for k, lb in FIELDS}, memo=tr(MEMO_LABEL))
         vals = []
@@ -860,9 +934,12 @@ class BizcardFindDialog(QDialog):
         while self.fav_tabs.count():
             self.fav_tabs.removeTab(0)
         pick = 0
-        for i, (gid, name) in enumerate(P.fav_groups(self._store())):
+        st = self._store()
+        for i, (gid, name) in enumerate(P.fav_groups(st, _today())):     # 기간 밖 할 일 탭은 숨김(D26)
             self.fav_tabs.addTab(name)
             self.fav_tabs.setTabData(i, gid)
+            info = P.todo_info(st, gid)
+            self.fav_tabs.setTabToolTip(i, self._todo_tip(info) if info else "")
             if gid == select:
                 pick = i
         self.fav_tabs.setCurrentIndex(pick)
@@ -903,7 +980,7 @@ class BizcardFindDialog(QDialog):
             self.fav_tabs.setTabText(i, name)
 
     def fav_delete_tab(self, i, ask: bool = True) -> bool:
-        if i < 0 or self.fav_tabs.count() <= 1:
+        if i < 0:
             return False
         gid = self.fav_tabs.tabData(i)
         n = len(P.fav_members(self._store(), gid))
@@ -920,11 +997,78 @@ class BizcardFindDialog(QDialog):
         i = self.fav_tabs.tabAt(pos)
         if i < 0:
             return
+        st = self._store()
+        gid = self.fav_tabs.tabData(i)
         m = QMenu(self)
+        if P.todo_info(st, gid) is not None:
+            _menu_act(m, tr("할 일 고치기..."), lambda: self.todo_edit(gid))
         _menu_act(m, tr("이름 바꾸기..."), lambda: self.fav_rename_tab(i))
-        _menu_act(m, tr("탭 지우기"), lambda: self.fav_delete_tab(i)).setEnabled(self.fav_tabs.count() > 1)
+        _menu_act(m, tr("탭 지우기"), lambda: self.fav_delete_tab(i))
         _menu_act(m, tr("새 탭..."), lambda: self.fav_new_tab())
+        hidden = P.todo_hidden(st, _today())
+        if hidden:
+            hm = m.addMenu(tr("숨은 할 일"))
+            for hid, title in hidden:
+                sm = hm.addMenu(title)
+                _menu_act(sm, tr("할 일 고치기..."), lambda h=hid: self.todo_edit(h))
+                _menu_act(sm, tr("지우기"), lambda h=hid: self.todo_delete(h))
         m.exec(self.fav_tabs.mapToGlobal(pos))
+
+    # ── 할 일(todo) — 즐겨찾기 탭 + 기간(D26) ──
+    @staticmethod
+    def _todo_tip(info) -> str:
+        period = "%s ~ %s" % (info["start"], info["end"] or tr("계속"))
+        return "%s\n%s" % (period, info["memo"]) if info["memo"] else period
+
+    def todo_new(self, info=None) -> int:
+        """[할 일…] — 고른 명함들(없으면 지금 명함)로 할 일 탭을 만든다. info 를 주면 창 없이(검사). 반환 = 탭 id 또는 0."""
+        cards = self.selected_cards() or ([self._card] if self._card else [])
+        if not cards:
+            return 0
+        if info is None:
+            dlg = TodoDialog(self, title=tr("할 일 — {n}명").format(n=len(cards)))
+            if dlg.exec() != QDialog.DialogCode.Accepted:
+                return 0
+            info = dlg.info()
+        if not (info.get("title") or "").strip():
+            return 0
+        if self._dirty and not self._ask_save():
+            return 0
+        gid = P.todo_add(self._store(), info, [c["id"] for c in cards], tr("계속"))
+        self._fav_fill_tabs(gid)
+        if self._card is not None:                    # 메모가 바뀌었을 수 있다 — 지금 명함 다시 읽기
+            c = P.card_by_id(self._store(), self._card["id"])
+            if c is not None:
+                self._load(c)
+        return gid
+
+    def todo_edit(self, gid, info=None) -> bool:
+        st = self._store()
+        cur = P.todo_info(st, gid)
+        if cur is None:
+            return False
+        if info is None:
+            dlg = TodoDialog(self, cur, title=tr("할 일 고치기"))
+            if dlg.exec() != QDialog.DialogCode.Accepted:
+                return False
+            info = dlg.info()
+        if not (info.get("title") or "").strip():
+            return False
+        P.todo_update(st, gid, info)
+        self._fav_fill_tabs(self._fav_gid())
+        return True
+
+    def todo_delete(self, gid, ask: bool = True) -> bool:
+        st = self._store()
+        cur = P.todo_info(st, gid)
+        if cur is None:
+            return False
+        if ask and QMessageBox.question(self, tr("할 일"), tr("할 일 '{t}' 를 지웁니다 — 명함과 메모는 그대로입니다.").format(
+                t=cur["title"])) != QMessageBox.StandardButton.Yes:
+            return False
+        ok = P.fav_delete_group(st, gid)
+        self._fav_fill_tabs(self._fav_gid())
+        return ok
 
     def _fav_fill(self):
         """지금 탭의 사람 칸 — 우선 옅은 파랑 + 첫 글자, 그림은 배경에서 읽어 바꾼다."""
@@ -938,7 +1082,7 @@ class BizcardFindDialog(QDialog):
         for c in P.fav_members(self._store(), gid):
             it = QListWidgetItem(QIcon(_rounded(None, c.get("name") or "")), c.get("name") or "")
             it.setData(ROLE, c["id"])
-            it.setToolTip(" · ".join(x for x in (c.get("name"), c.get("company"), c.get("title")) if x))
+            it.setToolTip(self._fav_tip(c))
             it.setTextAlignment(Qt.AlignmentFlag.AlignHCenter)
             self.fav.addItem(it)
             photos = P.person_photos(c["front"]) if c.get("front") and not V.is_contact(c) else []
@@ -980,8 +1124,15 @@ class BizcardFindDialog(QDialog):
         cards = cards if cards is not None else (self.selected_cards() or ([self._card] if self._card else []))
         if gid is None or not cards:
             return 0
-        n = P.fav_add(self._store(), gid, [c["id"] for c in cards])
+        todo = P.todo_info(self._store(), gid) is not None
+        if todo and self._dirty and not self._ask_save():
+            return 0
+        n = P.fav_add(self._store(), gid, [c["id"] for c in cards], ongoing=tr("계속"))
         self._fav_fill()
+        if todo and n and self._card is not None:     # 할 일 탭 — 메모 맨 위에 기록됐다(D26)
+            c = P.card_by_id(self._store(), self._card["id"])
+            if c is not None:
+                self._load(c)
         return n
 
     def fav_remove_selected(self):
@@ -997,10 +1148,32 @@ class BizcardFindDialog(QDialog):
         if gid is not None:
             P.fav_order(self._store(), gid, self.fav_ids())
 
+    @staticmethod
+    def _fav_tip(c) -> str:
+        """즐겨찾기 사람 위 — 이름·회사·직함 + 휴대폰·메일(§5.24, 사용자 지시 261119)."""
+        lines = [" · ".join(x for x in (c.get("name"), c.get("company"), c.get("title")) if x)]
+        cells = [p[1] for p in (c.get("phones") or []) if isinstance(p, (list, tuple)) and len(p) >= 2 and p[0] == "cell"]
+        if cells:
+            lines.append(tr("휴대폰") + ": " + ", ".join(cells))
+        mails = [str(e[-1] if isinstance(e, (list, tuple)) else e) for e in (c.get("emails") or []) if e]
+        if mails:
+            lines.append(tr("메일") + ": " + ", ".join(mails))
+        return "\n".join(x for x in lines if x)
+
+    def fav_copy_selected(self) -> str:
+        """즐겨찾기 사람 메뉴 '내용 복사' — 고른 사람들의 체크한 칸([내용 복사]와 같은 글)."""
+        st = self._store()
+        cards = [c for c in (P.card_by_id(st, it.data(ROLE)) for it in self.fav.selectedItems()) if c]
+        t = self.copy_text(cards)
+        if t:
+            QApplication.clipboard().setText(t)
+        return t
+
     def _fav_menu(self, pos):
         if self.fav.itemAt(pos) is None:
             return
         m = QMenu(self)
+        _menu_act(m, tr("내용 복사"), lambda: self.fav_copy_selected())
         _menu_act(m, tr("탭에서 빼기"), lambda: self.fav_remove_selected())
         m.exec(self.fav.mapToGlobal(pos))
 
@@ -1091,6 +1264,11 @@ class BizcardFindDialog(QDialog):
         rest = [p for p in self.photo_paths() if p not in paths or p in failed]
         self.apply_photo_order([p for p in rest if os.path.exists(p)])
         return len([p for p in paths if p not in failed])
+
+    def delete_shown_photos(self, ask: bool = True) -> int:
+        """[사진 삭제] — 썸네일 줄에서 고른 사진, 없으면 큰 화면의 사진(Delete 와 같은 길)."""
+        paths = [it.data(ROLE) for it in self.photos.selectedItems()] or ([self.photo_shown] if self.photo_shown else [])
+        return self.delete_photos(paths, ask=ask)
 
     def _photo_menu(self, pos):
         if self.photos.itemAt(pos) is None:

@@ -1067,9 +1067,21 @@ class BizcardFindDialog(QDialog):
                 st.delete_card(c["id"])
             gone += 1
         self.last_deleted = gone
+        if not gone:
+            return 0
+        rows = [r for r in (self.row_of_id(c["id"]) for c in cards) if r >= 0]
+        at = min(rows) if rows else 0                  # 지운 줄의 자리 — 지운 뒤 그 자리 = 바로 아래 명함(사용자 지시 261118)
         self._dirty = False
         self._card = None
         self.refresh()
+        n = self.table.rowCount()
+        if n:
+            r = min(at, n - 1)                          # 맨 끝을 지웠으면 새 끝 줄
+            self.table.clearSelection()
+            self.table.setCurrentCell(r, 0)
+            self.table.selectRow(r)
+            if self._card is None or self._card["id"] != (self._card_at(r) or {}).get("id"):
+                self._load(self._card_at(r))
         self._fav_fill()
         return gone
 

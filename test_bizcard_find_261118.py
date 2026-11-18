@@ -494,9 +494,16 @@ try:
     dlg.table.clearSelection()
     dlg.table.setCurrentCell(dlg.row_of_id(lee["id"]), 0)
     pump(timeout=0.1)
+    dlg.table.sortByColumn(0, Qt.SortOrder.AscendingOrder)   # 지울 명함이 맨 위가 아니게(고치기 전 코드는 맨 위로 갔다)
+    pump(timeout=0.1)
+    r_lee = dlg.row_of_id(lee["id"])
+    below = dlg._card_at(r_lee + 1) if r_lee + 1 < dlg.table.rowCount() else dlg._card_at(r_lee - 1)
     dlg.activateWindow(); dlg.table.setFocus()
     QTest.keyClick(dlg.table, Qt.Key.Key_Delete)
     pump(timeout=0.3)
+    chk(r_lee > 0 and dlg._card is not None and below is not None and dlg._card["id"] == below["id"]
+        and dlg.table.currentRow() == dlg.row_of_id(below["id"]), "I9 지운 뒤 커서는 맨 위가 아니라 바로 아래 명함",
+        "%s %s" % (dlg.table.currentRow(), r_lee))
     st = S.BizcardStore()
     chk(not os.path.exists(lee_front) and not src_lee.exists() and P.find(st, "이영희") == [], "I9 Delete — 원본·정리본 휴지통, DB 행 지움")
     chk(st.con.execute("SELECT COUNT(*) FROM fav_members WHERE card_id=?", (lee["id"],)).fetchone()[0] == 0, "I9 즐겨찾기 칸도 지움")

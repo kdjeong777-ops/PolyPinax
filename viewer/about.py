@@ -82,7 +82,9 @@ OSS = (
     ("PyWinRT", "MIT", "PyWinRT contributors", ("winrt-runtime", "winrt-Windows.Foundation",
                                                 "winrt-Windows.Security.Credentials",
                                                 "winrt-Windows.Security.Cryptography",
-                                                "winrt-Windows.Storage.Streams")),
+                                                "winrt-Windows.Storage.Streams", "winrt-Windows.Media.Ocr",
+                                                "winrt-Windows.Graphics.Imaging", "winrt-Windows.Globalization",
+                                                "winrt-Windows.Foundation.Collections")),
 )
 
 

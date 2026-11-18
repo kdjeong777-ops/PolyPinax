@@ -7,6 +7,7 @@ C. 이름 후보 — 큰 글자·성씨·직함 이웃이 이기고, 회사·주
 D. 앞뒤 합치기 — 한글판은 한글 주·영문 따로(R7), 한글 없는 명함은 영문 주, 영문판은 영문 주, 홍보 뒷면 판정(R8)
 E. 원천 — 그림 폴더의 하위 `pdf\\<앞부분>.pdf` 가 있으면 PDF 가 원천, 앞·뒤 짝 찾기
 F. 그린 가짜 명함(그림·PDF)을 로컬 Tesseract 로 끝까지(없으면 SKIP)
+G. 정답 대조로 고친 규칙(§5.22) · H. 두 엔진 합침·해외 번호·기관 이름 직함(§5.23) · I. 보조 OCR 엔진 붙이기(단어학습 SOT §14.25)
 """
 import os, sys, tempfile, shutil
 os.environ["QT_QPA_PLATFORM"] = "offscreen"          # 검사 작성 SOT §14.7 — Qt 를 쓰는 검사는 오프스크린
@@ -154,6 +155,125 @@ try:
     chk(s3["pdf"] is None and s3["front"].name == "라마_김철수_1.jpg" and s3["back"] is None, "E PDF 없는 JPG 는 그림이 원천")
 finally:
     shutil.rmtree(tmp, ignore_errors=True)
+
+# ── G ── 정답 대조로 고친 규칙(§5.22, 261118) — 가짜 값만
+print("\n=== G. 정답 대조로 고친 규칙(§5.22) ===")
+_has = lambda n: hasattr(R, n)
+chk(all(_has(n) for n in ("fix_email", "pick_emails", "pick_phones", "join_letter_lines", "org_token", "project_line",
+                          "dept_runs", "unglue_name")), "G 새 규칙 함수들이 있다")
+if all(_has(n) for n in ("fix_email", "pick_emails", "pick_phones", "join_letter_lines")):
+    chk(R.fix_email("hong@hanmal.net") == "hong@hanmail.net" and R.fix_email("hong@nale.com") == "hong@nate.com",
+        "G 흔한 메일 도메인 한두 글자 오인식", R.fix_email("hong@hanmal.net"))
+    chk(R.fix_email("e-mail.hong@example.co") == "hong@example.co.kr" and R.fix_email("hong@example.co.ke") == "hong@example.co.kr",
+        "G 앞에 붙은 이름표 떼기·끝이 빠지거나 틀린 .kr", R.fix_email("e-mail.hong@example.co"))
+    chk(R.find_emails("E-mail: hong0000@hanmailnet") == ["hong0000@hanmail.net"], "G 점이 빠진 'hanmailnet'",
+        str(R.find_emails("E-mail: hong0000@hanmailnet")))
+    pe = R.pick_emails("hongl000@example.com\nhong1000@example.com\nhong1000@example.com\n000@example.com")
+    chk(pe == ["hong1000@example.com"], "G 여러 번 읽은 메일 — 한 글자 다른·앞이 잘린 것을 묶어 많이 나온 것", str(pe))
+    pp = R.pick_phones(["T. 02-000-0001  F. 02-000-0002", "T. 02-000-0001", "T. 02-000-0007", "M. 010-0000-0003"])
+    chk(pp[:1] == [("work", "02-000-0001")] and ("fax", "02-000-0002") in pp and ("cell", "010-0000-0003") in pp
+        and not any(n == "02-000-0007" for _k, n in pp),
+        "G 번호 고르기 — 한 자리 다른 같은 번호는 많이 나온 쪽, 전화·팩스는 따로", str(pp))
+    pc = R.pick_phones(["Phone 010-0000-0004"])
+    chk(pc == [("cell", "010-0000-0004")], "G 01x 는 'Phone' 표시여도 휴대폰", str(pc))
+    jl = R.join_letter_lines([L("홍", 0.12, 90, 0.40, 0.30, 0.46), L("길", 0.12, 90, 0.40, 0.45, 0.46),
+                              L("동", 0.12, 90, 0.40, 0.60, 0.46), L("홍", 0.12, 90, 0.40, 0.30, 0.46)])
+    chk([x.text for x in jl] == ["홍길동"], "G 한 글자씩 따로 읽힌 이름을 잇는다(같은 자리 겹친 글자는 한 번)", str([x.text for x in jl]))
+    rn = R.parse_lines([L("가나다기술", 0.10, 90, 0.05), L("홍", 0.16, 90, 0.4, 0.3, 0.48), L("길", 0.16, 90, 0.4, 0.45, 0.48),
+                        L("동", 0.16, 90, 0.4, 0.6, 0.48), L("부장", 0.06, 90, 0.6)])
+    chk(rn.names_ko and rn.names_ko[0].text == "홍길동", "G 이은 이름이 1위", str([c.text for c in rn.names_ko[:3]]))
+if _has("org_token"):
+    chk(R.parse_hint(r"C:\x\가나다기술_홍 길동_001_1.jpg")[0] == "홍길동" and R.parse_hint(r"C:\x\가나다_이름_1.jpg")[0] == "",
+        "G 파일 이름 덧번호 '_001' 떼기·자리 글자 '이름' 은 이름이 아님", str(R.parse_hint(r"C:\x\가나다기술_홍 길동_001_1.jpg")))
+    rh = R.parse_lines([L("가나다기술", 0.12, 90, 0.1), L("010-0000-0005", 0.05, 90, 0.9)], hint_name="홍길동")
+    chk(rh.names_ko and rh.names_ko[0].text == "홍길동", "G 파일 이름의 이름은 OCR 에 없어도 후보 1위", str([c.text for c in rh.names_ko[:2]]))
+    rh2 = R.parse_lines([L("가나다기술", 0.10, 90, 0.1), L("홍길순", 0.16, 90, 0.4), L("부장", 0.06, 90, 0.5)], hint_name="홍길동")
+    chk(rh2.names_ko and rh2.names_ko[0].text == "홍길순", "G 파일 이름과 한 글자만 다른 큰 글자 이름이면 OCR 쪽", str([c.text for c in rh2.names_ko[:2]]))
+    rcmp = R.parse_lines([L("AB 가나다주택공사", 0.10, 90, 0.05), L("홍길동", 0.16, 90, 0.4)])
+    chk(rcmp.companies_ko and rcmp.companies_ko[0].text == "가나다주택공사", "G 줄 속 기관 낱말만 회사로", str([c.text for c in rcmp.companies_ko[:2]]))
+    rcmp2 = R.parse_lines([L("가나 교통부", 0.10, 90, 0.05), L("홍길동", 0.16, 90, 0.4)])
+    chk(rcmp2.companies_ko and rcmp2.companies_ko[0].text == "가나교통부", "G 띄어 읽힌 기관 이름을 잇는다", str([c.text for c in rcmp2.companies_ko[:2]]))
+    rp = R.parse_lines([L("(주)가나다건설", 0.10, 90, 0.05), L("가나-다라 도로건설공사", 0.06, 90, 0.3), L("홍길동 현장소장", 0.14, 90, 0.4)])
+    chk(rp.companies_ko and rp.companies_ko[0].text == "가나다건설" and rp.dept_ko == "가나-다라도로건설공사"
+        and rp.titles_ko[:1] == ["현장소장"], "G 공사 이름(현장)은 회사가 아니라 부서 칸", rp.dept_ko + " / " + str([c.text for c in rp.companies_ko[:2]]))
+    rd2 = R.parse_lines([L("가나다기술", 0.10, 90, 0.05), L("도로교통연구 본부", 0.06, 90, 0.3), L("감리2부 / 부장", 0.06, 90, 0.35),
+                         L("홍길동", 0.14, 90, 0.4)])
+    chk(rd2.dept_ko == "도로교통연구본부감리2부" and rd2.titles_ko[:1] == ["부장"], "G 이어진 부서 낱말 묶음·숫자 낀 부서·다음 줄 부서 잇기",
+        rd2.dept_ko)
+    rt3 = R.parse_lines([L("가나다기술", 0.10, 90, 0.05), L("책임 연구원 / 시설 사무관", 0.06, 90, 0.3), L("홍길동", 0.14, 90, 0.4)])
+    chk(rt3.titles_ko[:2] == ["책임연구원", "시설사무관"] or set(rt3.titles_ko[:2]) == {"책임연구원", "시설사무관"},
+        "G 겹 직함을 줄이지 않는다", str(rt3.titles_ko))
+    chk(R.unglue_name("가나다기업홍길동", "홍길동") == "가나다기업", "G 회사명에 붙어 읽힌 이름 떼기")
+    rdm = R.parse_lines([L("Cx 안국도로공사", 0.10, 90, 0.05), L("홍길동", 0.16, 90, 0.4), L("hong@ex.co.kr", 0.05, 90, 0.9)])
+    chk(rdm.companies_ko and rdm.companies_ko[0].text == "한국도로공사", "G 메일 도메인이 아는 기관이면 닮은 회사 후보를 그 이름으로",
+        str([c.text for c in rdm.companies_ko[:2]]))
+
+# ── H ── 두 엔진 합침·해외 번호·기관 이름 직함(§5.23, 261118) — 가짜 값만
+print("\n=== H. 두 엔진 합침·해외 번호(§5.23) ===")
+chk(all(_has(n) for n in ("loose_phone", "_rare_ko", "_pick_twin_variant")) and "src" in R.Line.__dataclass_fields__,
+    "H 새 규칙 함수·줄 엔진 표시(src)가 있다")
+if _has("loose_phone"):
+    pf = R.pick_phones(["T. +1-555-000-0002  Cell: (555) 000-0001", "M. 0100000 0003", "2018 08 01 str. 42"])
+    chk(("work", "+1-555-000-0002") in pf and ("cell", "555-000-0001") in pf and ("cell", "010-0000-0003") in pf and len(pf) == 3,
+        "H 해외 번호·묶음이 다른 국내 번호도 뽑고, 표시 없는 숫자(날짜·주소)는 뽑지 않는다", str(pf))
+    chk(R.pick_phones(["M. +82 10 0000 0004"]) == [("cell", "010-0000-0004")], "H +82 국제 꼴은 국내 꼴로",
+        str(R.pick_phones(["M. +82 10 0000 0004"])))
+    chk(R.title_token("가나환경연구원") == "" and R.title_token("선임연구원") == "선임연구원" and R.title_token("연구위원") == "연구위원",
+        "H '…환경연구원' 은 기관 이름, '선임연구원' 은 직함", R.title_token("가나환경연구원"))
+    chk(R._rare_ko("가나뮘") == 1 and R._rare_ko("가나다") == 0, "H 완성형 밖 음절 세기")
+    rc = R.parse_lines([L("가나엔지니어팅", 0.12, 90, 0.05), L("가나엔지니어링", 0.08, 90, 0.10, src="w"), L("홍길동", 0.16, 90, 0.4)])
+    chk(rc.companies_ko and rc.companies_ko[0].text == "가나엔지니어링", "H 한 글자 다른 회사 판 중 아는 회사 낱말이 든 것",
+        str([c.text for c in rc.companies_ko[:3]]))
+    rn2 = R.parse_lines([L("가나다기술", 0.10, 90, 0.05), L("홍길동", 0.14, 90, 0.4), L("홍길둥", 0.16, 90, 0.4, src="w"),
+                         L("부장", 0.06, 90, 0.5)])
+    chk(rn2.names_ko and rn2.names_ko[0].text == "홍길동", "H 보조 엔진에만 있고 한 글자 다른 이름은 뒤로",
+        str([c.text for c in rn2.names_ko[:3]]))
+    pm = R.pick_emails("hong5s5@example.com\nhong55@example.com")
+    chk(pm == ["hong55@example.com"], "H 같은 수로 나온 메일 판은 숫자 옆 헷갈리는 글자(s·o·l) 없는 쪽", str(pm))
+
+# ── I ── 보조 엔진(Windows 내장 OCR)을 붙이는 길(단어학습 SOT §14.25) — 대역으로, 있으면 실제 엔진도
+print("\n=== I. 보조 OCR 엔진 붙이기(§14.25) ===")
+try:
+    from viewer.study import win_ocr as WO
+    from viewer.study import tess_run as TR
+    from viewer.study import ocr as O2
+except Exception as e:
+    WO = None
+    chk(False, "I viewer.study.win_ocr 를 불러온다", repr(e))
+if WO is not None and _has("win_lines"):
+    from PIL import Image as _Im
+    keep = (O2.ensure_tesseract, TR.data, WO.available, WO.read)
+    try:
+        O2.ensure_tesseract = lambda *a, **k: {"ok": True}
+        TR.data = lambda imgs, lang, cfg: [{"text": []} for _ in imgs]
+        WO.available = lambda: True
+        WO.read = lambda g: [("홍길동", [(10.0, 10.0, 60.0, 20.0)])]
+        im0 = _Im.new("L", (200, 100), 255)
+        a = R.ocr_lines(im0)
+        b = R.ocr_lines(im0, lang=R.O_FALLBACK())
+        c = R.ocr_lines(im0, 7, win=False)
+        chk([(x.text, x.src) for x in a] == [("홍길동", "w")] and abs(a[0].height - 0.2) < 1e-6,
+            "I 기본 언어 읽기에 보조 엔진 줄이 붙는다(src='w', 높이 비율)", str([(x.text, x.src, x.height) for x in a]))
+        chk(b == [] and c == [], "I 영어 덧읽기·고른 자리 읽기(win=False)에는 붙지 않는다", str((b, c)))
+        WO.available = lambda: False
+        chk(R.ocr_lines(im0) == [], "I 보조 엔진이 없으면 Tesseract 줄만")
+    finally:
+        O2.ensure_tesseract, TR.data, WO.available, WO.read = keep
+    if WO.available():
+        from PIL import ImageDraw, ImageFont
+        im1 = _Im.new("L", (900, 160), 255)
+        try:
+            fnt = ImageFont.truetype(r"C:\Windows\Fonts\malgun.ttf", 56)
+        except Exception:
+            fnt = None
+        if fnt is not None:
+            ImageDraw.Draw(im1).text((20, 40), "010-0000-0001", font=fnt, fill=0)
+            got = WO.read(im1)
+            chk(any("0000" in t for t, _b in got), "I 실제 Windows OCR 이 그린 가짜 번호를 읽는다", str(got))
+    else:
+        print("SKIP - I 실제 Windows OCR(이 PC 에 한국어 OCR 이 없거나 Windows 가 아님)")
+else:
+    chk(False, "I 보조 엔진 함수(win_lines)가 있다")
 
 # ── F ──
 print("\n=== F. 가짜 명함 끝까지(로컬 Tesseract) ===")

@@ -41,3 +41,8 @@ winrt-Windows.Foundation>=2.0 ; sys_platform == "win32"
 winrt-Windows.Security.Credentials>=2.0 ; sys_platform == "win32"
 winrt-Windows.Security.Cryptography>=2.0 ; sys_platform == "win32"
 winrt-Windows.Storage.Streams>=2.0 ; sys_platform == "win32"
+# 명함 인식의 보조 OCR 엔진 — Windows 내장 OCR(단어학습 SOT §14.25), 없으면 Tesseract 만
+winrt-Windows.Media.Ocr>=3.2 ; sys_platform == "win32"
+winrt-Windows.Graphics.Imaging>=3.2 ; sys_platform == "win32"
+winrt-Windows.Globalization>=3.2 ; sys_platform == "win32"
+winrt-Windows.Foundation.Collections>=3.2 ; sys_platform == "win32"

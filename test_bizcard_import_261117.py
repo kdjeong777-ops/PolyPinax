@@ -242,6 +242,23 @@ try:
     dlg.set_cell(rk, BD.C_NAME, "박영수")
     pump(timeout=0.2)
     chk(dlg.table.item(rk, BD.C_FILE).text() == "박영수_라마바.jpg", "D 이름을 고치면 새 파일 이름이 바로", dlg.table.item(rk, BD.C_FILE).text())
+    # 261117-20: 사람이 확인한 칸은 굵게, 확인한 '확인 필요' 칸은 노란 바탕을 걷는다
+    nm = dlg.table.item(rk, BD.C_NAME)
+    chk(nm.font().bold() and nm.data(Qt.ItemDataRole.BackgroundRole) is None,
+        "D 손으로 고친 '확인 필요' 이름 칸 — 굵게, 노란 바탕 걷힘")
+    cp = dlg.table.item(rk, BD.C_COMP)
+    chk(not cp.font().bold(), "D 손대지 않은 칸은 보통 글씨")
+    from PyQt6.QtWidgets import QStyleOptionViewItem as _SO
+    idx_c = dlg.table.model().index(rk, BD.C_COMP)
+    ed_c = dlg.table.itemDelegate().createEditor(dlg.table.viewport(), _SO(), idx_c)
+    dlg.table.itemDelegate().setEditorData(ed_c, idx_c)
+    dlg.table.itemDelegate().setModelData(ed_c, dlg.table.model(), idx_c)   # 값을 바꾸지 않고 넣음 = 확인
+    ed_c.deleteLater()
+    st9 = S.BizcardStore()
+    h9 = st9.recog_get(dlg._items[rk].key, S.source_sig([dlg._items[rk].pdf, dlg._items[rk].front, dlg._items[rk].back]))
+    st9.close()
+    chk(dlg.table.item(rk, BD.C_COMP).font().bold() and "company" in (h9["edit"].get("_ok") or []) and "company" not in h9["edit"],
+        "D 값을 바꾸지 않고 칸을 넣어도 '확인' — 굵게, 기록에는 확인 표시만(고친 값 아님)", str(h9 and h9["edit"]))
     chk(dlg.table.horizontalHeaderItem(BD.C_DEPT).text() == "부서", "D 확인 표에 '부서' 열(261117-11)")
     dlg.table.item(rk, BD.C_DEPT).setText("품질팀")
     # 261117-17(사용자 질문 '고친 방법을 학습해 적용하나'): 표에서 고친 칸도 — 인식값과 닮았으면 오인식 교정으로 배운다
@@ -282,10 +299,14 @@ try:
     hit = st.recog_get(dlg._items[rk].key, S.source_sig([dlg._items[rk].pdf, dlg._items[rk].front, dlg._items[rk].back]))
     chk(hit and hit["edit"].get("name") == "박영수", "D 고친 값은 캐시에(다시 열면 이어서)")
     st.close()
+    r_need = next(i for i, it in enumerate(dlg._items) if it.base == "20250101_120000")
+    dlg._items[r_need].need_set = {"name"}                               # 아직 확인하지 않은 '확인 필요' 줄
+    dlg._style_row(r_need)
     dlg.chk_need.setChecked(True)
     pump(timeout=0.2)
     vis = [r for r in range(dlg.table.rowCount()) if not dlg.table.isRowHidden(r)]
-    chk(vis == [rk], "D '확인 필요만' 거르기", str(vis))
+    chk(vis == [r_need], "D '확인 필요만' 거르기 — 사람이 확인한 줄(이름을 고친 줄)은 빠진다(261117-20)", str(vis))
+    chk(dlg.table.item(r_need, BD.C_NAME).data(Qt.ItemDataRole.BackgroundRole) is not None, "D 확인 전 '확인 필요' 칸은 노란 바탕")
     dlg.chk_need.setChecked(False)
     # 스캔일 일괄(D7) — 고른 줄만 바뀐다(표를 칸 위젯 없이 바꾼 뒤에도, 261117-12)
     dlg.table.clearSelection()

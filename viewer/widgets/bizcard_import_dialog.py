@@ -110,6 +110,9 @@ class ChoiceDelegate(QStyledItemDelegate):
             model.setData(index, editor.currentText().strip(), Qt.ItemDataRole.EditRole)
         else:
             super().setModelData(editor, model, index)
+        hook = getattr(self, "on_committed", None)       # 261117-20: 값을 바꾸지 않고 넣어도 '사람이 확인함'
+        if hook is not None:
+            hook(index.row(), index.column())
 
 
 class RegionWorker(QObject):
@@ -211,7 +214,9 @@ class BizcardImportDialog(QDialog):
         for c, w in ((C_ON, 44), (C_NAME, 110), (C_COMP, 160), (C_DEPT, 110), (C_TITLE, 80), (C_CELL, 120), (C_TEL, 120),
                      (C_MAIL, 170), (C_BACK, 90), (C_DATE, 90)):
             self.table.setColumnWidth(c, w)
-        self.table.setItemDelegate(ChoiceDelegate(self.table))
+        _dlg = ChoiceDelegate(self.table)
+        _dlg.on_committed = self._on_committed
+        self.table.setItemDelegate(_dlg)
         _QS, _QK = self._del_key
         _dk = _QS(_QK(_QK.StandardKey.Delete), self.table, activated=self.delete_selected)
         _dk.setContext(Qt.ShortcutContext.WidgetShortcut)              # 표에서만(칸을 고치는 중이면 글 칸이 먼저 받는다)
@@ -384,11 +389,8 @@ class BizcardImportDialog(QDialog):
             need = set(res.get("need_check") or [])
             if res.get("error"):
                 need |= {"name", "company", "contact"}
-            it.need = bool(need)
-            for c, k in ((C_NAME, "name"), (C_COMP, "company"), (C_CELL, "contact"), (C_MAIL, "contact")):
-                itm = self.table.item(r, c)
-                itm.setBackground(NEED_BG if k in need else QColor(0, 0, 0, 0))
-                itm.setForeground(QColor("black") if k in need else self.table.palette().text().color())
+            it.need_set = need
+            self._style_row(r)
             self._update_file(r)
         finally:
             self._loading = False
@@ -432,6 +434,66 @@ class BizcardImportDialog(QDialog):
         if not self._loading and self._items[item.row()].result:
             self._on_edit(item.row())
 
+    FIELD_COL = None           # (칸 이름, 열) — 확인 표시(261117-20)
+
+    def _field_cols(self):
+        return (("name", C_NAME), ("company", C_COMP), ("dept", C_DEPT), ("title", C_TITLE),
+                ("cell", C_CELL), ("tel", C_TEL), ("email", C_MAIL))
+
+    def confirmed(self, r) -> set:
+        """사람이 확인한 칸 = 손으로 고친 칸 + 값을 바꾸지 않고 넣은 칸·확인 창 [넣기](`_ok`)."""
+        ed = self._items[r].edit or {}
+        return {k for k, _c in self._field_cols() if k in ed} | set(ed.get("_ok") or [])
+
+    def _style_row(self, r):
+        """261117-20(사용자 지시): 사람이 확인한 칸은 **굵게**, 확인한 '확인 필요' 칸은 노란 바탕을 걷고 보통 색으로."""
+        it = self._items[r]
+        need = getattr(it, "need_set", set())
+        ok = self.confirmed(r)
+        was = self._loading
+        self._loading = True
+        try:
+            for k, c in self._field_cols():
+                itm = self.table.item(r, c)
+                if itm is None:
+                    continue
+                f = itm.font()
+                f.setBold(k in ok)
+                itm.setFont(f)
+                flag = (k in need) or (k in ("cell", "email") and "contact" in need)
+                if flag and k not in ok:
+                    itm.setBackground(NEED_BG)
+                    itm.setForeground(QColor("black"))
+                else:
+                    itm.setData(Qt.ItemDataRole.BackgroundRole, None)
+                    itm.setData(Qt.ItemDataRole.ForegroundRole, None)
+        finally:
+            self._loading = was
+        it.need = bool({k for k in need if k not in ok} - ({"contact"} if {"cell", "email"} & ok else set()))
+
+    def mark_ok(self, r, fld):
+        """그 칸을 사람이 확인한 것으로(값은 그대로) — 기록(`_ok`)에 남기고 굵게."""
+        it = self._items[r]
+        if not it.result or fld not in dict(self._field_cols()):
+            return
+        ed = dict(it.edit or {})
+        ok = list(ed.get("_ok") or [])
+        if fld not in ok:
+            ok.append(fld)
+            ed["_ok"] = ok
+            it.edit = ed
+            try:
+                self._store().edit_put(it.key, ed)
+            except Exception:
+                pass
+        self._style_row(r)
+        self._apply_filter_row(r)
+
+    def _on_committed(self, r, c):
+        col2f = {c2: k for k, c2 in self._field_cols()}
+        if c in col2f and 0 <= r < len(self._items):
+            self.mark_ok(r, col2f[c])
+
     def _on_edit(self, r):
         if self._loading or not self._items[r].result:
             return
@@ -442,6 +504,9 @@ class BizcardImportDialog(QDialog):
             self._loading = False
         v = self._row_values(r)
         edit = self._manual_of(r, v)                # 261117-15: 인식값과 **다른** 칸만 — [다시 읽기] 가 손으로 고친 칸을 가려 지킨다
+        ok = (self._items[r].edit or {}).get("_ok")
+        if ok:
+            edit["_ok"] = list(ok)                  # 확인 표시(261117-20)는 지킨다
         self._items[r].edit = edit
         if self._learn_table_edits(r, edit):         # 261117-17: 표에서 고친 오인식도 교정으로 — 곧바로 쓰이게 다시 불러옴
             self._load_learned()
@@ -449,6 +514,8 @@ class BizcardImportDialog(QDialog):
             self._store().edit_put(self._items[r].key, edit)
         except Exception:
             pass
+        self._style_row(r)
+        self._apply_filter_row(r)
 
     EDIT_KEYS = ("name", "company", "dept", "title", "cell", "tel", "email", "scanned", "on", "keep_back")
 
@@ -629,7 +696,7 @@ class BizcardImportDialog(QDialog):
         return self._st
 
     def _apply_filter_row(self, r):
-        only = self.chk_need.isChecked()
+        only = self.chk_need.isChecked()          # 확인한 칸은 '확인 필요' 에서 빠진다(261117-20 — `need` 는 `_style_row` 가 갱신)
         self.table.setRowHidden(r, bool(only and not getattr(self._items[r], "need", True)))
 
     def _apply_filter(self):
@@ -810,6 +877,7 @@ class BizcardImportDialog(QDialog):
         col = {"name": C_NAME, "company": C_COMP, "dept": C_DEPT, "title": C_TITLE, "cell": C_CELL, "tel": C_TEL, "email": C_MAIL}[fld]
         self.set_cell(r, col, val)
         self._on_edit(r)
+        self.mark_ok(r, fld)                        # 확인 창 [넣기] = 사람이 확인함(261117-20)
         if fld in ("name", "company", "title"):         # 부서 자리는 칸만 채운다 — 다시 매기기가 쓰는 양식은 이름·회사(§5.13)
             v = self._row_values(r)
             key = R.layout_key(v["emails"], v["urls"], v["company"])

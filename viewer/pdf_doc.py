@@ -107,6 +107,12 @@ def page_hits(page, query: str, mode=None, ocr=None, flat_txt=None) -> list:
     틀린 정규식이면 빈 목록."""
     if not query:
         return []
+    if not (mode and mode[1]):                           # 261117-30(검색창 SOT §4.2): 정규식이 아니면 연산자로 읽는다
+        from viewer.query import parse as _parse
+        pq = _parse(query)
+        if pq.single is None:
+            return query_hits(page, pq, mode, ocr, flat_txt)
+        query = pq.single                                # 낱말 하나(따옴표 구절 포함) — 종전 길
     if not mode or not any(mode):
         hits = list(page.search_for(query))
         return hits or flat_hits(page, query, ocr, flat_txt)
@@ -116,6 +122,42 @@ def page_hits(page, query: str, mode=None, ocr=None, flat_txt=None) -> list:
     except Exception:
         return []
     return match_rects(page, m)
+
+
+def query_hits(page, pq, mode=None, ocr=None, flat_txt=None) -> list:
+    """261117-30(검색창 SOT §4.2·§8): 연산자 질의 — **식이 참인 쪽에서만** 긍정 낱말마다 종전 길(`page_hits`)로 칠한다.
+    식은 쪽 글로 본다: 기본은 빈칸·하이픈 무시 소문자 꼴(`flat_txt` — 문서 전체 검색은 `PdfDocument._flat_page` 를 준다,
+    글자층이 없으면 저장한 OCR 낱말), `Aa` 를 켰으면 원문에서 낱말마다 대소문자 구분."""
+    if pq is None or not pq.ok:
+        return []
+    from viewer.query import flat_text as _flat
+    if mode and mode[0]:
+        from viewer.search_match import Matcher
+        try:
+            raw = page.get_text("text") or ""
+        except Exception:
+            raw = ""
+        ok = pq.test(lambda w: Matcher(w, case=True).first(raw) is not None)
+    else:
+        ft = flat_txt
+        if ft is None:
+            try:
+                ft = _flat(page.get_text("text") or "").lower()
+            except Exception:
+                ft = ""
+        if not ft and ocr is not None:
+            try:
+                words, _dpi = ocr()
+                ft = _flat("".join(str(w.get("surface", "")) for w in (words or []))).lower()
+            except Exception:
+                ft = ""
+        ok = pq.matches_flat(ft)
+    if not ok:
+        return []
+    out = []
+    for w in pq.positives:
+        out.extend(page_hits(page, '"%s"' % w.replace('"', ""), mode, ocr, flat_txt))   # 따옴표로 — 다시 연산자로 읽히지 않게
+    return out
 
 
 @dataclass
@@ -238,13 +280,23 @@ class PdfDocument:
         """261025-11(검색창 SOT §8): 고른 쪽들만 — 본문이 문서를 나눠서 찾을 때 쓴다(없는 쪽 번호는 건너뜀)."""
         if not query:
             return []
+        pq = None
+        if not (mode and mode[1]):                       # 261117-30(검색창 SOT §4.2): 연산자 질의는 식이 참인 쪽만
+            from viewer.query import parse as _parse
+            pq = _parse(query)
+            if pq.single is not None:
+                query, pq = pq.single, None
+            elif not pq.ok:
+                return []
         hits: list = []
         n = self.doc.page_count
         for i in pages:
             if not 0 <= i < n:
                 continue
             page = self.doc.load_page(i)
-            if not mode or not any(mode):
+            if pq is not None:
+                rects = query_hits(page, pq, mode, None, None if (mode and mode[0]) else self._flat_page(i, page))
+            elif not mode or not any(mode):
                 # 빈칸 없는 쪽 글은 search_for 가 못 찾았을 때만 만든다 — 쪽마다 get_text 를 한 번 더 하지 않게(응답성 SOT §4 ⑥)
                 rects = list(page.search_for(query)) or flat_hits(page, query, None, self._flat_page(i, page))
             else:

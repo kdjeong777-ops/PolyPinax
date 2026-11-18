@@ -43,20 +43,8 @@ SELECT EXISTS(SELECT 1 FROM pragma_compile_options WHERE compile_options = 'ENAB
 
 # 261101-1(검색창 SOT §3.1): 하이픈도 빈칸처럼 뺀다 — 글자층의 줄 끝 분철(`labora-`/`tory`)이 `laboratory` 로 찾히고,
 #   `coarse-graded`·`coarse graded`·`coarsegraded` 가 서로 맞는다. 색인·질의·본문 강조(`pdf_doc.flat_hits`)가 이 하나를 쓴다.
-FLAT_SKIP = r"\s\-­‐‑"
-_WS = re.compile("[" + FLAT_SKIP + "]+")
-
-
-def flat_text(s: str) -> str:
-    """261019-4(검색창 SOT §3.1): 빈칸·줄바꿈(·하이픈, 261101-1)을 모두 뺀 글 — 색인과 질의를 같은 모양으로 맞춘다.
-    글자층은 줄 끝마다 줄바꿈이 들어 있어(문단 안에서도) '아스팔트 포장' 이 '아스팔트\n포장' 으로 남는다."""
-    return _WS.sub("", s or "")
-
-
-def flat_pattern(q: str):
-    """질의 글자 사이에 빈칸·줄바꿈·하이픈이 얼마든 있어도 맞는 정규식 — 개수·미리보기용(색인 비교와 같은 뜻)."""
-    qf = flat_text(q)
-    return re.compile(("[" + FLAT_SKIP + "]*").join(re.escape(c) for c in qf), re.IGNORECASE) if qf else None
+# 261117-30(검색창 SOT §4.2): 정의는 검색 연산자 해석기와 한 곳(`viewer/query.py`) — 여기는 다시 내보내기만(종전 import 그대로 된다).
+from viewer.query import FLAT_SKIP, flat_text, flat_pattern, like_escape, parse as parse_query   # noqa: E402,F401
 
 
 def _apply_text_fixes(file_path, page: int, text: str) -> str:
@@ -881,21 +869,25 @@ class PdfIndex:
         q = query.strip()
         if not q:
             return []
-        if mode and any(mode):
-            # 261014-18(검색창 SOT §4.1): 대소문자·정규식 — 색인 형식은 그대로, 후보를 추린 뒤 `Matcher` 로 거른다
+        if mode and mode[1]:
+            # 261014-18(검색창 SOT §4.1): 정규식 — 연산자를 해석하지 않는다(§4.2), 후보를 추린 뒤 `Matcher` 로 거른다
             return self._search_matcher(q, limit, paths, mode)
+        pq = parse_query(q)                              # 261117-30(§4.2): 띄어쓰기 AND · | OR · -NOT · 괄호 · "구절"
+        if pq.single is None and not pq.ok:
+            return []                                    # 찾을 낱말이 없다(NOT 뿐) — 빈 결과(SOT §4.2)
+        if mode and any(mode):
+            if pq.single is not None:
+                return self._search_matcher(pq.single, limit, paths, mode)
+            return self._search_query_case(pq, limit, paths)
         # 261019-4(검색창 SOT §4): **빈칸·줄바꿈을 무시**한다 — 새 표는 `flat` 으로, 옛 표(아직 옮기지 않은 파일)는 원문으로
-        qf = flat_text(q)
-        esc = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-        like = f"%{esc}%"
-        escf = qf.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-        like_f = f"%{escf}%"
-        # 260825: trigram FTS — `p.text LIKE ?`(컬럼 직접, lower() 미사용)면 3자↑ 질의는
-        #   트라이그램 색인을 사용해 빠름(대소문자 무시=토크나이저 기본). 함수로 감싸면 색인
-        #   최적화가 깨지므로 lower() 를 쓰지 않는다(LIKE 자체가 대소문자 무시).
+        # 260825: trigram FTS — `flat LIKE ?`(컬럼 직접, lower() 미사용)면 3자↑ 낱말은 트라이그램 색인을 쓴다.
+        #   함수로 감싸면 색인 최적화가 깨지므로 lower() 를 쓰지 않는다(LIKE 자체가 대소문자 무시).
+        # 261117-30: 낱말마다 LIKE 를 식 나무대로 잇는다 — 값은 모두 매개변수(`Query.sql`)
+        w2, a2 = pq.sql("flat", flat=True)
+        w1, a1 = pq.sql("text", flat=False)
+        args: list = a2 + a1
         # 260828: 영구(다중 폴더) 캐시에서 검색 범위를 SQL 로 한정 — LIMIT 이
         #   다른 폴더 결과로 채워지지 않게. paths=None 이면 전체.
-        args: list = [like_f, like]
         scope_sql = ""
         if paths:
             # 260628: 표준 키(pathutil.norm_key)로 통일. ★ 아래 SQL 변환
@@ -908,9 +900,9 @@ class PdfIndex:
         args.append(limit)
         sql = f"""
             SELECT f.path AS path, x.page_index AS page_index, x.text AS text
-            FROM (SELECT file_id, page_index, text FROM pages2 WHERE flat LIKE ? ESCAPE '\\'
+            FROM (SELECT file_id, page_index, text FROM pages2 WHERE {w2}
                   UNION ALL
-                  SELECT file_id, page_index, text FROM pages_fts WHERE text LIKE ? ESCAPE '\\') AS x
+                  SELECT file_id, page_index, text FROM pages_fts WHERE {w1}) AS x
             JOIN files AS f ON f.id = x.file_id
             WHERE 1=1{scope_sql}
             ORDER BY f.path, x.page_index
@@ -919,7 +911,7 @@ class PdfIndex:
         cur = self.conn.execute(sql, args)
 
         results: list = []
-        pat = flat_pattern(q) or re.compile(re.escape(q), re.IGNORECASE)
+        pat = pq.pattern() or re.compile(re.escape(q), re.IGNORECASE)   # 개수·조각 글은 긍정 낱말만(§4.2)
         for row in cur:
             text = row["text"] or ""
             cnt = len(pat.findall(text)) or 1
@@ -932,6 +924,46 @@ class PdfIndex:
                     snippet=self._snippet_flat(text, pat),
                 )
             )
+        return results
+
+    def _search_query_case(self, pq, limit: int, paths) -> list:
+        """§4.1·§4.2 — `Aa` 를 켠 연산자 질의: LIKE 식으로 후보를 추린 뒤(대소문자 무시) 낱말마다 대소문자 구분 `Matcher` 로 식을 다시 본다.
+        개수·조각 글은 긍정 낱말 갈래 하나의 `Matcher`."""
+        from viewer.search_match import Matcher
+        mm = {}
+
+        def has(w, text):
+            m = mm.get(w)
+            if m is None:
+                m = mm[w] = Matcher(w, case=True)
+            return m.first(text) is not None
+        pos = Matcher("|".join(re.escape(w) for w in sorted(pq.positives, key=len, reverse=True)), case=True, regex=True)
+        w2, a2 = pq.sql("flat", flat=True)
+        w1, a1 = pq.sql("text", flat=False)
+        args: list = a2 + a1
+        where = ""
+        if paths:
+            from viewer.pathutil import norm_key
+            keys = sorted({norm_key(p) for p in paths})
+            where = " WHERE lower(replace(f.path,'/','\\')) IN (%s)" % ",".join("?" for _ in keys)   # §7.0 키와 같은 문자열
+            args.extend(keys)
+        sql = ("SELECT f.path AS path, x.page_index AS page_index, x.text AS text FROM ("
+               "SELECT file_id, page_index, text FROM pages2 WHERE " + w2 + " UNION ALL "
+               "SELECT file_id, page_index, text FROM pages_fts WHERE " + w1 + ") AS x JOIN files AS f ON f.id = x.file_id"
+               + where + " ORDER BY f.path, x.page_index")
+        results: list = []
+        for row in self.conn.execute(sql, args):
+            text = row["text"] or ""
+            if not pq.test(lambda w: has(w, text)):
+                continue
+            cnt = pos.count(text)
+            if not cnt:
+                continue
+            results.append(SearchResult(file_path=row["path"], file_name=Path(row["path"]).name,
+                                        page_index=row["page_index"], match_count=cnt,
+                                        snippet=self._snippet_by(text, pos)))
+            if len(results) >= limit:
+                break
         return results
 
     def _search_matcher(self, q: str, limit: int, paths, mode) -> list:

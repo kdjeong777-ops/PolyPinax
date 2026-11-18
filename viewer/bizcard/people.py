@@ -24,24 +24,42 @@ def _nk(p) -> str:
 
 # ── 찾기 ──
 def find(store, text: str = "", since: str = "", until: str = "", limit: int = SEARCH_LIMIT) -> list:
-    """낱말 여럿(모두 들어 있어야) — 칸 글자 **일부**로(LIKE). `#낱말` 은 해시태그. 스캔일 범위 YYYY-MM-DD.
-    반환 = 명함 DB 행(dict), 스캔일 최근 먼저, limit+1 장까지(넘쳤는지 부르는 쪽이 안다)."""
-    hay = " || ' ' || ".join("IFNULL(%s,'')" % c for c in _COLS)
+    """검색 연산자(검색창 SOT §4.2 — 띄어쓰기 AND·`|` OR·`-` NOT·괄호·"구절") — 단위는 명함 하나, 낱말은 모든 칸 글자 **일부**로
+    (대소문자·빈칸·하이픈 무시). `#낱말` 은 해시태그(앞부분 일치). 스캔일 범위 YYYY-MM-DD.
+    반환 = 명함 DB 행(dict), 스캔일 최근 먼저, limit+1 장까지(넘쳤는지 부르는 쪽이 안다).
+    261117-30: 칸을 이어 붙인 글을 식으로 보려고 날짜로만 SQL 에서 거르고 낱말은 파이썬에서 본다(명함 수천 장 — 수 ms)."""
+    from viewer.query import parse, flat_text
+    pq = parse(text or "")
+    if not pq.empty and not pq.ok:
+        return []                                   # '-' 낱말뿐 — 찾을 낱말이 없다(SOT §4.2)
     where, args = [], []
-    for t in (text or "").split():
-        if t.startswith("#") and len(t) > 1:
-            where.append("IFNULL(tags,'') LIKE ? ESCAPE '\\'")
-            args.append('%"' + _like(t[1:]) + '%')
-        else:
-            where.append("(%s) LIKE ? ESCAPE '\\'" % hay)
-            args.append("%" + _like(t) + "%")
     if since:
         where.append("IFNULL(scanned,'') >= ?"); args.append(since)
     if until:
         where.append("IFNULL(scanned,'') <= ?"); args.append(until + "￿")
     q = "SELECT * FROM cards" + (" WHERE " + " AND ".join(where) if where else "")
-    q += " ORDER BY IFNULL(scanned,'') DESC, id DESC LIMIT %d" % (int(limit) + 1)
-    return [store._row(r) for r in store.con.execute(q, args).fetchall()]
+    q += " ORDER BY IFNULL(scanned,'') DESC, id DESC"
+    if pq.empty:
+        q += " LIMIT %d" % (int(limit) + 1)
+        return [store._row(r) for r in store.con.execute(q, args).fetchall()]
+    out = []
+    for r in store.con.execute(q, args):
+        hay = flat_text(" ".join(str(r[c] or "") for c in _COLS if c in r.keys())).lower()
+        try:
+            tags = [str(t).lower() for t in json.loads(r["tags"] or "[]")]
+        except (ValueError, TypeError):
+            tags = []
+
+        def has(w, hay=hay, tags=tags):
+            if w.startswith("#") and len(w) > 1:
+                t = w[1:].lower()
+                return any(x.startswith(t) for x in tags)
+            return flat_text(w).lower() in hay
+        if pq.test(has):
+            out.append(store._row(r))
+            if len(out) > int(limit):
+                break
+    return out
 
 
 def _like(s: str) -> str:

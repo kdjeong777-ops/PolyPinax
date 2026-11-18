@@ -99,9 +99,12 @@ d.close()
 d = fitz.open(str(scan_pdf))
 ocr = lambda: ([{"surface": "스캔본", "x0": 300, "y0": 300, "x1": 600, "y1": 360},
                 {"surface": "우리", "x0": 640, "y0": 300, "x1": 760, "y1": 360}], 300)
-h3 = page_hits(d[0], "스캔본 우리", ocr=ocr)
+# 261117-30(검색창 SOT §4.2): 빈칸은 AND — 이어진 구절은 따옴표로(종전 '스캔본 우리' 의 뜻)
+h3 = page_hits(d[0], '"스캔본 우리"', ocr=ocr)
 chk(len(h3) == 1 and abs(h3[0].x0 - 72.0) < 0.5 and abs(h3[0].x1 - 182.4) < 0.5,
     "D3 스캔 쪽은 OCR 낱말 자리로 칠한다(pt 로 바꿈)", f"{h3}")
+h3b = page_hits(d[0], "스캔본 우리", ocr=ocr)
+chk(len(h3b) == 2, "D3b 띄어쓰기(AND)는 스캔 쪽에서도 낱말마다 칠한다(OCR 글로 식을 본다)", f"{h3b}")
 d.close()
 
 print()

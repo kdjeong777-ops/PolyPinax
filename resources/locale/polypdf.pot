@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-11-18 20:54+0900\n"
+"POT-Creation-Date: 2026-11-18 22:01+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -6044,6 +6044,10 @@ msgstr ""
 #: viewer/progress_text.py
 #, python-brace-format
 msgid "원본 {page}쪽"
+msgstr ""
+
+#: viewer/query.py
+msgid "'-' 낱말만으로는 찾지 않습니다 — 찾을 낱말을 함께 쓰세요."
 msgstr ""
 
 #: viewer/read_ocr_offer.py

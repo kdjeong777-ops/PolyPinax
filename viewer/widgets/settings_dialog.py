@@ -1112,13 +1112,16 @@ class SettingsDialog(QDialog):
             out += [w.itemText(i) for i in range(w.count())]
         return out
 
-    def _search_hits(self, pid: str, needle: str) -> list:
+    def _search_hits(self, pid: str, needle) -> list:
+        """설정 칸(글자를 가진 위젯) 하나가 단위 — 검색 연산자(검색창 SOT §4.2, 261117-30). `needle` 은 질의 글 또는 `Query`."""
+        from viewer.query import parse
+        pq = parse(needle) if isinstance(needle, str) else needle
         content = self._scrolls[pid].widget()
         hits = []
         for w in content.findChildren(QWidget):
             if not w.isVisibleTo(content) or isinstance(w, (QScrollArea,)):
                 continue
-            if any(needle in t.lower() for t in self._texts_of(w)):
+            if pq.matches("".join(self._texts_of(w))):
                 hits.append(w)
         return hits
 
@@ -1132,8 +1135,9 @@ class SettingsDialog(QDialog):
 
     def _on_search(self, text: str) -> None:
         self._clear_hits()
-        needle = (text or "").strip().lower()
-        if not needle:
+        from viewer.query import parse
+        needle = parse((text or "").strip())               # 261117-30(검색창 SOT §4.2): 띄어쓰기 AND·| OR·-NOT·괄호·"구절"
+        if needle.empty:
             for pid in self.page_ids():
                 self._page_items[pid].setHidden(False)
             self._page_items["external"].setHidden(not self.adv.has_visible())
@@ -1147,7 +1151,7 @@ class SettingsDialog(QDialog):
             visible_ok = not (pid in ("external", "dict") and not self.adv.has_visible()) and not (
                 pid == "photo" and self.cmb_view_kind.currentData() != "mixed")
             hits = self._search_hits(pid, needle) if visible_ok else []
-            name_hit = visible_ok and needle in page_name(pid).lower()
+            name_hit = visible_ok and needle.matches(page_name(pid))
             self._page_items[pid].setHidden(not (hits or name_hit))
             for w in hits:
                 self._hits[w] = w.styleSheet()

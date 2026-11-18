@@ -210,13 +210,23 @@ class DictStore:
     def user_entries(self, query: str = "") -> list[dict]:
         """사용자 뜻만 — 편집 창 '사용자 뜻' 목록(261019-5). query 가 있으면 표제어 부분일치."""
         sql = f"SELECT {_ENTRY_COLS} FROM u.dict_entry WHERE enabled=1"
-        args: list = []
-        nk = normalize_key(query)
-        if nk:
-            sql += " AND (norm_ko LIKE ? OR norm_en LIKE ?)"
-            args += [f"%{nk}%", f"%{nk}%"]
         sql += " ORDER BY COALESCE(NULLIF(term_ko,''), term_en)"
-        return [dict(r) for r in self.conn.execute(sql, args)]
+        rows = [dict(r) for r in self.conn.execute(sql)]
+        # 261117-30(검색창 SOT §4.2): 연산자 — 단위는 항목 하나, 낱말마다 표제어(한·영) `normalize_key` 부분일치
+        from viewer.query import parse
+        pq = parse(query or "")
+        if pq.empty:
+            return rows
+        if not pq.ok:
+            return []                                    # '-' 낱말뿐
+        keys = {}
+
+        def has(w, r):
+            k = keys.get(w)
+            if k is None:
+                k = keys[w] = normalize_key(w)
+            return bool(k) and (k in (r.get("norm_ko") or "") or k in (r.get("norm_en") or ""))
+        return [r for r in rows if pq.test(lambda w, r=r: has(w, r))]
 
     def _meta_set_silent(self, key: str, value: str) -> None:
         self.conn.execute(

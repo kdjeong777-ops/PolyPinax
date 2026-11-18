@@ -8421,6 +8421,13 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 self.status.showMessage(tr('정규식이 틀렸습니다: {e}').format(e=e), 8000)
                 return
         self.search_bar.set_invalid("")
+        if not (mode and mode[1]):
+            from viewer.query import parse as _parse_q, NEG_ONLY_TEXT
+            if _parse_q(query).neg_only:                 # 261117-30(검색창 SOT §4.2): '-' 낱말뿐 — 빈 결과와 까닭
+                self._on_search_finished(query, [])
+                self.main_view.set_query("")
+                self.status.showMessage(tr(NEG_ONLY_TEXT), 8000)
+                return
         self._touch_recent_search(query, bool(mode and mode[0]), bool(mode and mode[1]))   # 261025-5 최근 검색어
         for _mv in self._mv:
             _mv.set_search_mode(mode)

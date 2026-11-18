@@ -661,6 +661,19 @@ class TagApplyDialog(QDialog):
     def _find_text(self) -> str:
         return self.ed_find.text().strip().lstrip("#").lower()
 
+    def _find_ok(self, tag: str) -> bool:
+        """찾기 칸 거르기 — 태그 이름 하나가 단위, 검색 연산자(검색창 SOT §4.2, 261117-30). 낱말 앞 '#' 는 뗀다.
+        '새 태그 이름' 으로 쓸 때(`_find_add`)는 친 글 그대로다."""
+        from viewer.query import parse, flat_text
+        raw = self.ed_find.text()
+        if self.__dict__.get("_find_pq_raw") != raw:
+            self._find_pq_raw, self._find_pq = raw, parse(raw)
+        pq = self._find_pq
+        if pq.empty:
+            return True
+        tl = flat_text(tag or "").lower()
+        return pq.test(lambda w: bool(flat_text(w.lstrip("#"))) and flat_text(w.lstrip("#")).lower() in tl)
+
     def _order(self, tags) -> list:
         if self._sort == self.SORT_REG:
             reg = self._reg_order()
@@ -716,7 +729,7 @@ class TagApplyDialog(QDialog):
         lw = self.lst_tags
         lw.blockSignals(True)
         lw.clear()
-        for t in self._order([t for t in counts if not q or q in t.lower()]):
+        for t in self._order([t for t in counts if self._find_ok(t)]):
             n = counts[t]
             mate = pt.partner(t)                         # 261113-9(§8.9): 짝이 있으면 '태그 ⇄ 짝'
             hm = "#" if manual.get(t.lower()) else "·#"  # 261114-2(§5.3.2): 자동으로만 붙은 태그는 '·#'
@@ -736,12 +749,12 @@ class TagApplyDialog(QDialog):
         la.clear()
         sections = []
         # 261114-2 덧붙임 2(사용자 결정 '늘 보이게'): 문서 종류 7 + 자동 해시태그 속성 6 = 13 항목은 늘 보인다(붙어 있으면 ✓·◐)
-        sections.append((tr("문서 종류"), "fmt", [f for f in FORMAT_VOCAB if not q or q in f.lower()]))
-        sections.append((tr("자동 해시태그 속성"), "attr", [a for a in PDF_ATTR_ITEMS if not q or q in a.lower()]))
+        sections.append((tr("문서 종류"), "fmt", [f for f in FORMAT_VOCAB if self._find_ok(f)]))
+        sections.append((tr("자동 해시태그 속성"), "attr", [a for a in PDF_ATTR_ITEMS if self._find_ok(a)]))
         fl = {f.lower() for f in FORMAT_VOCAB} | {a.lower() for a in PDF_ATTR_ITEMS}
-        known = [t for t in self._all_known() if t.lower() not in have and t.lower() not in fl and (not q or q in t.lower())]
+        known = [t for t in self._all_known() if t.lower() not in have and t.lower() not in fl and (self._find_ok(t))]
         sections.append((tr("기존 태그"), "tag", self._order(known)))
-        sections.append((tr("새 태그 후보"), "cand", [t for t, _h in self._cand_rows() if t.lower() not in have and (not q or q in t.lower())]))
+        sections.append((tr("새 태그 후보"), "cand", [t for t, _h in self._cand_rows() if t.lower() not in have and (self._find_ok(t))]))
         if self._show_cand_first:
             sections = [sections[3]] + sections[:3]
         import re as _re

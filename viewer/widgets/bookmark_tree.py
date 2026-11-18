@@ -2975,7 +2975,16 @@ class BookmarkTree(QWidget):
     def _on_filter(self, text: str):
         toks = (text or "").strip().split()
         tagq = [t[1:].lower() for t in toks if t.startswith("#") and len(t) > 1]
-        textq = " ".join(t for t in toks if not t.startswith("#")).lower().strip()
+        # 261117-30(검색 SOT §4.2): `#` 없는 글은 연산자 질의(띄어쓰기 AND·| OR·-NOT·괄호·"구절") — 단위는 파일
+        #   (이름·책갈피 글·키워드·연도를 함께), `#태그` 토큰은 종전대로 따로 AND(§5.1)
+        import re as _re
+        from viewer.query import parse as _parse
+        pq = _parse(_re.sub(r'(?<!\S)#\S+', " ", text or ""))
+        textq = "" if pq.empty else (text or "").strip()   # 거르기 켜짐 표시(빈 결과 알림)에만 쓴다
+        _SEP = "\x1f"                                      # 칸 사이 — 빈칸 무시(flat)가 칸을 넘어 잇지 않게
+
+        def _sub_text(item) -> str:
+            return _SEP.join([item.text(0)] + [_sub_text(item.child(i)) for i in range(item.childCount())])
         # 260830 P4(검색 SOT §5.1): 버튼에 활성 태그 수 표시(#N + 강조 — 디자인 §2.11)
         try:
             self.btn_tag.setText(f"#{len(tagq)}" if tagq else "#")
@@ -2984,10 +2993,10 @@ class BookmarkTree(QWidget):
         except Exception:
             pass
 
-        def text_match(item: QTreeWidgetItem) -> bool:
-            ok = (not textq) or (textq in item.text(0).lower())
-            child = any(text_match(item.child(i)) for i in range(item.childCount()))
-            return ok or child
+        def text_match(item: QTreeWidgetItem, extra: str = "") -> bool:
+            if pq.empty:
+                return True
+            return pq.matches(_sub_text(item) + (_SEP + extra if extra else ""))
 
         # 261113-9(태그 SOT §8.9, 사용자 결정 '#태그 거르기만'): `#균열` 은 짝 `#crack` 도 — 짝은 이름 그대로 같을 때만
         try:
@@ -3006,19 +3015,16 @@ class BookmarkTree(QWidget):
         def file_text_match(item, path) -> bool:
             """260830 P4(태그 SOT §8.4): 파일 항목은 키워드·연도도 일반 텍스트 검색에
             포함 — 별도 토큰(kw:·year:) 없이 '2023' 을 치면 그 해 자료가 걸린다."""
-            if text_match(item):
+            if pq.empty:
                 return True
-            if not textq or self._tags is None:
-                return False
-            try:
-                if textq in " ".join(self._tags.get_keywords(path)).lower():
-                    return True
-                y = self._tags.get_year(path)
-                if y and textq in str(y):
-                    return True
-            except Exception:
-                pass
-            return False
+            extra = ""
+            if self._tags is not None:
+                try:
+                    y = self._tags.get_year(path)
+                    extra = _SEP.join(list(self._tags.get_keywords(path)) + ([str(y)] if y else []))
+                except Exception:
+                    extra = ""
+            return text_match(item, extra)              # 261117-30: 낱말마다 이름·책갈피·키워드·연도 어디든(같은 파일 안에서)
 
         def apply_row(it) -> bool:
             """행 하나를 거르고 가시성을 반환. 260901-2: 폴더 행은 '보이는 자식이 있으면' 보인다."""
@@ -3038,7 +3044,7 @@ class BookmarkTree(QWidget):
             # 자식(책갈피) 가시성: 부모 보일 때 텍스트로 거름
             if vis:
                 for c in range(it.childCount()):
-                    self._filter_text_recursive(it.child(c), textq)
+                    self._filter_text_recursive(it.child(c), pq)
             return vis
 
         for i in range(self.tree.topLevelItemCount()):
@@ -3075,11 +3081,16 @@ class BookmarkTree(QWidget):
         lbl.show()
         lbl.raise_()
 
-    def _filter_text_recursive(self, item: QTreeWidgetItem, textq: str) -> bool:
-        ok = (not textq) or (textq in item.text(0).lower())
+    def _filter_text_recursive(self, item: QTreeWidgetItem, pq) -> bool:
+        """책갈피 줄 — 긍정 낱말이 든 줄(또는 그런 자식이 있는 줄)만 보인다(261117-30, 검색 SOT §4.2). `pq` 는 `viewer.query.Query`."""
+        if pq is None or pq.empty:
+            ok = True
+        else:
+            pat = pq.pattern()
+            ok = bool(pat and pat.search(item.text(0) or ""))
         child = False
         for i in range(item.childCount()):
-            if self._filter_text_recursive(item.child(i), textq):
+            if self._filter_text_recursive(item.child(i), pq):
                 child = True
         vis = ok or child
         item.setHidden(not vis)

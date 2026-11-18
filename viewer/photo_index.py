@@ -203,11 +203,12 @@ def remove(con, keys) -> None:
 
 
 def search(query: str, folder=None, limit: int = 500, path: Path | None = None) -> list:
-    """사진 모드 검색 — 이름·촬영일·카메라·태그. 낱말마다 앞부분 일치(AND). 결과: dict(key, path, name, folder, taken, camera, width, height, zip, member)."""
-    words = [w for w in (query or "").replace('"', " ").split() if w]
-    if not words:
+    """사진 모드 검색 — 이름·촬영일·카메라·태그. 낱말마다 앞부분 일치, 연산자는 검색창 SOT §4.2. 결과: dict(key, path, name, folder, taken, camera, width, height, zip, member)."""
+    # 261117-30(검색창 SOT §4.2): 띄어쓰기 AND · | OR · -NOT · 괄호 · "구절" — FTS5 식으로(낱말 앞부분 일치·앞 '#' 떼기는 그대로)
+    from viewer.query import parse
+    fts = parse(query).fts(xform=lambda w: w.lstrip("#"))
+    if not fts:
         return []
-    fts = " ".join('"%s"*' % w.lstrip("#") for w in words)
     from viewer import dbutil
     try:
         con = connect_read(path, busy_ms=dbutil.BUSY_MS_UI)   # 메인에서 부른다 — 읽기만, 오래 기다리지 않는다(못 읽으면 빈 결과)

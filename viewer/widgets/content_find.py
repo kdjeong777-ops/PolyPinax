@@ -24,6 +24,27 @@ def set_mode(mode) -> None:
 
 def _find_all(viewer, query):
     mode = _MODE["v"]
+    if not (mode and mode[1]):
+        # 261117-30(검색창 SOT §4.2): 연산자 — 단위는 본문 전체. 식이 참이면 긍정 낱말 자리를 모두(빈칸·하이픈 무시 `Query.pattern`)
+        from viewer.query import parse
+        pq = parse(query)
+        if pq.single is None:
+            if not pq.ok:
+                return []
+            text = viewer.toPlainText()
+            if mode and mode[0]:
+                from viewer.search_match import Matcher
+                ok = pq.test(lambda w: Matcher(w, case=True).first(text) is not None)
+                import re as _re
+                rx = Matcher("|".join(_re.escape(w) for w in sorted(pq.positives, key=len, reverse=True)),
+                             case=True, regex=True)
+                spans = list(rx.spans(text))
+            else:
+                ok = pq.matches(text)
+                pat = pq.pattern()
+                spans = [m.span() for m in pat.finditer(text) if m.end() > m.start()] if pat else []
+            return spans if ok else []
+        query = pq.single                                # 낱말 하나(따옴표 구절 포함) — 종전 길
     if mode:
         # §4.1 — 같은 `Matcher`. 본문 글(toPlainText)의 글자 자리 = 문서 커서 자리(문단 사이 한 글자)
         from viewer.search_match import Matcher

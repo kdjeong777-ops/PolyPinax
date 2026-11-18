@@ -1668,6 +1668,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             _themed_icon("search"), QLineEdit.ActionPosition.LeadingPosition)
         self.toolbar_search.returnPressed.connect(self._on_toolbar_search)
         self._ribbon.set_search(self.toolbar_search)
+        # 261117-31(검색창 SOT §6·§10): 누르기·↓ 로 최근 검색어를 칸 아래 펼친다 — 목록은 `recent_searches` 하나(메뉴와 같은 것)
+        from viewer.widgets.recent_popup import RecentSearchPopup
+        self._recent_popup = RecentSearchPopup(self.toolbar_search, self._open_recent_search)
+        self._recent_popup.set_items(getattr(self, "_recent_searches", None) or [])
 
     def _style_panel_toolbar(self, dark: bool):
         """260606-26: 세부 줄(종전 패널) 버튼 테두리/배경을 테마별로. 라이트=짙은 회색,
@@ -1764,6 +1768,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         text = self.toolbar_search.text().strip()
         if not text:
             return
+        rp = getattr(self, "_recent_popup", None)
+        if rp is not None and rp.consume_return():
+            return                                   # 261117-31: 펼침 목록에서 고른 Enter — 그쪽이 토글까지 되살려 찾는다
         if self._content_panel is not None:
             self._open_content_find(text)
             return
@@ -11378,6 +11385,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self._refresh_recent_searches_menu()
 
     def _refresh_recent_searches_menu(self) -> None:
+        rp = getattr(self, "_recent_popup", None)
+        if rp is not None:                           # 261117-31: 탭 줄 검색창 펼침 목록도 같은 목록·같은 순서로
+            rp.set_items(getattr(self, "_recent_searches", None) or [])
         m = getattr(self, "menu_recent_searches", None)
         if m is None:
             return

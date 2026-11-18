@@ -65,7 +65,13 @@ ORG_WORDS_KO = ("회사", "기업", "건설", "산업", "기술", "엔지니어�
                 "재단", "은행", "청", "시청", "구청", "도청", "부", "처", "원")
 CORP_MARKS_EN = re.compile(r"\b(co\.?,?\s*ltd\.?|corp(oration)?\.?|inc\.?|ltd\.?|llc|company|co\.)\b", re.I)
 ORG_WORDS_EN = ("university", "institute", "engineering", "construction", "consultants", "corporation", "company",
-                "association", "ministry", "korea", "group", "technology", "college", "school", "department", "center")
+                "association", "ministry", "korea", "group", "technology", "college", "school", "department", "center",
+                # §5.25(이름 정확도) — 외국 명함에서 이름으로 잘못 고른 기관 문구
+                "road", "program", "division", "communication", "republic", "committee", "technopark", "solution",
+                "factory", "maintenance", "pavement", "office", "bureau", "agency", "authority", "council", "laboratory",
+                "transport", "highway", "government", "administration", "services", "international", "foundation",
+                "society", "research", "development", "infrastructure")
+EN_NAME_STOP = ("and", "of", "for", "the", "&")         # 이름 낱말이 아닌 이음말 — 'AND COMMUNICATIONS' 따위는 이름이 아니다
 FREE_MAIL = ("gmail", "naver", "hanmail", "daum", "nate", "hotmail", "yahoo", "kakao", "outlook", "korea.com",
              "empal", "dreamwiz", "paran", "lycos", "chol", "hanmir", "live", "icloud", "me.com")
 # 성의 로마자(메일 아이디와 닮음)
@@ -666,7 +672,63 @@ NAME_W = {"bias": -1.5, "h": 2.0, "sur": 2.5, "title": 1.2, "org": -2.0, "len2":
 
 def name_score(f: dict, w: Optional[dict] = None) -> float:
     w = w or NAME_W
-    return round(sum(w.get(k, 0.0) * float(f.get(k, 0.0)) for k in NAME_FEATS), 3)
+    # 'adj' = §5.25 고정 보정(배우지 않는다 — NAME_FEATS 밖이라 이 PC 에서 배운 가중치와 무관하게 늘 더한다)
+    return round(sum(w.get(k, 0.0) * float(f.get(k, 0.0)) for k in NAME_FEATS) + float(f.get("adj", 0.0)), 3)
+
+
+# ── 이름 고정 보정(§5.25, 정답 대조 학습 2/3) — 배우는 가중치(NAME_FEATS)와 따로, 점수를 다 매긴 뒤 더한다 ──
+# 이름(성 뒤 글자)에 흔히 쓰는 음절 — 한 글자만 다른 후보끼리 가를 때만 쓴다(OCR 이 '승'→'층', '찬'→'차' 로 읽는 일)
+NAME_SYL = set("가각간갑강개건걸겸경계고곤공관광교구국군권규균극근금기길나남내녕노능다단달담대덕도돈동두득라란람랑래량려련렬령례로록룡루류륜률리린림"
+               "마만명모목무문미민바박반방배백범법벽병보복본봉부분빈사산삼상새생서석선설섭성세소속손솔송수숙순술승시식신실심"
+               "아안애양언엄여역연열염엽영예오옥온완왕요용우욱운웅원월위유육윤율은을음응의이익인일임"
+               "자작장재전점정제조종주준중지직진찬창채천철청초총춘충치칠탁태택판팔평표필하학한함항해행향허헌혁현형혜호홍화환활황회효후훈휘흠흥희")
+COMMON_SURNAMES = set("김이박최정강조윤장임한오서신권황안송류유홍전고문양손배백허남심노하곽성차주우구민진나지엄채원천방공현함변염여추도석선설")
+# 이름이 아닌 낱말 조각 — 이것이 든 후보는 이름이 아니다(직함·기관·연락처 낱말이 성씨 글자로 시작해 후보가 되는 일)
+NOT_NAME_PARTS = ("사무소", "사무", "공과", "공학", "전화", "부문", "기업", "도로", "기술", "사업", "설계", "연구", "본부", "지사", "센터",
+                  "대학", "학교", "주소", "팩스", "휴대", "메일", "법률", "표준", "영업", "관리", "지원", "협회", "정보", "보수",
+                  "유지", "시설", "공단", "공사", "건설", "산업", "개발", "시험", "검사", "안전", "품질", "환경", "교통", "구조",
+                  "토목", "건축", "전기", "기계", "재료", "도시", "계획", "행정", "총무", "기획", "홍보", "경영", "회계",
+                  "주식", "회사", "중앙", "공장", "지점")
+ADJ_RARE = -3.0        # 한 글자만 다른 짝에서 드문 음절·드문 성 쪽(파일 이름 힌트 덤을 넘을 만큼 — ScanSnap 도 '승'→'층' 으로 읽는다)
+ADJ_WORD = -3.0        # 이름이 아닌 낱말 조각
+ADJ_PART = -1.5        # 성이 빠진 두 글자 조각('길동' — '홍길동' 이 후보에 있음)
+
+
+def _rare_count(n: str) -> int:
+    if n[:2] in COMPOUND_SURNAMES and len(n) >= 3:
+        sur, given = n[:2], n[2:]
+    else:
+        sur, given = n[:1], n[1:]
+    return int(sur not in COMMON_SURNAMES and sur not in COMPOUND_SURNAMES) + sum(1 for ch in given if ch not in NAME_SYL)
+
+
+def name_adjust(cands: dict) -> dict:
+    """후보 글 → 고정 보정 점수(§5.25). 한 글자(세 글자 이름은 두 글자까지) 다른 짝에서 드문 음절·성이 더 많은 쪽,
+    이름이 아닌 낱말이 든 것, 성 빠진 두 글자 조각을 내린다."""
+    adj = {t: 0.0 for t in cands}
+    texts = list(cands)
+    for t in texts:
+        if any(w in t for w in NOT_NAME_PARTS):
+            adj[t] += ADJ_WORD
+        if len(t) == 2 and any(len(u) == 3 and (u[1:] == t and u[0] in SURNAMES or u[:2] == t) for u in texts):
+            adj[t] += ADJ_PART                         # '길동'(홍길동)·'홍길'(홍길동) — 세 글자 이름의 조각
+    for i, a in enumerate(texts):
+        for b in texts[i + 1:]:
+            if len(a) != len(b) or len(a) < 2:
+                continue
+            d = _edit(a, b)
+            if d == 1 or (d == 2 and len(a) >= 3):
+                ra, rb = _rare_count(a), _rare_count(b)
+                if ra > rb:
+                    adj[a] += ADJ_RARE
+                elif rb > ra:
+                    adj[b] += ADJ_RARE
+    return adj
+
+
+def fix_latin_name(n: str) -> str:
+    """영문 이름의 'I'·'l' 헷갈림 — 소문자 뒤의 대문자 I 는 l('MitcheII' → 'Mitchell')."""
+    return " ".join(re.sub(r"(?<=[a-z])I+", lambda m: "l" * len(m.group(0)), w) for w in n.split())
 
 
 def merge_spaced(text: str) -> str:
@@ -802,6 +864,16 @@ def name_candidates_ko(lines: list, emails: list, hint: str = "", weights: Optio
              "len3": float(len(hint) == 3), "len4": float(len(hint) == 4), "mail": 1.0 if _email_hint(hint, emails) else 0.0,
              "hint": 1.0, "conf": 0.0, "frag": 0.0, "both": 0.0, "tpl": 0.0, "cx": -1.0, "cy": -1.0}
         cands[hint] = Cand(hint, name_score(f, weights), ("hint", "파일이름"), f)
+    if hint and len(hint) == 2 and hint in cands:
+        # 파일 이름이 성을 빠뜨린 두 글자('길동')이고 OCR 에 '성+그 두 글자'('홍길동')가 있으면 덤을 세 글자 쪽으로(§5.25)
+        full = [c for c in cands.values() if len(c.text) == 3 and c.text[1:] == hint and c.text[0] in SURNAMES]
+        if full:
+            best = max(full, key=lambda c: c.score)
+            for c, hv in ((best, 1.0), (cands[hint], 0.0)):
+                f = dict(c.feat)
+                f["hint"] = hv
+                cands[c.text] = Cand(c.text, name_score(f, weights), tuple(c.why) + (("hint",) if hv == 1.0 else ()), f)
+            hint = best.text
     if hint and hint in cands:
         # ScanSnap 은 흔한 이름으로 한 글자 바꿔 붙이는 일이 많다 — OCR 이 한 글자만 다르게 읽은 후보가 있으면 그쪽에
         #   덤을 옮긴다(§5.22 실측: 그런 45장 중 OCR 쪽이 맞음 33, 파일 이름이 맞음 8)
@@ -813,6 +885,11 @@ def name_candidates_ko(lines: list, emails: list, hint: str = "", weights: Optio
                 f = dict(c.feat)
                 f["hint"] = hv
                 cands[c.text] = Cand(c.text, name_score(f, weights), tuple(c.why) + (("hint",) if hv == 1.0 else ()), f)
+    adj = name_adjust(cands)                            # §5.25 고정 보정(배우는 가중치 밖)
+    for t, c in list(cands.items()):
+        if adj[t]:
+            f = dict(c.feat, adj=adj[t])
+            cands[t] = Cand(c.text, name_score(f, weights), c.why, f)
     return sorted(cands.values(), key=lambda c: (-c.score, c.text))   # 같은 점수는 글자 차례(실행마다 같게 — set 차례는 실행마다 다르다)
 
 
@@ -824,7 +901,10 @@ def name_candidates_en(lines: list, emails: list, hint: str = "") -> list:
         if _HANGUL.search(t) or "@" in t or re.search(r"\d", t):
             continue
         low = t.lower()
-        if CORP_MARKS_EN.search(t) or any(w in low for w in ORG_WORDS_EN):
+        low_ns = low.replace(" ", "")                    # 'UNIVE RSITY' 처럼 띄어 읽힌 기관 낱말도(§5.25)
+        if CORP_MARKS_EN.search(t) or any(w in low_ns for w in ORG_WORDS_EN):
+            continue
+        if any(w.lower() in EN_NAME_STOP for w in t.split()):
             continue
         nm = re.sub(r",?\s*(ph\.?\s?d\.?|p\.?e\.?|m\.?s\.?)$", "", t, flags=re.I)
         words = [w for w in nm.replace(",", " ").split() if w]
@@ -834,7 +914,7 @@ def name_candidates_en(lines: list, emails: list, hint: str = "") -> list:
             continue
         if any(w.lower().strip(".") in TITLES_EN for w in words):
             continue
-        n = " ".join(words)
+        n = fix_latin_name(" ".join(words))
         near = " ".join(x.text.lower() for x in lines[max(0, idx - 1): idx + 2])
         s = 2.0 * (ln.height / hmax) + (1.0 if any(k in near for k in TITLES_EN) else 0.0)
         local = re.sub(r"[^a-z]", "", (emails[0].split("@")[0] if emails else ""))

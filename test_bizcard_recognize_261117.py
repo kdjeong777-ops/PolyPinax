@@ -8,6 +8,7 @@ D. 앞뒤 합치기 — 한글판은 한글 주·영문 따로(R7), 한글 없�
 E. 원천 — 그림 폴더의 하위 `pdf\\<앞부분>.pdf` 가 있으면 PDF 가 원천, 앞·뒤 짝 찾기
 F. 그린 가짜 명함(그림·PDF)을 로컬 Tesseract 로 끝까지(없으면 SKIP)
 G. 정답 대조로 고친 규칙(§5.22) · H. 두 엔진 합침·해외 번호·기관 이름 직함(§5.23) · I. 보조 OCR 엔진 붙이기(단어학습 SOT §14.25)
+J. 이름 정확도(§5.25) — 드문 음절·낱말 조각·두 글자 조각 보정, 파일 이름 두 글자 힌트, 영문 I/l·기관 문구
 """
 import os, sys, tempfile, shutil
 os.environ["QT_QPA_PLATFORM"] = "offscreen"          # 검사 작성 SOT §14.7 — Qt 를 쓰는 검사는 오프스크린
@@ -338,6 +339,30 @@ else:
         chk(R.card_filename(res2.name, res2.company) == "홍길동_가나다기술.jpg", "F 새 파일 이름")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
+
+# ── J ── 이름 정확도(§5.25) — 고정 보정·힌트 옮기기·영문 기관 문구 (모두 가짜 값)
+print("\n=== J. 이름 정확도(§5.25) ===")
+chk(_has("name_adjust") and _has("fix_latin_name"), "J 새 규칙 함수가 있다")
+if _has("name_adjust"):
+    adj = R.name_adjust({"홍길동": 0, "홍길층": 0})
+    chk(adj["홍길층"] < 0 and adj["홍길동"] == 0, "J 한 글자 다른 짝 — 이름에 드문 음절('층') 쪽을 내림", str(adj))
+    adj = R.name_adjust({"부문장": 0, "홍길동": 0, "가나사무소": 0})
+    chk(adj["부문장"] < 0 and adj["가나사무소"] < 0 and adj["홍길동"] == 0, "J 이름이 아닌 낱말 조각(부문·사무소)을 내림", str(adj))
+    adj = R.name_adjust({"길동": 0, "홍길동": 0, "홍길": 0})
+    chk(adj["길동"] < 0 and adj["홍길"] < 0 and adj["홍길동"] == 0, "J 세 글자 이름의 두 글자 조각(성 빠짐·끝 빠짐)을 내림", str(adj))
+    lines = [L("가나다기술", 0.10, 90, 0.05), L("홍길층", 0.16, 90, 0.4), L("홍길동", 0.14, 90, 0.45), L("부장", 0.06, 90, 0.5)]
+    nk = R.name_candidates_ko(lines, [])
+    chk(nk and nk[0].text == "홍길동", "J 후보 고르기 — 큰 글자라도 드문 음절이 낀 판보다 흔한 이름", str([c.text for c in nk[:3]]))
+    nk = R.name_candidates_ko([L("가나다기술", 0.10, 90, 0.05), L("홍길동", 0.14, 90, 0.4), L("부장", 0.06, 90, 0.5)], [], hint="길동")
+    chk(nk and nk[0].text == "홍길동", "J 파일 이름이 성을 빠뜨린 두 글자면 힌트 덤을 '성+두 글자' 쪽으로", str([c.text for c in nk[:3]]))
+    w = dict(R.NAME_W)
+    sc0 = R.name_score({"bias": 1.0, "adj": -3.0}, w)
+    chk(abs(sc0 - (w["bias"] - 3.0)) < 1e-6, "J 고정 보정(adj)은 배운 가중치와 따로 늘 더함", str(sc0))
+    chk(R.fix_latin_name("John BeII") == "John Bell" and R.fix_latin_name("JOHN DOE") == "JOHN DOE",
+        "J 영문 이름 — 소문자 뒤 대문자 I 는 l, 대문자 이름은 그대로", R.fix_latin_name("John BeII"))
+    ne = R.name_candidates_en([L("FOR ROADS", 0.16, 90, 0.05), L("UNIVE RSITY", 0.15, 90, 0.1), L("John Doe", 0.12, 90, 0.4)], [])
+    chk(ne and ne[0].text == "John Doe" and all(c.text not in ("FOR ROADS", "UNIVE RSITY") for c in ne),
+        "J 영문 기관 문구(이음말·띄어 읽힌 기관 낱말)는 이름이 아님", str([c.text for c in ne]))
 
 print()
 print("ALL PASS" if not fails else "FAILURES: %d" % len(fails))

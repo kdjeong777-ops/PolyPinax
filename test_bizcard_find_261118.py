@@ -13,7 +13,7 @@ H. 텍스트 창 명함 메모 칸
 I. 명함찾기 개편(명함 SOT §5.24) — 명함 폴더가 비면 `명함` 단추 숨김, 머리말 정렬, 앞↔뒤 단추, 체크한 칸 복사(기억),
    즐겨찾기 탭(여러 명 넣기·빼기·차례·탭 더하기/이름/지우기·그림), 인물 사진 차례 = 파일 이름·지우기 = 휴지통,
    해시태그(DB·파일, #찾기, 저장해도 남음), 주소록 vCard 가져오기(합치기·그림 없는 명함)·리멤버용 내보내기,
-   주소록 우선순위(리멤버 > 구글, 명함·손 고침은 덮지 않음), 목록에서 지우기
+   주소록 우선순위(리멤버 > 구글, 명함·손 고침은 덮지 않음), 목록에서 지우기, 처음 너비(I11), '해시태그 수정' 창(I12)
 """
 import os, sys, tempfile, time, datetime
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -315,6 +315,13 @@ try:
     mw._action_bizcard_find()
     dlg = mw._bizcard_find_dlg
     pump(lambda: dlg.table.rowCount() == 3, timeout=5)
+    # I11 처음 너비 — 목록은 네 열이 다 보이는 최소 폭, 사진창은 넓게
+    pump(timeout=0.2)
+    tw = dlg.table_min_width()
+    ls, ps = dlg.split.sizes()
+    chk(abs(dlg.mid.sizes()[0] - tw) <= 30 and dlg.table.viewport().width() >= sum(dlg.table.columnWidth(c) for c in range(3))
+        and ps >= 0.35 * (ls + ps) and ps > dlg.mid.sizes()[0],
+        "I11 처음 너비 — 목록은 스캔일까지 보이는 최소 폭, 사진창이 목록보다 넓음", "%s %s tw=%s" % (dlg.split.sizes(), dlg.mid.sizes(), tw))
     # I2 머리말 정렬 — 실제 마우스로 머리말을 누름
     hh = dlg.table.horizontalHeader()
     col_names = lambda: [dlg.table.item(r, 0).text() for r in range(dlg.table.rowCount())]
@@ -423,6 +430,36 @@ try:
     st = S.BizcardStore()
     chk("골프동호회" in P.card_by_id(st, hong["id"])["tags"], "I7 칸을 고쳐 저장해도 사람이 붙인 해시태그는 남음")
     st.close()
+    # I12 해시태그 — 책갈피창 '해시태그 수정' 창과 같은 길(창에 고른 명함의 정리본 앞면, 닫으면 DB·뒷면 맞춤)
+    import viewer.widgets.tag_apply_dialog as _tad
+    seen = {}
+    def _fake_exec(self):
+        seen["paths"] = list(self._paths)
+        self.apply_tags(True, tags=["가족모임"])     # [적용] 을 누른 것처럼
+        return 0
+    _orig_exec = _tad.TagApplyDialog.exec
+    _tad.TagApplyDialog.exec = _fake_exec
+    try:
+        hong = P.card_by_id(dlg._store(), hong["id"])
+        kim = next(c for c in dlg._rows if c["name"] == "김철수")
+        dlg.table.clearSelection()
+        sm = dlg.table.selectionModel()
+        for c in (hong, kim):
+            sm.select(dlg.table.model().index(dlg.row_of_id(c["id"]), 0),
+                      QItemSelectionModel.SelectionFlag.Select | QItemSelectionModel.SelectionFlag.Rows)
+        QTest.mouseClick(dlg.btn_tags, Qt.MouseButton.LeftButton)
+        pump(timeout=0.2)
+    finally:
+        _tad.TagApplyDialog.exec = _orig_exec
+    want_paths = sorted(os.path.normcase(os.path.realpath(c["front"])) for c in (hong, kim))
+    chk(sorted(os.path.normcase(x) for x in seen.get("paths", [])) == want_paths,
+        "I12 [해시태그…] 는 '해시태그 수정' 창에 고른 명함들의 정리본 앞면을 넘김", str(len(seen.get("paths", []))))
+    st = S.BizcardStore()
+    h2, k2 = P.card_by_id(st, hong["id"]), P.card_by_id(st, kim["id"])
+    chk("가족모임" in h2["tags"] and "가족모임" in k2["tags"] and sorted(r["name"] for r in P.find(st, "#가족모임")) == ["김철수", "홍길동"],
+        "I12 창에서 붙인 태그가 명함 DB 태그 칸에(#찾기)")
+    st.close()
+    chk("가족모임" in (mw.bookmark_tree._tags.get_manual(os.path.realpath(h2["back"])) or []), "I12 뒷면 파일에도 같은 태그")
     # I8 주소록 가져오기(리멤버 꼴 vCard) — 같은 사람은 빈 칸만, 없는 사람은 그림 없는 명함
     vf = TMP / "contacts.vcf"
     vf.write_text("BEGIN:VCARD\r\nVERSION:3.0\r\nN:;김철수;;;\r\nTEL;TYPE=work,cell:010-0000-0003\r\nEMAIL;TYPE=work:kim@example.com\r\n"

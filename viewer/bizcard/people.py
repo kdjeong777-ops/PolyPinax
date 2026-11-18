@@ -160,7 +160,7 @@ def save_person_photo(src, dst) -> None:
 
 
 # ── 고치기 ──
-def update_card(store, card_id: int, fields: dict) -> None:
+def update_card(store, card_id: int, fields: dict, commit: bool = True) -> None:
     """id 로 칸 고침(앞면 경로가 바뀌어도 새 행을 만들지 않는다). fields: 칸 → 값(phones·emails·urls 는 목록)."""
     row = store._row(store.con.execute("SELECT * FROM cards WHERE id=?", (card_id,)).fetchone())
     if row is None:
@@ -181,7 +181,8 @@ def update_card(store, card_id: int, fields: dict) -> None:
     store.con.execute("UPDATE cards SET %s WHERE id=?" % ", ".join(sets), args + [card_id])
     store.con.execute("DELETE FROM cards_fts WHERE rowid=?", (card_id,))
     store.con.execute("INSERT INTO cards_fts(rowid, body) VALUES(?,?)", (card_id, store._body(row)))
-    store.con.commit()
+    if commit:
+        store.con.commit()
 
 
 def card_by_id(store, card_id: int):

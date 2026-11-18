@@ -29,6 +29,7 @@ ROLE = Qt.ItemDataRole.UserRole
 FAV_ICON = 56                       # 즐겨찾기 사람 칸 그림(카톡 꼴 둥근 네모)
 FAV_ROWS = 2                        # 즐겨찾기 줄 최대 높이(줄 수) — 넘치면 그 칸 안에서 굴림
 PHOTO_ICON = 104
+DETAIL_W = 330                      # 처음 너비 — 세부 칸(§5.24 '처음 너비': 목록은 네 열 최소 폭, 나머지는 사진창)
 FIND_DELAY_MS = 250
 FAV_BG = "#cfe2f6"                  # 사진도 명함도 없을 때 — 옅은 파랑
 IMG_FILTER = " ".join("*" + e for e in R.IMG_EXTS)
@@ -304,7 +305,7 @@ class BizcardFindDialog(QDialog):
         self.fav.customContextMenuRequested.connect(self._fav_menu)
         lv.addWidget(self.fav)
 
-        mid = QSplitter(Qt.Orientation.Horizontal)
+        mid = self.mid = QSplitter(Qt.Orientation.Horizontal)
         self.table = QTableWidget(0, 4)
         self.table.setHorizontalHeaderLabels([tr("이름"), tr("회사"), tr("직함"), tr("스캔일")])
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
@@ -637,6 +638,29 @@ class BizcardFindDialog(QDialog):
         super().resizeEvent(e)
         QTimer.singleShot(0, self._show_card)
         QTimer.singleShot(0, self._fav_fit)
+
+    def showEvent(self, e):
+        super().showEvent(e)
+        if not getattr(self, "_sized", False):
+            self._sized = True
+            self._init_sizes()
+
+    def table_min_width(self) -> int:
+        """네 열(이름·회사·직함·스캔일)이 다 보이는 표 폭."""
+        t = self.table
+        date_w = t.fontMetrics().horizontalAdvance("0000-00-00") + 24     # 마지막 열은 늘어나므로 글자 폭으로 센다
+        return (sum(t.columnWidth(c) for c in range(t.columnCount() - 1)) + date_w
+                + t.verticalScrollBar().sizeHint().width() + 2 * t.frameWidth() + 4)
+
+    def _init_sizes(self):
+        """처음 너비(§5.24, 사용자 지시 261118) — 목록은 스캔일까지 보이는 최소 폭, 세부는 DETAIL_W, 나머지는 사진창.
+        창을 열 때 한 번만 — 그 뒤는 사용자가 끌어 바꾼다."""
+        tw = self.table_min_width()
+        self.mid.setSizes([tw, DETAIL_W])
+        total = max(self.split.width(), self.width() - 24)
+        left = tw + DETAIL_W + self.mid.handleWidth() + 6
+        self.split.setSizes([left, max(300, total - left)])
+        QTimer.singleShot(0, self._show_card)
 
     def _set_dirty(self, on: bool):
         if self._loading:
@@ -1145,9 +1169,13 @@ class BizcardFindDialog(QDialog):
         if self._dirty and not self._ask_save():
             return None
         from viewer.tag_store import normalize_tags
+        if text is None:
+            files = [c for c in cards if c.get("front") and not V.is_contact(c) and os.path.exists(c["front"])]
+            if files:                                   # 책갈피창 '해시태그 수정' 창과 같은 길(§5.24, 사용자 지시 261118)
+                return self.tag_apply(files)
         init = P.common_tags(cards)
         store = self._tagstore()
-        if text is None:
+        if text is None:                                # 그림 없는 주소록 명함만 — 명함 DB 태그 칸만
             from viewer.widgets.tag_edit_dialog import TagEditDialog
             existing = sorted(set(store.all_tags()) | {t for c in self._rows for t in c.get("tags") or []})
             title = (cards[0].get("name") or "") if len(cards) == 1 else tr("명함 {n}장").format(n=len(cards))
@@ -1169,6 +1197,54 @@ class BizcardFindDialog(QDialog):
                     store.set(f, list(dict.fromkeys(cur + added)))
         self.refresh()
         return len(cards)
+
+    def tag_apply(self, cards) -> int:
+        """책갈피창 '해시태그 수정' 창(`TagApplyDialog`, 태그 SOT §8.7)에 명함들의 정리본 앞면을 썸네일로 넘긴다.
+        창을 닫으면 명함마다 앞면에서 더하고 뗀 사람 태그를 명함 DB 태그 칸·뒷면 파일에 같게. 반환 = 바뀐 명함 수."""
+        from viewer.widgets.tag_apply_dialog import TagApplyDialog
+        store = self._tagstore()
+        fronts = [os.path.realpath(c["front"]) for c in cards]
+        before = {f: list(store.get_manual(f) or []) for f in fronts}
+        mw = self._mw
+        prefs = getattr(mw, "_prefs", None) if mw is not None else None
+        keep = mw.__dict__.setdefault("_thread_keep", []) if mw is not None else _KEEP
+        state = prefs.get("tag_apply_window") if isinstance(prefs, dict) else None
+        dlg = TagApplyDialog(store, fronts, fronts, self, keep=keep, state=state)
+        self._tag_apply_dialog = dlg                   # 검사용
+        dlg.exec()
+        if isinstance(prefs, dict) and dlg.state_out != (prefs.get("tag_apply_window") or {}):
+            prefs["tag_apply_window"] = dict(dlg.state_out)   # 크기·최대화·정렬 기억 — 책갈피창과 같은 설정
+            try:
+                mw._save_settings_now()
+            except Exception:
+                pass
+        st = self._store()
+        n = 0
+        # 여러 장이어도 메인을 오래 세우지 않게 — 태그 저장소는 한 번에 모아 저장(bulk), 명함 DB 는 마지막에 한 번 커밋
+        with store.bulk():
+            for c, f in zip(cards, fronts):
+                after = list(store.get_manual(f) or [])
+                add = [t for t in after if t not in before[f]]
+                rem = [t for t in before[f] if t not in after]
+                if not add and not rem:
+                    continue
+                b = c.get("back")
+                if b and os.path.exists(b):
+                    b = os.path.realpath(b)
+                    cur = [t for t in (store.get_manual(b) or []) if t not in rem]
+                    store.set(b, list(dict.fromkeys(cur + add)))
+                row = P.card_by_id(st, c["id"]) or c            # 대화상자 뒤 — 명함은 id 로 다시 읽는다
+                P.update_card(st, c["id"], {"tags": list(dict.fromkeys([t for t in row.get("tags") or [] if t not in rem] + add))},
+                              commit=False)
+                n += 1
+        st.con.commit()
+        try:
+            mw.bookmark_tree.refresh_tag_labels()
+        except Exception:
+            pass
+        if n:
+            self.refresh()
+        return n
 
     # ── 주소록 가져오기 (§5.24 D22·D23 — 구글 주소록·리멤버 명함첩 vCard) ──
     def import_contacts(self, path=None, ask: bool = True, source: str = "google"):

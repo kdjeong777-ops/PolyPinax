@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-11-18 13:47+0900\n"
+"POT-Creation-Date: 2026-11-18 14:27+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -3040,6 +3040,11 @@ msgstr ""
 #: viewer/app.py
 #, python-brace-format
 msgid "인덱싱 오류: {e}"
+msgstr ""
+
+#: viewer/app.py
+#, python-brace-format
+msgid "명함 메모를 저장하지 못했습니다 ({kind})"
 msgstr ""
 
 #: viewer/app.py
@@ -14292,6 +14297,10 @@ msgid "고친 글을 OCR 텍스트층에 다시 적습니다(원본 백업)"
 msgstr ""
 
 #: viewer/widgets/text_panel.py
+msgid "이 명함의 메모 — 명함찾기 창과 같은 칸입니다"
+msgstr ""
+
+#: viewer/widgets/text_panel.py
 msgid "두 줄을 합쳤습니다 — 반영하면 두 자리가 하나로 들어갑니다."
 msgstr ""
 
@@ -14345,6 +14354,10 @@ msgstr ""
 
 #: viewer/widgets/text_panel.py
 msgid "칠했습니다 — 본문에도 표시했습니다."
+msgstr ""
+
+#: viewer/widgets/text_panel.py
+msgid "명함 메모"
 msgstr ""
 
 #: viewer/widgets/text_panel.py

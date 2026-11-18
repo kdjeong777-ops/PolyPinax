@@ -236,6 +236,33 @@ try:
     chk(max(gaps or [0]) < 1.0, "G 메인 정지 < 1초", "%.2f" % max(gaps or [0]))
     dlg.close()
     pump(timeout=0.3)
+
+    print("\n=== H. 텍스트 창 명함 메모 칸(텍스트 창 SOT §2.2) ===")
+    tp = mw.text_panel
+    ok_open = mw._photo_open_arg(str(nf))
+    if hasattr(mw, "_vm_text"):
+        mw._vm_text()
+    chk(ok_open and pump(lambda: tp.card_box.isVisible(), timeout=10), "H 사진 모드에서 정리본을 열면 메모 칸이 보임")
+    chk(tp.card_memo.toPlainText() == "새 메모" and "홍길동" in tp.card_title.text(), "H 그 명함의 메모·이름",
+        tp.card_title.text())
+    tp.card_memo.moveCursor(tp.card_memo.textCursor().MoveOperation.End)
+    tp.card_memo.setFocus()
+    type_ko(tp.card_memo, " 추가")
+    def _memo():
+        s = S.BizcardStore()
+        try:
+            return s.card_by_front(nf)["memo"]
+        finally:
+            s.close()
+    chk(_memo() == "새 메모", "H 치자마자 쓰지 않음(600ms 모아 한 번)")
+    chk(pump(lambda: _memo() == "새 메모 추가", timeout=3), "H 고친 메모가 명함 DB 에(명함찾기와 같은 칸)", _memo())
+    type_ko(tp.card_memo, "!")
+    other_photo = Path(items["b"].front)               # 원본 그림 — 정리본 아님
+    mw._photo_open_arg(str(other_photo))
+    chk(pump(lambda: not tp.card_box.isVisible(), timeout=10), "H 명함 정리본이 아닌 사진에서는 숨김")
+    st = S.BizcardStore()
+    chk(st.card_by_front(nf)["memo"] == "새 메모 추가!", "H 사진을 바꾸기 전에 남은 고침을 먼저 씀", st.card_by_front(nf)["memo"])
+    st.close()
 except Exception:
     import traceback
     traceback.print_exc()

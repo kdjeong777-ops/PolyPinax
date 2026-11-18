@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-18 13:47+0900\n"
+"POT-Creation-Date: 2026-11-18 14:27+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -3142,6 +3142,11 @@ msgstr "[Label] {name}"
 #, python-brace-format
 msgid "인덱싱 오류: {e}"
 msgstr "Indexing error: {e}"
+
+#: viewer/app.py
+#, python-brace-format
+msgid "명함 메모를 저장하지 못했습니다 ({kind})"
+msgstr "Could not save the business card memo ({kind})"
 
 #: viewer/app.py
 #, python-brace-format
@@ -14647,6 +14652,10 @@ msgid "고친 글을 OCR 텍스트층에 다시 적습니다(원본 백업)"
 msgstr "Write the corrected text back to the OCR text layer (original backed up)"
 
 #: viewer/widgets/text_panel.py
+msgid "이 명함의 메모 — 명함찾기 창과 같은 칸입니다"
+msgstr "Memo for this card — the same field as in Find Business Card"
+
+#: viewer/widgets/text_panel.py
 msgid "두 줄을 합쳤습니다 — 반영하면 두 자리가 하나로 들어갑니다."
 msgstr "Two lines were merged — when applied, the two places become one."
 
@@ -14701,6 +14710,10 @@ msgstr "Added the text from the extended area: {t}"
 #: viewer/widgets/text_panel.py
 msgid "칠했습니다 — 본문에도 표시했습니다."
 msgstr "Highlighted — also shown on the page."
+
+#: viewer/widgets/text_panel.py
+msgid "명함 메모"
+msgstr "Business card memo"
 
 #: viewer/widgets/text_panel.py
 #, python-brace-format

@@ -14,7 +14,7 @@ from viewer.i18n import tr                   # 261008: 화면 문구(다국어 S
 from PyQt6.QtGui import QFont, QTextCharFormat, QColor, QTextCursor
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QComboBox,
                              QToolButton, QCheckBox, QTextEdit, QPushButton,
-                             QDoubleSpinBox, QMenu)
+                             QDoubleSpinBox, QMenu, QPlainTextEdit)
 
 # 기본 스타일(설정에 없으면 이것으로 시작) — SOT §3.4
 DEFAULT_STYLES = {
@@ -127,6 +127,8 @@ class TextPanel(QWidget):
     # 260912-7(입력 SOT §2.7, 사용자 지시): '본문에도 표시' 가 켜져 있을 때,
     #   칠한 줄의 자리를 본문에 그리라고 알린다 — (쪽, [사각형…])
     highlightMarked = pyqtSignal(int, object)
+    # 261118(SOT §2.2): 명함 메모를 고쳤다 — (명함 DB id, 메모). 앱이 명함 DB 에 남긴다
+    cardMemoEdited = pyqtSignal(int, str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -254,6 +256,28 @@ class TextPanel(QWidget):
         bar3.addWidget(self.btn_word)
         v.addWidget(self.bar3_widget)
 
+        # 261118(SOT §2.2, 명함 SOT §5.7): 명함 메모 칸 — 사진 모드에서 명함 정리본을 볼 때만 보인다
+        self.card_box = QWidget(self)
+        cb = QVBoxLayout(self.card_box)
+        cb.setContentsMargins(0, 0, 0, 0)
+        cb.setSpacing(2)
+        self.card_title = QLabel("")
+        self.card_title.setStyleSheet("font-weight:bold;")
+        cb.addWidget(self.card_title)
+        self.card_memo = QPlainTextEdit()
+        self.card_memo.setPlaceholderText(tr("이 명함의 메모 — 명함찾기 창과 같은 칸입니다"))
+        self.card_memo.setMaximumHeight(90)
+        self.card_memo.textChanged.connect(self._on_card_memo_changed)
+        cb.addWidget(self.card_memo)
+        self.card_box.setVisible(False)
+        v.addWidget(self.card_box)
+        self._card_id = None
+        self._card_memo_loading = False
+        self._card_timer = QTimer(self)
+        self._card_timer.setSingleShot(True)
+        self._card_timer.setInterval(600)
+        self._card_timer.timeout.connect(self.flush_card_memo)
+
         self.info = QLabel("")
         self.info.setStyleSheet("color:#666;")
         self.info.setWordWrap(True)
@@ -268,6 +292,37 @@ class TextPanel(QWidget):
         v.addWidget(self.edit, 1)
 
         self._sync_style_widgets()
+
+    # ---------------- 명함 메모 칸 (SOT §2.2) ----------------
+    def set_card(self, card):
+        """명함 정리본이면 그 행(dict — id·name·company·memo), 아니면 None(칸 숨김). 남은 고침은 먼저 쓴다."""
+        self.flush_card_memo()
+        self._card_id = int(card["id"]) if card else None
+        self._card_memo_loading = True
+        try:
+            if card:
+                who = " · ".join(x for x in ((card.get("name") or ""), (card.get("company") or "")) if x)
+                self.card_title.setText(tr("명함 메모") + (" — " + who if who else ""))
+                self.card_memo.setPlainText(card.get("memo") or "")
+            else:
+                self.card_title.setText("")
+                self.card_memo.setPlainText("")
+        finally:
+            self._card_memo_loading = False
+        self.card_box.setVisible(card is not None)
+
+    def _on_card_memo_changed(self):
+        if not self._card_memo_loading and self._card_id is not None:
+            self._card_dirty = True
+            self._card_timer.start()
+
+    def flush_card_memo(self):
+        """기다리던 메모 고침을 지금 알린다(사진을 바꾸기 전·타이머)."""
+        self._card_timer.stop()
+        if getattr(self, "_card_dirty", False) and self._card_id is not None:
+            self._card_dirty = False
+            self.cardMemoEdited.emit(self._card_id, self.card_memo.toPlainText())
+        self._card_dirty = False
 
     # ---------------- 스타일 ----------------
     def styles(self) -> dict:

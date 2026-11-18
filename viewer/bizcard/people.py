@@ -55,6 +55,39 @@ def since_for(period: str, today=None) -> str:
     return (d - dt.timedelta(days=days)).isoformat() if days else ""
 
 
+def card_for_path(path, db=None):
+    """텍스트 창 명함 메모 칸(텍스트 창 SOT §2.2) — 이 그림이 정리본(앞면·뒷면)인 명함 행, 없으면 None.
+    명함 DB 를 **읽기 전용**으로 잠깐 연다(사진을 바꿀 때마다 부르므로 스키마 만들기·쓰기 없음, UI 대기 상한)."""
+    import sqlite3
+    from viewer import dbutil
+    from viewer.bizcard.store import db_path, BizcardStore
+    p = Path(db) if db else db_path()
+    if not path or not p.exists():
+        return None
+    k = _nk(path)
+    try:
+        con = dbutil.connect(p, dbutil.BUSY_MS_UI, readonly=True)   # 응답성 SOT §4 ⑤ — UI 대기 상한
+    except sqlite3.Error:
+        return None
+    try:
+        r = con.execute("SELECT * FROM cards WHERE front=? OR back=? LIMIT 1", (k, k)).fetchone()
+        return BizcardStore._row(r)
+    except sqlite3.Error:
+        return None
+    finally:
+        con.close()
+
+
+def set_memo(card_id: int, memo: str, db=None) -> None:
+    """명함 메모만 고침(텍스트 창 SOT §2.2) — 명함찾기 창과 같은 칸."""
+    from viewer.bizcard.store import BizcardStore
+    st = BizcardStore(db, ui=True)
+    try:
+        update_card(st, card_id, {"memo": memo})
+    finally:
+        st.close()
+
+
 # ── 인물 사진 ──
 def people_dir(front) -> Path:
     return Path(front).parent.parent / PEOPLE_DIR

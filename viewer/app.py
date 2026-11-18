@@ -3838,6 +3838,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             pass
         tp.highlightAdded.connect(self._on_text_highlight)      # 260908-3(SOT §6)
         tp.ocrRequested.connect(self._on_text_need_ocr)
+        tp.cardMemoEdited.connect(self._on_card_memo_edited)     # 261118(텍스트 창 SOT §2.2): 명함 메모 칸
         try:    # 261103-15(텍스트 창 SOT §5.1.5): 본문의 줄 상자를 끌어 늘리면 늘린 띠를 읽어 그 줄에 넣는다
             self.main_view.panelRectStretched.connect(self._on_text_rect_stretched)
         except Exception:
@@ -3852,6 +3853,28 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         from viewer.text_fix_store import store
         return store()
 
+    def _text_card_sync(self, photo):
+        """텍스트 창 SOT §2.2: 본문 사진이 명함 정리본(앞·뒤)이면 명함 메모 칸, 아니면 숨김. 명함 DB 는 읽기 전용으로 잠깐."""
+        tp = getattr(self, "text_panel", None)
+        if tp is None or not hasattr(tp, "set_card"):
+            return
+        card = None
+        if photo:
+            try:
+                from viewer.bizcard import people
+                card = people.card_for_path(str(photo))
+            except Exception:
+                card = None
+        tp.set_card(card)
+
+    def _on_card_memo_edited(self, card_id: int, memo: str):
+        """텍스트 창 명함 메모 → 명함 DB(명함찾기 창과 같은 칸). 명함 글은 로그에 싣지 않는다(명함 SOT §2.1)."""
+        try:
+            from viewer.bizcard import people
+            people.set_memo(card_id, memo)
+        except Exception as e:
+            self.status.showMessage(tr("명함 메모를 저장하지 못했습니다 ({kind})").format(kind=type(e).__name__), 6000)
+
     def _reload_text_panel(self):
         """현재 쪽의 줄 목록을 뽑아 텍스트 창에 넣는다(SOT §3).
 
@@ -3862,7 +3885,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             return
         mv = self.main_view
         cur = mv.current_file() if mv else None
-        if cur and mv._doc is not None and getattr(self, "_photo_mode", False) and self._is_photo_path(cur):
+        is_photo = bool(cur and mv._doc is not None and getattr(self, "_photo_mode", False) and self._is_photo_path(cur))
+        self._text_card_sync(cur if is_photo else None)    # 261118(텍스트 창 SOT §2.2): 명함 정리본이면 메모 칸
+        if is_photo:
             self._photo_text_reload(cur)                   # 261104-10(사진 보기 SOT §4.34): 사진 — 우리 OCR 낱말만
             return
         self._text_apply_sync()                           # 261116-29: [PDF 에 반영] 켜기·끄기는 한 곳
@@ -11763,6 +11788,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         return True                          # 저장 안 함 → 그대로 종료
 
     def closeEvent(self, event):
+        try:                                           # 261118(텍스트 창 SOT §2.2): 기다리던 명함 메모 고침을 먼저 쓴다
+            self.text_panel.flush_card_memo()
+        except Exception:
+            pass
         # 260611-17: 편집모드에서 X(종료) 시 저장/저장 안 함/취소 선택
         if not self._confirm_close_edit():
             event.ignore()

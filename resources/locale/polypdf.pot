@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-11-18 12:45+0900\n"
+"POT-Creation-Date: 2026-11-18 13:00+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -180,7 +180,8 @@ msgstr ""
 msgid "버전 v{version}"
 msgstr ""
 
-#: viewer/app.py viewer/widgets/crop_dialog.py viewer/widgets/read_aloud.py
+#: viewer/app.py viewer/widgets/bizcard_find_dialog.py
+#: viewer/widgets/crop_dialog.py viewer/widgets/read_aloud.py
 #: viewer/widgets/tag_apply_dialog.py viewer/widgets/thumbs_list.py
 msgid "전체"
 msgstr ""
@@ -336,10 +337,10 @@ msgstr ""
 
 #: viewer/app.py viewer/convert/__init__.py viewer/edit_controller.py
 #: viewer/jobs_controller.py viewer/photo_controller.py viewer/redact.py
-#: viewer/study_controller.py viewer/widgets/bookmark_tree.py
-#: viewer/widgets/ctx_menu.py viewer/widgets/encrypt_dialog.py
-#: viewer/widgets/line_text_settings_dialog.py viewer/widgets/merge_preview.py
-#: viewer/widgets/twoup_dialog.py
+#: viewer/study_controller.py viewer/widgets/bizcard_find_dialog.py
+#: viewer/widgets/bookmark_tree.py viewer/widgets/ctx_menu.py
+#: viewer/widgets/encrypt_dialog.py viewer/widgets/line_text_settings_dialog.py
+#: viewer/widgets/merge_preview.py viewer/widgets/twoup_dialog.py
 msgid "저장"
 msgstr ""
 
@@ -449,7 +450,7 @@ msgstr ""
 msgid "인덱스"
 msgstr ""
 
-#: viewer/app.py viewer/bizcard/vcard.py
+#: viewer/app.py viewer/bizcard/vcard.py viewer/widgets/bizcard_find_dialog.py
 #: viewer/widgets/bizcard_import_dialog.py
 msgid "명함"
 msgstr ""
@@ -558,7 +559,8 @@ msgstr ""
 
 #: viewer/app.py viewer/compare_controller.py viewer/jobs_controller.py
 #: viewer/photo_controller.py viewer/print_controller.py
-#: viewer/update_controller.py viewer/widgets/bizcard_import_dialog.py
+#: viewer/update_controller.py viewer/widgets/bizcard_find_dialog.py
+#: viewer/widgets/bizcard_import_dialog.py
 #: viewer/widgets/glossary_edit_dialog.py viewer/widgets/hyperlink_dialog.py
 #: viewer/widgets/image_tune_dialog.py viewer/widgets/stamp_dialog.py
 #: viewer/widgets/tag_apply_dialog.py viewer/widgets/translate_dialog.py
@@ -1832,6 +1834,10 @@ msgstr ""
 
 #: viewer/app.py viewer/widgets/bookmark_tree.py
 msgid "명함 관리..."
+msgstr ""
+
+#: viewer/app.py
+msgid "명함찾기..."
 msgstr ""
 
 #: viewer/app.py viewer/doc_info.py viewer/sign_controller.py
@@ -4780,7 +4786,7 @@ msgstr ""
 msgid "고도"
 msgstr ""
 
-#: viewer/photo_controller.py
+#: viewer/photo_controller.py viewer/widgets/bizcard_find_dialog.py
 msgid "주소"
 msgstr ""
 
@@ -5720,7 +5726,8 @@ msgstr ""
 msgid "PolyPinax 에서 고르기"
 msgstr ""
 
-#: viewer/photo_map.py viewer/widgets/bookmark_tree.py
+#: viewer/photo_map.py viewer/widgets/bizcard_find_dialog.py
+#: viewer/widgets/bookmark_tree.py
 #, python-brace-format
 msgid "{n}장"
 msgstr ""
@@ -6650,9 +6657,10 @@ msgstr ""
 msgid "이 파일의 서명 자리를 모두 지울까요?"
 msgstr ""
 
-#: viewer/sign_draft_controller.py viewer/widgets/bizcard_import_dialog.py
-#: viewer/widgets/capture_settings.py viewer/widgets/image_to_pdf_dialog.py
-#: viewer/widgets/sign_dialogs.py viewer/widgets/stamp_dialog.py
+#: viewer/sign_draft_controller.py viewer/widgets/bizcard_find_dialog.py
+#: viewer/widgets/bizcard_import_dialog.py viewer/widgets/capture_settings.py
+#: viewer/widgets/image_to_pdf_dialog.py viewer/widgets/sign_dialogs.py
+#: viewer/widgets/stamp_dialog.py
 msgid "이름"
 msgstr ""
 
@@ -7761,6 +7769,167 @@ msgstr ""
 msgid "변환 도구 오류(코드 {rc})"
 msgstr ""
 
+#: viewer/widgets/bizcard_find_dialog.py
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "회사"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "부서"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "직함"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "휴대폰"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "전화"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "팩스"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "메일"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "누리집"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "명함찾기"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "이름·회사·메모 등 — 낱말 여럿은 모두 들어 있는 명함, #낱말은 해시태그"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "인물 사진을 여기에 끌어 놓으면 이 명함의 인물 사진으로 넣습니다"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "고친 칸·메모를 명함 DB 에 저장합니다 — 이름·회사를 바꾸면 정리본 파일 이름도 '성명_회사명' 으로"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "사진 추가..."
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "인물 사진을 '인물' 폴더에 정리본과 같은 이름의 JPG 로 넣습니다 — 위치 정보 등 EXIF 는 뺍니다"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "사진 모드에서 열기"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "vCard 로 내보내기..."
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "고른 명함들을 vCard(.vcf) 로 내보냅니다"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "고친 내용을 저장할까요?"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "인물 사진"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "최근 1개월"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "최근 3개월"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "최근 1년"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py viewer/widgets/tag_apply_dialog.py
+msgid "직접"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "스캔일"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py viewer/widgets/main_view.py
+msgid "메모"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "(그림 파일이 없습니다)"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "인물 사진을 넣는 중입니다 — 끝난 뒤에 다시 하세요."
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "이름을 비울 수 없습니다."
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "명함 이름 바꾸기"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py viewer/widgets/study_panel.py
+msgid "그림"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "사진 모드로 열지 못했습니다."
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "구글 드라이브의 명함 폴더 이름 — 메모에 '폴더/파일 이름' 과 드라이브 검색 주소를 넣습니다(비우면 넣지 않음):"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "vCard 로 내보내기"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "파일 이름을 바꾸지 못했습니다 — 다른 프로그램이 열고 있는지 확인하세요."
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+#, python-brace-format
+msgid "처음 {n}장"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+#, python-brace-format
+msgid "그림 {n}개를 넣지 못했습니다."
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+#: viewer/widgets/bizcard_import_dialog.py
+#, python-brace-format
+msgid "vCard 에 {n}장을 썼습니다."
+msgstr ""
+
 #: viewer/widgets/bizcard_import_dialog.py
 msgid "명함 위를 끌어 이름·회사 등의 자리를 지정하면 그 자리만 다시 읽어 칸을 채우고, 같은 회사 명함에 기억합니다"
 msgstr ""
@@ -7837,35 +8006,7 @@ msgid "다시 읽기"
 msgstr ""
 
 #: viewer/widgets/bizcard_import_dialog.py
-msgid "회사"
-msgstr ""
-
-#: viewer/widgets/bizcard_import_dialog.py
-msgid "부서"
-msgstr ""
-
-#: viewer/widgets/bizcard_import_dialog.py
-msgid "직함"
-msgstr ""
-
-#: viewer/widgets/bizcard_import_dialog.py
-msgid "휴대폰"
-msgstr ""
-
-#: viewer/widgets/bizcard_import_dialog.py
-msgid "전화"
-msgstr ""
-
-#: viewer/widgets/bizcard_import_dialog.py
-msgid "메일"
-msgstr ""
-
-#: viewer/widgets/bizcard_import_dialog.py
 msgid "뒷면"
-msgstr ""
-
-#: viewer/widgets/bizcard_import_dialog.py
-msgid "스캔일"
 msgstr ""
 
 #: viewer/widgets/bizcard_import_dialog.py
@@ -7890,10 +8031,6 @@ msgstr ""
 
 #: viewer/widgets/bizcard_import_dialog.py
 msgid "(다시 읽는 중)"
-msgstr ""
-
-#: viewer/widgets/bizcard_import_dialog.py
-msgid "구글 드라이브의 명함 폴더 이름 — 메모에 '폴더/파일 이름' 과 드라이브 검색 주소를 넣습니다(비우면 넣지 않음):"
 msgstr ""
 
 #: viewer/widgets/bizcard_import_dialog.py
@@ -7980,10 +8117,6 @@ msgid "합칠 기존 vCard"
 msgstr ""
 
 #: viewer/widgets/bizcard_import_dialog.py
-msgid "vCard 로 내보내기"
-msgstr ""
-
-#: viewer/widgets/bizcard_import_dialog.py
 msgid "정리본 만드는 중"
 msgstr ""
 
@@ -7998,11 +8131,6 @@ msgstr ""
 #: viewer/widgets/bizcard_import_dialog.py
 #, python-brace-format
 msgid "기존 vCard 에 합쳤습니다 — 같은 사람 {m}명(더한 줄 {l}), 새 사람 {a}명."
-msgstr ""
-
-#: viewer/widgets/bizcard_import_dialog.py
-#, python-brace-format
-msgid "vCard 에 {n}장을 썼습니다."
 msgstr ""
 
 #: viewer/widgets/bizcard_import_dialog.py
@@ -10254,10 +10382,6 @@ msgstr ""
 #: viewer/widgets/line_text_settings_dialog.py
 #, python-brace-format
 msgid "이미 '{name}' 스타일이 있습니다. 덮어쓸까요?"
-msgstr ""
-
-#: viewer/widgets/main_view.py
-msgid "메모"
 msgstr ""
 
 #: viewer/widgets/main_view.py
@@ -13655,10 +13779,6 @@ msgid "사전 뜻 끝에 출처(참고문헌)를 표시합니다."
 msgstr ""
 
 #: viewer/widgets/study_panel.py
-msgid "그림"
-msgstr ""
-
-#: viewer/widgets/study_panel.py
 msgid "사전에 그림이 있으면 단어 옆에 표시합니다."
 msgstr ""
 
@@ -13879,10 +13999,6 @@ msgstr ""
 
 #: viewer/widgets/tag_apply_dialog.py
 msgid "올해"
-msgstr ""
-
-#: viewer/widgets/tag_apply_dialog.py
-msgid "직접"
 msgstr ""
 
 #: viewer/widgets/tag_apply_dialog.py

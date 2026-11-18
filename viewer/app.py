@@ -2044,9 +2044,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             (tr("자동 태그 전체 삭제"), self._autotag_clear_all),
             (tr("없는 파일 항목 정리"), self._autotag_prune_missing)), "tools.autotag")
         _act(tr("인덱스"), self.action_reindex, "tools.reindex", tip=tr("인덱스 재구축 — 열린 폴더의 검색 색인을 처음부터 다시 만듭니다"))   # 261031-16: 종전 '인덱스 재구축'
-        # 261117-8(명함 SOT §5.10, D11): 명함 ▾ — 들이기(P2). 명함찾기는 P4 에서 더한다
+        # 261117-8(명함 SOT §5.10, D11): 명함 ▾ — 들이기(P2) · 명함찾기(P4, §5.9)
         _sub(tr("명함"), (
-            (tr("명함 관리..."), lambda: self._action_bizcard_import()),), "tools.bizcard")   # 261117-9: 종전 '명함 들이기'(사용자 지시)
+            (tr("명함 관리..."), lambda: self._action_bizcard_import()),   # 261117-9: 종전 '명함 들이기'(사용자 지시)
+            (tr("명함찾기..."), lambda: self._action_bizcard_find())), "tools.bizcard")
         # PDF
         m_tools.addSeparator()
         _mk_pdf = RibbonIconMark(self, None, tr("PDF 만들기·합치기·암호·서명"), tr("PDF"))
@@ -3678,6 +3679,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self._rehome_sidecars([(o, n) for o, n in pairs if o])
         # 261105-8(§4.7.14): 경로 키 기록(OCR·고른 낱말·고친 글·하이라이트)도 새 이름으로 — 배경
         self._carry_records([(o, n) for o, n in pairs if o], copy=False)
+        self._bizcard_follow([(o, n) for o, n in pairs if o])   # 명함 SOT §5.7·§5.9(P4): 명함 DB 의 정리본 경로도 — 배경
         try:
             from viewer import sign_drafts             # 보안 SOT §3.10 — 서명 자리 기록도 새 경로로
             sign_drafts.relocate([(o, n) for o, n in pairs if o])
@@ -7498,6 +7500,52 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         worker.error.connect(self._on_index_db_error)  # 261009-14: 색인 손상이면 스스로 복구
         self._attach_indexing_dialog(worker)          # 260902-6: 폴더 인덱싱 진행 창
         run_in_thread(worker, self._thread_keep)
+
+    def _bizcard_follow(self, pairs):
+        """명함 SOT §5.7·§5.9(P4): 이름 바꾸기·옮기기 뒤 명함 DB 의 앞면·뒷면·원천 경로를 새 경로로 — 배경 스레드.
+        명함 DB 가 없으면(명함 기능을 안 쓰는 PC) 아무것도 안 한다. 끝나면 `_bizcard_follow_done` 을 센다(검사)."""
+        if not pairs:
+            return
+        try:
+            from viewer.bizcard.store import db_path
+            if not db_path().exists():
+                return
+        except Exception:
+            return
+        import threading
+
+        def _job():
+            try:
+                from viewer.bizcard.store import BizcardStore
+                from viewer.bizcard import people
+                st = BizcardStore()
+                try:
+                    people.relocate_cards(st, pairs)
+                finally:
+                    st.close()
+            except Exception as e:                       # 명함 경로는 싣지 않는다(§2.1)
+                print("[bizcard] follow failed:", type(e).__name__)
+            self._bizcard_follow_done = getattr(self, "_bizcard_follow_done", 0) + 1
+        threading.Thread(target=_job, daemon=True, name="bizcard-follow").start()
+
+    def _action_bizcard_find(self):
+        """명함 SOT §5.9(P4): 명함찾기 창 — 하나만(다시 누르면 앞으로)."""
+        old = getattr(self, "_bizcard_find_dlg", None)
+        try:
+            from PyQt6 import sip
+            if old is not None and not sip.isdeleted(old) and old.isVisible():
+                if old.isMinimized():
+                    old.showNormal()
+                old.raise_()
+                old.activateWindow()
+                return
+        except Exception:
+            pass
+        from viewer.widgets.bizcard_find_dialog import BizcardFindDialog
+        dlg = BizcardFindDialog(self)
+        dlg.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
+        self._bizcard_find_dlg = dlg
+        dlg.show()
 
     def _action_bizcard_import(self, folder=None):
         """261117-8(명함 SOT §5.10): 명함 관리(261117-9 — 종전 '명함 들이기') — 확인 표 창. 대상은 준 폴더, 없으면 열린 폴더(D11)."""

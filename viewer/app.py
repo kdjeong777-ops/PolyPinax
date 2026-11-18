@@ -10934,6 +10934,12 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         _act_en(va.get("study"), True)
         for a in getattr(self, "_ko_only_acts", []):
             _act_en(a, True)
+        # 명함 SOT §5.24(사용자 지시): 환경설정 명함 폴더가 비어 있으면 도구 탭 `명함 ▾` 숨김 — 메뉴·모음도 같은 액션.
+        #   숨기기만(끄지 않음) — 폴더가 없을 때 들어가는 길은 환경설정·사진 모드 폴더 줄 우클릭 '명함 관리…'
+        _pic = p.get("picture") if isinstance(p.get("picture"), dict) else {}
+        _bz = (getattr(self, "_cmds", None) or {}).get("tools.bizcard")
+        if _bz is not None:
+            _bz.setVisible(bool(str(_pic.get("bizcard_folder") or "").strip()))
         tabs = getattr(self, "search_tabs", None)
         sp = getattr(self, "study_panel", None)
         if tabs is not None and sp is not None:

@@ -9,6 +9,11 @@ D. 고쳐 저장(실제 키 입력·단추) — 이름·회사가 바뀌면 정�
 E. 저장 안 한 고침 — 다른 줄을 고르면 묻는다(버리기면 안 남음)
 F. 책갈피창 이름 바꾸기 한 길(`_rename_bg` → `_after_rename`)로 정리본 이름을 바꾸면 명함 DB 가 따라감(배경)
 G. vCard 로 내보내기(고른 명함), 메인 정지 < 1초
+H. 텍스트 창 명함 메모 칸
+I. 명함찾기 개편(명함 SOT §5.24) — 명함 폴더가 비면 `명함` 단추 숨김, 머리말 정렬, 앞↔뒤 단추, 체크한 칸 복사(기억),
+   즐겨찾기 탭(여러 명 넣기·빼기·차례·탭 더하기/이름/지우기·그림), 인물 사진 차례 = 파일 이름·지우기 = 휴지통,
+   해시태그(DB·파일, #찾기, 저장해도 남음), 주소록 vCard 가져오기(합치기·그림 없는 명함)·리멤버용 내보내기,
+   주소록 우선순위(리멤버 > 구글, 명함·손 고침은 덮지 않음), 목록에서 지우기
 """
 import os, sys, tempfile, time, datetime
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -110,6 +115,33 @@ try:
     chk([r["name"] for r in P.find(st, "")][:1] == ["홍길동"], "A 스캔일 최근 먼저")
     st.close()
 
+    print("\n=== A2. 옛 명함 DB(즐겨찾기·주소록 출처 표 없음)로 열기 ===")
+    import sqlite3 as _sq
+    from viewer import dbutil
+    old_db = TMP / "old_bizcard.db"
+    con = dbutil.connect(old_db, dbutil.BUSY_MS_BG)
+    con.executescript("CREATE TABLE cards(id INTEGER PRIMARY KEY, front TEXT UNIQUE NOT NULL, back TEXT, src_key TEXT, src_pdf TEXT, "
+                      "name TEXT, company TEXT, title TEXT, phones TEXT, emails TEXT, urls TEXT, address TEXT, en TEXT, memo TEXT, "
+                      "tags TEXT, scanned TEXT, top1 INTEGER, created REAL, updated REAL);"
+                      "CREATE VIRTUAL TABLE cards_fts USING fts5(body, tokenize='unicode61');"
+                      "INSERT INTO cards(front, name, phones, emails, urls, tags, en) VALUES('c:\\x\\a.jpg', '옛사람', '[]', '[]', '[]', '[]', '{}');")
+    con.commit(); con.close()
+    try:
+        ost = S.BizcardStore(old_db)
+        oid = ost.con.execute("SELECT id FROM cards").fetchone()[0]
+        ok_old = P.field_srcs(ost, oid) == {}            # 출처 표가 아직 없어도
+        ost.delete_card(oid)                              # 즐겨찾기·출처 표 없이 지우기
+        P.fav_init(ost, "즐겨찾기")
+        ok_old = ok_old and len(P.fav_groups(ost)) == 1 and ost.count() == 0
+        ost.close()
+        con = dbutil.connect(old_db, dbutil.BUSY_MS_BG)  # 옛 판이 새 DB 를 읽는 꼴 — cards 는 그대로
+        ok_old = ok_old and [r[1] for r in con.execute("PRAGMA table_info(cards)")][:3] == ["id", "front", "back"]
+        con.close()
+    except Exception as e:
+        ok_old = False
+        print(repr(e))
+    chk(ok_old, "A2 옛 DB 를 열어도 깨지지 않음(새 표는 CREATE IF NOT EXISTS, cards 열은 그대로)")
+
     print("\n=== B. 메뉴·창 ===")
     from viewer.app import MainWindow
     import modal_guard
@@ -135,7 +167,8 @@ try:
     chk(pump(lambda: dlg.table.rowCount() == 1, timeout=3), "B 글을 치면 잠시 뒤 결과가 줄어듦", str(dlg.table.rowCount()))
     chk(dlg.eds["name"].text() == "홍길동" and dlg.eds["cell"].text() == "010-0000-0001" and dlg.ed_memo.toPlainText() == "골프 모임",
         "B 첫 결과의 칸·메모가 오른쪽에")
-    chk(dlg.thumbs.count() == 2, "B 작은 그림 줄 — 앞면·뒷면", str(dlg.thumbs.count()))
+    chk(dlg.btn_flip.isEnabled() and os.path.normcase(dlg.shown) == os.path.normcase(dlg._card["front"]),
+        "B 사진창 — 명함 앞면, 뒷면이 있으면 앞↔뒤 단추 켜짐")
     dlg.ed_find.clear()
     pump(lambda: dlg.table.rowCount() == 3, timeout=3)
     dlg.cb_period.setCurrentIndex(dlg.cb_period.findData("1y"))
@@ -144,7 +177,7 @@ try:
     pump(lambda: dlg.table.rowCount() == 3, timeout=3)
 
     print("\n=== C. 인물 사진 ===")
-    r_h = next(i for i, c in enumerate(dlg._rows) if c["name"] == "홍길동")
+    r_h = dlg.row_of_id(next(c["id"] for c in dlg._rows if c["name"] == "홍길동"))
     dlg.table.setCurrentCell(r_h, 0)
     pump(timeout=0.2)
     src = TMP / "photo.jpg"
@@ -164,8 +197,8 @@ try:
                 "%s %s %s" % (q.format, dict(q.getexif()), q.size))
     dlg.add_photos([str(src)])
     pump(lambda: not dlg.photo_busy, timeout=10)
-    chk((pdir / "홍길동_가나도로공사 (2).jpg").exists() and dlg.thumbs.count() == 4, "C 둘째는 ' (2)'·작은 그림 줄에 보임",
-        str(dlg.thumbs.count()))
+    chk((pdir / "홍길동_가나도로공사 (2).jpg").exists() and dlg.photos.count() == 2, "C 둘째는 ' (2)'·인물 사진 칸에 보임",
+        str(dlg.photos.count()))
 
     print("\n=== D. 고쳐 저장 ===")
     front0 = OUT / "홍길동_가나도로공사.jpg"
@@ -202,7 +235,7 @@ try:
     QMessageBox.question = staticmethod(lambda *a, **k: (asked.append(1), QMessageBox.StandardButton.Discard)[1])
     dlg.eds["title"].setFocus()
     QTest.keyClicks(dlg.eds["title"], "X")
-    other = next(i for i, c in enumerate(dlg._rows) if c["name"] == "김철수")
+    other = dlg.row_of_id(next(c["id"] for c in dlg._rows if c["name"] == "김철수"))
     dlg.table.setCurrentCell(other, 0)
     pump(timeout=0.2)
     st = S.BizcardStore()
@@ -263,6 +296,214 @@ try:
     st = S.BizcardStore()
     chk(st.card_by_front(nf)["memo"] == "새 메모 추가!", "H 사진을 바꾸기 전에 남은 고침을 먼저 씀", st.card_by_front(nf)["memo"])
     st.close()
+
+    print("\n=== I. 명함찾기 개편(§5.24) ===")
+    import hashlib, shutil
+    from PyQt6.QtCore import QPoint
+    import viewer.widgets.bookmark_tree as _btm
+    TR = TMP / "trash"
+    TR.mkdir()
+    _btm._trash_fn = lambda: (lambda p: shutil.move(p, str(TR / (Path(p).parent.name + "_" + Path(p).name))))   # 시험용 휴지통
+    QMessageBox.question = staticmethod(lambda *a, **k: QMessageBox.StandardButton.Yes)
+    # I1 명함 단추 — 명함 폴더가 비면 숨김
+    bz = mw._cmds.get("tools.bizcard")
+    mw._gate_api_dependent_ui(mw._prefs)
+    chk(bz is not None and not bz.isVisible(), "I1 명함 폴더가 비면 도구 탭 `명함` 숨김")
+    mw._prefs.setdefault("picture", {})["bizcard_folder"] = str(F)
+    mw._gate_api_dependent_ui(mw._prefs)
+    chk(bz is not None and bz.isVisible(), "I1 명함 폴더를 정하면 보임")
+    mw._action_bizcard_find()
+    dlg = mw._bizcard_find_dlg
+    pump(lambda: dlg.table.rowCount() == 3, timeout=5)
+    # I2 머리말 정렬 — 실제 마우스로 머리말을 누름
+    hh = dlg.table.horizontalHeader()
+    col_names = lambda: [dlg.table.item(r, 0).text() for r in range(dlg.table.rowCount())]
+    def click_head(col):
+        QTest.mouseClick(hh.viewport(), Qt.MouseButton.LeftButton, pos=QPoint(hh.sectionViewportPosition(col) + 5, hh.height() // 2))
+        pump(timeout=0.1)
+    click_head(0)
+    a1 = col_names()
+    click_head(0)
+    a2 = col_names()
+    chk(a1 == sorted(a1) and a2 == sorted(a1, reverse=True) and a1 != a2, "I2 머리말을 누르면 정렬, 다시 누르면 반대", "%s %s" % (a1, a2))
+    hong = next(c for c in dlg._rows if c["name"] == "홍길동")
+    dlg.table.setCurrentCell(dlg.row_of_id(hong["id"]), 0)
+    pump(timeout=0.1)
+    click_head(1)
+    chk(dlg._card and dlg._card["id"] == hong["id"] and dlg.table.currentRow() == dlg.row_of_id(hong["id"]), "I2 정렬해도 고른 명함 그대로")
+    # I3 앞↔뒤 단추
+    QTest.mouseClick(dlg.btn_flip, Qt.MouseButton.LeftButton)
+    b1 = dlg.shown
+    QTest.mouseClick(dlg.btn_flip, Qt.MouseButton.LeftButton)
+    chk(os.path.normcase(b1) == os.path.normcase(hong["back"]) and os.path.normcase(dlg.shown) == os.path.normcase(hong["front"]),
+        "I3 동그란 단추 — 누르면 뒷면, 또 누르면 앞면")
+    # I4 체크한 칸 복사 — 기억
+    for k, cb in dlg.chk.items():
+        if cb.isChecked() != (k in ("name", "cell")):
+            QTest.mouseClick(cb, Qt.MouseButton.LeftButton)
+    kim = next(c for c in dlg._rows if c["name"] == "김철수")
+    dlg.table.clearSelection()
+    from PyQt6.QtCore import QItemSelectionModel
+    sm = dlg.table.selectionModel()
+    for c in (hong, kim):
+        sm.select(dlg.table.model().index(dlg.row_of_id(c["id"]), 0),
+                  QItemSelectionModel.SelectionFlag.Select | QItemSelectionModel.SelectionFlag.Rows)
+    QTest.mouseClick(dlg.btn_copy, Qt.MouseButton.LeftButton)
+    cb_text = QApplication.clipboard().text()
+    want = {"이름: 홍길동\n휴대폰: 010-0000-0001", "이름: 김철수\n휴대폰: 010-0000-0003"}
+    chk(set(cb_text.split("\n\n")) == want, "I4 체크한 칸만 '항목: 값' 줄로, 명함 사이 빈 줄", repr(cb_text))
+    dlg.close()
+    pump(timeout=0.2)
+    mw._action_bizcard_find()
+    dlg = mw._bizcard_find_dlg
+    pump(lambda: dlg.table.rowCount() == 3, timeout=5)
+    chk({k for k, cb in dlg.chk.items() if cb.isChecked()} == {"name", "cell"}, "I4 체크는 창을 다시 열어도 그대로")
+    # I5 즐겨찾기 — 여러 명 넣기·빼기·차례·탭
+    rows = {c["name"]: c for c in dlg._rows}
+    sm = dlg.table.selectionModel()
+    dlg.table.clearSelection()
+    for n in ("홍길동", "김철수"):
+        sm.select(dlg.table.model().index(dlg.row_of_id(rows[n]["id"]), 0),
+                  QItemSelectionModel.SelectionFlag.Select | QItemSelectionModel.SelectionFlag.Rows)
+    QTest.mouseClick(dlg.btn_fav_add, Qt.MouseButton.LeftButton)
+    chk(dlg.fav.count() == 2 and dlg.fav_tabs.count() == 1, "I5 고른 둘을 한 번에 즐겨찾기 탭에", str(dlg.fav.count()))
+    QTest.mouseClick(dlg.btn_fav_add, Qt.MouseButton.LeftButton)
+    chk(dlg.fav.count() == 2, "I5 이미 있으면 건너뜀")
+    chk(pump(lambda: getattr(dlg, "fav_icons_pending", 0) == 0, timeout=5)
+        and dlg.fav.item(dlg.fav_ids().index(rows["홍길동"]["id"])).data(Qt.ItemDataRole.UserRole + 1),
+        "I5 인물 사진이 있으면 그 그림(배경에서 읽음)")
+    from viewer.widgets.bizcard_find_dialog import _move_rows
+    _move_rows(dlg.fav, [1], 0)
+    dlg.fav.reordered.emit()
+    order = dlg.fav_ids()
+    gid = dlg.fav_tabs.tabData(0)
+    dlg.fav_new_tab("가족")
+    chk(dlg.fav_tabs.count() == 2 and dlg.fav.count() == 0, "I5 새 탭(빈 탭으로 바뀜)")
+    dlg.fav_rename_tab(1, "친구")
+    dlg.fav_tabs.setCurrentIndex(0)
+    chk(dlg.fav_ids() == order and dlg.fav_tabs.tabText(1) == "친구", "I5 차례·탭 이름이 저장됨", str(dlg.fav_ids()))
+    dlg.fav.item(0).setSelected(True)
+    QTest.keyClick(dlg.fav, Qt.Key.Key_Delete)
+    chk(dlg.fav.count() == 1, "I5 Delete 로 탭에서 빼기(명함은 그대로)", str(dlg.fav.count()))
+    chk(dlg.fav_delete_tab(1, ask=False) and dlg.fav_tabs.count() == 1 and not dlg.fav_delete_tab(0, ask=False),
+        "I5 탭 지우기 — 마지막 하나는 지우지 않음")
+    it = dlg.fav.item(0)
+    QTest.mouseClick(dlg.fav.viewport(), Qt.MouseButton.LeftButton, pos=dlg.fav.visualItemRect(it).center())
+    pump(timeout=0.1)
+    chk(dlg._card and dlg._card["id"] == it.data(Qt.ItemDataRole.UserRole), "I5 사람을 누르면 그 명함을 보임")
+    # I6 인물 사진 차례 = 파일 이름, 지우기 = 휴지통
+    hong = P.card_by_id(dlg._store(), rows["홍길동"]["id"])
+    dlg.table.setCurrentCell(dlg.row_of_id(hong["id"]), 0)
+    pump(timeout=0.1)
+    ph = dlg.photo_paths()
+    Image.new("RGB", (30, 30), "blue").save(ph[1])          # 둘째를 다른 그림으로 — 바뀐 것이 보이게
+    md5 = lambda f: hashlib.md5(Path(f).read_bytes()).hexdigest()
+    h0, h1 = md5(ph[0]), md5(ph[1])
+    _move_rows(dlg.photos, [1], 0)
+    dlg.photos.reordered.emit()
+    ph2 = dlg.photo_paths()
+    chk([os.path.basename(x) for x in ph2] == [os.path.basename(x) for x in ph] and md5(ph2[0]) == h1 and md5(ph2[1]) == h0,
+        "I6 끌어 차례를 바꾸면 파일 이름이 그 차례대로", str([os.path.basename(x) for x in ph2]))
+    n = dlg.delete_photos([ph2[0]], ask=False)
+    ph3 = dlg.photo_paths()
+    chk(n == 1 and len(ph3) == 1 and os.path.basename(ph3[0]) == os.path.basename(ph[0]) and md5(ph3[0]) == h0
+        and any(x.endswith(os.path.basename(ph[0])) for x in os.listdir(TR)), "I6 사진 지우기 = 휴지통, 남은 사진은 첫 이름으로")
+    # I7 해시태그 — DB·파일, #찾기, 저장해도 남음
+    dlg.table.clearSelection()
+    dlg.table.setCurrentCell(dlg.row_of_id(hong["id"]), 0)
+    chk(dlg.edit_tags(text="명함 새회사 한글 골프동호회") == 1, "I7 해시태그 붙이기")
+    st = S.BizcardStore()
+    hong = P.card_by_id(st, hong["id"])
+    chk("골프동호회" in hong["tags"] and [r["name"] for r in P.find(st, "#골프동호회")] == ["홍길동"], "I7 명함 DB 태그·#찾기")
+    st.close()
+    chk("골프동호회" in (mw.bookmark_tree._tags.get_manual(os.path.realpath(hong["front"])) or []), "I7 정리본 파일에도 같은 해시태그")
+    dlg.ed_memo.setPlainText("태그 뒤 메모")
+    QTest.mouseClick(dlg.btn_save, Qt.MouseButton.LeftButton)
+    pump(timeout=0.3)
+    st = S.BizcardStore()
+    chk("골프동호회" in P.card_by_id(st, hong["id"])["tags"], "I7 칸을 고쳐 저장해도 사람이 붙인 해시태그는 남음")
+    st.close()
+    # I8 주소록 가져오기(리멤버 꼴 vCard) — 같은 사람은 빈 칸만, 없는 사람은 그림 없는 명함
+    vf = TMP / "contacts.vcf"
+    vf.write_text("BEGIN:VCARD\r\nVERSION:3.0\r\nN:;김철수;;;\r\nTEL;TYPE=work,cell:010-0000-0003\r\nEMAIL;TYPE=work:kim@example.com\r\n"
+                  "ORG:다른회사;\r\nEND:VCARD\r\n"
+                  "BEGIN:VCARD\r\nVERSION:3.0\r\nN:;박새사람;;;\r\nTEL;TYPE=work,cell:010-0000-0009\r\nORG:차카타;영업팀\r\n"
+                  "TITLE:과장\r\nADR;TYPE=work:;가짜시 가짜로 1;;;;;\r\nEND:VCARD\r\n", encoding="utf-8")
+    res = dlg.import_contacts(str(vf), ask=False)
+    st = S.BizcardStore()
+    kim = P.find(st, "김철수")[0]
+    new = P.find(st, "박새사람")
+    chk(res == (1, 1), "I8 합침 1·더함 1", str(res))
+    chk(kim["emails"] == ["kim@example.com"] and kim["company"] == "라마바", "I8 같은 사람은 빈 칸만 채움(회사는 그대로)", str(kim["company"]))
+    chk(len(new) == 1 and new[0]["front"].startswith("contact:") and new[0]["dept"] == "영업팀" and new[0]["address"] == "가짜시 가짜로 1",
+        "I8 없는 사람은 그림 없는 명함으로(부서·주소)")
+    st.close()
+    pump(lambda: dlg.table.rowCount() == 4, timeout=3)
+    dlg.table.clearSelection()
+    dlg.table.setCurrentCell(dlg.row_of_id(new[0]["id"]), 0)
+    pump(timeout=0.1)
+    chk(not dlg.btn_photo.isEnabled() and not dlg.btn_open.isEnabled() and dlg.btn_tags.isEnabled(), "I8 그림 없는 명함 — 사진·명함 보기 끔")
+    from viewer import bg_write
+    rf = TMP / "remember.vcf"
+    dlg.export_vcard(path=str(rf), style="remember")
+    bg_write.flush()
+    rt = rf.read_text(encoding="utf-8") if rf.exists() else ""
+    chk("N:;박새사람;;;" in rt and "TEL;TYPE=work,cell:010-0000-0009" in rt and "ORG:차카타;영업팀" in rt
+        and "drive.google" not in rt, "I8 리멤버용 vCard 내보내기 꼴")
+    # I10 주소록 우선순위(D24) — 같은 번호, 다른 회사: 리멤버 > 구글, 명함·손 고침은 덮어쓰지 않음
+    def vcf(name, comp, num="010-0000-0077"):
+        f = TMP / ("p_%s_%s.vcf" % (len(list(TMP.glob("p_*.vcf"))), comp))
+        f.write_text("BEGIN:VCARD\r\nVERSION:3.0\r\nFN:%s\r\nTEL;TYPE=CELL:%s\r\nORG:%s\r\nEND:VCARD\r\n" % (name, num, comp), encoding="utf-8")
+        return str(f)
+    def comp_of(num_part="0000-0077"):
+        st = S.BizcardStore()
+        try:
+            r = P.find(st, num_part)
+            return [(x["name"], x["company"]) for x in r]
+        finally:
+            st.close()
+    dlg.import_contacts(vcf("최가짜", "구글회사"), ask=False, source="google")
+    chk(comp_of() == [("최가짜", "구글회사")], "I10 구글에서 새 사람", str(comp_of()))
+    dlg.import_contacts(vcf("최가짜", "리멤버회사"), ask=False, source="remember")
+    chk(comp_of() == [("최가짜", "리멤버회사")], "I10 리멤버가 구글 값을 이김", str(comp_of()))
+    dlg.import_contacts(vcf("최가짜", "구글새회사"), ask=False, source="google")
+    chk(comp_of() == [("최가짜", "리멤버회사")], "I10 구글은 리멤버 값을 덮지 않음", str(comp_of()))
+    dlg.import_contacts(vcf("김철수", "리멤버회사", "010-0000-0003"), ask=False, source="remember")
+    chk(comp_of("0000-0003") == [("김철수", "라마바")], "I10 명함을 읽은 값은 리멤버도 덮지 않음", str(comp_of("0000-0003")))
+    pump(timeout=0.1)
+    choi = next(c for c in dlg._rows if c["name"] == "최가짜")
+    dlg.table.clearSelection()
+    dlg.table.setCurrentCell(dlg.row_of_id(choi["id"]), 0)
+    pump(timeout=0.1)
+    ed = dlg.eds["company"]
+    ed.setFocus(); ed.selectAll()
+    type_ko(ed, "손회사")
+    QTest.mouseClick(dlg.btn_save, Qt.MouseButton.LeftButton)
+    pump(timeout=0.3)
+    dlg.import_contacts(vcf("최가짜", "리멤버다른회사"), ask=False, source="remember")
+    chk(comp_of() == [("최가짜", "손회사")], "I10 손으로 고친 칸은 리멤버도 덮지 않음", str(comp_of()))
+    pump(lambda: dlg.table.rowCount() == 5, timeout=3)
+    # I9 목록에서 지우기 — 명함 관리 [삭제]와 같은 길
+    lee = next(c for c in dlg._rows if c["name"] == "이영희")
+    st = S.BizcardStore()
+    gid0 = dlg._fav_gid()
+    P.fav_add(st, gid0, [lee["id"]])
+    st.close()
+    lee_front = os.path.realpath(lee["front"])
+    src_lee = Path(items["c"].front)
+    dlg.table.clearSelection()
+    dlg.table.setCurrentCell(dlg.row_of_id(lee["id"]), 0)
+    pump(timeout=0.1)
+    dlg.activateWindow(); dlg.table.setFocus()
+    QTest.keyClick(dlg.table, Qt.Key.Key_Delete)
+    pump(timeout=0.3)
+    st = S.BizcardStore()
+    chk(not os.path.exists(lee_front) and not src_lee.exists() and P.find(st, "이영희") == [], "I9 Delete — 원본·정리본 휴지통, DB 행 지움")
+    chk(st.con.execute("SELECT COUNT(*) FROM fav_members WHERE card_id=?", (lee["id"],)).fetchone()[0] == 0, "I9 즐겨찾기 칸도 지움")
+    st.close()
+    chk(dlg.table.rowCount() == 4, "I9 표에서 빠짐", str(dlg.table.rowCount()))
+    dlg.close()
+    pump(timeout=0.2)
 except Exception:
     import traceback
     traceback.print_exc()

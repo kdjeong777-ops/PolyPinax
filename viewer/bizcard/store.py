@@ -247,11 +247,27 @@ class BizcardStore:
         for r in self.con.execute("SELECT id, front, back FROM cards WHERE src_key=?", (k,)).fetchall():
             outs += [x for x in (r["front"], r["back"]) if x]
             self.con.execute("DELETE FROM cards_fts WHERE rowid=?", (r["id"],))
+            self._forget_fav(r["id"])
         self.con.execute("DELETE FROM cards WHERE src_key=?", (k,))
         self.con.execute("DELETE FROM recog WHERE src_key=?", (k,))
         self.con.execute("DELETE FROM samples WHERE src_key=?", (k,))
         self.con.commit()
         return outs
+
+    def _forget_fav(self, card_id: int):
+        """즐겨찾기 칸도 지운다(§5.24) — id 는 다시 쓰일 수 있어 남겨 두면 새 명함이 옛 칸을 물려받는다. 표가 없으면(옛 DB) 그만."""
+        for t in ("fav_members", "contact_src"):        # 즐겨찾기 칸·주소록 출처(§5.24)
+            try:
+                self.con.execute("DELETE FROM %s WHERE card_id=?" % t, (card_id,))
+            except sqlite3.OperationalError:
+                pass
+
+    def delete_card(self, card_id: int):
+        """원천이 없는 명함 행 하나 지우기(§5.24) — 원천이 있으면 `delete_src`."""
+        self.con.execute("DELETE FROM cards_fts WHERE rowid=?", (card_id,))
+        self.con.execute("DELETE FROM cards WHERE id=?", (card_id,))
+        self._forget_fav(card_id)
+        self.con.commit()
 
     def count(self) -> int:
         return self.con.execute("SELECT COUNT(*) FROM cards").fetchone()[0]

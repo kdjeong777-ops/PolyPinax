@@ -143,6 +143,54 @@ def _first(phones, kinds):
     return ""
 
 
+def trash_paths(parent, mw, targets) -> set:
+    """명함 지우기의 파일 쪽 — 한 길(261117-19 §5.20, 261117-4·-6 공용 — 책갈피창 `_trash_files` 와 같은 꼴). 명함 관리 [삭제]·
+    명함찾기 목록 지우기(§5.24 D18)가 함께 쓴다. 열린 PDF 는 먼저 놓고 → 앱 `_trash_bg`(배경·`pathutil.trash_when_free` —
+    잠깐 잡히면 다시) → 지운 것은 `fileOpCompleted(경로, "")`, 놓았는데 못 지운 것은 `(경로, 경로)`. 못 지운 것은 공용 문구로 알린다.
+    반환 = 못 지운 경로들."""
+    from viewer.pathutil import norm_key, trash_when_free
+    import viewer.widgets.bookmark_tree as _btm
+    bt = getattr(mw, "bookmark_tree", None)
+    released = []
+    if bt is not None:
+        try:
+            cur = bt._open_file_now()
+        except Exception:
+            cur = None
+        for p in targets:
+            if cur and norm_key(p) == norm_key(cur):
+                bt.releaseFileRequested.emit(p)
+                released.append(p)
+        if released:
+            from PyQt6.QtWidgets import QApplication
+            QApplication.processEvents()
+    runner = getattr(mw, "_trash_bg", None)
+    if runner is not None:                      # 앱 — 늘 이 길(배경)
+        res = runner(targets, photo=True) or {}
+    else:                                       # 앱 밖(검사) — 같은 휴지통 함수·같은 '잠깐 잡히면 다시'
+        fn = _btm._trash_fn()
+        res = {}
+        for p in targets:
+            try:
+                trash_when_free(p, fn)
+                res[p] = None
+            except Exception as e:              # noqa: BLE001
+                res[p] = e
+    failed = [(p, e) for p, e in res.items() if e is not None]
+    failed_set = {p for p, _e in failed}
+    for p in targets:
+        if bt is None:
+            break
+        if p in failed_set:
+            if p in released:
+                bt.fileOpCompleted.emit(p, p)    # 못 지움 — 놓았던 원본 다시 열기
+        else:
+            bt.fileOpCompleted.emit(p, "")       # 지움 — 책갈피창·사진 목록·본문(한 길)
+    if failed:
+        QMessageBox.warning(parent, tr("휴지통 이동 실패"), _btm._trash_fail_text(failed, photo=True))
+    return failed_set
+
+
 class BizcardImportDialog(QDialog):
     def __init__(self, folder, parent=None, db=None, out_dir=None):
         super().__init__(parent)
@@ -597,47 +645,7 @@ class BizcardImportDialog(QDialog):
                 tr("명함 {n}장을 지웁니다 — 원본 파일까지 휴지통으로 보냅니다(원본 {f}개·정리본 {o}개). 인식 기록도 지웁니다.").format(
                     n=len(rows), f=len(files), o=len(outs))) != QMessageBox.StandardButton.Yes:
             return 0
-        # 지우는 길은 하나(261117-4·-6 공용 — 책갈피창 `_trash_files` 와 같은 꼴): 열린 PDF 는 먼저 놓고 → 앱 `_trash_bg`
-        #   (배경·`pathutil.trash_when_free` — 잠깐 잡히면 다시) → 지운 것은 `fileOpCompleted(경로, "")`, 놓았는데 못 지운 것은 `(경로, 경로)`
-        from viewer.pathutil import norm_key, trash_when_free
-        import viewer.widgets.bookmark_tree as _btm
-        targets = list(dict.fromkeys(files + outs))
-        bt = getattr(self._mw, "bookmark_tree", None)
-        released = []
-        if bt is not None:
-            try:
-                cur = bt._open_file_now()
-            except Exception:
-                cur = None
-            for p in targets:
-                if cur and norm_key(p) == norm_key(cur):
-                    bt.releaseFileRequested.emit(p)
-                    released.append(p)
-            if released:
-                from PyQt6.QtWidgets import QApplication
-                QApplication.processEvents()
-        runner = getattr(self._mw, "_trash_bg", None)
-        if runner is not None:
-            res = runner(targets, photo=True) or {}
-        else:                                       # 앱 밖(검사) — 같은 휴지통 함수·같은 '잠깐 잡히면 다시'
-            fn = _btm._trash_fn()
-            res = {}
-            for p in targets:
-                try:
-                    trash_when_free(p, fn)
-                    res[p] = None
-                except Exception as e:              # noqa: BLE001
-                    res[p] = e
-        failed = [(p, e) for p, e in res.items() if e is not None]
-        failed_set = {p for p, _e in failed}
-        for p in targets:
-            if bt is None:
-                break
-            if p in failed_set:
-                if p in released:
-                    bt.fileOpCompleted.emit(p, p)    # 못 지움 — 놓았던 원본 다시 열기
-            else:
-                bt.fileOpCompleted.emit(p, "")       # 지움 — 책갈피창·사진 목록·본문(한 길)
+        failed_set = trash_paths(self, self._mw, list(dict.fromkeys(files + outs)))
         gone = []
         for r in rows:                              # 한 파일이라도 못 지운 명함은 기록을 남긴다(일부만 휴지통으로 간 경우)
             it = self._items[r]
@@ -653,8 +661,6 @@ class BizcardImportDialog(QDialog):
             self.table.removeRow(r)
             del self._items[r]
         self.lbl_folder.setText(tr("폴더: {path}  ·  명함 {n}장").format(path=str(self._folder), n=len(self._items)))
-        if failed:
-            QMessageBox.warning(self, tr("휴지통 이동 실패"), _btm._trash_fail_text(failed, photo=True))
         self.last_deleted = len(gone)
         return len(gone)
 

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-11-18 14:27+0900\n"
+"POT-Creation-Date: 2026-11-18 20:54+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -2779,6 +2779,7 @@ msgid "앞 작업이 끝난 뒤에 다시 하세요."
 msgstr ""
 
 #: viewer/app.py viewer/photo_controller.py
+#: viewer/widgets/bizcard_find_dialog.py
 #: viewer/widgets/bizcard_import_dialog.py viewer/widgets/favorites_dialog.py
 #: viewer/widgets/hyperlink_dialog.py viewer/widgets/image_to_pdf_dialog.py
 #: viewer/widgets/line_text_settings_dialog.py viewer/widgets/merge_dialog.py
@@ -6644,9 +6645,9 @@ msgstr ""
 msgid "다른 쪽에도 놓기"
 msgstr ""
 
-#: viewer/sign_draft_controller.py viewer/widgets/image_tune_dialog.py
-#: viewer/widgets/photo_label_dialog.py viewer/widgets/sign_dialogs.py
-#: viewer/widgets/stamp_dialog.py
+#: viewer/sign_draft_controller.py viewer/widgets/bizcard_find_dialog.py
+#: viewer/widgets/image_tune_dialog.py viewer/widgets/photo_label_dialog.py
+#: viewer/widgets/sign_dialogs.py viewer/widgets/stamp_dialog.py
 msgid "지우기"
 msgstr ""
 
@@ -7774,6 +7775,10 @@ msgstr ""
 msgid "변환 도구 오류(코드 {rc})"
 msgstr ""
 
+#: viewer/widgets/bizcard_find_dialog.py viewer/widgets/main_view.py
+msgid "메모"
+msgstr ""
+
 #: viewer/widgets/bizcard_find_dialog.py
 #: viewer/widgets/bizcard_import_dialog.py
 msgid "회사"
@@ -7821,11 +7826,27 @@ msgid "이름·회사·메모 등 — 낱말 여럿은 모두 들어 있는 명�
 msgstr ""
 
 #: viewer/widgets/bizcard_find_dialog.py
-msgid "인물 사진을 여기에 끌어 놓으면 이 명함의 인물 사진으로 넣습니다"
+msgid "새 즐겨찾기 탭"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "표의 줄을 끌어 놓으면 이 탭에 넣습니다 — 끌어 차례 바꾸기, Delete 로 빼기"
 msgstr ""
 
 #: viewer/widgets/bizcard_find_dialog.py
 msgid "고친 칸·메모를 명함 DB 에 저장합니다 — 이름·회사를 바꾸면 정리본 파일 이름도 '성명_회사명' 으로"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "인물 사진을 여기에 끌어 놓으면 이 명함의 인물 사진으로 넣습니다"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "명함 앞면 ↔ 뒷면"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "끌어 차례를 바꿉니다(첫 사진이 즐겨찾기 그림) — Delete 로 지우기(휴지통)"
 msgstr ""
 
 #: viewer/widgets/bizcard_find_dialog.py
@@ -7837,15 +7858,63 @@ msgid "인물 사진을 '인물' 폴더에 정리본과 같은 이름의 JPG 로
 msgstr ""
 
 #: viewer/widgets/bizcard_find_dialog.py
-msgid "사진 모드에서 열기"
+msgid "명함 보기"
 msgstr ""
 
 #: viewer/widgets/bizcard_find_dialog.py
-msgid "vCard 로 내보내기..."
+msgid "이 명함을 사진 모드에서 엽니다"
 msgstr ""
 
 #: viewer/widgets/bizcard_find_dialog.py
-msgid "고른 명함들을 vCard(.vcf) 로 내보냅니다"
+msgid "주소록 ▾"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "주소록 vCard(.vcf) 가져오기·내보내기 — 구글 주소록·리멤버"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "리멤버 vCard 가져오기..."
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "구글 주소록 vCard 가져오기..."
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "구글 주소록용 vCard 로 내보내기..."
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "리멤버용 vCard 로 내보내기..."
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "해시태그..."
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "고른 명함들에 해시태그를 붙이거나 뗍니다 — 정리본 파일에도 같이, 찾기 칸에서 #낱말로 찾습니다"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "내용 복사"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "고른 명함들의 체크한 칸을 '항목: 값' 글로 복사합니다"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "즐겨찾기에 넣기"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "표에서 고른 명함 모두를 지금 즐겨찾기 탭에 넣습니다"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "고른 명함을 지웁니다 — 원본·정리본·인물 사진을 휴지통으로"
 msgstr ""
 
 #: viewer/widgets/bizcard_find_dialog.py
@@ -7853,7 +7922,23 @@ msgid "고친 내용을 저장할까요?"
 msgstr ""
 
 #: viewer/widgets/bizcard_find_dialog.py
+msgid "이름 바꾸기..."
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "새 탭..."
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "탭에서 빼기"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
 msgid "인물 사진"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "주소록"
 msgstr ""
 
 #: viewer/widgets/bizcard_find_dialog.py
@@ -7877,12 +7962,12 @@ msgstr ""
 msgid "스캔일"
 msgstr ""
 
-#: viewer/widgets/bizcard_find_dialog.py viewer/widgets/main_view.py
-msgid "메모"
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "체크한 칸을 [내용 복사] 로 글로 복사합니다 — 체크는 다음에도 그대로"
 msgstr ""
 
 #: viewer/widgets/bizcard_find_dialog.py
-msgid "(그림 파일이 없습니다)"
+msgid "즐겨찾기"
 msgstr ""
 
 #: viewer/widgets/bizcard_find_dialog.py
@@ -7897,8 +7982,20 @@ msgstr ""
 msgid "명함 이름 바꾸기"
 msgstr ""
 
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "새 탭 이름(예: 가족·친구):"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "탭 이름:"
+msgstr ""
+
 #: viewer/widgets/bizcard_find_dialog.py viewer/widgets/study_panel.py
 msgid "그림"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "사진 이름을 다 바꾸지 못했습니다 — 다른 프로그램이 열고 있는지 확인하세요."
 msgstr ""
 
 #: viewer/widgets/bizcard_find_dialog.py
@@ -7916,7 +8013,23 @@ msgid "vCard 로 내보내기"
 msgstr ""
 
 #: viewer/widgets/bizcard_find_dialog.py
-msgid "파일 이름을 바꾸지 못했습니다 — 다른 프로그램이 열고 있는지 확인하세요."
+msgid "주소록 가져오기"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "이 파일에서 연락처를 찾지 못했습니다."
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "(주소록에서 가져온 명함 — 그림 없음)"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "(그림 파일이 없습니다)"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "탭 지우기"
 msgstr ""
 
 #: viewer/widgets/bizcard_find_dialog.py
@@ -7925,8 +8038,45 @@ msgid "처음 {n}장"
 msgstr ""
 
 #: viewer/widgets/bizcard_find_dialog.py
+msgid "파일 이름을 바꾸지 못했습니다 — 다른 프로그램이 열고 있는지 확인하세요."
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+#, python-brace-format
+msgid "명함 {n}장"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+#, python-brace-format
+msgid "'{tab}' 탭을 지웁니다 — 탭의 {n}명은 빠지고 명함은 그대로입니다."
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
 #, python-brace-format
 msgid "그림 {n}개를 넣지 못했습니다."
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+#, python-brace-format
+msgid "인물 사진 {n}개를 휴지통으로 보냅니다."
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+#, python-brace-format
+msgid "명함 {n}장을 지웁니다 — 원본 파일까지 휴지통으로 보냅니다(원본 {f}개·정리본 {o}개·인물 사진 {p}개). 인식 기록도 지웁니다."
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "파일을 읽지 못했습니다."
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+#, python-brace-format
+msgid "연락처 {n}명을 읽었습니다 — 이미 있는 {m}명은 빈 칸만 채우고, 새 {a}명은 그림 없는 명함으로 더합니다."
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "리멤버"
 msgstr ""
 
 #: viewer/widgets/bizcard_find_dialog.py
@@ -7937,6 +8087,10 @@ msgstr ""
 
 #: viewer/widgets/bizcard_import_dialog.py
 msgid "명함 위를 끌어 이름·회사 등의 자리를 지정하면 그 자리만 다시 읽어 칸을 채우고, 같은 회사 명함에 기억합니다"
+msgstr ""
+
+#: viewer/widgets/bizcard_import_dialog.py viewer/widgets/bookmark_tree.py
+msgid "휴지통 이동 실패"
 msgstr ""
 
 #: viewer/widgets/bizcard_import_dialog.py
@@ -8048,10 +8202,6 @@ msgstr ""
 
 #: viewer/widgets/bizcard_import_dialog.py
 msgid "지금 읽는 중입니다 — 다 읽은 뒤에 다시 하세요."
-msgstr ""
-
-#: viewer/widgets/bizcard_import_dialog.py viewer/widgets/bookmark_tree.py
-msgid "휴지통 이동 실패"
 msgstr ""
 
 #: viewer/widgets/bizcard_import_dialog.py

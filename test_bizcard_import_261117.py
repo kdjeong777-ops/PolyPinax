@@ -210,8 +210,13 @@ try:
     mw.show()
     pump(timeout=1.0)
     import ui_layout
+    _pic = mw._prefs.setdefault("picture", {})
+    _pic["bizcard_folder"] = str(F2)                  # 명함 SOT §5.24: 명함 폴더가 비면 `명함 ▾` 은 숨는다 — 자리는 보일 때 본다
+    mw._gate_api_dependent_ui(mw._prefs)
     w = ui_layout.where(mw, "tools.bizcard")
     tw = ui_layout.where(mw, "tools.reindex")
+    _pic.pop("bizcard_folder", None)
+    mw._gate_api_dependent_ui(mw._prefs)
     chk(w is not None and tw is not None and w[0] == tw[0] and w[1] == tw[1] and w[2] == tw[2] + 1,
         "D 도구 탭 생성 묶음에서 `인덱스` 바로 뒤가 `명함 ▾`", "%s / %s" % (w, tw))
     chk(callable(getattr(mw.bookmark_tree, "bizcard_import", None)), "D 책갈피창 폴더 줄 우클릭이 앱에 이어진다")

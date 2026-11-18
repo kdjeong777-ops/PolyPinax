@@ -72,9 +72,16 @@ def split_name(name: str):
     return w[-1], " ".join(w[:-1])
 
 
+CONTACT_PREFIX = "contact:"          # 주소록에서 가져온 '그림 없는 명함' 의 front 열쇠(§5.24 D22)
+
+
+def is_contact(card) -> bool:
+    return str((card or {}).get("front") or "").startswith(CONTACT_PREFIX)
+
+
 def _note_lines(card: dict, drive_folder: str, other_lang_line: str, card_word: str) -> list:
     lines = [ln for ln in (card.get("memo") or "").splitlines() if ln.strip()]
-    fname = os.path.basename(card.get("front") or "")
+    fname = "" if is_contact(card) else os.path.basename(card.get("front") or "")
     if drive_folder and fname:
         lines.append("%s: %s/%s" % (card_word, drive_folder.strip().strip("/\\"), fname))
         lines.append(DRIVE_SEARCH + urllib.parse.quote(fname))
@@ -83,8 +90,12 @@ def _note_lines(card: dict, drive_folder: str, other_lang_line: str, card_word: 
     return lines
 
 
-def card_to_vcard(card: dict, drive_folder: str = "", lang: str = "ko", card_word: str = "") -> str:
-    """명함 DB 한 행 → vCard 3.0 한 장(CRLF). card_word = NOTE 의 '명함' 낱말(결과물 언어, 비우면 tr)."""
+def card_to_vcard(card: dict, drive_folder: str = "", lang: str = "ko", card_word: str = "", style: str = "google") -> str:
+    """명함 DB 한 행 → vCard 3.0 한 장(CRLF). card_word = NOTE 의 '명함' 낱말(결과물 언어, 비우면 tr).
+    style='remember' — 리멤버 명함첩 꼴(§5.24 D23): 이름 통째로 N 둘째 칸, TEL TYPE=work,cell·work·work,fax, EMAIL·ADR TYPE=work,
+    주소는 ADR 둘째 칸, NOTE 에 드라이브 줄 없음(메모만)."""
+    if style == "remember":
+        return _remember_vcard(card, lang)
     if not card_word:
         card_word = tr("명함")
     en = card.get("en") or {}
@@ -125,8 +136,38 @@ def card_to_vcard(card: dict, drive_folder: str = "", lang: str = "ko", card_wor
     return "".join(fold(x) + "\r\n" for x in out)
 
 
-def export_text(cards, drive_folder: str = "", lang: str = "ko", card_word: str = "") -> str:
-    return "".join(card_to_vcard(c, drive_folder, lang, card_word) for c in cards if (c.get("name") or "").strip())
+def _remember_vcard(card: dict, lang: str = "ko") -> str:
+    en = card.get("en") or {}
+    main = {k: card.get(k) or "" for k in ("name", "company", "dept", "title", "address")}
+    if lang.startswith("en") and en.get("name"):
+        main = {k: en.get(k) or main[k] for k in main}
+    name = main["name"].replace(" ", "") if _hangul(main["name"]) else main["name"]
+    out = ["BEGIN:VCARD", "VERSION:3.0", "N:;%s;;;" % esc(name), "FN:%s" % esc(name)]
+    kinds = {"cell": "work,cell", "work": "work", "fax": "work,fax"}
+    for kind, num in card.get("phones") or []:
+        if num:
+            out.append("TEL;TYPE=%s:%s" % (kinds.get(kind, "work"), esc(num)))
+    if main["company"] or main["dept"]:
+        out.append("ORG:%s;%s" % (esc(main["company"]), esc(main["dept"])))
+    if main["title"]:
+        out.append("TITLE:%s" % esc(main["title"]))
+    for e in card.get("emails") or []:
+        if e:
+            out.append("EMAIL;TYPE=work:%s" % esc(e))
+    if main["address"]:
+        out.append("ADR;TYPE=work:;%s;;;;;" % esc(main["address"]))
+    for u in card.get("urls") or []:
+        if u:
+            out.append("URL:%s" % esc(u))
+    memo = "\n".join(ln for ln in (card.get("memo") or "").splitlines() if ln.strip())
+    if memo:
+        out.append("NOTE:%s" % esc(memo))
+    out.append("END:VCARD")
+    return "".join(fold(x) + "\r\n" for x in out)
+
+
+def export_text(cards, drive_folder: str = "", lang: str = "ko", card_word: str = "", style: str = "google") -> str:
+    return "".join(card_to_vcard(c, drive_folder, lang, card_word, style) for c in cards if (c.get("name") or "").strip())
 
 
 # ── 읽기·합치기(R10) ──
@@ -276,3 +317,81 @@ def merged_path(existing_path: str, suffix: str = "") -> str:
         p = "%s_%s (%d).vcf" % (stem, suffix, k)
         k += 1
     return p
+
+
+# ── 주소록 가져오기(§5.24 D22·D23 — 구글 주소록·리멤버 명함첩 vCard) ──
+def _parts(val: str) -> list:
+    """N·ADR·ORG 의 ';' 칸 — 이스케이프된 세미콜론(역빗금 + ;)은 칸을 나누지 않는다."""
+    out, cur, i = [], "", 0
+    while i < len(val):
+        ch = val[i]
+        if ch == "\\" and i + 1 < len(val):
+            cur += val[i:i + 2]
+            i += 2
+            continue
+        if ch == ";":
+            out.append(unesc(cur))
+            cur = ""
+        else:
+            cur += ch
+        i += 1
+    out.append(unesc(cur))
+    return out
+
+
+def _tel_kind(params: dict) -> str:
+    t = ",".join(params.get("TYPE", []) + [k for k, v in params.items() if v == [""]]).upper()
+    return "fax" if "FAX" in t else "cell" if ("CELL" in t or "MOBILE" in t) else "work"
+
+
+def people_from_vcf(text: str, card_words=()) -> list:
+    """vCard 글 → 사람들 [{name, company, dept, title, phones[(종류, 번호)], emails, urls, address, memo}].
+    우리가 내보낸 NOTE 의 '명함: 폴더/파일'·드라이브 찾기 줄은 메모로 들이지 않는다(card_words = 그 낱말들)."""
+    out, cur = [], None
+    words = tuple(w for w in card_words if w)
+    for ln in _unfold(text):
+        u = ln.strip().upper()
+        if u == "BEGIN:VCARD":
+            cur = {"name": "", "n": "", "company": "", "dept": "", "title": "", "phones": [], "emails": [], "urls": [],
+                   "address": "", "memo": ""}
+            continue
+        if u == "END:VCARD":
+            if cur is not None:
+                cur["name"] = cur["name"] or cur.pop("n", "")
+                cur.pop("n", None)
+                if cur["name"] or cur["phones"] or cur["emails"]:
+                    out.append(cur)
+            cur = None
+            continue
+        if cur is None:
+            continue
+        p = parse_line(ln)
+        if not p:
+            continue
+        name, params, val = p
+        if name == "FN":
+            cur["name"] = val.strip()
+        elif name == "N":
+            fam, giv = (_parts(val) + ["", ""])[:2]
+            if _hangul(fam + giv) or not (fam and giv):
+                cur["n"] = (fam + giv).strip()
+            else:
+                cur["n"] = (giv + " " + fam).strip()
+        elif name == "ORG":
+            ps = _parts(val) + [""]
+            cur["company"], cur["dept"] = ps[0].strip(), " ".join(x.strip() for x in ps[1:] if x.strip())
+        elif name == "TITLE":
+            cur["title"] = val.strip()
+        elif name == "TEL" and val.strip():
+            cur["phones"].append((_tel_kind(params), val.strip()))
+        elif name == "EMAIL" and val.strip():
+            cur["emails"].append(val.strip())
+        elif name == "URL" and val.strip():
+            cur["urls"].append(val.strip())
+        elif name == "ADR" and not cur["address"]:
+            cur["address"] = " ".join(x.strip() for x in _parts(val) if x.strip())
+        elif name == "NOTE":
+            keep = [x for x in val.splitlines() if x.strip() and not x.startswith(DRIVE_SEARCH)
+                    and not any(x.startswith(w + ": ") and "/" in x for w in words)]
+            cur["memo"] = "\n".join(keep)
+    return out

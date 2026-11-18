@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-18 22:01+0900\n"
+"POT-Creation-Date: 2026-11-19 06:30+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -8282,6 +8282,10 @@ msgstr "(Imported from contacts — no card image)"
 #: viewer/widgets/bizcard_find_dialog.py
 msgid "(그림 파일이 없습니다)"
 msgstr "(No image file)"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "(인물 사진 없음 — 끌어 놓거나 [사진 추가...])"
+msgstr "(No person photo — drop one here or use [Add Photo...])"
 
 #: viewer/widgets/bizcard_find_dialog.py
 msgid "탭 지우기"

@@ -28,7 +28,7 @@ C_NAME, C_COMP, C_TITLE, C_DATE = range(4)
 ROLE = Qt.ItemDataRole.UserRole
 FAV_ICON = 56                       # 즐겨찾기 사람 칸 그림(카톡 꼴 둥근 네모)
 FAV_ROWS = 2                        # 즐겨찾기 줄 최대 높이(줄 수) — 넘치면 그 칸 안에서 굴림
-PHOTO_ICON = 104
+PHOTO_ICON = 72                     # 인물 사진 썸네일 줄(큰 화면은 그 위 — §5.24 사진창)
 DETAIL_W = 330                      # 처음 너비 — 세부 칸(§5.24 '처음 너비': 목록은 네 열 최소 폭, 나머지는 사진창)
 FIND_DELAY_MS = 250
 FAV_BG = "#cfe2f6"                  # 사진도 명함도 없을 때 — 옅은 파랑
@@ -390,18 +390,29 @@ class BizcardFindDialog(QDialog):
         pvl = QVBoxLayout(photow)
         pvl.setContentsMargins(6, 0, 0, 0)
         pvl.addWidget(QLabel(tr("인물 사진")))
+        # 위 = 큰 화면, 아래 = 썸네일 한 줄(§5.24 사진창, 사용자 지시 261119)
+        self.photo_view = QLabel()
+        self.photo_view.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.photo_view.setMinimumSize(160, 120)
+        self.photo_view.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Ignored)
+        self.photo_shown = ""
+        pvl.addWidget(self.photo_view, 1)
         self.photos = _OrderList(external=self._drop_files, accepts=lambda e: e.mimeData().hasUrls())
+        self.photos.setWrapping(False)                     # 한 줄 — 넘치면 가로 스크롤
         self.photos.setIconSize(QSize(PHOTO_ICON, PHOTO_ICON))
         self.photos.setGridSize(QSize(PHOTO_ICON + 12, PHOTO_ICON + 12))
+        self.photos.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.photos.setFixedHeight(PHOTO_ICON + 16 + self.photos.horizontalScrollBar().sizeHint().height())
+        self.photos.currentItemChanged.connect(lambda _c, _p: self._show_photo())
         self.photos.setToolTip(tr("끌어 차례를 바꿉니다(첫 사진이 즐겨찾기 그림) — Delete 로 지우기(휴지통)"))
         self.photos.reordered.connect(self._photo_reordered)
         self.photos.deleteRequested.connect(lambda: self.delete_photos())
         self.photos.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.photos.customContextMenuRequested.connect(self._photo_menu)
-        pvl.addWidget(self.photos, 1)
+        pvl.addWidget(self.photos)
         self.photo_split.addWidget(photow)
-        self.photo_split.setStretchFactor(0, 3)
-        self.photo_split.setStretchFactor(1, 2)
+        self.photo_split.setStretchFactor(0, 2)
+        self.photo_split.setStretchFactor(1, 3)
         self.photo_split.splitterMoved.connect(lambda _p, _i: QTimer.singleShot(0, self._show_card))
 
         self.split = QSplitter(Qt.Orientation.Horizontal)
@@ -608,6 +619,7 @@ class BizcardFindDialog(QDialog):
         self._show_card()
 
     def _show_card(self):
+        self._show_photo()                                # 크기가 바뀌면 인물 사진 큰 화면도
         c = self._card
         path = (c.get("back") if self._side == "back" else c.get("front")) if c else ""
         self.shown = path or ""
@@ -618,18 +630,39 @@ class BizcardFindDialog(QDialog):
             return
         self.pv.setPixmap(_scaled(path, max(200, self.pv.width()), max(120, self.pv.height())))
 
-    def _fill_photos(self, select: str = ""):
-        self.photos.clear()
-        c = self._card
-        if not c or V.is_contact(c):
+    def _show_photo(self):
+        """썸네일 줄에서 고른 인물 사진(없으면 첫 사진)을 위 큰 화면에."""
+        it = self.photos.currentItem() or (self.photos.item(0) if self.photos.count() else None)
+        path = it.data(ROLE) if it is not None else ""
+        self.photo_shown = path or ""
+        if not path or not os.path.exists(path):
+            self.photo_view.clear()
+            if self._card and not V.is_contact(self._card):
+                self.photo_view.setText(tr("(인물 사진 없음 — 끌어 놓거나 [사진 추가...])"))
             return
-        for p in P.person_photos(c["front"]):
-            it = QListWidgetItem(QIcon(_scaled(p, PHOTO_ICON, PHOTO_ICON)), "")
-            it.setData(ROLE, p)
-            it.setToolTip(os.path.basename(p))
-            self.photos.addItem(it)
-            if select and os.path.normcase(p) == os.path.normcase(select):
-                self.photos.setCurrentItem(it)
+        self.photo_view.setPixmap(_scaled(path, max(120, self.photo_view.width()), max(90, self.photo_view.height())))
+
+    def _fill_photos(self, select: str = ""):
+        self.photos.blockSignals(True)
+        try:
+            self.photos.clear()
+            c = self._card
+            if c and not V.is_contact(c):
+                cur = None
+                for p in P.person_photos(c["front"]):
+                    it = QListWidgetItem(QIcon(_scaled(p, PHOTO_ICON, PHOTO_ICON)), "")
+                    it.setData(ROLE, p)
+                    it.setToolTip(os.path.basename(p))
+                    self.photos.addItem(it)
+                    if select and os.path.normcase(p) == os.path.normcase(select):
+                        cur = it
+                if cur is None and self.photos.count():
+                    cur = self.photos.item(0)         # 명함을 고르면 첫 사진
+                if cur is not None:
+                    self.photos.setCurrentItem(cur)
+        finally:
+            self.photos.blockSignals(False)
+        self._show_photo()
 
     def photo_paths(self) -> list:
         return [self.photos.item(i).data(ROLE) for i in range(self.photos.count())]

@@ -403,6 +403,17 @@ try:
     dlg.table.setCurrentCell(dlg.row_of_id(hong["id"]), 0)
     pump(timeout=0.1)
     ph = dlg.photo_paths()
+    # I13 인물 사진 — 위 큰 화면, 아래 썸네일 한 줄, 썸네일을 누르면 큰 화면에
+    pv = getattr(dlg, "photo_view", None)
+    chk(pv is not None and len(ph) == 2 and os.path.normcase(getattr(dlg, "photo_shown", "")) == os.path.normcase(ph[0])
+        and pv.pixmap() is not None and not pv.pixmap().isNull()
+        and not dlg.photos.isWrapping() and pv.height() > dlg.photos.height() and pv.y() < dlg.photos.y(),
+        "I13 명함을 고르면 첫 인물 사진이 위 큰 화면에, 그 아래 썸네일 한 줄",
+        "%s %s" % (getattr(dlg, "photo_shown", None), pv and (pv.height(), dlg.photos.height())))
+    it2 = dlg.photos.item(1)
+    QTest.mouseClick(dlg.photos.viewport(), Qt.MouseButton.LeftButton, pos=dlg.photos.visualItemRect(it2).center())
+    pump(timeout=0.1)
+    chk(os.path.normcase(getattr(dlg, "photo_shown", "")) == os.path.normcase(ph[1]), "I13 썸네일을 누르면 그 사진이 큰 화면에")
     Image.new("RGB", (30, 30), "blue").save(ph[1])          # 둘째를 다른 그림으로 — 바뀐 것이 보이게
     md5 = lambda f: hashlib.md5(Path(f).read_bytes()).hexdigest()
     h0, h1 = md5(ph[0]), md5(ph[1])

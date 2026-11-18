@@ -1227,8 +1227,10 @@ class BizcardImportDialog(QDialog):
 
     @staticmethod
     def _tag_each(store, done):
+        from viewer.bizcard.apply import LANG_TAGS
         for front, back, tags in done:
             for p in (front, back):
                 if p:
                     old = store.get_manual(p) if hasattr(store, "get_manual") else []
+                    old = [t for t in old or [] if t not in LANG_TAGS or t in tags]   # 언어 태그는 하나(D25)
                     store.set(p, list(dict.fromkeys(list(old) + list(tags))))

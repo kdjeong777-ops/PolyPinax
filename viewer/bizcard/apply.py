@@ -66,13 +66,34 @@ def write_side(src_img: str, pdf: str, page: int, dst: Path) -> bool:
     return True
 
 
+LANG_TAGS = ("한글", "영어")
+
+
+def _has_hangul(s: str) -> bool:
+    return any("가" <= ch <= "힣" for ch in s or "")
+
+
+def lang_tag(name: str, company: str, langs, ordered: bool = True) -> str:
+    """언어 해시태그 하나(D25·§5.5) — 성명·회사명에 한글이 있으면 '한글', 아니면 langs 의 첫째(인식이 글자 수가
+    많은 쪽을 앞에 둔다). ordered=False = 이미 붙은 태그에서 온 것(차례에 뜻 없음) — 둘 다면 '영어'
+    (성명·회사명에 한글이 없고 글자 수는 남아 있지 않음). 없으면 ""."""
+    langs = [x for x in (langs or []) if x in LANG_TAGS]
+    if not langs:
+        return ""
+    if _has_hangul(name) or _has_hangul(company):
+        return "한글"
+    return langs[0] if ordered or len(langs) == 1 else "영어"
+
+
 def tags_for(row: dict) -> list:
-    """해시태그(R6·§5.5) — #명함 · #회사 · #한글/#영어."""
+    """해시태그(R6·§5.5) — #명함 · #회사 · #한글 또는 #영어(하나, D25)."""
     tags = ["명함"]
     comp = R.strip_corp(row.get("company") or "")
     if comp:
         tags.append(comp)
-    tags += [x for x in (row.get("langs") or []) if x in ("한글", "영어")]
+    lt = lang_tag(row.get("name") or "", comp, row.get("langs"), row.get("langs_ordered", True))
+    if lt:
+        tags.append(lt)
     return tags
 
 

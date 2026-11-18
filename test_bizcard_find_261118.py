@@ -115,6 +115,23 @@ try:
     chk([r["name"] for r in P.find(st, "")][:1] == ["홍길동"], "A 스캔일 최근 먼저")
     st.close()
 
+    print("\n=== L. 언어 해시태그는 하나(D25) ===")
+    from viewer.bizcard import recognize as RZ
+    chk(AP.tags_for({"name": "홍길동", "company": "Gana Co", "langs": RZ.order_langs(10, 80)}) == ["명함", "Gana Co", "한글"]
+        and AP.tags_for({"name": "John Doe", "company": "가나", "langs": ("영어",)})[-1] == "한글",
+        "L 성명이나 회사명이 한글이면 #한글만(영어 글자가 더 많아도)")
+    chk(AP.tags_for({"name": "John Doe", "company": "Acme", "langs": RZ.order_langs(30, 20)})[-1] == "한글"
+        and AP.tags_for({"name": "John Doe", "company": "Acme", "langs": RZ.order_langs(10, 80)})[-1] == "영어"
+        and "한글" not in AP.tags_for({"name": "John Doe", "company": "Acme", "langs": RZ.order_langs(10, 80)}),
+        "L 성명·회사명이 한글이 아니면 글자 수가 많은 말 하나")
+    chk(AP.lang_tag("John Doe", "Acme", ["한글", "영어"], ordered=False) == "영어"
+        and AP.lang_tag("홍길동", "", ["한글", "영어"], ordered=False) == "한글" and AP.lang_tag("홍길동", "", []) == "",
+        "L 이미 둘 다 붙은 태그 — 성명·회사명 한글이면 #한글, 아니면 #영어")
+    st = S.BizcardStore()
+    hong0 = next(r for r in P.find(st, "") if r["name"] == "홍길동")
+    P.update_card(st, hong0["id"], {"tags": ["명함", "가나도로공사", "한글", "영어"]})   # 종전 규칙으로 둘 다
+    st.close()
+
     print("\n=== A2. 옛 명함 DB(즐겨찾기·주소록 출처 표 없음)로 열기 ===")
     import sqlite3 as _sq
     from viewer import dbutil
@@ -158,9 +175,18 @@ try:
     def beat():
         now = time.monotonic(); gaps.append(now - last[0]); last[0] = now
     hb = QTimer(); hb.timeout.connect(beat); hb.start(20)
+    hong_front = os.path.realpath(hong0["front"])
+    mw.bookmark_tree._tags.set(hong_front, ["명함", "가나도로공사", "한글", "영어", "골프"])
     (acts[0].trigger() if acts else mw._action_bizcard_find())
     dlg = getattr(mw, "_bizcard_find_dlg", None)
     chk(dlg is not None and pump(lambda: dlg.table.rowCount() == 3, timeout=5), "B 창이 열리고 명함 셋", str(dlg and dlg.table.rowCount()))
+    st = S.BizcardStore()
+    h_tags = P.card_by_id(st, hong0["id"])["tags"]
+    chk("한글" in h_tags and "영어" not in h_tags and st.meta_get(P.LANG_FIX_KEY) and P.fix_lang_tags(st) == 0,
+        "L 명함찾기를 처음 열면 종전 '#한글·#영어' 를 하나로(한 번만)", str(h_tags))
+    st.close()
+    f_tags = mw.bookmark_tree._tags.get_manual(hong_front) or []
+    chk("영어" not in f_tags and "한글" in f_tags and "골프" in f_tags, "L 정리본 파일 태그도 하나로, 사람이 붙인 태그는 그대로", str(f_tags))
     mw._action_bizcard_find()
     chk(mw._bizcard_find_dlg is dlg, "B 다시 눌러도 창은 하나")
     type_ko(dlg.ed_find, "도로")

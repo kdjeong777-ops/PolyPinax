@@ -472,6 +472,10 @@ class BizcardFindDialog(QDialog):
 
     def _init_store_bits(self):
         st = self._store()
+        try:
+            P.fix_lang_tags(st, self._tagstore())         # 종전 '#한글·#영어 둘 다' → 하나(D25, 한 번만)
+        except Exception:
+            pass
         on = set(st.meta_get("copy_fields", list(P.COPY_DEFAULT)) or [])
         for k, cb in self.chk.items():
             cb.blockSignals(True)
@@ -753,12 +757,14 @@ class BizcardFindDialog(QDialog):
         if not new["name"]:
             QMessageBox.information(self, tr("명함찾기"), tr("이름을 비울 수 없습니다."))
             return False
-        from viewer.bizcard.apply import tags_for, unique_path, BACK_SUFFIX
+        from viewer.bizcard.apply import tags_for, unique_path, BACK_SUFFIX, LANG_TAGS
         st = self._store()
         old_tags = list(c.get("tags") or [])
-        langs = [t for t in old_tags if t in ("한글", "영어")]
-        old_auto = set(tags_for({"company": c.get("company") or "", "langs": langs}))   # 앱이 붙인 것만 바꾼다
-        new_tags = list(dict.fromkeys(tags_for({"company": new["company"], "langs": langs})
+        langs = [t for t in old_tags if t in LANG_TAGS]
+        old_auto = set(tags_for({"name": c.get("name") or "", "company": c.get("company") or "", "langs": langs,
+                                 "langs_ordered": False})) | set(langs)     # 앱이 붙인 것만 바꾼다(언어는 다시 하나로 — D25)
+        new_tags = list(dict.fromkeys(tags_for({"name": new["name"], "company": new["company"], "langs": langs,
+                                                "langs_ordered": False})
                                       + [t for t in old_tags if t not in old_auto]))     # 사람이 붙인 해시태그는 그대로
         front, back = c["front"], c.get("back") or ""
         nf, nb = front, back

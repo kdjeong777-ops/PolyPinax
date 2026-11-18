@@ -1507,6 +1507,19 @@ def rescore(res: dict, weights: Optional[dict] = None, layouts: Optional[dict] =
     return r
 
 
+def order_langs(hangul: int, latin: int) -> tuple:
+    """면의 말(해시태그용) — 한글 4자·라틴 12자 이상이면 그 말, 둘 다면 글자 수가 많은 쪽을 앞에.
+    태그는 이 첫째 하나(성명·회사명이 한글이면 한글 — apply.lang_tag, D25)."""
+    langs = []
+    if hangul >= 4:
+        langs.append("한글")
+    if latin >= 12:
+        langs.append("영어")
+    if len(langs) == 2 and latin > hangul:
+        langs.reverse()
+    return tuple(langs)
+
+
 def merge_sides(front: Optional[SideResult], back: Optional[SideResult], hint_name: str = "",
                 hint_company: str = "", ui_lang: str = "ko", domain_map: Optional[dict] = None) -> CardResult:
     """앞뒤 합치기(R7) — 한글 칸이 주, 영문은 `en` 에 따로. 영문판(ui_lang='en')이면 영문이 주."""
@@ -1540,12 +1553,7 @@ def merge_sides(front: Optional[SideResult], back: Optional[SideResult], hint_na
     ck, ce = pool("companies_ko"), pool("companies_en")
     hangul = sum(s.hangul for s in sides)
     latin = sum(s.latin for s in sides)
-    langs = []
-    if hangul >= 4:
-        langs.append("한글")
-    if latin >= 12:
-        langs.append("영어")
-    c.langs = tuple(langs)
+    c.langs = order_langs(hangul, latin)
     tk = [t for s in sides for t in s.titles_ko]
     te = [t for s in sides for t in s.titles_en]
     ak = next((s.address_ko for s in sides if s.address_ko), "")

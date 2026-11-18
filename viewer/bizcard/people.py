@@ -504,6 +504,44 @@ def retag_cards(store, cards, added, removed) -> None:
         update_card(store, c["id"], {"tags": list(dict.fromkeys(cur + list(added)))})
 
 
+LANG_FIX_KEY = "lang_tag_one"
+
+
+def fix_lang_tags(store, tags=None) -> int:
+    """종전 규칙으로 `#한글`·`#영어` 둘 다 붙은 명함을 하나로(D25·§5.5) — 명함 DB 태그 칸과 정리본 앞뒷면 파일 태그.
+    한 번만(meta `lang_tag_one`). tags = 앱의 태그 저장소(없으면 DB 만). 반환 = 고친 명함 수."""
+    if store.meta_get(LANG_FIX_KEY):
+        return 0
+    import contextlib
+    from viewer.bizcard.apply import lang_tag, LANG_TAGS
+    from viewer.bizcard.vcard import is_contact
+    ids =[r["id"] for r in store.con.execute("SELECT id FROM cards WHERE tags LIKE ? AND tags LIKE ?",
+                                               ("%한글%", "%영어%")).fetchall()]
+    n = 0
+    ctx = tags.bulk() if tags is not None and hasattr(tags, "bulk") else contextlib.nullcontext()
+    with ctx:
+        for cid in ids:
+            c = card_by_id(store, cid)
+            cur = list(c.get("tags") or [])
+            langs = [t for t in cur if t in LANG_TAGS]
+            if len(set(langs)) < 2:
+                continue
+            keep = lang_tag(c.get("name") or "", c.get("company") or "", langs, ordered=False)
+            drop = [t for t in LANG_TAGS if t != keep]
+            update_card(store, cid, {"tags": [t for t in cur if t not in drop]}, commit=False)
+            if tags is not None:
+                for p in (c.get("front"), c.get("back")):
+                    if p and not is_contact(c) and os.path.exists(p):
+                        rp = os.path.realpath(p)
+                        man = list(tags.get_manual(rp) or [])
+                        if any(t in drop for t in man):
+                            tags.set(rp, [t for t in man if t not in drop])     # 사람이 붙인 다른 태그는 그대로
+            n += 1
+    store.con.commit()
+    store.meta_set(LANG_FIX_KEY, 1)
+    return n
+
+
 def relocate_cards(store, pairs) -> int:
     """앱의 이름 바꾸기·옮기기(`filesRelocated`) 뒤 — 명함 DB 의 경로를 새 경로로(§5.7). 명함 DB 에 없는 경로는 건너뛴다.
     반환 = 고친 짝 수."""

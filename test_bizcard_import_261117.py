@@ -177,7 +177,7 @@ try:
         chk(im.format == "JPEG" and abs(im.width - round(258 / 72 * 300)) <= 2, "C PDF 앞면은 300 dpi JPG", str(im.size))
     chk((out / "김철수_라마바.jpg").read_bytes() == Path(by["라마바_김철수"].front).read_bytes(), "C JPG 원천은 바이트 그대로")
     chk(sorted(os.listdir(F)) == before, "C 원본 폴더는 그대로(D10)")
-    chk(done[0][2] == ["명함", "가나다기술", "한글", "영어"], "C 해시태그 #명함·#회사·#한글·#영어", str(done[0][2]))
+    chk(done[0][2] == ["명함", "가나다기술", "한글"], "C 해시태그 #명함·#회사·언어 하나(성명이 한글이면 #한글만 — D25)", str(done[0][2]))
     st = S.BizcardStore(db)
     cid = st.card_by_src(g.key)["id"]
     st.con.execute("UPDATE cards SET memo='메모' WHERE id=?", (cid,)); st.con.commit()

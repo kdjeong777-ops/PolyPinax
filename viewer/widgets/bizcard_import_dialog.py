@@ -171,6 +171,16 @@ class BizcardImportDialog(QDialog):
         self.chk_need = QCheckBox(tr("확인 필요만"))
         self.chk_need.toggled.connect(lambda _c: self._apply_filter())
         top.addWidget(self.chk_need)
+        # P5(명함 SOT §5.10 'P5', D17): 새 명함 — 아직 [적용] 하지 않은 줄만 보기 · 창을 연 채 새로 넣은 그림 읽기
+        self.chk_new = QCheckBox(tr("새 명함만"))
+        self.chk_new.setToolTip(tr("아직 [적용] 하지 않은 명함만 봅니다"))
+        self.chk_new.toggled.connect(lambda _c: self._apply_filter())
+        top.addWidget(self.chk_new)
+        self.btn_new = QPushButton(tr("새 명함 읽기"))
+        self.btn_new.setToolTip(tr("폴더를 다시 훑어 창을 연 뒤에 넣은 명함 그림만 표 끝에 더하고 읽습니다"))
+        self.btn_new.clicked.connect(lambda _c=False: self.read_new())
+        top.addWidget(self.btn_new)
+        self._applied_keys = None
         self.ed_date = QLineEdit()
         self.ed_date.setPlaceholderText("YYYY-MM-DD")
         self.ed_date.setFixedWidth(110)
@@ -282,10 +292,10 @@ class BizcardImportDialog(QDialog):
         QTimer.singleShot(0, self._start)
 
     # ── 표 ──
-    def _fill_empty_rows(self):
+    def _fill_empty_rows(self, start: int = 0):
         self._loading = True
         try:
-            for r, it in enumerate(self._items):
+            for r, it in enumerate(self._items[start:], start):
                 on = QTableWidgetItem()
                 on.setFlags(Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
                 on.setCheckState(Qt.CheckState.Unchecked)
@@ -793,11 +803,56 @@ class BizcardImportDialog(QDialog):
 
     def _apply_filter_row(self, r):
         only = self.chk_need.isChecked()          # 확인한 칸은 '확인 필요' 에서 빠진다(261117-20 — `need` 는 `_style_row` 가 갱신)
-        self.table.setRowHidden(r, bool(only and not getattr(self._items[r], "need", True)))
+        hide = bool(only and not getattr(self._items[r], "need", True))
+        if not hide and self.chk_new.isChecked():  # P5: 새 명함만 — 적용한(명함 DB 행이 있는) 줄은 숨김
+            hide = os.path.normcase(os.path.abspath(str(self._items[r].key))) in self.applied_keys()
+        self.table.setRowHidden(r, hide)
+
+    def applied_keys(self) -> set:
+        """적용한 원천(명함 DB 행이 있는 src_key, normcase) — 한 번 읽어 두고 [적용]·[새 명함 읽기] 뒤 다시."""
+        if self._applied_keys is None:
+            try:
+                self._applied_keys = {r[0] for r in self._store().con.execute("SELECT src_key FROM cards") if r[0]}
+            except Exception:
+                self._applied_keys = set()
+        return self._applied_keys
 
     def _apply_filter(self):
         for r in range(len(self._items)):
             self._apply_filter_row(r)
+
+    def read_new(self, ask: bool = True) -> int:
+        """[새 명함 읽기](P5, D17) — 폴더를 다시 훑어 표에 없는 원천만 끝에 더하고 그 줄들만 읽는다. 반환 = 더한 장 수."""
+        if (self._worker is not None and not self._worker.done_event.is_set()) or self.region_busy:
+            if ask:
+                QMessageBox.information(self, tr("새 명함 읽기"), tr("지금 읽는 중입니다 — 다 읽은 뒤에 다시 하세요."))
+            return 0
+        known = {os.path.normcase(os.path.abspath(str(it.key))) for it in self._items}
+        new = [it for it in scan_folder(self._folder) if os.path.normcase(os.path.abspath(str(it.key))) not in known]
+        if not new:
+            if ask:
+                QMessageBox.information(self, tr("새 명함 읽기"), tr("새 명함이 없습니다."))
+            return 0
+        start = len(self._items)
+        self._items.extend(new)
+        self.table.setRowCount(len(self._items))
+        self._fill_empty_rows(start)
+        self.lbl_folder.setText(tr("폴더: {path}  ·  명함 {n}장").format(path=str(self._folder), n=len(self._items)))
+        self._applied_keys = None
+        rows = list(range(start, len(self._items)))
+        lang = "en" if (language() or "ko").lower().startswith("en") else "ko"
+        from viewer.workers import run_in_thread
+        self._worker = ImportWorker(new, self._db, lang, rows=rows)     # 캐시는 그대로(force 아님)
+        self.bar.setRange(0, max(1, len(rows)))
+        self.bar.setValue(0)
+        self.bar.setFormat(tr("새 명함 읽는 중 %v / %m"))
+        self._worker.itemDone.connect(self._on_item_ready)
+        self._worker.progressed.connect(self._on_progress)
+        self._worker.finishedAll.connect(self._on_done)
+        keep = getattr(self._mw, "_thread_keep", None)
+        run_in_thread(self._worker, keep if keep is not None else _KEEP)
+        self.table.scrollToItem(self.table.item(start, C_NAME))
+        return len(new)
 
     def _set_dates(self):
         d = self.ed_date.text().strip()
@@ -1134,6 +1189,8 @@ class BizcardImportDialog(QDialog):
         done = box["done"]
         self._apply_box = box                     # 검사가 본다(배우기 오류 종류)
         self._tag(done)
+        self._applied_keys = None                 # P5: 새 명함만 — 방금 적용한 줄을 숨긴다
+        self._apply_filter()
         self.learned = box.get("learn")
         self._load_learned()
         self._rescore_others()

@@ -480,6 +480,36 @@ try:
         "G 일부만 휴지통으로 간 명함은 표·기록을 남긴다(못 지운 파일 그대로)", str(n2))
     dg.close()
     pump(timeout=0.5)
+
+    # ── P. 새 명함(P5, D17) — 창을 연 채 넣은 그림만 [새 명함 읽기], '새 명함만' 거르기 ──
+    print()
+    print("=== P. 새 명함 ===")
+    F7 = TMP / "cards7"
+    mkfolder(F7)
+    mw._action_bizcard_import(str(F7))
+    dn = mw._bizcard_dlg
+    chk(pump(lambda: dn.bar.value() == 4 and not dn._pending, timeout=30), "P 창 — 읽기 끝")
+    ra = next(i for i, it in enumerate(dn._items) if it.base == "라마바_김철수")
+    from viewer.bizcard.apply import apply_cards as _ac
+    _ac([dn._row_values(ra)], F7 / "정리")                              # 한 장은 적용한 명함
+    shown_info = []
+    QMessageBox.information = staticmethod(lambda *a, **k: (shown_info.append(a[2] if len(a) > 2 else ""), QMessageBox.StandardButton.Ok)[1])
+    jpg(F7 / "차카타_박영수_1.jpg", "honeydew")
+    QTest.mouseClick(dn.btn_new, Qt.MouseButton.LeftButton)
+    chk(dn.table.rowCount() == 5 and dn._items[4].base == "차카타_박영수", "P [새 명함 읽기] — 새 원천만 표 끝에 한 줄",
+        "%d %s" % (dn.table.rowCount(), dn._items[-1].base))
+    chk(pump(lambda: dn.bar.value() == 1 and not dn._pending and dn.cell(4, BD.C_NAME) == "박영수", timeout=15),
+        "P 새 줄만 읽어 칸이 채워짐", "%s %s" % (dn.bar.value(), dn.cell(4, BD.C_NAME)))
+    chk("5" in dn.lbl_folder.text() and dn.cell(0, BD.C_NAME) != "", "P 위 줄 장수 고침·기존 줄은 그대로")
+    shown_info.clear()
+    chk(dn.read_new() == 0 and shown_info and dn.table.rowCount() == 5, "P 한 번 더 — '새 명함이 없습니다'만", str(shown_info))
+    dn.chk_new.setChecked(True)
+    hid = [dn._items[r].base for r in range(dn.table.rowCount()) if dn.table.isRowHidden(r)]
+    chk(hid == ["라마바_김철수"] and not dn.table.isRowHidden(4), "P '새 명함만' — 적용한 줄만 숨김", str(hid))
+    dn.chk_new.setChecked(False)
+    chk(not any(dn.table.isRowHidden(r) for r in range(dn.table.rowCount())), "P 끄면 다시 모두")
+    dn.close()
+    pump(timeout=0.5)
     mw.close()
 except Exception:
     import traceback

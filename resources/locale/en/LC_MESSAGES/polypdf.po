@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-18 13:00+0900\n"
+"POT-Creation-Date: 2026-11-18 13:47+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -8190,6 +8190,22 @@ msgid "확인 필요만"
 msgstr "Needs review only"
 
 #: viewer/widgets/bizcard_import_dialog.py
+msgid "새 명함만"
+msgstr "New cards only"
+
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "아직 [적용] 하지 않은 명함만 봅니다"
+msgstr "Show only cards that have not been applied yet"
+
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "새 명함 읽기"
+msgstr "Read New Cards"
+
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "폴더를 다시 훑어 창을 연 뒤에 넣은 명함 그림만 표 끝에 더하고 읽습니다"
+msgstr "Rescan the folder and add only card images placed there after this window opened to the end of the table, then read them"
+
+#: viewer/widgets/bizcard_import_dialog.py
 msgid "스캔일 일괄"
 msgstr "Set Scan Date"
 
@@ -8235,6 +8251,10 @@ msgstr "Apply"
 #: viewer/widgets/bizcard_import_dialog.py
 msgid "체크한 명함을 정리 폴더에 '성명_회사명.jpg' 로 만듭니다 — 원본은 그대로 둡니다"
 msgstr "Creates the checked cards as 'Name_Company.jpg' in the output folder — the originals are left as they are"
+
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "새 명함 읽는 중 %v / %m"
+msgstr "Reading new cards %v / %m"
 
 #: viewer/widgets/bizcard_import_dialog.py
 msgid "고른 자리"
@@ -8366,6 +8386,10 @@ msgstr "No cards to export — only cards you have applied are exported to vCard
 #: viewer/widgets/bizcard_import_dialog.py
 msgid "합칠 기존 vCard"
 msgstr "Existing vCard to merge into"
+
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "새 명함이 없습니다."
+msgstr "No new cards."
 
 #: viewer/widgets/bizcard_import_dialog.py
 msgid "정리본 만드는 중"

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-11-18 13:00+0900\n"
+"POT-Creation-Date: 2026-11-18 13:47+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -7939,6 +7939,22 @@ msgid "확인 필요만"
 msgstr ""
 
 #: viewer/widgets/bizcard_import_dialog.py
+msgid "새 명함만"
+msgstr ""
+
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "아직 [적용] 하지 않은 명함만 봅니다"
+msgstr ""
+
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "새 명함 읽기"
+msgstr ""
+
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "폴더를 다시 훑어 창을 연 뒤에 넣은 명함 그림만 표 끝에 더하고 읽습니다"
+msgstr ""
+
+#: viewer/widgets/bizcard_import_dialog.py
 msgid "스캔일 일괄"
 msgstr ""
 
@@ -7983,6 +7999,10 @@ msgstr ""
 
 #: viewer/widgets/bizcard_import_dialog.py
 msgid "체크한 명함을 정리 폴더에 '성명_회사명.jpg' 로 만듭니다 — 원본은 그대로 둡니다"
+msgstr ""
+
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "새 명함 읽는 중 %v / %m"
 msgstr ""
 
 #: viewer/widgets/bizcard_import_dialog.py
@@ -8114,6 +8134,10 @@ msgstr ""
 
 #: viewer/widgets/bizcard_import_dialog.py
 msgid "합칠 기존 vCard"
+msgstr ""
+
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "새 명함이 없습니다."
 msgstr ""
 
 #: viewer/widgets/bizcard_import_dialog.py

@@ -187,6 +187,14 @@ class BizcardImportDialog(QDialog):
         self._reread_menu.aboutToShow.connect(self._fill_reread_menu)
         self.btn_reread.setMenu(self._reread_menu)
         top.addWidget(self.btn_reread)
+        # P3(명함 SOT §5.8): vCard 내보내기·기존 vCard 에 합치기
+        self.btn_vcard = QPushButton("vCard ▾")
+        self.btn_vcard.setToolTip(tr("적용한 명함을 vCard(.vcf) 로 내보내거나 기존 vCard 에 합칩니다 — 구글 연락처·휴대폰에서 읽습니다"))
+        self._vcard_menu = QMenu(self)
+        self._vcard_menu.aboutToShow.connect(self._fill_vcard_menu)
+        self.btn_vcard.setMenu(self._vcard_menu)
+        top.addWidget(self.btn_vcard)
+        self.last_vcard = None
         self.btn_del = QPushButton(tr("삭제"))
         self.btn_del.setToolTip(tr("고른 명함의 원본 그림·PDF 와 만든 정리본을 휴지통으로 보내고 기록을 지웁니다 (Delete)"))
         self.btn_del.clicked.connect(lambda _c=False: self.delete_selected())
@@ -688,6 +696,94 @@ class BizcardImportDialog(QDialog):
         self.reread_learned = learned_n
         self._start(rows)
         return True
+
+    # ── vCard (P3, 명함 SOT §5.8) ──
+    def _fill_vcard_menu(self):
+        m = self._vcard_menu
+        m.clear()
+        sel = self.selected_rows_idx()
+        alln = list(range(len(self._items)))
+        for i, (text, rows, merge) in enumerate((
+                (tr("고른 명함 → vCard 파일… ({n}장)"), sel, False),
+                (tr("모든 명함 → vCard 파일… ({n}장)"), alln, False),
+                (tr("고른 명함을 기존 vCard 에 합치기… ({n}장)"), sel, True),
+                (tr("모든 명함을 기존 vCard 에 합치기… ({n}장)"), alln, True))):
+            if i == 2:
+                m.addSeparator()
+            a = m.addAction(text.format(n=len(rows)))
+            a.setEnabled(bool(rows))                                  # 고른 줄이 없으면 끔(숨기지 않음)
+            a.triggered.connect(lambda _c=False, rs=list(rows), mg=merge: self.export_vcard(rs, merge=mg))
+
+    def vcard_cards(self, rows):
+        """(명함 DB 행들, 빠진 수) — [적용] 한 명함만(정리본 파일 이름이 있어야 드라이브 링크를 만든다)."""
+        st = self._store()
+        cards, skipped = [], 0
+        for r in rows:
+            if not 0 <= r < len(self._items):
+                continue
+            c = st.card_by_src(self._items[r].key)
+            if c and (c.get("name") or "").strip():
+                cards.append(c)
+            else:
+                skipped += 1
+        return cards, skipped
+
+    def export_vcard(self, rows, merge: bool = False, path=None, existing=None, drive=None):
+        """vCard 내보내기·합치기. path·existing·drive 를 주면 묻지 않는다(검사). 반환 = 통계(숫자·경로) 또는 None."""
+        from viewer.bizcard import vcard as V
+        from viewer import bg_write
+        quiet = path is not None or existing is not None
+        cards, skipped = self.vcard_cards(rows)
+        if not cards:
+            if not quiet:
+                QMessageBox.information(self, "vCard", tr("내보낼 명함이 없습니다 — [적용] 한 명함만 vCard 로 내보냅니다."))
+            return None
+        st = self._store()
+        if drive is None:
+            default = st.meta_get("drive_folder", None)
+            if default is None:
+                default = Path(self.ed_out.text().strip() or str(self._folder)).name
+            from PyQt6.QtWidgets import QInputDialog
+            drive, ok = QInputDialog.getText(self, "vCard", tr("구글 드라이브의 명함 폴더 이름 — 메모에 '폴더/파일 이름' 과 드라이브 검색 주소를 넣습니다(비우면 넣지 않음):"),
+                                             text=default)
+            if not ok:
+                return None
+            drive = drive.strip()
+            st.meta_set("drive_folder", drive)
+        lang = "en" if str(language()).startswith("en") else "ko"
+        word = tr("명함")
+        if merge:
+            if existing is None:
+                existing, _f = QFileDialog.getOpenFileName(self, tr("합칠 기존 vCard"), str(self._folder), "vCard (*.vcf)")
+                if not existing:
+                    return None
+            try:
+                old = bg_write.read_text(existing, encoding="utf-8-sig")
+            except UnicodeDecodeError:                                # 옛 휴대폰 내보내기(cp949)
+                old = Path(existing).read_text(encoding="cp949", errors="replace")
+            text, stats = V.merge_text(old, cards, drive, lang, word)
+            path = V.merged_path(existing, tr("합침"))
+        else:
+            if path is None:
+                start = Path(self.ed_out.text().strip() or str(self._folder)) / (tr("명함") + ".vcf")
+                path, _f = QFileDialog.getSaveFileName(self, tr("vCard 로 내보내기"), str(start), "vCard (*.vcf)")
+                if not path:
+                    return None
+            text = V.export_text(cards, drive, lang, word)
+            stats = {"cards": len(cards)}
+        bg_write.submit(path, text, delay=0)                          # 드라이브 폴더·백신이 붙들어도 메인은 서지 않는다
+        stats.update(skipped=skipped, path=str(path))
+        self.last_vcard = stats
+        if not quiet:
+            if merge:
+                msg = tr("기존 vCard 에 합쳤습니다 — 같은 사람 {m}명(더한 줄 {l}), 새 사람 {a}명.").format(
+                    m=stats["merged"], l=stats["lines"], a=stats["added"])
+            else:
+                msg = tr("vCard 에 {n}장을 썼습니다.").format(n=stats["cards"])
+            if skipped:
+                msg += "\n" + tr("적용하지 않은 {k}장은 빠졌습니다.").format(k=skipped)
+            QMessageBox.information(self, "vCard", msg + "\n" + str(path))
+        return stats
 
     def _store(self):
         if getattr(self, "_st", None) is None:

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-11-18 04:22+0900\n"
+"POT-Creation-Date: 2026-11-18 12:45+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -449,7 +449,8 @@ msgstr ""
 msgid "인덱스"
 msgstr ""
 
-#: viewer/app.py
+#: viewer/app.py viewer/bizcard/vcard.py
+#: viewer/widgets/bizcard_import_dialog.py
 msgid "명함"
 msgstr ""
 
@@ -3388,6 +3389,10 @@ msgstr ""
 #: viewer/app.py
 #, python-brace-format
 msgid "그림을 읽을 수 없습니다: {name}"
+msgstr ""
+
+#: viewer/bizcard/vcard.py viewer/widgets/bizcard_import_dialog.py
+msgid "합침"
 msgstr ""
 
 #: viewer/bookmark_gen.py viewer/widgets/toc_review_dialog.py
@@ -7777,6 +7782,10 @@ msgid "지금의 인식으로 다시 읽습니다 — 고른 줄만 또는 모�
 msgstr ""
 
 #: viewer/widgets/bizcard_import_dialog.py
+msgid "적용한 명함을 vCard(.vcf) 로 내보내거나 기존 vCard 에 합칩니다 — 구글 연락처·휴대폰에서 읽습니다"
+msgstr ""
+
+#: viewer/widgets/bizcard_import_dialog.py
 msgid "고른 명함의 원본 그림·PDF 와 만든 정리본을 휴지통으로 보내고 기록을 지웁니다 (Delete)"
 msgstr ""
 
@@ -7884,6 +7893,10 @@ msgid "(다시 읽는 중)"
 msgstr ""
 
 #: viewer/widgets/bizcard_import_dialog.py
+msgid "구글 드라이브의 명함 폴더 이름 — 메모에 '폴더/파일 이름' 과 드라이브 검색 주소를 넣습니다(비우면 넣지 않음):"
+msgstr ""
+
+#: viewer/widgets/bizcard_import_dialog.py
 msgid "날짜를 YYYY-MM-DD 꼴로 적으세요."
 msgstr ""
 
@@ -7939,6 +7952,38 @@ msgid "모두 다시 읽기 ({n}장)"
 msgstr ""
 
 #: viewer/widgets/bizcard_import_dialog.py
+#, python-brace-format
+msgid "고른 명함 → vCard 파일… ({n}장)"
+msgstr ""
+
+#: viewer/widgets/bizcard_import_dialog.py
+#, python-brace-format
+msgid "모든 명함 → vCard 파일… ({n}장)"
+msgstr ""
+
+#: viewer/widgets/bizcard_import_dialog.py
+#, python-brace-format
+msgid "고른 명함을 기존 vCard 에 합치기… ({n}장)"
+msgstr ""
+
+#: viewer/widgets/bizcard_import_dialog.py
+#, python-brace-format
+msgid "모든 명함을 기존 vCard 에 합치기… ({n}장)"
+msgstr ""
+
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "내보낼 명함이 없습니다 — [적용] 한 명함만 vCard 로 내보냅니다."
+msgstr ""
+
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "합칠 기존 vCard"
+msgstr ""
+
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "vCard 로 내보내기"
+msgstr ""
+
+#: viewer/widgets/bizcard_import_dialog.py
 msgid "정리본 만드는 중"
 msgstr ""
 
@@ -7948,6 +7993,16 @@ msgstr ""
 
 #: viewer/widgets/bizcard_import_dialog.py
 msgid "넣지 않음"
+msgstr ""
+
+#: viewer/widgets/bizcard_import_dialog.py
+#, python-brace-format
+msgid "기존 vCard 에 합쳤습니다 — 같은 사람 {m}명(더한 줄 {l}), 새 사람 {a}명."
+msgstr ""
+
+#: viewer/widgets/bizcard_import_dialog.py
+#, python-brace-format
+msgid "vCard 에 {n}장을 썼습니다."
 msgstr ""
 
 #: viewer/widgets/bizcard_import_dialog.py
@@ -7965,6 +8020,11 @@ msgstr ""
 #: viewer/widgets/bizcard_import_dialog.py
 #, python-brace-format
 msgid "명함 {n}장을 다시 읽습니다 — 한 장에 몇 초씩 걸립니다. 손으로 고친 칸은 그대로 둡니다."
+msgstr ""
+
+#: viewer/widgets/bizcard_import_dialog.py
+#, python-brace-format
+msgid "적용하지 않은 {k}장은 빠졌습니다."
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py

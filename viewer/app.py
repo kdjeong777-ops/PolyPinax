@@ -1672,6 +1672,11 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         from viewer.widgets.recent_popup import RecentSearchPopup
         self._recent_popup = RecentSearchPopup(self.toolbar_search, self._open_recent_search)
         self._recent_popup.set_items(getattr(self, "_recent_searches", None) or [])
+        # 261117-39(검색창 SOT §6): 찾은 글은 다른 항목으로 떠나면 흐린 자리표시로 — 빈 칸에서 → 로 되살린다
+        from viewer.widgets.search_ghost import SearchGhost
+        _rp = self._recent_popup
+        self._search_ghost = SearchGhost(self.toolbar_search, on_restore=lambda: _rp.is_open() and _rp.open(),
+                                         extra=(_rp.completer.popup(),))
 
     def _style_panel_toolbar(self, dark: bool):
         """260606-26: 세부 줄(종전 패널) 버튼 테두리/배경을 테마별로. 라이트=짙은 회색,
@@ -1689,12 +1694,14 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 if dark:
                     ts.setStyleSheet(
                         "QLineEdit#toolbarSearch{background:#3a3a3d;color:#e8e8e8;"
-                        "border:1px solid #5a5a5a;border-radius:13px;padding:3px 10px;}"
+                        "border:1px solid #5a5a5a;border-radius:13px;padding:3px 10px;"
+                        "placeholder-text-color:#8a8a8a;}"          # 261117-39: 흐린 자리표시(디자인 SOT §2.3)
                         "QLineEdit#toolbarSearch:focus{border-color:#7a7a7a;}")
                 else:
                     ts.setStyleSheet(
                         "QLineEdit#toolbarSearch{background:#ffffff;color:#222;"
-                        "border:1px solid #b8b8b8;border-radius:13px;padding:3px 10px;}"
+                        "border:1px solid #b8b8b8;border-radius:13px;padding:3px 10px;"
+                        "placeholder-text-color:#9a9a9a;}"
                         "QLineEdit#toolbarSearch:focus{border-color:#909090;}")
                 from viewer.widgets.icons import themed_icon as _themed_icon
                 self._search_lead_action.setIcon(_themed_icon("search", dark=dark))
@@ -1771,6 +1778,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         rp = getattr(self, "_recent_popup", None)
         if rp is not None and rp.consume_return():
             return                                   # 261117-31: 펼침 목록에서 고른 Enter — 그쪽이 토글까지 되살려 찾는다
+        sg = getattr(self, "_search_ghost", None)
+        if sg is not None:
+            sg.mark_searched(text)                   # 261117-39: 이 글 그대로 떠나면 흐린 글로
         if self._content_panel is not None:
             self._open_content_find(text)
             return
@@ -11407,6 +11417,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
     def _open_recent_search(self, r: dict) -> None:
         """누르면 **지금 연 폴더(폴더 모드)나 파일(파일 모드)** 에서 다시 찾는다(사용자 결정) — 대소문자·정규식도 되살린다."""
         q = r.get("query", "")
+        sg = getattr(self, "_search_ghost", None)
+        if sg is not None:
+            sg.mark_searched(q)                      # 261117-39: 최근 목록에서 골라 찾은 글도 같다
         self._vm_search()
         try:
             self.search_bar.edit.setText(q)

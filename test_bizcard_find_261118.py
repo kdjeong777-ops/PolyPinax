@@ -824,17 +824,31 @@ try:
     chk(sel_ids() == [kim["id"]], "I18 이미 보던 명함을 다시 골라도 목록에서 그 줄을 고름", str(sel_ids()))
     dlg.ed_find.setText("")
     pump(lambda: dlg._table_tab is None and dlg.table.rowCount() >= 3, timeout=3)
-    # I8 주소록 가져오기(리멤버 꼴 vCard) — 같은 사람은 빈 칸만, 없는 사람은 그림 없는 명함
+    # I8 주소록 가져오기(리멤버 꼴 vCard) — 모두 넣고 곧바로 [중복 검토] 창(§5.24.8), 창에서 합치면 같은 사람은 빈 칸만
+    from viewer.widgets import bizcard_dupe_dialog as _DD
+    merged = []
+
+    def merge_now():
+        dd_ = getattr(dlg, "dupe_dlg", None)
+        if dd_ is not None and dd_.isVisible():
+            merged.append(dd_.apply(ask=False))
+            dd_.close()
+            dlg.after_dupes()
+            dlg.raise_(); dlg.activateWindow()   # 모달 없이 띄운 창을 닫은 뒤 — 오프스크린은 활성 창이 돌아오지 않는다
+            pump(timeout=0.1)
+        else:
+            merged.append(None)
     vf = TMP / "contacts.vcf"
     vf.write_text("BEGIN:VCARD\r\nVERSION:3.0\r\nN:;김철수;;;\r\nTEL;TYPE=work,cell:010-0000-0003\r\nEMAIL;TYPE=work:kim@example.com\r\n"
                   "ORG:다른회사;\r\nEND:VCARD\r\n"
                   "BEGIN:VCARD\r\nVERSION:3.0\r\nN:;박새사람;;;\r\nTEL;TYPE=work,cell:010-0000-0009\r\nORG:차카타;영업팀\r\n"
                   "TITLE:과장\r\nADR;TYPE=work:;가짜시 가짜로 1;;;;;\r\nEND:VCARD\r\n", encoding="utf-8")
     res = dlg.import_contacts(str(vf), ask=False)
+    merge_now()
     st = S.BizcardStore()
     kim = P.find(st, "김철수")[0]
     new = P.find(st, "박새사람")
-    chk(res == (1, 1), "I8 합침 1·더함 1", str(res))
+    chk(res == 2 and merged == [1], "I8 둘 다 넣고 병합 창에서 같은 번호 1묶음 합침", str((res, merged)))
     chk(kim["emails"] == ["kim@example.com"] and kim["company"] == "라마바", "I8 같은 사람은 빈 칸만 채움(회사는 그대로)", str(kim["company"]))
     chk(len(new) == 1 and new[0]["front"].startswith("contact:") and new[0]["dept"] == "영업팀" and new[0]["address"] == "가짜시 가짜로 1",
         "I8 없는 사람은 그림 없는 명함으로(부서·주소)")
@@ -864,12 +878,16 @@ try:
         finally:
             st.close()
     dlg.import_contacts(vcf("최가짜", "구글회사"), ask=False, source="google")
+    merge_now()
     chk(comp_of() == [("최가짜", "구글회사")], "I10 구글에서 새 사람", str(comp_of()))
     dlg.import_contacts(vcf("최가짜", "리멤버회사"), ask=False, source="remember")
+    merge_now()
     chk(comp_of() == [("최가짜", "리멤버회사")], "I10 리멤버가 구글 값을 이김", str(comp_of()))
     dlg.import_contacts(vcf("최가짜", "구글새회사"), ask=False, source="google")
+    merge_now()
     chk(comp_of() == [("최가짜", "리멤버회사")], "I10 구글은 리멤버 값을 덮지 않음", str(comp_of()))
     dlg.import_contacts(vcf("김철수", "리멤버회사", "010-0000-0003"), ask=False, source="remember")
+    merge_now()
     chk(comp_of("0000-0003") == [("김철수", "라마바")], "I10 명함을 읽은 값은 리멤버도 덮지 않음", str(comp_of("0000-0003")))
     pump(timeout=0.1)
     choi = next(c for c in dlg._rows if c["name"] == "최가짜")
@@ -882,6 +900,7 @@ try:
     QTest.mouseClick(dlg.btn_save, Qt.MouseButton.LeftButton)
     pump(timeout=0.3)
     dlg.import_contacts(vcf("최가짜", "리멤버다른회사"), ask=False, source="remember")
+    merge_now()
     chk(comp_of() == [("최가짜", "손회사")], "I10 손으로 고친 칸은 리멤버도 덮지 않음", str(comp_of()))
     pump(lambda: dlg.table.rowCount() == 5, timeout=3)
     # I9 목록에서 지우기 — 명함 관리 [삭제]와 같은 길

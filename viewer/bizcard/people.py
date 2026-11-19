@@ -495,7 +495,7 @@ def card_files(card: dict) -> tuple:
     return [p for p in orig if os.path.exists(p)], outs, photos
 
 
-# ── 주소록 가져오기 (§5.24 D22 — 같은 사람은 빈 칸만 채우고, 없는 사람은 그림 없는 명함으로) ──
+# ── 주소록 가져오기 (§5.24 D22 — 모두 그림 없는 명함으로 넣고, 같은 사람은 [중복 검토] 창에서 고른다 §5.24.8) ──
 _SCALARS = ("name", "company", "dept", "title", "address", "memo")
 
 
@@ -505,42 +505,8 @@ def _phone_key(num: str) -> str:
     return d if len(d) >= 9 else ""
 
 
-def import_plan(store, persons) -> list:
-    """[(사람, 맞는 명함 id 또는 None)] — 휴대폰·전화 번호(숫자 9자리 이상) 또는 메일이 같으면 같은 사람.
-    가져오는 파일 안에서 같은 사람이 또 나오면 앞의 것에 합친다(같은 '새 명함')."""
-    by_phone, by_mail = {}, {}
-    for r in store.con.execute("SELECT id, phones, emails FROM cards").fetchall():
-        for x in json.loads(r["phones"] or "[]"):
-            k = _phone_key(x[-1] if isinstance(x, list) else x)
-            if k:
-                by_phone.setdefault(k, r["id"])
-        for e in json.loads(r["emails"] or "[]"):
-            by_mail.setdefault(str(e).strip().lower(), r["id"])
-    plan, new_of = [], {}
-    for i, p in enumerate(persons):
-        keys = [("t", _phone_key(n)) for _k, n in p.get("phones") or []] + [("m", e.strip().lower()) for e in p.get("emails") or []]
-        keys = [k for k in keys if k[1]]
-        cid = next((by_phone.get(v) if t == "t" else by_mail.get(v) for t, v in keys
-                    if (by_phone.get(v) if t == "t" else by_mail.get(v))), None)
-        if cid is None:
-            cid = next((new_of[k] for k in keys if k in new_of), None)
-        if cid is None:
-            new_of.update({k: ("new", i) for k in keys})
-        plan.append((p, cid))
-    return plan
-
-
-def import_counts(plan) -> tuple:
-    """(합칠 사람 수, 새로 더할 사람 수)."""
-    merged = sum(1 for _p, c in plan if isinstance(c, int))
-    added = sum(1 for _p, c in plan if c is None)
-    return merged, added
-
-
-# 주소록 우선순위(§5.24 D24, 사용자 지시 '리멤버, 구글 주소록 순서로 우선') — 큰 수가 이긴다.
-#   명함을 읽은 값·손으로 고친 값은 출처 없음(=None) — 주소록이 덮어쓰지 않고 빈 칸만 채운다.
+# 주소록 출처(§5.24 D24) — 칸마다 어느 주소록에서 왔나. 중복 검토의 출처(리멤버·구글)와 손으로 고친 칸을 가린다(§5.24.8).
 SOURCE_RANK = {"google": 1, "remember": 2}
-_OVERRIDE = ("name", "company", "dept", "title", "address")      # 메모는 덮어쓰지 않는다(빈 칸만)
 
 
 def src_init(store) -> None:
@@ -572,78 +538,264 @@ def forget_srcs(store, card_id: int, fields=None) -> None:
         pass
 
 
-def _merge_into(row: dict, p: dict, srcs: dict = None, src: str = "") -> tuple:
-    """빈 칸은 채우고, 값이 다른 칸은 **앞 출처가 주소록이고 이번 주소록이 더 높을 때만** 바꾼다(리멤버 > 구글).
-    번호·메일·누리집은 없는 것만 더함. 반환 = (바꿀 칸, 이번 출처로 적을 칸)."""
-    srcs, rank = srcs or {}, SOURCE_RANK.get(src, 0)
-    ch, mine = {}, []
-    for k in _SCALARS:
-        new = (p.get(k) or "").strip()
-        old = (row.get(k) or "").strip()
-        if not new or new == old:
-            continue
-        if not old:
-            ch[k] = new
-            mine.append(k)
-        elif k in _OVERRIDE and srcs.get(k) in SOURCE_RANK and rank > SOURCE_RANK[srcs[k]]:
-            ch[k] = new
-            mine.append(k)
-    have = {_phone_key(n) or n for _k, n in row.get("phones") or []}
-    add = [(k, n) for k, n in p.get("phones") or [] if (_phone_key(n) or n) not in have]
-    if add:
-        ch["phones"] = list(row.get("phones") or []) + add
-    for k in ("emails", "urls"):
-        low = {x.lower() for x in row.get(k) or []}
-        more = [x for x in p.get(k) or [] if x.lower() not in low]
-        if more:
-            ch[k] = list(row.get(k) or []) + more
-    return ch, mine
-
-
-def apply_import(store, plan, tag: str = "", src: str = "") -> tuple:
-    """가져오기 적용 — (합친 명함 수, 더한 명함 수). 더하는 명함은 front 가 `contact:<번호>`(그림 없음).
-    src = 'remember'·'google' — 칸마다 출처를 적어 두어 다음 가져오기의 우선순위를 가린다(D24)."""
+def apply_import(store, persons, tag: str = "", src: str = "") -> int:
+    """가져오기 — 연락처마다 그림 없는 명함(front `contact:<번호>`)을 더한다. 반환 = 더한 수.
+    같은 사람이 이미 있어도 합치지 않는다 — 부르는 쪽이 곧바로 [중복 검토] 창을 띄운다(§5.24.8, 사용자 지시 261119).
+    src = 'remember'·'google' — 칸마다 출처를 적어 둔다(중복 검토의 출처·손으로 고친 칸 가리기)."""
     import uuid
     from viewer.bizcard.vcard import CONTACT_PREFIX
     src_init(store)
-    merged, added = 0, 0
-    made = {}                                       # 같은 파일 안 '새 사람' 의 첫 행 → id
-    for i, (p, cid) in enumerate(plan):
-        if isinstance(cid, tuple):                  # ("new", j) — 앞에서 더한 새 명함에 합침
-            cid = made.get(cid[1])
-        if cid is None:
-            front = CONTACT_PREFIX + uuid.uuid4().hex
-            now = time.time()
-            tags = [t for t in ("명함", tag) if t]
-            cur = store.con.execute(
-                "INSERT INTO cards(front, back, src_key, src_pdf, name, company, title, phones, emails, urls, address, en, "
-                "memo, tags, scanned, created, updated, dept) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                (front, "", "", "", p.get("name") or "", p.get("company") or "", p.get("title") or "",
-                 json.dumps([list(x) for x in p.get("phones") or []], ensure_ascii=False),
-                 json.dumps(list(p.get("emails") or []), ensure_ascii=False),
-                 json.dumps(list(p.get("urls") or []), ensure_ascii=False), p.get("address") or "", "{}",
-                 p.get("memo") or "", json.dumps(tags, ensure_ascii=False), time.strftime("%Y-%m-%d"), now, now,
-                 p.get("dept") or ""))
-            nid = cur.lastrowid
-            row = card_by_id(store, nid)
-            store.con.execute("INSERT INTO cards_fts(rowid, body) VALUES(?,?)", (nid, store._body(row)))
-            if src:
-                _set_srcs(store, nid, [k for k in _SCALARS if (p.get(k) or "").strip()], src)
-            store.con.commit()
-            made[i] = nid
-            added += 1
+    added = 0
+    for p in persons:
+        front = CONTACT_PREFIX + uuid.uuid4().hex
+        now = time.time()
+        tags = [t for t in ("명함", tag) if t]
+        cur = store.con.execute(
+            "INSERT INTO cards(front, back, src_key, src_pdf, name, company, title, phones, emails, urls, address, en, "
+            "memo, tags, scanned, created, updated, dept) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (front, "", "", "", p.get("name") or "", p.get("company") or "", p.get("title") or "",
+             json.dumps([list(x) for x in p.get("phones") or []], ensure_ascii=False),
+             json.dumps(list(p.get("emails") or []), ensure_ascii=False),
+             json.dumps(list(p.get("urls") or []), ensure_ascii=False), p.get("address") or "", "{}",
+             p.get("memo") or "", json.dumps(tags, ensure_ascii=False), time.strftime("%Y-%m-%d"), now, now,
+             p.get("dept") or ""))
+        nid = cur.lastrowid
+        row = card_by_id(store, nid)
+        store.con.execute("INSERT INTO cards_fts(rowid, body) VALUES(?,?)", (nid, store._body(row)))
+        if src:
+            _set_srcs(store, nid, [k for k in _SCALARS if (p.get(k) or "").strip()], src)
+        added += 1
+    store.con.commit()
+    return added
+
+
+# ── 중복 검토 (§5.24.8 D30) — 묶기·출처·차례·합친 값은 여기(Qt 없음), 파일 옮기기·적용은 창이 ──
+DUPE_SOURCES = ("card", "remember", "google", "contact")   # 명함(그림) · 리멤버 · 구글 · 출처 모름 주소록
+DUPE_ORDER_KEY = "dupe_order"
+HOLD_DIR = "병합 보관"            # 합쳐 지운 그림 명함 파일 — 정리 폴더 옆(인물 폴더와 같은 자리), 다음 합치기 때 휴지통
+WHY_SURE = ("phone", "mail")
+_WHY_RANK = {"phone": 0, "mail": 1, "typo": 2, "namecomp": 3}
+_ONE = ("name", "company", "dept", "title", "address")
+
+
+def _nname(s) -> str:
+    return re.sub(r"\s+", "", str(s or "")).lower()
+
+
+def _keys_of(card) -> list:
+    out = []
+    for x in card.get("phones") or []:
+        k = _phone_key(x[-1] if isinstance(x, (list, tuple)) else x)
+        if k:
+            out.append(k)
+    return out
+
+
+def one_off(a: str, b: str) -> bool:
+    """숫자 수가 같고 한 자리만 다른 번호(오타 의심)."""
+    return len(a) == len(b) and a != b and sum(x != y for x, y in zip(a, b)) == 1
+
+
+def dupe_order(store) -> list:
+    got = [s for s in (store.meta_get(DUPE_ORDER_KEY) or []) if s in DUPE_SOURCES]
+    return list(dict.fromkeys(got + [s for s in DUPE_SOURCES if s not in got]))
+
+
+def card_source(store, card) -> str:
+    from viewer.bizcard.vcard import is_contact
+    if not is_contact(card):
+        return "card"
+    vals = [v for v in field_srcs(store, card["id"]).values() if v in SOURCE_RANK]
+    if not vals:
+        return "contact"
+    return max(sorted(set(vals)), key=lambda v: (vals.count(v), SOURCE_RANK[v]))
+
+
+def order_cards(cards, src_of: dict, order) -> list:
+    """출처 순서, 같은 출처는 스캔일·고친 날 최근 먼저."""
+    rank = {s: i for i, s in enumerate(order)}
+    out = sorted(cards, key=lambda c: (str(c.get("scanned") or ""), float(c.get("updated") or 0)), reverse=True)
+    return sorted(out, key=lambda c: rank.get(src_of.get(c["id"]), len(rank)))
+
+
+def manual_fields(store, cards) -> set:
+    """손으로 고친 칸 {(id, 칸)} — 주소록 명함인데 값이 있고 출처 기록이 없는 칸([저장] 이 출처를 지움, D24).
+    중복 검토에서 출처 순서보다 먼저 쓴다(손으로 고친 값은 주소록이 덮지 않는다)."""
+    from viewer.bizcard.vcard import is_contact
+    out = set()
+    for c in cards:
+        if is_contact(c):
+            srcs = field_srcs(store, c["id"])
+            out |= {(c["id"], k) for k in _ONE if (c.get(k) or "").strip() and k not in srcs}
+    return out
+
+
+def dupe_groups(store, order=None) -> list:
+    """[{cards: [차례대로], why: {id: 이유}, sure_root: {id: 확실한 묶음 열쇠}, src: {id: 출처}}] — 두 장 이상 묶음만.
+    이유 = 'phone'·'mail'(확실) · 'typo'(이름 같고 번호 한 자리 다름) · 'namecomp'(이름+회사 같음)."""
+    order = order or dupe_order(store)
+    cards = [store._row(r) for r in store.con.execute("SELECT * FROM cards").fetchall()]
+    byid = {c["id"]: c for c in cards}
+    par, spar, edges = {}, {}, {}
+
+    def find(p, x):
+        while p.setdefault(x, x) != x:
+            p[x] = p[p[x]]
+            x = p[x]
+        return x
+
+    def link(a, b, why):
+        if a == b:
+            return
+        par[find(par, a)] = find(par, b)
+        if why in WHY_SURE:
+            spar[find(spar, a)] = find(spar, b)
+        for x, y in ((a, b), (b, a)):
+            old = edges.get(x, {}).get(y)
+            if old is None or _WHY_RANK[why] < _WHY_RANK[old]:
+                edges.setdefault(x, {})[y] = why
+
+    first = {}
+    for c in cards:
+        for k in set(_keys_of(c)):
+            if ("t", k) in first:
+                link(c["id"], first[("t", k)], "phone")
+            else:
+                first[("t", k)] = c["id"]
+        for e in {str(e).strip().lower() for e in c.get("emails") or [] if str(e).strip()}:
+            if ("m", e) in first:
+                link(c["id"], first[("m", e)], "mail")
+            else:
+                first[("m", e)] = c["id"]
+    by_name, by_nc = {}, {}
+    for c in cards:
+        n = _nname(c.get("name"))
+        if not n:
             continue
-        row = card_by_id(store, cid)
-        if row is None:
+        by_name.setdefault(n, []).append(c)
+        co = _nname(c.get("company"))
+        if co:
+            by_nc.setdefault((n, co), []).append(c)
+    for same in by_name.values():
+        for i, a in enumerate(same):
+            ka = _keys_of(a)
+            for b in same[i + 1:]:
+                if any(one_off(x, y) for x in ka for y in _keys_of(b)):
+                    link(a["id"], b["id"], "typo")
+    for same in by_nc.values():
+        for b in same[1:]:
+            link(same[0]["id"], b["id"], "namecomp")
+    comp = {}
+    for cid in par:
+        comp.setdefault(find(par, cid), []).append(cid)
+    out = []
+    for ids in comp.values():
+        if len(ids) < 2:
             continue
-        ch, mine = _merge_into(row, p, field_srcs(store, cid), src)
-        if ch:
-            update_card(store, cid, ch)
-        if src and mine:
-            _set_srcs(store, cid, mine, src)
-            store.con.commit()
-        merged += 1
-    return merged, added
+        src = {i: card_source(store, byid[i]) for i in ids}
+        ordered = order_cards([byid[i] for i in ids], src, order)
+        why = {i: min(edges.get(i, {}).values(), key=lambda w: _WHY_RANK[w]) for i in ids}
+        out.append({"cards": ordered, "why": why, "src": src, "sure_root": {i: find(spar, i) for i in ids},
+                    "manual": manual_fields(store, [byid[i] for i in ids])})
+    out.sort(key=lambda g: _nname(g["cards"][0].get("name")))
+    return out
+
+
+OLD_MOBILE = ("011", "016", "017", "018", "019")   # 예전 휴대폰 앞자리 — 010 번호가 있으면 뺀다(사용자 지시 261119)
+
+
+def merge_plan(cards, manual=None) -> dict:
+    """차례대로 놓인 명함들(첫째 = 대표) → {keeper, fields, frm, drop, photo_from}.
+    한 칸은 손으로 고친 칸(manual = {(id, 칸)})이 먼저, 없으면 차례대로 처음 비지 않은 값.
+    전화·메일·누리집은 모두(휴대폰을 바꿨을 수 있다 — 한 자리만 다른 번호는 오타로 빼고, 010 이 있으면 011·016~019 는 뺌),
+    태그 모두, 메모는 대표 위 + 없는 글 아래."""
+    from viewer.bizcard.vcard import is_contact
+    rep = cards[0]
+    manual = manual or set()
+    fields, frm = {}, {}
+    for k in _ONE:
+        hand = [c for c in cards if (c["id"], k) in manual and (c.get(k) or "").strip()]
+        for c in hand + cards:
+            v = (c.get(k) or "").strip()
+            if v:
+                fields[k], frm[k] = v, c["id"]
+                break
+        else:
+            fields[k] = ""
+    en = {}
+    for c in cards:
+        for k, v in (c.get("en") or {}).items():
+            if v and not en.get(k):
+                en[k] = v
+    fields["en"] = en
+    memo = (rep.get("memo") or "").strip()
+    for c in cards[1:]:
+        m = (c.get("memo") or "").strip()
+        if m and m not in memo:
+            memo = (memo + "\n\n" + m) if memo else m
+    fields["memo"] = memo
+    phones, keys = [], []
+    for c in cards:
+        for kind, num in c.get("phones") or []:
+            k = _phone_key(num) or re.sub(r"\D", "", num or "")
+            if not k or k in keys or any(one_off(k, x) for x in keys if len(x) >= 9):
+                continue
+            keys.append(k)
+            phones.append((kind, num))
+    if any(k.startswith("010") for k in keys):
+        phones = [(kind, num) for (kind, num), k in zip(phones, keys) if not k.startswith(OLD_MOBILE)]
+    fields["phones"] = phones
+    for k in ("emails", "urls"):
+        seen, vals = set(), []
+        for c in cards:
+            for x in c.get(k) or []:
+                if str(x).strip() and str(x).lower() not in seen:
+                    seen.add(str(x).lower())
+                    vals.append(x)
+        fields[k] = vals
+    fields["tags"] = list(dict.fromkeys(t for c in cards for t in c.get("tags") or []))
+    keeper = rep if not is_contact(rep) else next((c for c in cards if not is_contact(c)), rep)
+    photo_from = None
+    if not is_contact(keeper) and not person_photos(keeper.get("front")):
+        photo_from = next((c["id"] for c in cards if c is not keeper and not is_contact(c) and person_photos(c.get("front"))), None)
+    return {"keeper": keeper["id"], "fields": fields, "frm": frm,
+            "drop": [c["id"] for c in cards if c["id"] != keeper["id"]], "photo_from": photo_from}
+
+
+def merge_db(store, plan, extra: dict = None) -> None:
+    """합친 값을 남길 행에, 지울 행의 즐겨찾기·할 일·최근 칸은 남길 행으로, 주소록 출처는 칸마다 값을 준 명함의 것.
+    extra = 창이 정한 front·back(이름을 바꾼 뒤). 그 뒤 지울 행을 지운다(파일은 창이 먼저 옮김)."""
+    kid = plan["keeper"]
+    srcs = {cid: field_srcs(store, cid) for cid in set(plan["frm"].values())}
+    update_card(store, kid, dict(plan["fields"], **(extra or {})), commit=False)
+    for cid in plan["drop"]:
+        for sql in ("INSERT OR IGNORE INTO fav_members(group_id, card_id, pos, memo_entry) "
+                    "SELECT group_id, ?, pos, memo_entry FROM fav_members WHERE card_id=?",
+                    "INSERT INTO recent(card_id, seen) SELECT ?, seen FROM recent WHERE card_id=? AND 1 "
+                    "ON CONFLICT(card_id) DO UPDATE SET seen=MAX(recent.seen, excluded.seen)"):
+            try:
+                store.con.execute(sql, (kid, cid))
+            except sqlite3.OperationalError:
+                pass
+    try:
+        store.con.execute("DELETE FROM contact_src WHERE card_id=?", (kid,))
+        store.con.executemany("INSERT INTO contact_src(card_id, field, src) VALUES(?,?,?)",
+                              [(kid, f, srcs[c][f]) for f, c in plan["frm"].items() if srcs.get(c, {}).get(f)])
+    except sqlite3.OperationalError:
+        pass
+    store.con.commit()
+    for cid in plan["drop"]:
+        r = store.con.execute("SELECT src_key FROM cards WHERE id=?", (cid,)).fetchone()
+        if r is None:
+            continue
+        if r["src_key"]:
+            store.delete_src(r["src_key"])
+        else:
+            store.delete_card(cid)
+
+
+def hold_dir(front) -> Path:
+    return Path(front).parent.parent / HOLD_DIR
 
 
 # ── 해시태그 (§5.24) — 명함 DB 태그 칸, 정리본 파일 태그는 부르는 쪽이 앱 태그 저장소로 ──

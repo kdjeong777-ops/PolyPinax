@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-19 13:05+0900\n"
+"POT-Creation-Date: 2026-11-19 14:51+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -452,7 +452,8 @@ msgstr "Tags"
 msgid "인덱스"
 msgstr "Index"
 
-#: viewer/app.py viewer/bizcard/vcard.py viewer/widgets/bizcard_find_dialog.py
+#: viewer/app.py viewer/bizcard/vcard.py viewer/widgets/bizcard_dupe_dialog.py
+#: viewer/widgets/bizcard_find_dialog.py
 #: viewer/widgets/bizcard_import_dialog.py
 msgid "명함"
 msgstr "Business Cards"
@@ -561,7 +562,8 @@ msgstr "Bookmark Generation Stopped"
 
 #: viewer/app.py viewer/compare_controller.py viewer/jobs_controller.py
 #: viewer/photo_controller.py viewer/print_controller.py
-#: viewer/update_controller.py viewer/widgets/bizcard_find_dialog.py
+#: viewer/update_controller.py viewer/widgets/bizcard_dupe_dialog.py
+#: viewer/widgets/bizcard_find_dialog.py
 #: viewer/widgets/bizcard_import_dialog.py
 #: viewer/widgets/glossary_edit_dialog.py viewer/widgets/hyperlink_dialog.py
 #: viewer/widgets/image_tune_dialog.py viewer/widgets/stamp_dialog.py
@@ -4040,6 +4042,7 @@ msgid "항목"
 msgstr "Item"
 
 #: viewer/doc_info_controller.py viewer/photo_controller.py
+#: viewer/widgets/bizcard_dupe_dialog.py
 msgid "값"
 msgstr "Value"
 
@@ -4948,7 +4951,8 @@ msgstr "Location (GPS)"
 msgid "고도"
 msgstr "Altitude"
 
-#: viewer/photo_controller.py viewer/widgets/bizcard_find_dialog.py
+#: viewer/photo_controller.py viewer/widgets/bizcard_dupe_dialog.py
+#: viewer/widgets/bizcard_find_dialog.py
 msgid "주소"
 msgstr "Address"
 
@@ -6855,7 +6859,8 @@ msgstr "Signature Places"
 msgid "이 파일의 서명 자리를 모두 지울까요?"
 msgstr "Remove all signature places of this file?"
 
-#: viewer/sign_draft_controller.py viewer/widgets/bizcard_find_dialog.py
+#: viewer/sign_draft_controller.py viewer/widgets/bizcard_dupe_dialog.py
+#: viewer/widgets/bizcard_find_dialog.py
 #: viewer/widgets/bizcard_import_dialog.py viewer/widgets/capture_settings.py
 #: viewer/widgets/image_to_pdf_dialog.py viewer/widgets/sign_dialogs.py
 #: viewer/widgets/stamp_dialog.py
@@ -8027,24 +8032,147 @@ msgstr "Print_{stamp}"
 msgid "변환 도구 오류(코드 {rc})"
 msgstr "Conversion tool error (code {rc})"
 
-#: viewer/widgets/bizcard_find_dialog.py viewer/widgets/main_view.py
-msgid "메모"
-msgstr "Note"
+#: viewer/widgets/bizcard_dupe_dialog.py viewer/widgets/bizcard_find_dialog.py
+msgid "리멤버"
+msgstr "Remember"
 
-#: viewer/widgets/bizcard_find_dialog.py
+#: viewer/widgets/bizcard_dupe_dialog.py
+msgid "구글"
+msgstr "Google"
+
+#: viewer/widgets/bizcard_dupe_dialog.py viewer/widgets/bizcard_find_dialog.py
+msgid "주소록"
+msgstr "Contacts"
+
+#: viewer/widgets/bizcard_dupe_dialog.py
+msgid "같은 번호"
+msgstr "Same number"
+
+#: viewer/widgets/bizcard_dupe_dialog.py
+msgid "같은 메일"
+msgstr "Same email"
+
+#: viewer/widgets/bizcard_dupe_dialog.py
+msgid "번호 오타?"
+msgstr "Number typo?"
+
+#: viewer/widgets/bizcard_dupe_dialog.py
+msgid "이름·회사 같음"
+msgstr "Same name and company"
+
+#: viewer/widgets/bizcard_dupe_dialog.py viewer/widgets/bizcard_find_dialog.py
 #: viewer/widgets/bizcard_import_dialog.py
 msgid "회사"
 msgstr "Company"
 
-#: viewer/widgets/bizcard_find_dialog.py
+#: viewer/widgets/bizcard_dupe_dialog.py viewer/widgets/bizcard_find_dialog.py
 #: viewer/widgets/bizcard_import_dialog.py
 msgid "부서"
 msgstr "Department"
 
-#: viewer/widgets/bizcard_find_dialog.py
+#: viewer/widgets/bizcard_dupe_dialog.py viewer/widgets/bizcard_find_dialog.py
 #: viewer/widgets/bizcard_import_dialog.py
 msgid "직함"
 msgstr "Title"
+
+#: viewer/widgets/bizcard_dupe_dialog.py viewer/widgets/bizcard_find_dialog.py
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "전화"
+msgstr "Phone"
+
+#: viewer/widgets/bizcard_dupe_dialog.py viewer/widgets/bizcard_find_dialog.py
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "메일"
+msgstr "Email"
+
+#: viewer/widgets/bizcard_dupe_dialog.py viewer/widgets/bizcard_find_dialog.py
+msgid "누리집"
+msgstr "Website"
+
+#: viewer/widgets/bizcard_dupe_dialog.py viewer/widgets/bizcard_find_dialog.py
+#: viewer/widgets/main_view.py
+msgid "메모"
+msgstr "Note"
+
+#: viewer/widgets/bizcard_dupe_dialog.py viewer/widgets/bizcard_find_dialog.py
+msgid "중복 검토"
+msgstr "Review Duplicates"
+
+#: viewer/widgets/bizcard_dupe_dialog.py
+msgid "왼쪽이 1순위 — 1순위에 있는 값은 그대로, 없는 칸만 다음 순위 값으로 채웁니다"
+msgstr "Leftmost is first priority — its values are kept; only empty fields are filled from the next priority"
+
+#: viewer/widgets/bizcard_dupe_dialog.py
+msgid "다시 찾기"
+msgstr "Search Again"
+
+#: viewer/widgets/bizcard_dupe_dialog.py
+msgid "합치기 적용"
+msgstr "Apply Merge"
+
+#: viewer/widgets/bizcard_dupe_dialog.py
+msgid "마지막 합치기 되돌리기"
+msgstr "Undo Last Merge"
+
+#: viewer/widgets/bizcard_dupe_dialog.py
+msgid "대표로"
+msgstr "Make Primary"
+
+#: viewer/widgets/bizcard_dupe_dialog.py
+msgid "병합 우선순위(끌어 순서 바꾸기):"
+msgstr "Merge priority (drag to reorder):"
+
+#: viewer/widgets/bizcard_dupe_dialog.py
+msgid "적용 전 — 대표와 그 아래 유사한 명함(체크한 것만 합침)"
+msgstr "Before — primary card with similar cards below (only checked ones are merged)"
+
+#: viewer/widgets/bizcard_dupe_dialog.py viewer/widgets/glossary_edit_dialog.py
+#: viewer/widgets/translate_dialog.py
+msgid "출처"
+msgstr "Source"
+
+#: viewer/widgets/bizcard_dupe_dialog.py
+msgid "이유"
+msgstr "Reason"
+
+#: viewer/widgets/bizcard_dupe_dialog.py
+msgid "적용 후 — 합친 결과(대표에서 바뀐 칸은 굵게)"
+msgstr "After — merged result (fields changed from the primary in bold)"
+
+#: viewer/widgets/bizcard_dupe_dialog.py
+msgid "칸"
+msgstr "Field"
+
+#: viewer/widgets/bizcard_dupe_dialog.py
+msgid "(합치지 않음)"
+msgstr "(not merged)"
+
+#: viewer/widgets/bizcard_dupe_dialog.py
+#, python-brace-format
+msgid "묶음 {g}개 · 합칠 묶음 {n}개 · 지울 명함 {d}장"
+msgstr "{g} groups · {n} to merge · {d} cards to remove"
+
+#: viewer/widgets/bizcard_dupe_dialog.py
+msgid "마지막 합치기를 되돌립니다 — 옮긴 파일을 제자리로, 명함 DB 를 합치기 전으로."
+msgstr "Undo the last merge — moved files go back and the card database returns to its state before the merge."
+
+#: viewer/widgets/bizcard_dupe_dialog.py
+msgid "대표"
+msgstr "Primary"
+
+#: viewer/widgets/bizcard_dupe_dialog.py
+msgid "모두"
+msgstr "All"
+
+#: viewer/widgets/bizcard_dupe_dialog.py
+#, python-brace-format
+msgid "파일 {n}개를 옮기지 못했습니다 — 다른 프로그램이 열고 있는지 확인하세요."
+msgstr "Could not move {n} file(s) — check whether another program has them open."
+
+#: viewer/widgets/bizcard_dupe_dialog.py
+#, python-brace-format
+msgid "묶음 {n}개를 합칩니다 — 대표가 아닌 명함 {d}장은 지웁니다(그림 파일은 '병합 보관' 폴더로). [마지막 합치기 되돌리기] 로 되돌릴 수 있습니다."
+msgstr "Merge {n} groups — {d} non-primary cards will be removed (their image files go to the merge-holding folder). You can undo with [Undo Last Merge]."
 
 #: viewer/widgets/bizcard_find_dialog.py
 #: viewer/widgets/bizcard_import_dialog.py
@@ -8052,22 +8180,8 @@ msgid "휴대폰"
 msgstr "Mobile"
 
 #: viewer/widgets/bizcard_find_dialog.py
-#: viewer/widgets/bizcard_import_dialog.py
-msgid "전화"
-msgstr "Phone"
-
-#: viewer/widgets/bizcard_find_dialog.py
 msgid "팩스"
 msgstr "Fax"
-
-#: viewer/widgets/bizcard_find_dialog.py
-#: viewer/widgets/bizcard_import_dialog.py
-msgid "메일"
-msgstr "Email"
-
-#: viewer/widgets/bizcard_find_dialog.py
-msgid "누리집"
-msgstr "Website"
 
 #: viewer/widgets/bizcard_find_dialog.py
 msgid "작업 제목 — 즐겨찾기 탭 이름이 됩니다"
@@ -8168,10 +8282,6 @@ msgid "이 명함을 사진 모드에서 엽니다"
 msgstr "Open this card in photo mode"
 
 #: viewer/widgets/bizcard_find_dialog.py
-msgid "주소록"
-msgstr "Contacts"
-
-#: viewer/widgets/bizcard_find_dialog.py
 msgid "주소록 vCard(.vcf) 가져오기·내보내기 — 구글 주소록·리멤버"
 msgstr "Import or export contacts as vCard (.vcf) — Google Contacts, Remember"
 
@@ -8194,6 +8304,10 @@ msgstr "Export vCard for Remember"
 #: viewer/widgets/bizcard_find_dialog.py
 msgid "명함 폴더의 확인 표 창(명함 관리)을 엽니다"
 msgstr "Open the review table for the business card folder (Manage Business Cards)"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "같은 사람으로 보이는 명함(같은 번호·메일, 번호 오타, 같은 이름·회사)을 묶어 우선순위대로 합칩니다"
+msgstr "Group cards that look like the same person (same number or email, number typo, same name and company) and merge them by priority"
 
 #: viewer/widgets/bizcard_find_dialog.py
 msgid "고친 내용을 저장할까요?"
@@ -8285,12 +8399,12 @@ msgid "체크한 칸을 [내용 복사] 로 글로 복사합니다 — 체크는
 msgstr "[Copy details] copies the checked fields as text — the checks are remembered"
 
 #: viewer/widgets/bizcard_find_dialog.py
-msgid "즐겨찾기"
-msgstr "Favorites"
-
-#: viewer/widgets/bizcard_find_dialog.py
 msgid "인물 사진을 넣는 중입니다 — 끝난 뒤에 다시 하세요."
 msgstr "Adding portrait photos — try again when it finishes."
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "즐겨찾기"
+msgstr "Favorites"
 
 #: viewer/widgets/bizcard_find_dialog.py
 msgid "이름을 비울 수 없습니다."
@@ -8468,12 +8582,8 @@ msgstr "Could not read the file."
 
 #: viewer/widgets/bizcard_find_dialog.py
 #, python-brace-format
-msgid "연락처 {n}명을 읽었습니다 — 이미 있는 {m}명은 빈 칸만 채우고, 새 {a}명은 그림 없는 명함으로 더합니다."
-msgstr "Read {n} contacts — {m} existing people get only their empty fields filled, and {a} new people are added as cards without an image."
-
-#: viewer/widgets/bizcard_find_dialog.py
-msgid "리멤버"
-msgstr "Remember"
+msgid "연락처 {n}명을 읽었습니다 — 모두 그림 없는 명함으로 넣은 뒤 [중복 검토] 창에서 이미 있는 명함과 합칠 것을 고릅니다."
+msgstr "Read {n} contacts — all will be added as cards without images, then you choose which to merge with existing cards in the [Review Duplicates] window."
 
 #: viewer/widgets/bizcard_find_dialog.py
 #: viewer/widgets/bizcard_import_dialog.py
@@ -10364,10 +10474,6 @@ msgstr "Source (EN) — editable"
 #: viewer/widgets/glossary_edit_dialog.py viewer/widgets/translate_dialog.py
 msgid "번역(KO) — 수정 가능"
 msgstr "Translation (KO) — editable"
-
-#: viewer/widgets/glossary_edit_dialog.py viewer/widgets/translate_dialog.py
-msgid "출처"
-msgstr "Source"
 
 #: viewer/widgets/glossary_edit_dialog.py
 msgid "본문 예문 (선택한 용어가 쓰인 문장):"
@@ -17915,4 +18021,7 @@ msgstr "Getting Started"
 
 #~ msgid "할 일 고치기..."
 #~ msgstr "Edit To-do..."
+
+#~ msgid "연락처 {n}명을 읽었습니다 — 이미 있는 {m}명은 빈 칸만 채우고, 새 {a}명은 그림 없는 명함으로 더합니다."
+#~ msgstr "Read {n} contacts — {m} existing people get only their empty fields filled, and {a} new people are added as cards without an image."
 

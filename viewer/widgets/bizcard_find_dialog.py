@@ -672,9 +672,12 @@ class BizcardFindDialog(QDialog):
         self.btn_manage.setToolTip(tr("명함 폴더의 확인 표 창(명함 관리)을 엽니다"))
         self.btn_manage.clicked.connect(lambda _c=False: self.open_manage())
         self.btn_manage.setVisible(callable(getattr(self.parent(), "_action_bizcard_import", None)))
+        self.btn_dupe = QPushButton(tr("중복 검토"))        # §5.24.8 D30 — 번호·메일 등으로 같은 사람 묶어 합치기
+        self.btn_dupe.setToolTip(tr("같은 사람으로 보이는 명함(같은 번호·메일, 번호 오타, 같은 이름·회사)을 묶어 우선순위대로 합칩니다"))
+        self.btn_dupe.clicked.connect(lambda _c=False: self.open_dupes())
         b_close = QPushButton(tr("닫기"))
         b_close.clicked.connect(lambda _c=False: self.close())
-        for b in (self.btn_manage, self.btn_vcard, self.btn_open):   # [명함 관리] → [주소록] → [명함 보기](§5.24.1 '단추', 사용자 지시 261119)
+        for b in (self.btn_manage, self.btn_dupe, self.btn_vcard, self.btn_open):   # [명함 관리] → [주소록] → [명함 보기](§5.24.1 '단추', 사용자 지시 261119)
             bot.addWidget(b)
         bot.addStretch(1)
         bot.addWidget(b_close)
@@ -688,6 +691,29 @@ class BizcardFindDialog(QDialog):
         fn = getattr(self.parent(), "_action_bizcard_import", None)
         if callable(fn):
             fn()
+
+    def open_dupes(self, exec_: bool = True):
+        """[중복 검토](§5.24.8) — 고치던 칸은 먼저 저장을 묻고, 창을 닫으면 목록·즐겨찾기를 다시."""
+        if self._dirty and not self._ask_save():
+            return None
+        if self.photo_busy:
+            QMessageBox.information(self, tr("명함찾기"), tr("인물 사진을 넣는 중입니다 — 끝난 뒤에 다시 하세요."))
+            return None
+        from viewer.widgets.bizcard_dupe_dialog import BizcardDupeDialog
+        dlg = BizcardDupeDialog(self)
+        self.dupe_dlg = dlg                                  # 검사가 찾는다
+        if not exec_:
+            dlg.show()
+            return dlg
+        dlg.exec()
+        self.after_dupes()
+        return dlg
+
+    def after_dupes(self):
+        self._card = None
+        self._dirty = False
+        self.refresh()
+        self._fav_fill()
 
     # ── 저장소 ──
     def _store(self):
@@ -1032,25 +1058,10 @@ class BizcardFindDialog(QDialog):
                                                 "langs_ordered": False})
                                       + [t for t in old_tags if t not in old_auto]))     # 사람이 붙인 해시태그는 그대로
         front, back = c["front"], c.get("back") or ""
-        nf, nb = front, back
-        want = R.card_filename(new["name"], new["company"], os.path.splitext(front)[1] or ".jpg")
-        if (new["name"], new["company"]) != (c.get("name") or "", c.get("company") or "") and os.path.exists(front) \
-                and os.path.normcase(Path(front).stem.split(" (")[0]) != os.path.normcase(Path(want).stem):
-            folder = Path(front).parent
-            same = folder / want
-            p = same if os.path.normcase(str(same)) == os.path.normcase(front) else unique_path(folder, want, set())
-            photos = P.person_photos(front)
-            if not self._rename(front, str(p)):
-                return False
-            nf = str(p)
-            if back and os.path.exists(back):
-                pb = unique_path(folder, p.stem + BACK_SUFFIX + os.path.splitext(back)[1], set())
-                if self._rename(back, str(pb)):
-                    nb = str(pb)
-            for i, ph in enumerate(photos):          # 인물 사진도 새 이름으로(차례 지킴)
-                dst = Path(ph).with_name(P.photo_name(p, i, os.path.splitext(ph)[1]))
-                if os.path.normcase(str(dst)) != os.path.normcase(ph) and not dst.exists():
-                    self._rename(ph, str(dst))
+        got = self.rename_card_files(c, new["name"], new["company"])
+        if got is None:
+            return False
+        nf, nb = got
         fields = dict(new, front=nf, back=nb, tags=new_tags)
         P.update_card(st, c["id"], fields)
         P.forget_srcs(st, c["id"], [k for k in ("name", "company", "dept", "title", "address", "memo")
@@ -1063,6 +1074,37 @@ class BizcardFindDialog(QDialog):
         self.refresh()
         self._fav_fill()
         return True
+
+    def rename_card_files(self, c, name: str, company: str, log=None):
+        """이름·회사가 바뀌면 정리본·뒷면·인물 사진 이름을 `성명_회사명` 으로(한 길) — 반환 (새 앞면, 새 뒷면), 실패면 None.
+        [저장]·중복 검토(§5.24.8) 가 같이 쓴다. log = [(원래, 새)] 를 모을 목록(되돌리기용)."""
+        from viewer.bizcard.apply import unique_path, BACK_SUFFIX
+        front, back = c["front"], c.get("back") or ""
+        nf, nb = front, back
+        want = R.card_filename(name, company, os.path.splitext(front)[1] or ".jpg")
+        if (name, company) != (c.get("name") or "", c.get("company") or "") and os.path.exists(front) \
+                and os.path.normcase(Path(front).stem.split(" (")[0]) != os.path.normcase(Path(want).stem):
+            front = P._real(front)
+            folder = Path(front).parent
+            same = folder / want
+            p = same if os.path.normcase(str(same)) == os.path.normcase(front) else unique_path(folder, want, set())
+            photos = P.person_photos(front)
+            if not self._rename(front, str(p)):
+                return None
+            log is not None and log.append((front, str(p)))
+            nf = str(p)
+            if back and os.path.exists(back):
+                back = P._real(back)
+                pb = unique_path(folder, p.stem + BACK_SUFFIX + os.path.splitext(back)[1], set())
+                if self._rename(back, str(pb)):
+                    nb = str(pb)
+                    log is not None and log.append((back, str(pb)))
+            for i, ph in enumerate(photos):          # 인물 사진도 새 이름으로(차례 지킴)
+                dst = Path(ph).with_name(P.photo_name(p, i, os.path.splitext(ph)[1]))
+                if os.path.normcase(str(dst)) != os.path.normcase(ph) and not dst.exists():
+                    if self._rename(ph, str(dst)):
+                        log is not None and log.append((ph, str(dst)))
+        return nf, nb
 
     def _rename(self, src: str, dst: str, quiet: bool = False) -> bool:
         """앱의 이름 바꾸기 한 길(배경 + `_after_rename` → 태그·색인·명함 DB 가 따라감). 앱 밖이면 그 자리에서."""
@@ -1935,16 +1977,15 @@ class BizcardFindDialog(QDialog):
         if self._dirty and not self._ask_save():
             return None
         st = self._store()
-        plan = P.import_plan(st, persons)
-        m, a = P.import_counts(plan)
         if ask and QMessageBox.question(
                 self, tr("주소록 가져오기"),
-                tr("연락처 {n}명을 읽었습니다 — 이미 있는 {m}명은 빈 칸만 채우고, 새 {a}명은 그림 없는 명함으로 더합니다.").format(
-                    n=len(persons), m=m, a=a)) != QMessageBox.StandardButton.Yes:
+                tr("연락처 {n}명을 읽었습니다 — 모두 그림 없는 명함으로 넣은 뒤 [중복 검토] 창에서 이미 있는 명함과 합칠 것을 고릅니다.").format(
+                    n=len(persons))) != QMessageBox.StandardButton.Yes:
             return None
-        res = P.apply_import(st, plan, tr("주소록"), source)
+        res = P.apply_import(st, persons, tr("주소록"), source)
         self.last_import = res
         self.refresh()
+        self.open_dupes(exec_=ask)              # 가져온 뒤에는 늘 병합 창(§5.24.8, 사용자 지시 261119) — 검사(ask=False)는 모달 없이
         return res
 
     def closeEvent(self, e):

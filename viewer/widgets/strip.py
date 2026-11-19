@@ -281,6 +281,8 @@ class MiniStrip(QWidget):
         super().__init__(parent)
         self._title = title
         self._max = max_items
+        # 261117-64(스크린샷 SOT §4): 마지막으로 붙인 쪽 — 한도를 넘으면 그 반대편(가장 오래된 쪽)부터 뺀다
+        self._last_prepend = False
         self._draggable = draggable
         self._extra_widgets = extra_widgets or []
         # 261112-16(스크린샷 SOT §4.1): 우클릭 메뉴의 앞 항목을 앱이 넣는다 — menu_hook(menu, [고른 경로]) · '삭제' 앞에
@@ -421,9 +423,9 @@ class MiniStrip(QWidget):
             self.list.insertItem(0, item)
         else:
             self.list.addItem(item)
+        self._last_prepend = bool(prepend)
 
-        while self.list.count() > self._max:
-            self.list.takeItem(self.list.count() - 1)
+        self._trim_oldest()
         self._update_count()
         self._renumber()
 
@@ -580,11 +582,18 @@ class MiniStrip(QWidget):
 
 
     def set_max_items(self, n: int):
-        """v1.5.1: 한도 동적 변경. 줄이면 끝에서부터 제거."""
+        """v1.5.1: 한도 동적 변경. 줄이면 가장 오래된 쪽부터 제거(261117-64)."""
         self._max = max(1, int(n))
-        while self.list.count() > self._max:
-            self.list.takeItem(self.list.count() - 1)
+        self._trim_oldest()
         self._update_count()
+        self._renumber()
+
+    def _trim_oldest(self):
+        """261117-64(스크린샷 SOT §4): 한도를 넘는 만큼 **붙인 쪽의 반대편**에서 뺀다 — 끝에 붙였으면 0 번부터,
+        앞에 붙였으면 끝부터. 종전에는 늘 끝부터 빼서, 끝에 붙이는 앱에서는 방금 넣은 컷이 사라졌다.
+        빠진 컷은 카드만 없어지고 PNG 는 임시 폴더에 남는다."""
+        while self.list.count() > self._max:
+            self.list.takeItem(self.list.count() - 1 if self._last_prepend else 0)
 
     def max_items(self) -> int:
         return self._max

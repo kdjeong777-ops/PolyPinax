@@ -372,6 +372,9 @@ try:
     def click_head(col):
         QTest.mouseClick(hh.viewport(), Qt.MouseButton.LeftButton, pos=QPoint(hh.sectionViewportPosition(col) + 5, hh.height() // 2))
         pump(timeout=0.1)
+    a0 = col_names()                                    # I16 처음은 이름 차례
+    chk(a0 == sorted(a0) and hh.sortIndicatorSection() == 0, "I16 목록 처음 정렬은 이름(성명) 차례", str(a0))
+    click_head(1)
     click_head(0)
     a1 = col_names()
     click_head(0)
@@ -738,6 +741,32 @@ try:
     finally:
         QMenu.exec = _orig_exec
         QInputDialog.getText = _orig_get
+    # I16 찾기 칸을 고르면 전체 목록 · 사람 칸 키보드 이동 (사용자 지시 261119)
+    g_fav = dlg.fav_tabs.tabData(1)
+    dlg.fav_add_selected([hong, kim], gid=g_fav)
+    QTest.mouseClick(dlg.fav_tabs, Qt.MouseButton.LeftButton, pos=dlg.fav_tabs.tabRect(1).center())
+    pump(timeout=0.3)
+    n_tab = dlg.table.rowCount()
+    n_all = len(P.find(dlg._store(), ""))
+    dlg.ed_find.clear()
+    QTest.mouseClick(dlg.ed_find, Qt.MouseButton.LeftButton)
+    pump(lambda: dlg.table.rowCount() == n_all, timeout=3)
+    chk(n_tab == len(P.fav_members(dlg._store(), g_fav)) < n_all and dlg.table.rowCount() == n_all and dlg._table_tab is None,
+        "I16 탭 명단을 보다가 빈 찾기 칸을 누르면 전체 목록", "%d %d %d" % (n_tab, dlg.table.rowCount(), n_all))
+    dlg.fav_tabs.setCurrentIndex(1)
+    pump(timeout=0.1)
+    dlg.fav.setFocus()
+    dlg.fav.setCurrentRow(0)
+    pump(timeout=0.1)
+    first = dlg.fav.item(0).data(Qt.ItemDataRole.UserRole)
+    dlg._show_card_id(first)                            # 누르기 전에는 첫 사람을 보고 있다
+    pump(timeout=0.1)
+    shown_first = dlg._card and dlg._card["id"] == first
+    QTest.keyClick(dlg.fav, Qt.Key.Key_Right)
+    pump(timeout=0.2)
+    second = dlg.fav.item(1).data(Qt.ItemDataRole.UserRole) if dlg.fav.count() > 1 else None
+    chk(shown_first and dlg.fav.count() > 1 and dlg._card and dlg._card["id"] == second != first,
+        "I16 사람 칸을 키보드(→)로 옮기면 그 명함을 보임", "%s %s %s" % (first, second, dlg._card and dlg._card["id"]))
     # I8 주소록 가져오기(리멤버 꼴 vCard) — 같은 사람은 빈 칸만, 없는 사람은 그림 없는 명함
     vf = TMP / "contacts.vcf"
     vf.write_text("BEGIN:VCARD\r\nVERSION:3.0\r\nN:;김철수;;;\r\nTEL;TYPE=work,cell:010-0000-0003\r\nEMAIL;TYPE=work:kim@example.com\r\n"

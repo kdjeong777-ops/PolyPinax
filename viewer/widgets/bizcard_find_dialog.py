@@ -32,6 +32,7 @@ PHOTO_ICON = 72                     # 인물 사진 썸네일 줄(큰 화면은 
 DETAIL_W = 330                      # 처음 너비 — 세부 칸(§5.24 '처음 너비': 목록은 네 열 최소 폭, 나머지는 사진창)
 FIND_DELAY_MS = 250
 RECENT = -1                         # '최근' 탭의 tabData(명함 DB 의 탭 id 와 겹치지 않음, §5.24.2)
+FAV_KEY_MS = 120                    # 사람 칸을 키보드로 넘길 때 — 멈춘 뒤 마지막 사람만 그린다(§5.24.2)
 RECENT_MS = 3000                    # 세부 칸에 이만큼 넘게 보이면 '최근' 에 넣는다(D27)
 FAV_BG = "#cfe2f6"                  # 사진도 명함도 없을 때 — 옅은 파랑
 IMG_FILTER = " ".join("*" + e for e in R.IMG_EXTS)
@@ -433,11 +434,17 @@ class BizcardFindDialog(QDialog):
         self._find_timer.setInterval(FIND_DELAY_MS)
         self._find_timer.timeout.connect(self.refresh)
         self.ed_find.textChanged.connect(lambda _t: self._search_mode())
+        self.ed_find.installEventFilter(self)                   # 찾기 칸을 고르면 찾기 결과로(§5.24.2 '탭 줄')
         self.cb_period.currentIndexChanged.connect(self._on_period)
         self._recent_timer = QTimer(self)
         self._recent_timer.setSingleShot(True)
         self._recent_timer.setInterval(RECENT_MS)
         self._recent_timer.timeout.connect(self._recent_hit)
+        self._fav_key_timer = QTimer(self)
+        self._fav_key_timer.setSingleShot(True)
+        self._fav_key_timer.setInterval(FAV_KEY_MS)
+        self._fav_key_timer.timeout.connect(self._fav_key_show)
+        self._fav_key_id = None
 
         # ── 왼쪽: 즐겨찾기 줄 + [표 | 세부] ──
         left = QWidget()
@@ -490,6 +497,7 @@ class BizcardFindDialog(QDialog):
         self.fav.reordered.connect(self._fav_save_order)
         self.fav.deleteRequested.connect(lambda: self.fav_remove_selected())
         self.fav.itemClicked.connect(lambda it: self._show_card_id(it.data(ROLE)))
+        self.fav.currentItemChanged.connect(self._fav_current)    # 키보드로 옮겨도 그 명함(§5.24.2)
         self.fav.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.fav.customContextMenuRequested.connect(self._fav_menu)
         lv.addWidget(self.fav)
@@ -510,7 +518,7 @@ class BizcardFindDialog(QDialog):
         for c, w in ((C_NAME, 90), (C_COMP, 150), (C_TITLE, 80)):
             self.table.setColumnWidth(c, w)
         self.table.setSortingEnabled(True)                   # 머리말을 누르면 정렬, 다시 누르면 반대(§5.24)
-        self.table.sortByColumn(C_DATE, Qt.SortOrder.DescendingOrder)
+        self.table.sortByColumn(C_NAME, Qt.SortOrder.AscendingOrder)   # 처음은 이름 차례(§5.24.1, 사용자 지시 261119)
         self.table.currentCellChanged.connect(self._on_current)
         self.table.cellClicked.connect(lambda r, _c: self._on_clicked(r))
         self.table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
@@ -790,6 +798,7 @@ class BizcardFindDialog(QDialog):
 
     # ── 한 명함 ──
     def _load(self, card):
+        self._fav_key_timer.stop()                         # 다른 길로 명함을 보이면 키보드 대기는 버린다
         self._card = card
         self._side = "front"
         self._loading = True
@@ -1424,8 +1433,33 @@ class BizcardFindDialog(QDialog):
     def todo_delete(self, gid, ask: bool = True) -> bool:
         return P.todo_info(self._store(), gid) is not None and self.tab_delete(gid, ask=ask)
 
+    def _fav_current(self, cur, _prev):
+        """키보드로 옮김 — 빠르게 넘겨도 멈춘 뒤 마지막 사람만 보인다(메인을 세우지 않게, FAV_KEY_MS)."""
+        if cur is not None and not getattr(self, "_fav_filling", False):
+            self._fav_key_id = cur.data(ROLE)
+            self._fav_key_timer.start()
+
+    def _fav_key_show(self):
+        if self._fav_key_id is not None:
+            self._show_card_id(self._fav_key_id)
+
+    def eventFilter(self, obj, e):
+        from PyQt6.QtCore import QEvent
+        if obj is getattr(self, "ed_find", None) and e.type() in (QEvent.Type.FocusIn, QEvent.Type.MouseButtonPress) \
+                and self._table_tab is not None:
+            self._table_tab = None                         # 탭 명단 보기 → 찾기 결과(비었으면 전체)
+            QTimer.singleShot(0, self.refresh)
+        return super().eventFilter(obj, e)
+
     def _fav_fill(self):
         """지금 탭의 사람 칸 — 우선 옅은 파랑 + 첫 글자, 그림은 배경에서 읽어 바꾼다."""
+        self._fav_filling = True
+        try:
+            self._fav_fill_items()
+        finally:
+            self._fav_filling = False
+
+    def _fav_fill_items(self):
         self.fav.clear()
         gid = self._fav_gid()
         self._fav_gen += 1

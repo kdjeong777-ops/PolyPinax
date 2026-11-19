@@ -1673,9 +1673,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         from viewer.widgets.recent_popup import RecentSearchPopup
         self._recent_popup = RecentSearchPopup(self.toolbar_search, self._open_recent_search)
         self._recent_popup.set_items(getattr(self, "_recent_searches", None) or [])
-        # 261117-39·-42(검색창 SOT §6.1): 찾은 글은 떠나면 흐리게 — 다시 누르면 다 골라 새로 쓰기, → 로 되살리기
-        from viewer.widgets.search_ghost import SearchGhost
-        self._search_ghost = SearchGhost(self.toolbar_search)
+        # 261117-39·-42·-60(검색창 SOT §6.1): 찾은 글은 떠나면 흐리게 — 다시 누르면 커서 맨 앞·첫 입력에 옛 글 지움, → 로 되살리기
+        from viewer.widgets.search_ghost import SearchGhost      # 최근 목록 팝업도 키를 받으므로 extra 로
+        self._search_ghost = SearchGhost(self.toolbar_search, extra=(self._recent_popup.completer.popup(),))
 
     def _style_panel_toolbar(self, dark: bool):
         """260606-26: 세부 줄(종전 패널) 버튼 테두리/배경을 테마별로. 라이트=짙은 회색,

@@ -1,19 +1,22 @@
 # -*- coding: utf-8 -*-
-"""261117-39·261117-42(검색창 SOT §6.1): 검색 칸 공통 — 찾은 글은 떠나면 흐리게.
+"""261117-39·261117-42·261117-60(검색창 SOT §6.1): 검색 칸 공통 — 찾은 글은 떠나면 흐리게.
 
 사용자 지시 '검색한 후 다른 항목을 선택하여 선택이 해제되면 검색한 내용이 흐리게 … 다시 포인터되면 새로운 키워드로
-지우지 않고 그냥 작성 … 화살표키로 우측으로 이동시 다시 사용', 보고 '검색창(책갈피창, 명함창 등)에서 … 적용 안됐어'.
+지우지 않고 그냥 작성 … 화살표키로 우측으로 이동시 다시 사용', 보고 '검색창(책갈피창, 명함창 등)에서 … 적용 안됐어',
+보고(-60) '다시 선택되면 커서가 가장 앞에 있게하고, 글을 쓸 경우 뒤에 있는 글자가 지워지고, 쓴 글만 있도록'.
 
 A. 탭 줄 칸 — 실제 Enter 로 찾고 칸이 숨었다 다시 보이면 글은 그대로·흐린 색
 B. 결과는 그대로(다시 찾지 않음)
-C. 실제 마우스로 다시 누르면 다 고르고(흐린 채) 최근 목록은 전부 · 친 글이 곧 새 검색어(제 색)
-D. 찾은 뒤 다른 항목을 실제 마우스로 누르면 흐림 · 다시 누르고 → 면 고름이 풀리고 글·제 색 되살림
+C. 실제 마우스로 다시 누르면 흐린 채·고름 없이 커서 맨 앞, 최근 목록은 전부 · 목록이 열린 채 친 글이 옛 글을 지우고 새 검색어(제 색)
+D. 찾은 뒤 다른 항목을 실제 마우스로 누르면 흐림 · 글 가운데를 누르기·두 번 누르기도 커서 맨 앞 · ←·Home 은 흐린 채 · → 면 글·제 색·커서 끝
+D2. 첫 입력 — Backspace·붙여넣기(Ctrl+V)·한글 조합(QInputMethodEvent preedit→commit)도 옛 글을 지우고 친 것만
 E. Enter 칸은 쳐 놓기만 한 글은 떠나도 그대로
-F. 검색 패널 칸 — Enter 로 찾은 글·다른 길(최근 검색어)로 찾은 글 모두 흐림, 다시 누르고 치면 새 글
-G. 책갈피창 거르기(즉시 칸) — 친 글은 떠나면 흐림, 걸러 둔 것(칸 글)은 그대로, → 로 제 색 · 팔레트 길(스타일시트 없는 칸)도 되돌림
+F. 검색 패널 칸 — Enter 로 찾은 글·다른 길(최근 검색어)로 찾은 글 모두 흐림, 다시 누르면 커서 맨 앞, 치면 새 글
+G. 책갈피창 거르기(즉시 칸) — 친 글은 떠나면 흐림, 걸러 둔 것(칸 글)은 그대로, Tab 으로 와도 커서 맨 앞(다 고르지 않음),
+   → 로 제 색 · 팔레트 길(스타일시트 없는 칸)도 되돌림 · 첫 글자로 거르기 칸 글이 곧바로 그 글자 하나
 H. 창 바꾸기로 떠나는 초점은 흐리지 않는다
 I. §6.1 표의 모든 칸에 SearchGhost 가 붙어 있다(즉시·Enter 구분까지)
-수정 전 코드(-39: 탭 줄 칸만, 칸을 비움)는 A 부터 실패한다.
+수정 전 코드(-42: 다시 누르면 다 고름·커서 끝)는 C·D·D2·F·G 에서 실패한다.
 """
 import os, sys, faulthandler, tempfile, shutil, re
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -25,7 +28,7 @@ faulthandler.dump_traceback_later(180, exit=True)
 from PyQt6.QtCore import QStandardPaths, Qt, QPoint, QEvent
 QStandardPaths.setTestModeEnabled(True)             # 검사 작성 SOT §14.7.2
 from PyQt6.QtWidgets import QApplication
-from PyQt6.QtGui import QPalette, QFocusEvent
+from PyQt6.QtGui import QPalette, QFocusEvent, QInputMethodEvent
 from PyQt6.QtTest import QTest
 
 app = QApplication.instance() or QApplication(sys.argv[:1])
@@ -63,8 +66,27 @@ def type_(ed, s):
     QTest.qWait(60)
 
 
-def click(w):
-    QTest.mouseClick(w, Qt.MouseButton.LeftButton, pos=QPoint(min(40, w.width() // 2), w.height() // 2)); QTest.qWait(120)
+def click(w, x=None):
+    QTest.mouseClick(w, Qt.MouseButton.LeftButton, pos=QPoint(min(40, w.width() // 2) if x is None else x, w.height() // 2)); QTest.qWait(120)
+
+
+def mid_x(ed):
+    """칸 글 가운데의 x — 글 사이를 누른다(커서가 맨 앞으로 가야 한다)."""
+    r = ed.cursorRect()
+    m = ed.textMargins()
+    fm = ed.fontMetrics()
+    return ed.contentsRect().left() + m.left() + 2 + fm.horizontalAdvance(ed.text()[: max(1, len(ed.text()) // 2)])
+
+
+def at_home(ed, txt):
+    return ed.text() == txt and not ed.hasSelectedText() and ed.cursorPosition() == 0 and looks_dim(ed)
+
+
+def ime(ed, preedit="", commit=""):
+    e = QInputMethodEvent(preedit, [])
+    if commit:
+        e.setCommitString(commit)
+    QApplication.sendEvent(target(ed), e); QTest.qWait(60)
 
 
 def close_popup(ed):
@@ -109,13 +131,14 @@ try:
     chk(calls == ["asphalt"] and mw.search_bar.edit.text() == "asphalt", "B 다시 찾지 않고 검색 막대 글도 남는다")
 
     # C
-    click(ed)
-    chk(ed.selectedText() == "asphalt" and looks_dim(ed), "C 다시 누르면 다 고르고 흐린 채", "sel=%r" % ed.selectedText())
+    click(ed, mid_x(ed))
+    chk(at_home(ed, "asphalt"), "C 글 가운데를 다시 눌러도 흐린 채·고름 없이 커서 맨 앞",
+        "sel=%r pos=%d dim=%s" % (ed.selectedText(), ed.cursorPosition(), looks_dim(ed)))
     pop = QApplication.activePopupWidget()
     n = pop.model().rowCount() if pop is not None else -1
     chk(n == len(mw._recent_searches) and n >= 3, "C 흐린 글로 누르면 최근 목록은 전부", "%d / %d" % (n, len(mw._recent_searches)))
     type_(ed, "crack")
-    chk(ed.text() == "crack" and not looks_dim(ed), "C 친 글이 곧 새 검색어(제 색)", repr(ed.text()))
+    chk(ed.text() == "crack" and not looks_dim(ed), "C 목록이 열린 채 친 글이 옛 글을 지우고 새 검색어(제 색)", repr(ed.text()))
     close_popup(ed)
 
     # D
@@ -125,10 +148,37 @@ try:
     chk(ed.text() == "crack" and not looks_dim(ed), "준비 — 찾은 글로 칸에 있다(제 색)")
     click(tree)
     chk(not ed.hasFocus() and looks_dim(ed) and ed.text() == "crack", "D 실제 마우스로 다른 항목을 누르면 흐림")
-    click(ed); close_popup(ed)
+    click(ed, mid_x(ed)); close_popup(ed)
+    chk(at_home(ed, "crack"), "D 다시 누르면 커서 맨 앞", "pos=%d sel=%r" % (ed.cursorPosition(), ed.selectedText()))
+    QTest.mouseDClick(ed, Qt.MouseButton.LeftButton, pos=QPoint(mid_x(ed), ed.height() // 2)); QTest.qWait(120); close_popup(ed)
+    chk(at_home(ed, "crack"), "D 두 번 눌러도 고르지 않고 커서 맨 앞", "pos=%d sel=%r" % (ed.cursorPosition(), ed.selectedText()))
+    key(ed, Qt.Key.Key_Left); key(ed, Qt.Key.Key_Home)
+    chk(at_home(ed, "crack"), "D ←·Home 은 흐린 채 그대로")
     key(ed, Qt.Key.Key_Right)
     chk(ed.text() == "crack" and not ed.hasSelectedText() and ed.cursorPosition() == 5 and not looks_dim(ed),
         "D → 로 고름이 풀리고 글·제 색 되살림", "pos=%d sel=%r" % (ed.cursorPosition(), ed.selectedText()))
+
+    # D2 — 첫 입력: Backspace·붙여넣기·한글 조합
+    def search_and_leave(s):
+        ed.selectAll(); type_(ed, s); close_popup(ed)
+        key(ed, Qt.Key.Key_Return); QTest.qWait(150)
+        hide_panel(); click(ed, mid_x(ed))
+        return at_home(ed, s)
+    chk(search_and_leave("crack"), "준비 — 찾은 글로 다시 들어와 커서 맨 앞")
+    key(ed, Qt.Key.Key_Backspace)
+    chk(ed.text() == "" and not looks_dim(ed), "D2 Backspace 첫 입력 — 옛 글이 지워진다", repr(ed.text()))
+    close_popup(ed)
+    chk(search_and_leave("seal"), "준비 — seal 로 찾고 다시 들어옴")
+    QApplication.clipboard().setText("rut")
+    QTest.keyClick(target(ed), Qt.Key.Key_V, Qt.KeyboardModifier.ControlModifier); QTest.qWait(80)
+    chk(ed.text() == "rut" and not looks_dim(ed), "D2 붙여넣기 첫 입력 — 붙인 글만", repr(ed.text()))
+    close_popup(ed)
+    chk(search_and_leave("rut"), "준비 — rut 로 찾고 다시 들어옴")
+    ime(ed, preedit="\u314e")
+    chk(ed.text() == "" and not looks_dim(ed), "D2 한글 조합 첫 글자 — 조합 중에 옛 글이 지워진다", repr(ed.text()))
+    ime(ed, commit="\ud55c")
+    chk(ed.text() == "\ud55c", "D2 한글 조합을 마치면 친 글만", repr(ed.text()))
+    close_popup(ed)
 
     # E
     ed.selectAll(); type_(ed, "draft"); close_popup(ed)
@@ -145,8 +195,8 @@ try:
     click(tree)
     chk(sb.text() == "pave" and looks_dim(sb), "F 검색 패널 칸 — Enter 로 찾은 글은 떠나면 흐림",
         "%s %r" % (calls, sb.text()))
-    click(sb)
-    chk(sb.selectedText() == "pave", "F 다시 누르면 다 고른다", repr(sb.selectedText()))
+    click(sb, mid_x(sb))
+    chk(at_home(sb, "pave"), "F 다시 누르면 커서 맨 앞", "pos=%d sel=%r" % (sb.cursorPosition(), sb.selectedText()))
     type_(sb, "x")
     chk(sb.text() == "x" and not looks_dim(sb), "F 친 글이 새 글", repr(sb.text()))
     click(tree)
@@ -164,11 +214,17 @@ try:
     click(fe); type_(fe, "abc")
     click(sb)
     chk(fe.text() == "abc" and looks_dim(fe), "G 즉시 칸 — 친 글은 떠나면 흐리고 걸러 둔 글은 그대로", repr(fe.text()))
-    click(fe)
-    chk(fe.selectedText() == "abc", "G 다시 누르면 다 고른다")
+    fe.setFocus(Qt.FocusReason.TabFocusReason); QTest.qWait(80)
+    chk(at_home(fe, "abc"), "G Tab 으로 와도 다 고르지 않고 커서 맨 앞", "pos=%d sel=%r" % (fe.cursorPosition(), fe.selectedText()))
     key(fe, Qt.Key.Key_Right)
     chk(not looks_dim(fe) and not fe.testAttribute(Qt.WidgetAttribute.WA_SetPalette),
         "G → 로 제 색 — 팔레트는 테마를 계속 따른다(직접 둔 팔레트 없음)")
+    seen = []
+    fe.textChanged.connect(seen.append)
+    click(sb); click(fe, mid_x(fe))
+    chk(at_home(fe, "abc"), "준비 — 다시 흐린 채 들어옴")
+    seen.clear(); type_(fe, "q")
+    chk(fe.text() == "q" and seen == ["q"], "G 첫 글자로 거르기 칸 글이 곧바로 그 글자 하나(옛 글이 섞인 글로 거르지 않음)", str(seen))
 
     # H — 창 바꾸기
     click(fe); fe.end(False)
@@ -198,7 +254,7 @@ try:
     miss = []
     for f, name, instant in TABLE:
         src = open(os.path.join(HERE, f), encoding="utf-8").read()
-        m = re.search(r"SearchGhost\(%s(, instant=True)?\)" % re.escape(name), src)
+        m = re.search(r"SearchGhost\(%s(, instant=True)?(, extra=[^\n]*)?\)" % re.escape(name), src)
         if not m or bool(m.group(1)) != instant:
             miss.append("%s %s" % (f, name))
     chk(not miss, "I §6.1 표의 모든 칸에 붙어 있다(즉시·Enter 구분까지)", str(miss))

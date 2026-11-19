@@ -61,7 +61,7 @@ class RecentSearchPopup(QObject):
         if not self.items:
             return
         ed = self.edit
-        armed = ed.hasSelectedText() and ed.selectedText() == ed.text()   # 261117-42: 다 고른 글(흐린 글) = 새로 쓸 참 — 전부
+        armed = bool(ed.property("searchGhostDim"))       # 261117-42·-60(검색창 SOT §6.1): 흐린 글 = 새로 쓸 참 — 전부
         self.completer.setCompletionPrefix("" if armed else ed.text())
         if self.completer.completionCount() <= 0:
             self.completer.popup().hide()

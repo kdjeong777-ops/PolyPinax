@@ -363,9 +363,15 @@ try:
     pump(timeout=0.2)
     tw = dlg.table_min_width()
     ls, ps = dlg.split.sizes()
-    chk(abs(dlg.mid.sizes()[0] - tw) <= 30 and dlg.table.viewport().width() >= sum(dlg.table.columnWidth(c) for c in range(3))
+    heads = [dlg.table.horizontalHeaderItem(c).text() for c in range(dlg.table.columnCount())]
+    chk(abs(dlg.mid.sizes()[0] - tw) <= 30 and heads[3:4] == ["전화"]
+        and dlg.table.viewport().width() >= dlg.table.columnViewportPosition(3) + dlg.table.columnWidth(3)
         and ps >= 0.35 * (ls + ps) and ps > dlg.mid.sizes()[0],
-        "I11 처음 너비 — 목록은 스캔일까지 보이는 최소 폭, 사진창이 목록보다 넓음", "%s %s tw=%s" % (dlg.split.sizes(), dlg.mid.sizes(), tw))
+        "I11·I17 처음 너비 — 목록은 전화까지 보이는 최소 폭, 사진창이 목록보다 넓음", "%s %s tw=%s" % (dlg.split.sizes(), dlg.mid.sizes(), tw))
+    r_h = next(r for r in range(dlg.table.rowCount()) if dlg.table.item(r, 0).text() == "홍길동")
+    chk(heads == ["이름", "회사", "직함", "전화", "메일", "스캔일"] and dlg.table.item(r_h, 3).text() == "010-0000-0001"
+        and dlg.table.item(r_h, 4).text() == "hong@example.com",
+        "I17 목록 직함 오른쪽에 전화(휴대폰)·메일 열", "%s %s" % (heads, [dlg.table.item(r_h, c).text() for c in range(dlg.table.columnCount())]))
     # I2 머리말 정렬 — 실제 마우스로 머리말을 누름
     hh = dlg.table.horizontalHeader()
     col_names = lambda: [dlg.table.item(r, 0).text() for r in range(dlg.table.rowCount())]

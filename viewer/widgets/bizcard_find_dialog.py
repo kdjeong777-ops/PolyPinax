@@ -24,7 +24,7 @@ from viewer.bizcard import people as P
 from viewer.bizcard import recognize as R
 from viewer.bizcard import vcard as V
 
-C_NAME, C_COMP, C_TITLE, C_DATE = range(4)
+C_NAME, C_COMP, C_TITLE, C_PHONE, C_MAIL, C_DATE = range(6)   # 전화·메일 열(§5.9 '결과', 사용자 지시 261119)
 ROLE = Qt.ItemDataRole.UserRole
 FAV_ICON = 56                       # 즐겨찾기 사람 칸 그림(카톡 꼴 둥근 네모)
 FAV_ROWS = 2                        # 즐겨찾기 줄 최대 높이(줄 수) — 넘치면 그 칸 안에서 굴림
@@ -40,6 +40,17 @@ IMG_FILTER = " ".join("*" + e for e in R.IMG_EXTS)
 FIELDS = (("name", tr_noop("이름")), ("company", tr_noop("회사")), ("dept", tr_noop("부서")), ("title", tr_noop("직함")), ("cell", tr_noop("휴대폰")), ("work", tr_noop("전화")),
           ("fax", tr_noop("팩스")), ("email", tr_noop("메일")), ("address", tr_noop("주소")), ("url", tr_noop("누리집")))
 MEMO_LABEL = tr_noop("메모")
+
+
+def _list_phone(c) -> str:
+    """목록 '전화' 칸 — 휴대폰, 없으면 첫 전화(§5.9 '결과')."""
+    ph = [p for p in (c.get("phones") or []) if isinstance(p, (list, tuple)) and len(p) >= 2]
+    return next((n for k, n in ph if k == "cell"), "") or next((n for k, n in ph if k != "fax"), "")
+
+
+def _list_mail(c) -> str:
+    e = (c.get("emails") or [""])[0]
+    return str(e[-1] if isinstance(e, (list, tuple)) else e or "")
 
 
 def _today() -> str:
@@ -503,8 +514,8 @@ class BizcardFindDialog(QDialog):
         lv.addWidget(self.fav)
 
         mid = self.mid = QSplitter(Qt.Orientation.Horizontal)
-        self.table = QTableWidget(0, 4)
-        self.table.setHorizontalHeaderLabels([tr("이름"), tr("회사"), tr("직함"), tr("스캔일")])
+        self.table = QTableWidget(0, 6)
+        self.table.setHorizontalHeaderLabels([tr("이름"), tr("회사"), tr("직함"), tr("전화"), tr("메일"), tr("스캔일")])
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
@@ -515,7 +526,8 @@ class BizcardFindDialog(QDialog):
         hh.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
         hh.setStretchLastSection(True)
         hh.setSortIndicatorShown(True)
-        for c, w in ((C_NAME, 90), (C_COMP, 150), (C_TITLE, 80)):
+        phone_w = self.table.fontMetrics().horizontalAdvance("010-0000-0000") + 20
+        for c, w in ((C_NAME, 90), (C_COMP, 150), (C_TITLE, 80), (C_PHONE, phone_w), (C_MAIL, 170)):
             self.table.setColumnWidth(c, w)
         self.table.setSortingEnabled(True)                   # 머리말을 누르면 정렬, 다시 누르면 반대(§5.24)
         self.table.sortByColumn(C_NAME, Qt.SortOrder.AscendingOrder)   # 처음은 이름 차례(§5.24.1, 사용자 지시 261119)
@@ -725,7 +737,7 @@ class BizcardFindDialog(QDialog):
             self.table.setRowCount(len(self._rows))
             for r, c in enumerate(self._rows):
                 for col, val in ((C_NAME, c.get("name")), (C_COMP, c.get("company")), (C_TITLE, c.get("title")),
-                                 (C_DATE, c.get("scanned"))):
+                                 (C_PHONE, _list_phone(c)), (C_MAIL, _list_mail(c)), (C_DATE, c.get("scanned"))):
                     it = QTableWidgetItem(val or "")
                     if col == C_NAME:
                         it.setData(ROLE, c["id"])
@@ -904,14 +916,13 @@ class BizcardFindDialog(QDialog):
             self._init_sizes()
 
     def table_min_width(self) -> int:
-        """네 열(이름·회사·직함·스캔일)이 다 보이는 표 폭."""
+        """이름·회사·직함·전화가 다 보이는 표 폭(§5.24.1 '처음 너비' — 메일·스캔일은 끌어 넓히면)."""
         t = self.table
-        date_w = t.fontMetrics().horizontalAdvance("0000-00-00") + 24     # 마지막 열은 늘어나므로 글자 폭으로 센다
-        return (sum(t.columnWidth(c) for c in range(t.columnCount() - 1)) + date_w
+        return (sum(t.columnWidth(c) for c in range(C_PHONE + 1))
                 + t.verticalScrollBar().sizeHint().width() + 2 * t.frameWidth() + 4)
 
     def _init_sizes(self):
-        """처음 너비(§5.24, 사용자 지시 261118) — 목록은 스캔일까지 보이는 최소 폭, 세부는 DETAIL_W, 나머지는 사진창.
+        """처음 너비(§5.24.1) — 목록은 전화까지 보이는 최소 폭, 세부는 DETAIL_W, 나머지는 사진창.
         창을 열 때 한 번만 — 그 뒤는 사용자가 끌어 바꾼다."""
         tw = self.table_min_width()
         self.mid.setSizes([tw, DETAIL_W])

@@ -247,6 +247,11 @@ class BizcardImportDialog(QDialog):
         top.addWidget(self.btn_reread)
         from viewer.widgets.icons import drop_button
         drop_button(self.btn_reread)
+        # 명함 SOT §5.26(D31): 한 사진에 명함 여럿 — 창을 열 때·새 명함 때 저절로 세고, 이 단추는 고른 줄을 손으로
+        self.btn_multi = QPushButton(tr("다중 명함 나누기"))
+        self.btn_multi.setToolTip(tr("고른 줄의 사진에 명함이 여럿이면 명함마다 잘라 따로 읽습니다 — 찾은 테두리를 고치거나 새로 그릴 수 있습니다"))
+        self.btn_multi.clicked.connect(lambda _c=False: self.split_selected())
+        top.addWidget(self.btn_multi)
         # P3(명함 SOT §5.8): vCard 내보내기·기존 vCard 에 합치기
         self.btn_vcard = QPushButton("vCard")
         self.btn_vcard.setToolTip(tr("적용한 명함을 vCard(.vcf) 로 내보내거나 기존 vCard 에 합칩니다 — 구글 연락처·휴대폰에서 읽습니다"))
@@ -340,7 +345,9 @@ class BizcardImportDialog(QDialog):
         v.addLayout(bot)
 
         self._fill_empty_rows()
-        QTimer.singleShot(0, self._start)
+        self.multi_found = []
+        self.multi_dlg = None
+        QTimer.singleShot(0, self._start)           # 다 읽은 뒤 아직 안 센 사진을 다중 명함인지 센다(§5.26, _on_done)
 
     # ── 표 ──
     def _fill_empty_rows(self, start: int = 0):
@@ -804,6 +811,126 @@ class BizcardImportDialog(QDialog):
             QMessageBox.information(self, "vCard", msg + "\n" + str(path))
         return stats
 
+    # ── 다중 명함 사진 나누기 (명함 SOT §5.26, D31) ──
+    def _multi_busy(self) -> bool:
+        w = getattr(self, "_multi_worker", None)
+        return (w is not None and not w.done_event.is_set()) or getattr(self, "_split_busy", False) \
+            or (self.multi_dlg is not None and self.multi_dlg.isVisible())
+
+    def _multi_unseen(self, paths) -> list:
+        from viewer.bizcard import multisplit as M
+        from viewer.bizcard.store import source_sig
+        seen = self._store().meta_get(M.SEEN_KEY) or {}
+        return [p for p in paths if seen.get(os.path.normcase(os.path.abspath(p))) != source_sig([p])]
+
+    def _multi_pass(self, paths, after, force: bool = False, show_all: bool = False):
+        """사진들(None = 폴더의 세어 볼 사진 중 아직 안 센 것)을 배경에서 세고, 여럿이면 확인 창. 끝나면 after()
+        (나눴으면 폴더를 다시 훑은 뒤 모두 읽기)."""
+        from viewer.bizcard import multisplit as M
+        from viewer.bizcard.importer import MultiWorker
+        if paths is None:
+            paths = self._multi_unseen(M.candidates(self._folder))
+        if not paths:
+            after()
+            return
+        self.multi_found = []
+        self._multi_after = after
+        self._bar_saved = (self.bar.minimum(), self.bar.maximum(), self.bar.value(), self.bar.format())
+        w = MultiWorker(paths, self._db, force=force, show_all=show_all)
+        self._multi_worker = w
+        self.bar.setRange(0, max(1, len(paths)))
+        self.bar.setValue(0)
+        self.bar.setFormat(tr("다중 명함 찾는 중 %v / %m"))
+        w.found.connect(self._multi_one)
+        w.progressed.connect(self._on_progress)
+        w.finishedAll.connect(self._multi_done)
+        from viewer.workers import run_in_thread
+        keep = getattr(self._mw, "_thread_keep", None)
+        run_in_thread(w, keep if keep is not None else _KEEP)
+
+    def _multi_one(self, path, quads, pv):
+        self.multi_found.append((path, quads, pv))
+
+    def _multi_done(self, ok):
+        after = getattr(self, "_multi_after", None) or (lambda: None)
+        if not ok or not self.multi_found or self._closing:
+            after()
+            return
+        from viewer.widgets.bizcard_multi_dialog import MultiSplitDialog
+        st = self._store()
+        old = {p: 1 for p, _q, _v in self.multi_found if st.card_by_src(p) is not None}
+        dlg = MultiSplitDialog(self.multi_found, self, old_counts=old)
+        self.multi_dlg = dlg
+        dlg.finished.connect(lambda _r: self._multi_chosen(dlg, after))
+        dlg.open()                                   # 창 모달 — 닫히면 _multi_chosen
+
+    def _multi_chosen(self, dlg, after):
+        from viewer.bizcard import multisplit as M
+        from viewer.bizcard.store import source_sig
+        st = self._store()
+        if dlg.skipped:                              # 나누지 않기로 한 사진 — 다음엔 묻지 않는다
+            seen = dict(st.meta_get(M.SEEN_KEY) or {})
+            for p in dlg.skipped:
+                seen[os.path.normcase(os.path.abspath(p))] = source_sig([p])
+            st.meta_set(M.SEEN_KEY, seen)
+        if not dlg.jobs:
+            after()
+            return
+        from viewer.bizcard.importer import SplitWorker
+        from viewer.workers import run_in_thread
+        self._split_busy = True
+        self.bar.setFormat(tr("다중 명함 자르는 중"))
+        w = SplitWorker(dlg.jobs)
+        self._split_worker = w
+        w.done.connect(self._split_done)
+        keep = getattr(self._mw, "_thread_keep", None)
+        run_in_thread(w, keep if keep is not None else _KEEP)
+
+    def _split_done(self, out):
+        """잘랐으면 그 원본으로 만든 예전 명함(한 장으로 잘못 읽힌 것)은 지우고(휴지통, D31) 폴더를 다시 훑어 모두 읽는다."""
+        from viewer.bizcard import people as P
+        if self._closing:
+            self._split_busy = False
+            return
+        st = self._store()
+        cut = [p for p, made in out.items() if made]
+        self.multi_split = {p: list(made) for p, made in out.items() if made}
+        files, olds = [], []
+        for p in cut:
+            c = st.card_by_src(p)
+            if c is not None:
+                olds.append(p)
+                files += [x for grp in P.card_files(c)[1:] for x in grp]      # 정리본·인물 사진(원본은 이미 '다중 원본' 으로)
+        failed = trash_paths(self, self._mw, files) if files else set()
+        for p in olds:
+            c = st.card_by_src(p)
+            if c is not None and not any(x in failed for grp in P.card_files(c)[1:] for x in grp):
+                st.delete_src(p)
+        self._split_busy = False
+        if self._closing:
+            return
+        self._items = scan_folder(self._folder)
+        self.table.setRowCount(0)
+        self.table.setRowCount(len(self._items))
+        self._fill_empty_rows(0)
+        self._applied_keys = None
+        self.lbl_folder.setText(tr("폴더: {path}  ·  명함 {n}장").format(path=str(self._folder), n=len(self._items)))
+        self._start()
+
+    def split_selected(self):
+        """[다중 명함 나누기] — 고른 줄의 사진을 다시 세어(한 장 미만도) 확인 창에서 테두리를 고치거나 그려 나눈다."""
+        if (self._worker is not None and not self._worker.done_event.is_set()) or self._multi_busy():
+            QMessageBox.information(self, tr("다중 명함 나누기"), tr("지금 읽는 중입니다 — 다 읽은 뒤에 다시 하세요."))
+            return False
+        rows = sorted({i.row() for i in self.table.selectedIndexes()})
+        paths = [self._items[r].front for r in rows if 0 <= r < len(self._items) and self._items[r].front
+                 and not self._items[r].back]
+        if not paths:
+            QMessageBox.information(self, tr("다중 명함 나누기"), tr("나눌 사진 줄을 고르세요(뒷면이 짝지어진 명함은 빼고)."))
+            return False
+        self._multi_pass(paths, lambda: None, force=True, show_all=True)
+        return True
+
     def _store(self):
         if getattr(self, "_st", None) is None:
             from viewer.bizcard.store import BizcardStore
@@ -831,8 +958,9 @@ class BizcardImportDialog(QDialog):
             self._apply_filter_row(r)
 
     def read_new(self, ask: bool = True) -> int:
-        """[새 명함 읽기](P5, D17) — 폴더를 다시 훑어 표에 없는 원천만 끝에 더하고 그 줄들만 읽는다. 반환 = 더한 장 수."""
-        if (self._worker is not None and not self._worker.done_event.is_set()) or self.region_busy:
+        """[새 명함 읽기](P5, D17) — 폴더를 다시 훑어 표에 없는 원천만 끝에 더하고 그 줄들만 읽는다. 반환 = 더한 장 수.
+        다 읽은 뒤 새 사진이 다중 명함인지 센다(§5.26, _on_done)."""
+        if (self._worker is not None and not self._worker.done_event.is_set()) or self.region_busy or self._multi_busy():
             if ask:
                 QMessageBox.information(self, tr("새 명함 읽기"), tr("지금 읽는 중입니다 — 다 읽은 뒤에 다시 하세요."))
             return 0
@@ -1076,6 +1204,9 @@ class BizcardImportDialog(QDialog):
         from viewer.workers import run_in_thread
         if rows is None:
             self._worker = ImportWorker(self._items, self._db, lang)
+            self.bar.setRange(0, max(1, len(self._items)))   # 다중 명함 세기(§5.26)가 막대를 썼을 수 있다
+            self.bar.setValue(0)
+            self.bar.setFormat(tr("읽는 중 %v / %m"))
         else:                                       # [다시 읽기] — 그 줄들만, 캐시 건너뜀
             self._worker = ImportWorker([self._items[r] for r in rows], self._db, lang, force=True, rows=rows)
             self.bar.setRange(0, max(1, len(rows)))
@@ -1098,6 +1229,15 @@ class BizcardImportDialog(QDialog):
         self.bar.setFormat(tr("다 읽음 %v / %m") if ok else tr("멈춤 %v / %m"))
         if ok and self.table.currentRow() < 0 and self._items:
             self.table.setCurrentCell(0, C_NAME)
+        if ok and not self._closing and not self._multi_busy():
+            QTimer.singleShot(0, lambda: self._closing or self._multi_busy() or self._multi_pass(None, self._multi_idle))   # §5.26
+
+    def _multi_idle(self):
+        """다중 명함 세기만 하고 나눈 것이 없을 때 — 막대를 세기 전(다 읽음)으로 되돌린다."""
+        lo, hi, v, f = getattr(self, "_bar_saved", (0, max(1, len(self._items)), len(self._items), tr("다 읽음 %v / %m")))
+        self.bar.setRange(lo, hi)
+        self.bar.setValue(v)
+        self.bar.setFormat(f)
 
     def _stop_worker(self):
         w = self._worker
@@ -1137,6 +1277,18 @@ class BizcardImportDialog(QDialog):
     def closeEvent(self, e):
         self._closing = True                       # 자리 읽기가 돌고 있으면 결과를 버린다(§5.16)
         self._stop_worker()
+        mw_ = getattr(self, "_multi_worker", None)  # 다중 명함 세기(§5.26) — 신호를 끊고 멈춤
+        if mw_ is not None and not mw_.done_event.is_set():
+            for sig in (mw_.found, mw_.progressed, mw_.finishedAll):
+                try:
+                    sig.disconnect()
+                except (TypeError, RuntimeError):
+                    pass
+            mw_.request_cancel()
+            mw_.done_event.wait(15)
+        sw_ = getattr(self, "_split_worker", None)
+        if sw_ is not None and not sw_.done_event.is_set():
+            sw_.done_event.wait(30)                # 자르는 중이면 끝날 때까지(파일을 반쯤 옮긴 채 두지 않게)
         st = getattr(self, "_st", None)
         if st is not None:
             st.close()

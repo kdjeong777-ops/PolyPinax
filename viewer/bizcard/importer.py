@@ -154,3 +154,87 @@ class ImportWorker(QObject):
             self.finishedAll.emit(True)
         finally:
             st.close()
+
+
+class MultiWorker(QObject):
+    """다중 명함 세기(배경, 명함 SOT §5.26) — 사진마다 명함 수를 세어 두 장 이상이면 `found(경로, 모서리들, 미리 보기)`.
+    센 사진은 meta `multi_seen` 에 지문을 적어 다음엔 세지 않는다(force 면 다시 센다). show_all 이면 한 장 미만도 알린다(손으로 나누기)."""
+    found = pyqtSignal(str, list, object)
+    progressed = pyqtSignal(int, int)
+    finishedAll = pyqtSignal(bool)
+    finished = pyqtSignal()
+    PREVIEW = 1100                         # 미리 보기 긴 변
+
+    def __init__(self, paths, db=None, force: bool = False, show_all: bool = False):
+        super().__init__()
+        self._paths, self._db, self._force, self._all = list(paths), db, bool(force), bool(show_all)
+        self._stop = False
+        self.done_event = threading.Event()
+
+    def request_cancel(self):
+        self._stop = True
+
+    def run(self):
+        try:
+            self._run()
+        finally:
+            self.done_event.set()
+            self.finished.emit()
+
+    def _run(self):
+        import time as _t
+        from viewer.bizcard import multisplit as M
+        from viewer.bizcard.store import BizcardStore, source_sig
+        st = BizcardStore(self._db)
+        try:
+            seen = dict(st.meta_get(M.SEEN_KEY) or {})
+            n = len(self._paths)
+            for i, p in enumerate(self._paths):
+                if self._stop:
+                    self.finishedAll.emit(False)
+                    return
+                k = os.path.normcase(os.path.abspath(p))
+                sig = source_sig([p])
+                if self._force or seen.get(k) != sig:
+                    try:
+                        quads, full, pv = M.detect_file(p, self.PREVIEW)
+                    except Exception:             # 명함 글·경로는 싣지 않는다
+                        quads, full, pv = [], None, None
+                    if pv is not None and (len(quads) >= 2 or self._all):
+                        self.found.emit(p, [[list(map(float, c)) for c in q] for q in quads],
+                                        {"size": full, "rgb": pv.tobytes(), "pv": pv.size})
+                    else:
+                        seen[k] = sig                 # 보통 명함 사진 — 다음엔 세지 않는다
+                self.progressed.emit(i + 1, n)
+                _t.sleep(0.001)                       # 응답성 SOT §4 ④
+            st.meta_set(M.SEEN_KEY, seen)
+            self.finishedAll.emit(True)
+        finally:
+            st.close()
+
+
+class SplitWorker(QObject):
+    """다중 명함 자르기·원본 옮기기(배경, §5.26) — done({원본: [잘라낸 것들]})."""
+    done = pyqtSignal(dict)
+    finished = pyqtSignal()
+
+    def __init__(self, jobs):
+        super().__init__()
+        self._jobs = list(jobs)             # [(경로, 모서리들)]
+        self.moved = []                     # [(원본, 옮긴 곳)] — 되돌리기용
+        self.done_event = threading.Event()
+
+    def run(self):
+        from viewer.bizcard import multisplit as M
+        out = {}
+        try:
+            for job in self._jobs:                 # (경로, 모서리들[, 내보낼 폴더])
+                p, quads = job[0], job[1]
+                try:
+                    out[p] = M.split_file(p, quads, job[2] if len(job) > 2 else None, self.moved)
+                except Exception:
+                    out[p] = []
+        finally:
+            self.done.emit(out)
+            self.done_event.set()
+            self.finished.emit()

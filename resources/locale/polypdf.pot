@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-11-19 14:51+0900\n"
+"POT-Creation-Date: 2026-11-19 17:47+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -5734,7 +5734,7 @@ msgid "PolyPinax 에서 고르기"
 msgstr ""
 
 #: viewer/photo_map.py viewer/widgets/bizcard_find_dialog.py
-#: viewer/widgets/bookmark_tree.py
+#: viewer/widgets/bizcard_multi_dialog.py viewer/widgets/bookmark_tree.py
 #, python-brace-format
 msgid "{n}장"
 msgstr ""
@@ -6175,7 +6175,7 @@ msgstr ""
 msgid "스크롤 캡처 중 — 한 번 더 누르면 여기까지 저장 (Esc·[멈춤]도)"
 msgstr ""
 
-#: viewer/scroll_capture.py
+#: viewer/scroll_capture.py viewer/widgets/bizcard_dupe_dialog.py
 msgid "멈춤"
 msgstr ""
 
@@ -7856,6 +7856,22 @@ msgid "다시 찾기"
 msgstr ""
 
 #: viewer/widgets/bizcard_dupe_dialog.py
+msgid "다중 명함 찾기"
+msgstr ""
+
+#: viewer/widgets/bizcard_dupe_dialog.py
+msgid "이미 들어간 명함 중 한 사진에 명함이 여럿인 것(한 장으로 잘못 읽힌 것)을 찾아 명함마다 나눕니다"
+msgstr ""
+
+#: viewer/widgets/bizcard_dupe_dialog.py
+msgid "값을 두 번 눌러 고치면 그 값으로 합칩니다 — 전화·메일·누리집은 쉼표로 나눕니다"
+msgstr ""
+
+#: viewer/widgets/bizcard_dupe_dialog.py
+msgid "(명함 그림 없음)"
+msgstr ""
+
+#: viewer/widgets/bizcard_dupe_dialog.py
 msgid "합치기 적용"
 msgstr ""
 
@@ -7896,9 +7912,23 @@ msgstr ""
 msgid "(합치지 않음)"
 msgstr ""
 
+#: viewer/widgets/bizcard_dupe_dialog.py viewer/widgets/bizcard_find_dialog.py
+#: viewer/widgets/tag_apply_dialog.py
+msgid "직접"
+msgstr ""
+
 #: viewer/widgets/bizcard_dupe_dialog.py
 #, python-brace-format
 msgid "묶음 {g}개 · 합칠 묶음 {n}개 · 지울 명함 {d}장"
+msgstr ""
+
+#: viewer/widgets/bizcard_dupe_dialog.py
+#, python-brace-format
+msgid "다중 명함 찾는 중 — 사진 {n}장"
+msgstr ""
+
+#: viewer/widgets/bizcard_dupe_dialog.py
+msgid "한 사진에 명함이 여럿인 것을 찾지 못했습니다."
 msgstr ""
 
 #: viewer/widgets/bizcard_dupe_dialog.py
@@ -7910,17 +7940,27 @@ msgid "대표"
 msgstr ""
 
 #: viewer/widgets/bizcard_dupe_dialog.py
-msgid "모두"
-msgstr ""
-
-#: viewer/widgets/bizcard_dupe_dialog.py
 #, python-brace-format
 msgid "파일 {n}개를 옮기지 못했습니다 — 다른 프로그램이 열고 있는지 확인하세요."
 msgstr ""
 
 #: viewer/widgets/bizcard_dupe_dialog.py
+msgid "모두"
+msgstr ""
+
+#: viewer/widgets/bizcard_dupe_dialog.py
+#, python-brace-format
+msgid "다중 명함 찾는 중 {d} / {t}"
+msgstr ""
+
+#: viewer/widgets/bizcard_dupe_dialog.py
 #, python-brace-format
 msgid "묶음 {n}개를 합칩니다 — 대표가 아닌 명함 {d}장은 지웁니다(그림 파일은 '병합 보관' 폴더로). [마지막 합치기 되돌리기] 로 되돌릴 수 있습니다."
+msgstr ""
+
+#: viewer/widgets/bizcard_dupe_dialog.py
+#, python-brace-format
+msgid "명함 {n}장으로 나눴습니다 — 명함 관리를 열어 읽을까요?"
 msgstr ""
 
 #: viewer/widgets/bizcard_find_dialog.py
@@ -8118,10 +8158,6 @@ msgstr ""
 msgid "최근 1년"
 msgstr ""
 
-#: viewer/widgets/bizcard_find_dialog.py viewer/widgets/tag_apply_dialog.py
-msgid "직접"
-msgstr ""
-
 #: viewer/widgets/bizcard_find_dialog.py
 #: viewer/widgets/bizcard_import_dialog.py
 msgid "스캔일"
@@ -8296,11 +8332,6 @@ msgstr ""
 
 #: viewer/widgets/bizcard_find_dialog.py
 #, python-brace-format
-msgid "처음 {n}장"
-msgstr ""
-
-#: viewer/widgets/bizcard_find_dialog.py
-#, python-brace-format
 msgid "'{tab}' 탭을 삭제합니다 — 탭과 그 {n}명 칸이 완전히 지워지고, 할 일로 메모에 적은 글도 지웁니다. 되돌릴 수 없습니다. 명함과 파일은 그대로입니다."
 msgstr ""
 
@@ -8384,6 +8415,15 @@ msgid "지금의 인식으로 다시 읽습니다 — 고른 줄만 또는 모�
 msgstr ""
 
 #: viewer/widgets/bizcard_import_dialog.py
+#: viewer/widgets/bizcard_multi_dialog.py
+msgid "다중 명함 나누기"
+msgstr ""
+
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "고른 줄의 사진에 명함이 여럿이면 명함마다 잘라 따로 읽습니다 — 찾은 테두리를 고치거나 새로 그릴 수 있습니다"
+msgstr ""
+
+#: viewer/widgets/bizcard_import_dialog.py
 msgid "적용한 명함을 vCard(.vcf) 로 내보내거나 기존 vCard 에 합칩니다 — 구글 연락처·휴대폰에서 읽습니다"
 msgstr ""
 
@@ -8416,6 +8456,14 @@ msgstr ""
 
 #: viewer/widgets/bizcard_import_dialog.py
 msgid "체크한 명함을 정리 폴더에 '성명_회사명.jpg' 로 만듭니다 — 원본은 그대로 둡니다"
+msgstr ""
+
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "다중 명함 찾는 중 %v / %m"
+msgstr ""
+
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "다중 명함 자르는 중"
 msgstr ""
 
 #: viewer/widgets/bizcard_import_dialog.py
@@ -8460,6 +8508,10 @@ msgstr ""
 
 #: viewer/widgets/bizcard_import_dialog.py
 msgid "(다시 읽는 중)"
+msgstr ""
+
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "나눌 사진 줄을 고르세요(뒷면이 짝지어진 명함은 빼고)."
 msgstr ""
 
 #: viewer/widgets/bizcard_import_dialog.py
@@ -8586,6 +8638,32 @@ msgstr ""
 #: viewer/widgets/bizcard_import_dialog.py
 #, python-brace-format
 msgid "적용하지 않은 {k}장은 빠졌습니다."
+msgstr ""
+
+#: viewer/widgets/bizcard_multi_dialog.py
+msgid "테두리를 눌러 고른 뒤 Delete 로 빼고, 빈 곳을 끌어 새 테두리를 그립니다."
+msgstr ""
+
+#: viewer/widgets/bizcard_multi_dialog.py viewer/widgets/crop_dialog.py
+msgid "나누기"
+msgstr ""
+
+#: viewer/widgets/bizcard_multi_dialog.py viewer/widgets/crop_dialog.py
+msgid "나누지 않음"
+msgstr ""
+
+#: viewer/widgets/bizcard_multi_dialog.py
+msgid "이 사진들은 나누지 않고 한 장으로 둡니다(다음에 다시 묻지 않음 — 다시 나누려면 [다중 명함 나누기])"
+msgstr ""
+
+#: viewer/widgets/bizcard_multi_dialog.py
+#, python-brace-format
+msgid "사진 {n}장에서 명함 {m}장을 찾았습니다 — 체크한 사진을 명함마다 잘라 따로 읽습니다. 원본은 '다중 원본' 폴더로 옮깁니다."
+msgstr ""
+
+#: viewer/widgets/bizcard_multi_dialog.py
+#, python-brace-format
+msgid "이미 한 장으로 들어간 명함 {k}장은 지웁니다(휴지통)."
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
@@ -9900,10 +9978,6 @@ msgid "오른쪽"
 msgstr ""
 
 #: viewer/widgets/crop_dialog.py
-msgid "나누지 않음"
-msgstr ""
-
-#: viewer/widgets/crop_dialog.py
 msgid "좌우 2쪽(세로 가운데)"
 msgstr ""
 
@@ -9917,10 +9991,6 @@ msgstr ""
 
 #: viewer/widgets/crop_dialog.py
 msgid "남길 여백 (%)"
-msgstr ""
-
-#: viewer/widgets/crop_dialog.py
-msgid "나누기"
 msgstr ""
 
 #: viewer/widgets/crop_dialog.py

@@ -668,9 +668,13 @@ class BizcardFindDialog(QDialog):
         self.btn_vcard.setMenu(bm)
         from viewer.widgets.icons import drop_button
         drop_button(self.btn_vcard)
+        self.btn_manage = QPushButton(tr("명함 관리"))      # 메뉴 '명함 관리' 와 같은 길(§5.24.1 '단추', 사용자 지시 261119)
+        self.btn_manage.setToolTip(tr("명함 폴더의 확인 표 창(명함 관리)을 엽니다"))
+        self.btn_manage.clicked.connect(lambda _c=False: self.open_manage())
+        self.btn_manage.setVisible(callable(getattr(self.parent(), "_action_bizcard_import", None)))
         b_close = QPushButton(tr("닫기"))
         b_close.clicked.connect(lambda _c=False: self.close())
-        for b in (self.btn_vcard, self.btn_open):           # [주소록] 은 [명함 보기] 왼쪽(§5.24.1 '단추', 사용자 지시 261119)
+        for b in (self.btn_manage, self.btn_vcard, self.btn_open):   # [명함 관리] → [주소록] → [명함 보기](§5.24.1 '단추', 사용자 지시 261119)
             bot.addWidget(b)
         bot.addStretch(1)
         bot.addWidget(b_close)
@@ -678,6 +682,12 @@ class BizcardFindDialog(QDialog):
         self._enable_card_buttons(False)
         self._init_store_bits()
         QTimer.singleShot(0, self.refresh)
+
+    def open_manage(self):
+        """[명함 관리] — 메뉴 '명함 관리' 와 같은 함수(MainWindow._action_bizcard_import, 대상 폴더 규칙도 같음 §5.12)."""
+        fn = getattr(self.parent(), "_action_bizcard_import", None)
+        if callable(fn):
+            fn()
 
     # ── 저장소 ──
     def _store(self):

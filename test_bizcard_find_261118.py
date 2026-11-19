@@ -608,6 +608,20 @@ try:
     t = dlg.fav_copy_selected() if hasattr(dlg, "fav_copy_selected") else ""
     chk("홍길동" in t and "김철수" not in t and QApplication.clipboard().text() == t, "I14 즐겨찾기 사람 메뉴 '내용 복사' = 체크한 칸 글", repr(t[:40]))
     dlg.todo_delete(gid, ask=False)
+    # I19 아래 단추 줄 [명함 관리] — [주소록] 왼쪽, 누르면 메뉴 '명함 관리' 와 같은 함수 (사용자 지시 261119)
+    bm_ = getattr(dlg, "btn_manage", None)
+    calls = []
+    _orig_imp = mw._action_bizcard_import
+    mw._action_bizcard_import = lambda *a, **k: calls.append(a)
+    try:
+        if bm_ is not None and bm_.isVisible():
+            QTest.mouseClick(bm_, Qt.MouseButton.LeftButton)
+            pump(timeout=0.1)
+    finally:
+        mw._action_bizcard_import = _orig_imp
+    chk(bm_ is not None and bm_.isVisible() and bm_.text() == "명함 관리"
+        and abs(bm_.y() - dlg.btn_vcard.y()) <= 2 and bm_.x() < dlg.btn_vcard.x() and calls == [()],
+        "I19 [명함 관리] 단추는 [주소록] 왼쪽, 누르면 명함 관리 창 길", str(calls))
     # I15 탭·메뉴 개편 — 아이콘·끌어 복사·'+'·표/탭/사람 메뉴·이메일 복사·마감·삭제(메모 글)·최근·탭 명단 보기 (사용자 지시 261119)
     from PyQt6.QtWidgets import QMenu, QInputDialog, QToolButton, QWidgetAction
     st = dlg._store()

@@ -11,8 +11,8 @@ import os
 from viewer import dbutil
 from pathlib import Path
 
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QFont
+from PyQt6.QtCore import Qt, QSize, QObject, pyqtSignal
+from PyQt6.QtGui import QFont, QIcon, QPixmap, QImage
 from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QListView,
     QAbstractItemView, QPushButton, QSplitter, QTreeWidget, QTreeWidgetItem, QMessageBox, QMenu, QWidget)
 
@@ -21,6 +21,7 @@ from viewer.bizcard import people as P
 from viewer.bizcard import vcard as V
 
 ROLE = Qt.ItemDataRole.UserRole
+THUMB = 96                          # 명함 그림 썸네일 줄(고른 묶음의 그림 명함 앞·뒷면, §5.24.8 '명함 그림')
 SRC_LABEL = {"card": tr_noop("명함"), "remember": tr_noop("리멤버"), "google": tr_noop("구글"), "contact": tr_noop("주소록")}
 WHY_LABEL = {"phone": tr_noop("같은 번호"), "mail": tr_noop("같은 메일"), "typo": tr_noop("번호 오타?"),
              "namecomp": tr_noop("이름·회사 같음")}
@@ -40,6 +41,29 @@ def _val(fields, k) -> str:
     if isinstance(v, (list, tuple)):
         return ", ".join(str(x) for x in v)
     return str(v or "")
+
+
+_KEEP = []
+
+
+class _ImgWorker(QObject):
+    """명함 그림 읽기(배경) — (세대, 큰 그림 세대, 줄 번호(-1 = 큰 그림), 경로, 그림). 명함찾기와 같은 축소 읽기 `_read`."""
+    one = pyqtSignal(int, object, int, str, QImage)
+    finished = pyqtSignal()
+
+    def __init__(self, gen, big, jobs):
+        super().__init__()
+        self._gen, self._big, self._jobs = gen, big, list(jobs)
+
+    def run(self):
+        from viewer.widgets.bizcard_find_dialog import _read
+        for i, path, w, h in self._jobs:
+            try:
+                im = _read(path, w, h)
+            except Exception:
+                im = QImage()
+            self.one.emit(self._gen, self._big, i, path, im)
+        self.finished.emit()
 
 
 def _copy_db(src, dst) -> None:
@@ -67,10 +91,15 @@ class BizcardDupeDialog(QDialog):
         self.fd = find_dlg
         self.setWindowTitle(tr("중복 검토"))
         self.resize(1100, 640)
+        # 크게 보기(사용자 지시 261119) — 명함 관리 창과 같이 최대화 단추 + F11 전체 화면(Esc 로 돌아옴)
+        self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowMaximizeButtonHint | Qt.WindowType.WindowMinimizeButtonHint)
+        from PyQt6.QtGui import QShortcut, QKeySequence
+        QShortcut(QKeySequence("F11"), self, activated=self.toggle_full)
         st = self.fd._store()
         self.bak = st.path.with_name(st.path.name + ".dupe_bak")
         self.log_path = st.path.with_suffix(".dupe_undo.json")
         self.groups, self.rep, self.chk, self.gchk = [], {}, {}, {}
+        self.edits = {}                                  # {묶음: {칸: 값}} — '적용 후' 에서 고친 값
         self._busy = False
         v = QVBoxLayout(self)
         top = QHBoxLayout()
@@ -89,6 +118,11 @@ class BizcardDupeDialog(QDialog):
         b_find = QPushButton(tr("다시 찾기"))
         b_find.clicked.connect(lambda _c=False: self.reload())
         top.addWidget(b_find)
+        # 명함 SOT §5.26 '이미 들어간 명함'(사용자 지시 261119): 한 장으로 잘못 들어간 다중 명함 사진 찾기
+        self.btn_multi = QPushButton(tr("다중 명함 찾기"))
+        self.btn_multi.setToolTip(tr("이미 들어간 명함 중 한 사진에 명함이 여럿인 것(한 장으로 잘못 읽힌 것)을 찾아 명함마다 나눕니다"))
+        self.btn_multi.clicked.connect(lambda _c=False: self.find_multi())
+        top.addWidget(self.btn_multi)
         v.addLayout(top)
 
         split = QSplitter(Qt.Orientation.Horizontal)
@@ -106,14 +140,46 @@ class BizcardDupeDialog(QDialog):
         rv.addWidget(QLabel(tr("적용 후 — 합친 결과(대표에서 바뀐 칸은 굵게)")))
         self.after = QTreeWidget()
         self.after.setHeaderLabels([tr("칸"), tr("값"), tr("출처")])
+        self.after.setToolTip(tr("값을 두 번 눌러 고치면 그 값으로 합칩니다 — 전화·메일·누리집은 쉼표로 나눕니다"))
+        self.after.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.after.itemDoubleClicked.connect(self._edit_start)
+        self.after.itemChanged.connect(self._edited)
         rv.addWidget(self.after)
         split.addWidget(lw)
         split.addWidget(rw)
         split.setStretchFactor(0, 3)
         split.setStretchFactor(1, 2)
-        v.addWidget(split, 1)
-        self.before.currentItemChanged.connect(lambda cur, _p: self._sync(cur, self.after))
-        self.after.currentItemChanged.connect(lambda cur, _p: self._sync(cur, self.before))
+        # 아래: 고른 묶음의 명함 그림 — 썸네일 줄(여럿이면 골라) + 큰 그림 (사용자 지시 261119)
+        #   명함찾기 사진창과 같은 꼴(위 큰 그림 + 아래 썸네일 한 줄, 같은 격자), 읽기는 같은 `_read` 를 배경에서(세대로 앞 읽기 버림)
+        pw = QWidget()
+        ph = QVBoxLayout(pw)
+        ph.setContentsMargins(0, 0, 0, 0)
+        self.big = QLabel(tr("(명함 그림 없음)"))
+        self.big.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.big.setMinimumHeight(140)
+        self.big_path = ""
+        self.thumbs = QListWidget()
+        self.thumbs.setViewMode(QListView.ViewMode.IconMode)
+        self.thumbs.setFlow(QListView.Flow.LeftToRight)
+        self.thumbs.setWrapping(False)
+        self.thumbs.setMovement(QListView.Movement.Static)
+        self.thumbs.setIconSize(QSize(THUMB, THUMB))
+        self.thumbs.setGridSize(QSize(THUMB + 12, THUMB + 12))
+        self.thumbs.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.thumbs.setFixedHeight(THUMB + 16 + self.thumbs.horizontalScrollBar().sizeHint().height())
+        self.thumbs.currentItemChanged.connect(lambda cur, _p: self._show_big(cur.data(ROLE) if cur else ""))
+        self._img_gen = 0
+        self.imgs_pending = 0
+        ph.addWidget(self.big, 1)
+        ph.addWidget(self.thumbs)
+        vsplit = QSplitter(Qt.Orientation.Vertical)
+        vsplit.addWidget(split)
+        vsplit.addWidget(pw)
+        vsplit.setStretchFactor(0, 3)
+        vsplit.setStretchFactor(1, 2)
+        v.addWidget(vsplit, 1)
+        self.before.currentItemChanged.connect(lambda cur, _p: (self._sync(cur, self.after), self._preview(cur)))
+        self.after.currentItemChanged.connect(lambda cur, _p: (self._sync(cur, self.before), self._preview(cur)))
 
         bot = QHBoxLayout()
         self.lbl = QLabel()
@@ -126,6 +192,9 @@ class BizcardDupeDialog(QDialog):
         b_close.clicked.connect(lambda _c=False: self.accept())
         for b in (self.btn_apply, self.btn_undo, b_close):
             bot.addWidget(b)
+        for b in self.findChildren(QPushButton):          # Enter 가 칸 고치기를 마치지 않고 단추를 누르지 않게
+            b.setAutoDefault(False)
+            b.setDefault(False)
         v.addLayout(bot)
         self.reload()
 
@@ -148,7 +217,7 @@ class BizcardDupeDialog(QDialog):
 
     def reload(self):
         self.groups = P.dupe_groups(self.fd._store(), self.order_keys())
-        self.rep, self.chk, self.gchk = {}, {}, {}
+        self.rep, self.chk, self.gchk, self.edits = {}, {}, {}, {}
         for gi, g in enumerate(self.groups):
             rep = g["cards"][0]["id"]
             self.rep[gi] = rep
@@ -166,7 +235,13 @@ class BizcardDupeDialog(QDialog):
 
     def plan(self, gi):
         cards = self.group_cards(gi)
-        return P.merge_plan(cards, self.groups[gi].get("manual")) if self.gchk.get(gi) and len(cards) >= 2 else None
+        if not (self.gchk.get(gi) and len(cards) >= 2):
+            return None
+        p = P.merge_plan(cards, self.groups[gi].get("manual"))
+        for k, v in (self.edits.get(gi) or {}).items():   # '적용 후' 에서 손으로 고친 값이 이긴다(§5.24.8 '고치기')
+            p["fields"][k] = v
+            p["frm"].pop(k, None)                          # 출처 없음 = 손으로 고친 칸(주소록이 덮지 않음, D24)
+        return p
 
     def fill(self):
         self._busy = True
@@ -198,6 +273,13 @@ class BizcardDupeDialog(QDialog):
         self.fill_after()
 
     def fill_after(self):
+        self._busy = True
+        try:
+            self._fill_after()
+        finally:
+            self._busy = False
+
+    def _fill_after(self):
         self.after.clear()
         n_g = n_d = 0
         for gi, g in enumerate(self.groups):
@@ -215,15 +297,16 @@ class BizcardDupeDialog(QDialog):
             top.setText(0, p["fields"]["name"])
             top.setText(1, p["fields"]["company"])
             top.setText(2, tr(SRC_LABEL[g["src"][p["keeper"]]]))
-            for k, label in SHOW:
+            mine = self.edits.get(gi) or {}
+            for k, label in SHOW:                          # 빈 칸도 보인다 — 고쳐 채울 수 있게
                 val = _val(p["fields"], k)
-                if not val:
-                    continue
                 frm = p["frm"].get(k)
-                src = tr(SRC_LABEL[g["src"][frm]]) if frm else (tr("모두") if k in ("phones", "emails", "urls", "memo") else "")
+                src = tr("직접") if k in mine else (tr(SRC_LABEL[g["src"][frm]]) if frm else
+                                                   (tr("모두") if val and k in ("phones", "emails", "urls", "memo") else ""))
                 it = QTreeWidgetItem([tr(label), val.replace("\n", " ⏎ "), src])
                 it.setData(0, ROLE, (gi, k))
-                if val != _val(rep, k):
+                it.setFlags(it.flags() | Qt.ItemFlag.ItemIsEditable)
+                if val != _val(rep, k) or k in mine:
                     f = it.font(1)
                     f.setBold(True)
                     it.setFont(1, f)
@@ -233,6 +316,43 @@ class BizcardDupeDialog(QDialog):
             self.after.resizeColumnToContents(i)
         self.lbl.setText(tr("묶음 {g}개 · 합칠 묶음 {n}개 · 지울 명함 {d}장").format(g=len(self.groups), n=n_g, d=n_d))
         self.btn_apply.setEnabled(n_g > 0)
+
+    # ── '적용 후' 값 고치기 (§5.24.8 '고치기', 사용자 지시 261119) ──
+    def _edit_start(self, it, col):
+        d = it.data(0, ROLE)
+        if it.parent() is None or not d or not isinstance(d[1], str):
+            return
+        self._busy = True
+        it.setText(1, _val(self.plan(d[0])["fields"], d[1]))       # 고칠 때는 여러 줄 메모도 원래 글로
+        self._busy = False
+        from PyQt6.QtCore import QTimer
+        QTimer.singleShot(0, lambda: self.after.editItem(it, 1))   # 누름으로 바뀐 고른 줄·사진 정리가 끝난 뒤에 연다
+
+    def _edited(self, it, col):
+        if self._busy or col != 1 or it.parent() is None:
+            return
+        gi, k = it.data(0, ROLE)
+        self.set_edit(gi, k, it.text(1))
+
+    def set_edit(self, gi, k, text):
+        """묶음 gi 의 칸 k 를 text 로(전화·메일·누리집은 쉼표로 나눔, 메모의 ' ⏎ ' 는 줄바꿈)."""
+        g = self.groups[gi]
+        text = (text or "").replace(" ⏎ ", "\n").strip()
+        if k == "phones":
+            kinds = {}
+            for c in g["cards"]:
+                for kind, num in c.get("phones") or []:
+                    kinds.setdefault(P._phone_key(num) or num, kind)
+            val = []
+            for num in [x.strip() for x in text.split(",") if x.strip()]:
+                key = P._phone_key(num) or num
+                val.append((kinds.get(key) or ("cell" if key.startswith(P.MOBILE_PREFIX) else "work"), num))
+        elif k in ("emails", "urls"):
+            val = [x.strip() for x in text.split(",") if x.strip()]
+        else:
+            val = text
+        self.edits.setdefault(gi, {})[k] = val
+        self.fill_after()
 
     def _checked(self, it, col):
         if self._busy or col != 0:
@@ -255,6 +375,87 @@ class BizcardDupeDialog(QDialog):
         if top is not None and other.currentItem() is not top and (other.currentItem() is None
                                                                    or self._top_gi(other.currentItem()) != gi):
             other.setCurrentItem(top)
+
+    # ── 명함 그림 (§5.24.8 '명함 그림') ──
+    def _preview(self, cur):
+        """고른 줄의 묶음 — 그림 명함의 앞·뒷면을 썸네일 줄에, 고른 명함의 앞면을 크게. 그림이 없으면 글만."""
+        self.thumbs.blockSignals(True)
+        self.thumbs.clear()
+        self.thumbs.blockSignals(False)
+        if cur is None:
+            self._show_big("")
+            return
+        gi, cid = cur.data(0, ROLE)
+        if not isinstance(cid, int) or cid not in {c["id"] for c in self.groups[gi]["cards"]}:
+            p = self.plan(gi)
+            cid = p["keeper"] if p else self.rep[gi]
+        pick, jobs = None, []
+        self.thumbs.blockSignals(True)
+        for c in self.group_cards_all(gi):
+            if V.is_contact(c):
+                continue
+            for side in (c.get("front"), c.get("back")):
+                if not side or not os.path.exists(side):
+                    continue
+                it = QListWidgetItem(c.get("name") or "")
+                it.setData(ROLE, side)
+                jobs.append((self.thumbs.count(), side, THUMB, THUMB))
+                it.setToolTip(os.path.basename(side))
+                self.thumbs.addItem(it)
+                if pick is None and c["id"] == cid:
+                    pick = it
+        self.thumbs.blockSignals(False)
+        self._img_gen += 1
+        self._load_imgs(jobs)
+        pick = pick or self.thumbs.item(0)
+        if pick is not None:
+            self.thumbs.blockSignals(True)
+            self.thumbs.setCurrentItem(pick)
+            self.thumbs.blockSignals(False)
+        self._show_big(pick.data(ROLE) if pick is not None else "")
+
+    def group_cards_all(self, gi) -> list:
+        g = self.groups[gi]
+        return [next(c for c in g["cards"] if c["id"] == self.rep[gi])] + [c for c in g["cards"] if c["id"] != self.rep[gi]]
+
+    def _show_big(self, path):
+        self.big_path = path or ""
+        self._big_gen = getattr(self, "_big_gen", 0) + 1
+        if not path:
+            self.big.setPixmap(QPixmap())
+            self.big.setText(tr("(명함 그림 없음)"))
+            return
+        self._load_imgs([(-1, path, max(200, self.big.width()), max(120, self.big.height()))], big=self._big_gen)
+
+    def _load_imgs(self, jobs, big=None):
+        """그림 읽기는 배경(응답성 SOT) — 명함찾기와 같은 `_read`(축소 읽기). 세대가 바뀌면 늦게 온 그림은 버린다."""
+        if not jobs:
+            return
+        from viewer.workers import run_in_thread
+        w = _ImgWorker(self._img_gen, big, jobs)
+        w.one.connect(self._img_ready)
+        self.imgs_pending += len(jobs)
+        keep = getattr(self.fd._mw, "_thread_keep", None) if self.fd._mw is not None else None
+        run_in_thread(w, keep if isinstance(keep, list) else _KEEP)
+
+    def _img_ready(self, gen, big, i, path, img):
+        self.imgs_pending = max(0, self.imgs_pending - 1)
+        if img.isNull():
+            return
+        if i < 0:
+            if big == getattr(self, "_big_gen", 0) and path == self.big_path:
+                self.big.setPixmap(QPixmap.fromImage(img).scaled(max(200, self.big.width()), max(120, self.big.height()),
+                                   Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+            return
+        it = self.thumbs.item(i) if gen == self._img_gen else None  # noqa: E501
+        if it is not None and it.data(ROLE) == path:
+            it.setIcon(QIcon(QPixmap.fromImage(img).scaled(THUMB, THUMB, Qt.AspectRatioMode.KeepAspectRatio,
+                                                            Qt.TransformationMode.SmoothTransformation)))
+
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        if self.big_path:
+            self._show_big(self.big_path)
 
     @staticmethod
     def _top_gi(it):
@@ -281,6 +482,143 @@ class BizcardDupeDialog(QDialog):
         m = QMenu(self)
         m.addAction(tr("대표로"), lambda: self.set_rep(gi, cid))
         m.exec(self.before.viewport().mapToGlobal(pos))
+
+    def toggle_full(self):
+        if self.isFullScreen():
+            self.showNormal()
+        else:
+            self.showFullScreen()
+
+    def keyPressEvent(self, e):
+        if e.key() == Qt.Key.Key_Escape and self.isFullScreen():
+            self.toggle_full()                          # 전체 화면에서 Esc 는 창을 닫지 않고 돌아온다
+            return
+        super().keyPressEvent(e)
+
+    # ── 이미 들어간 다중 명함 사진 (§5.26 '이미 들어간 명함') ──
+    def multi_targets(self) -> dict:
+        """{셀 사진: (명함 행, 잘라낸 것을 둘 폴더)} — 원본 그림이 있으면 원본(그 옆), 없으면 정리본(정리 폴더 위 = 원천 폴더)."""
+        from viewer.bizcard import multisplit as M
+        out = {}
+        for r in self.fd._store().con.execute("SELECT * FROM cards").fetchall():
+            c = self.fd._store()._row(r)
+            if V.is_contact(c):
+                continue
+            src = P._real(c.get("src_key") or "")
+            if src and os.path.isfile(src) and Path(src).suffix.lower() in M.img_exts() \
+                    and Path(src).parent.name != M.MULTI_DIR:
+                out[src] = (c, None)
+                continue
+            f = P._real(c.get("front") or "")
+            if f and os.path.isfile(f):
+                out[f] = (c, str(Path(f).parent.parent))
+        return out
+
+    def find_multi(self, ask: bool = True):
+        """[다중 명함 찾기] — 이미 들어간 그림 명함의 사진을 배경에서 세어(이미 센 것은 건너뜀) 여럿이면 확인 창.
+        세는 동안 단추는 [멈춤](중간 취소), 글로 'n / m' 진행."""
+        if getattr(self, "_mw_multi", None) is not None and not self._mw_multi.done_event.is_set():
+            self._mw_multi.request_cancel()            # 두 번째 누름 = 멈춤
+            return None
+        from viewer.bizcard.importer import MultiWorker
+        from viewer.workers import run_in_thread
+        self._multi_targets = self.multi_targets()
+        self.multi_found = []
+        self._multi_ask = ask
+        w = MultiWorker(list(self._multi_targets), self.fd._db)
+        self._mw_multi = w
+        self.btn_multi.setText(tr("멈춤"))
+        self.lbl.setText(tr("다중 명함 찾는 중 — 사진 {n}장").format(n=len(self._multi_targets)))
+        w.found.connect(lambda p, q, pv: self.multi_found.append((p, q, pv)))
+        w.progressed.connect(lambda d, t: self.lbl.setText(tr("다중 명함 찾는 중 {d} / {t}").format(d=d, t=t)))
+        w.finishedAll.connect(self._multi_counted)
+        keep = getattr(self.fd._mw, "_thread_keep", None) if self.fd._mw is not None else None
+        run_in_thread(w, keep if isinstance(keep, list) else _KEEP)
+        return w
+
+    def _multi_counted(self, ok):
+        self.btn_multi.setText(tr("다중 명함 찾기"))
+        self.fill_after()
+        if not ok:
+            return
+        if not self.multi_found:
+            if self._multi_ask:
+                QMessageBox.information(self, tr("다중 명함 찾기"), tr("한 사진에 명함이 여럿인 것을 찾지 못했습니다."))
+            return
+        from viewer.widgets.bizcard_multi_dialog import MultiSplitDialog
+        dlg = MultiSplitDialog(self.multi_found, self, old_counts={p: 1 for p, _q, _v in self.multi_found})
+        self.multi_dlg = dlg
+        dlg.finished.connect(lambda _r: self._multi_chosen(dlg))
+        dlg.open()
+
+    def _multi_chosen(self, dlg):
+        from viewer.bizcard import multisplit as M
+        from viewer.bizcard.store import source_sig
+        st = self.fd._store()
+        if dlg.skipped:
+            seen = dict(st.meta_get(M.SEEN_KEY) or {})
+            for p in dlg.skipped:
+                seen[os.path.normcase(os.path.abspath(p))] = source_sig([p])
+            st.meta_set(M.SEEN_KEY, seen)
+        if not dlg.jobs:
+            return
+        from viewer.bizcard.importer import SplitWorker
+        from viewer.workers import run_in_thread
+        self._drop_old_hold()                            # 되돌리기는 마지막 하나 — 합치기와 같은 길(§5.24.8 '되돌리기')
+        dbp, bak = st.path, self.bak
+        self.setEnabled(False)
+        try:
+            self._bg(lambda: _copy_db(dbp, bak))         # 예전 명함을 지우기 전 DB 백업
+        finally:
+            self.setEnabled(True)
+        jobs = [(p, q, self._multi_targets[p][1]) for p, q in dlg.jobs]
+        w = SplitWorker(jobs)
+        self._split_worker = w
+        w.done.connect(self._multi_split_done)
+        keep = getattr(self.fd._mw, "_thread_keep", None) if self.fd._mw is not None else None
+        run_in_thread(w, keep if isinstance(keep, list) else _KEEP)
+
+    def _multi_split_done(self, out):
+        """나눴으면 예전 한 장짜리 명함은 지우고(정리본·인물 사진 휴지통, D31) 묶음을 다시 — 잘라낸 것은 명함 관리로 읽는다."""
+        st = self.fd._store()
+        self.multi_split = {p: made for p, made in out.items() if made}
+        moves = list(getattr(self._split_worker, "moved", []))
+        folders = []
+        for p in self.multi_split:
+            c, outd = self._multi_targets[p]
+            ok = True
+            for f in [x for grp in P.card_files(c)[1:] for x in grp if os.path.exists(x)]:   # 정리본·인물 사진 → '병합 보관'(되돌리기)
+                hd = P.hold_dir(f)
+                try:
+                    hd.mkdir(parents=True, exist_ok=True)
+                except OSError:
+                    ok = False
+                    continue
+                to = str(_unique(hd, os.path.basename(f)))
+                if self.fd._rename(f, to, quiet=True):
+                    moves.append((f, to))
+                else:
+                    ok = False
+            if not ok:
+                continue
+            if c.get("src_key"):
+                st.delete_src(c["src_key"])
+            else:
+                st.delete_card(c["id"])
+            folders.append(outd or str(Path(p).parent))
+        made = [x for v in self.multi_split.values() for x in v]
+        with open(self.log_path, "w", encoding="utf-8") as fp:
+            json.dump({"moves": moves, "made": made}, fp, ensure_ascii=False)
+        self.reload()
+        if folders and self.fd._mw is not None and hasattr(self.fd._mw, "_action_bizcard_import") and (
+                not self._multi_ask or QMessageBox.question(
+                    self, tr("다중 명함 찾기"),
+                    tr("명함 {n}장으로 나눴습니다 — 명함 관리를 열어 읽을까요?").format(
+                        n=sum(len(v) for v in self.multi_split.values()))) == QMessageBox.StandardButton.Yes):
+            from PyQt6.QtCore import QTimer
+            mw, f = self.fd._mw, folders[0]
+            self.accept()                              # 이 창(모달)을 닫아야 명함 관리 창을 쓸 수 있다
+            QTimer.singleShot(0, lambda: mw._action_bizcard_import(f))
 
     # ── 적용·되돌리기 ──
     def apply(self, ask: bool = True) -> int:
@@ -385,9 +723,14 @@ class BizcardDupeDialog(QDialog):
                 != QMessageBox.StandardButton.Yes:
             return False
         try:
-            moves = json.load(open(self.log_path, encoding="utf-8")).get("moves") or []
+            log_ = json.load(open(self.log_path, encoding="utf-8"))
         except (OSError, ValueError):
-            moves = []
+            log_ = {}
+        moves = log_.get("moves") or []
+        made = [x for x in (log_.get("made") or []) if os.path.exists(x)]
+        if made:                                          # 다중 명함 나누기(§5.26)로 만든 그림은 휴지통으로
+            from viewer.widgets.bizcard_import_dialog import trash_paths
+            trash_paths(self, self.fd._mw, made)
         for a, b in reversed(moves):
             if os.path.exists(b) and not os.path.exists(a):
                 try:

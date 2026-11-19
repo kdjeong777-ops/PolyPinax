@@ -14,7 +14,7 @@ if os.path.isdir(r"C:\Windows\Fonts"):
     os.environ.setdefault("QT_QPA_FONTDIR", r"C:\Windows\Fonts")
 sys.stdout.reconfigure(encoding="utf-8")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from PyQt6.QtCore import QStandardPaths, QCoreApplication, Qt
+from PyQt6.QtCore import QStandardPaths, QCoreApplication, Qt, QPoint
 QStandardPaths.setTestModeEnabled(True)             # 검사 작성 SOT §14.7.2
 from PyQt6.QtWidgets import QApplication, QMessageBox
 from PyQt6.QtTest import QTest
@@ -111,6 +111,24 @@ try:
     jpg(c_photo, "red")
 
     print("=== A. 묶기 ===")
+    # A0 회사 대표 번호·팩스·공용 메일은 여럿이 같이 쓴다 — 이름이 다르면 같은 휴대폰일 때만 묶음 (사용자 보고 261119)
+    t2 = S.BizcardStore(TMP / "share.db")
+    P.apply_import(t2, [
+        {"name": "정가짜", "company": "가짜공사", "phones": [("cell", "010-0000-7100"), ("work", "02-0000-7000"), ("fax", "02-0000-7001")],
+         "emails": ["office@example.com"], "urls": []},
+        {"name": "한가짜", "company": "가짜공사", "phones": [("cell", "010-0000-7200"), ("work", "02-0000-7000"), ("fax", "02-0000-7001")],
+         "emails": ["office@example.com"], "urls": []},
+        {"name": "윤가짜", "company": "가짜공사", "phones": [("work", "02-0000-7000")], "emails": [], "urls": []},
+        {"name": "Fake Program", "company": "가짜공사", "phones": [("cell", "010-0000-7200")], "emails": [], "urls": []},
+        {"name": "윤가짜", "company": "", "phones": [("work", "02-0000-7000")], "emails": [], "urls": []},
+        {"name": "갑가짜", "company": "사슬사", "phones": [("work", "02-0000-7300")], "emails": [], "urls": []},     # 사슬: 갑-을 회사 번호
+        {"name": "을가짜", "company": "사슬사", "phones": [("work", "02-0000-7300"), ("fax", "02-0000-7301")], "emails": [], "urls": []},
+        {"name": "병가짜", "company": "사슬사", "phones": [("fax", "02-0000-7301"), ("work", "02-0000-7302")], "emails": [], "urls": []},   # 을-병 팩스, 직통은 한 자리 다름
+    ], "주소록", "google")
+    sg = [sorted(c["name"] for c in g["cards"]) for g in P.dupe_groups(t2)]
+    chk(sorted(sg) == [["Fake Program", "한가짜"], ["윤가짜", "윤가짜"]],
+        "A0 이름이 다르면 회사 번호·팩스·메일이 같아도 묶지 않음(이름 다른 세 사람·사슬 갑-을 회사 번호·을-병 팩스·한 자리 다른 직통도), 같은 휴대폰이면 이름이 달라도(잘못 읽음) 묶음, 같은 이름은 회사 번호로도", str(sg))
+    t2.close()
     gs = P.dupe_groups(st)
     by = {frozenset(c["id"] for c in g["cards"]): g for g in gs}
     g1, g2, g3, g4, g5 = (by.get(frozenset(s)) for s in ((a_id, x_id), (b_id, c_id), (d_id, y_id), (z_id, w_id), (e_id, v_id)))
@@ -191,6 +209,52 @@ try:
     chk("직함" in bold and "이름" not in bold, "C 대표에서 바뀐 칸만 굵게", str(bold))
     dd.before.setCurrentItem(tops[a_id].child(0))
     chk(dd.after.currentItem() is a1, "C 왼쪽에서 고르면 오른쪽도 같은 묶음")
+    # C2 고른 묶음의 명함 그림 — 썸네일 줄 + 큰 그림, 여럿이면 골라 크게 (사용자 지시 261119)
+    nk = lambda x: os.path.normcase(os.path.realpath(x)) if x else ""
+    b_front = nk(P.card_by_id(S.BizcardStore(), b_id)["front"])
+    dd.before.setCurrentItem(t2)
+    pump(lambda: getattr(dd, "imgs_pending", 1) == 0 and not dd.big.pixmap().isNull(), timeout=5)   # 그림은 배경에서 읽음
+    th = getattr(dd, "thumbs", None)
+    chk(th is not None and th.count() == 2 and nk(dd.big_path) == b_front and not dd.big.pixmap().isNull(),
+        "C2 그림 명함 묶음을 고르면 아래에 명함 그림 썸네일(둘)·고른 명함 큰 그림", str(th and th.count()))
+    chk(th is not None and th.count() == 2 and all(not th.item(i).icon().isNull() for i in range(2)),
+        "C2 썸네일 그림은 배경에서 읽어 채움")
+    if th is not None and th.count() == 2:
+        th.setCurrentRow(1)
+        pump(lambda: dd.imgs_pending == 0, timeout=5)
+        chk(nk(dd.big_path) == nk(c_front), "C2 썸네일을 고르면 그 그림을 크게")
+    t4 = tops.get(w_id) or tops.get(z_id)
+    dd.before.setCurrentItem(t4)
+    pump(timeout=0.1)
+    chk(th is not None and th.count() == 0 and dd.big_path == "" and dd.big.text() == "(명함 그림 없음)",
+        "C2 주소록 명함만 있는 묶음은 그림 없음")
+    # C3 '적용 후' 값을 두 번 눌러 고치면 그 값으로 합침 — 잘못 들어간 정보 고치기 (사용자 지시 261119)
+    a1 = dd.after.topLevelItem(gi1)
+    ci = next((a1.child(i) for i in range(a1.childCount()) if a1.child(i).text(0) == "회사"), None)
+    di = next((a1.child(i) for i in range(a1.childCount()) if a1.child(i).text(0) == "부서"), None)
+    chk(ci is not None and di is not None and di.text(1) == "", "C3 적용 후에 빈 칸(부서)도 보여 채울 수 있음")
+    if ci is not None:
+        dd.after.scrollToItem(ci)
+        rect = dd.after.visualItemRect(ci)
+        pos = QPoint(dd.after.header().sectionPosition(1) + 10, rect.center().y())
+        QTest.mouseClick(dd.after.viewport(), Qt.MouseButton.LeftButton, pos=pos)   # 줄을 고른 뒤
+        QTest.mouseDClick(dd.after.viewport(), Qt.MouseButton.LeftButton, pos=pos)  # 두 번 눌러 고치기
+        pump(timeout=0.1)
+        ed = QApplication.focusWidget()
+        if ed is not None and hasattr(ed, "selectAll"):
+            ed.selectAll()
+            QTest.keyClicks(ed, "Fake Edit Co")
+            QTest.keyClick(ed, Qt.Key.Key_Return)
+        pump(timeout=0.1)
+    p1e = dd.plan(gi1)
+    a1 = dd.after.topLevelItem(gi1)
+    ce = next((a1.child(i) for i in range(a1.childCount()) if a1.child(i).text(0) == "회사"), None)
+    chk(p1e["fields"]["company"] == "Fake Edit Co" and "company" not in p1e["frm"] and ce is not None and ce.text(2) == "직접",
+        "C3 두 번 눌러 고친 값이 합칠 값(출처 '직접')", str(p1e["fields"]["company"]))
+    gi3 = next(i for i in range(len(dd.groups)) if dd.rep[i] == d_id)
+    dd.set_edit(gi3, "phones", "010-0000-0004, 02-0000-5555")
+    chk([n for _k, n in dd.plan(gi3)["fields"]["phones"]] == ["010-0000-0004", "02-0000-5555"]
+        and dd.plan(gi3)["fields"]["phones"][1][0] == "work", "C3 전화는 쉼표로 나눠 고침(새 번호 종류는 번호 꼴로)")
 
     print("\n=== D. 적용 ===")
     db_before = S.BizcardStore()
@@ -202,7 +266,7 @@ try:
     chk(got == 4 and st.count() == n_before - 4 and P.card_by_id(st, x_id) is None and P.card_by_id(st, c_id) is None,
         "D 묶음 넷 합침(체크 꺼진 이름+회사 묶음은 그대로), 나머지 명함 지움", "%s %s" % (got, st.count()))
     chk(a and a["title"] == "상무" and a["address"] == "서울 가짜로 1" and a["memo"] == "골프 모임\n\n리멤버 메모"
-        and len(a["phones"]) == 2, "D 대표 행에 합친 값", str(a and a["phones"]))
+        and len(a["phones"]) == 2 and a["company"] == "Fake Edit Co", "D 대표 행에 합친 값(고친 회사 포함)", str(a and (a["phones"], a["company"])))
     chk(st.con.execute("SELECT COUNT(*) FROM fav_members WHERE group_id=? AND card_id=?", (gid, a_id)).fetchone()[0] == 1,
         "D 지운 명함의 즐겨찾기 칸은 남길 행으로")
     chk(P.field_srcs(st, a_id).get("title") == "remember" and "company" not in P.field_srcs(st, a_id),
@@ -254,6 +318,78 @@ try:
         "F 가져오자마자 [중복 검토] 창 — 새 연락처가 기존 명함 묶음에", str(g_lee and len(g_lee["cards"])))
     if d2 is not None and d2 is not dd:
         d2.close()
+
+    print("\n=== G. 이미 한 장으로 들어간 다중 명함 사진 찾기 (§5.26) ===")
+    from PIL import ImageDraw as _ID
+    FG = TMP / "multi_in"
+    FG.mkdir()
+    board = Image.new("RGB", (2000, 1500), (58, 60, 66))
+    for cx, cy in ((500, 400), (1450, 400), (520, 1100)):
+        c = Image.new("RGB", (700, 400), (246, 246, 242))
+        _ID.Draw(c).rectangle([160, 80, 520, 100], fill=(20, 20, 20))
+        board.paste(c, (cx - 350, cy - 200))
+    board.save(FG / "g_1.jpg", quality=92)
+    itg = {it.base: it for it in I.scan_folder(FG)}["g"]
+    AP.apply_cards([{"key": itg.key, "front": itg.front, "back": "", "pdf": "", "keep_back": False,
+                     "name": "다중가짜", "company": "가짜묶음사", "langs": ["한글"], "phones": [("cell", "010-0000-9900")]}],
+                   FG / "정리")
+    st = S.BizcardStore()
+    g_old = P.find(st, "다중가짜")[0]
+    g_out = os.path.realpath(g_old["front"])
+    st.close()
+    import viewer.widgets.bookmark_tree as _btm
+    import shutil
+    TRG = TMP / "trash_g"
+    TRG.mkdir()
+    _btm._trash_fn = lambda: (lambda p: shutil.move(p, str(TRG / Path(p).name)))      # 시험용 휴지통
+    d3 = fd.open_dupes(exec_=False)
+    chk(d3 is not None and hasattr(d3, "btn_multi"), "G 중복 검토 창에 [다중 명함 찾기]")
+    QMessageBox.question = staticmethod(lambda *a, **k: QMessageBox.StandardButton.Yes)   # '명함 관리를 열어 읽을까요?' — 예
+    QTest.mouseClick(d3.btn_multi, Qt.MouseButton.LeftButton)
+    chk(pump(lambda: getattr(d3, "multi_dlg", None) is not None and d3.multi_dlg.isVisible(), timeout=20)
+        and len(d3.multi_dlg.view.quads) == 3, "G 이미 들어간 명함의 원본을 세어 확인 창(테두리 셋)")
+    if getattr(d3, "multi_dlg", None) is not None:
+        QTest.mouseClick(d3.multi_dlg.btn_ok, Qt.MouseButton.LeftButton)
+    chk(pump(lambda: getattr(d3, "multi_split", None) is not None and getattr(mw, "_bizcard_dlg", None) is not None, timeout=20),
+        "G 나눈 뒤 명함 관리를 그 폴더로 엶")
+    st = S.BizcardStore()
+    names_g = sorted(os.listdir(FG))
+    chk(P.card_by_id(st, g_old["id"]) is None and not os.path.exists(g_out) and "g_1 명함 03.jpg" in names_g
+        and (FG / "다중 원본" / "g_1.jpg").exists(),
+        "G 예전 한 장짜리 명함은 지우고(정리본 휴지통) 원본 옆에 셋, 원본은 '다중 원본'", str(names_g))
+    st.close()
+    imd = getattr(mw, "_bizcard_dlg", None)
+    if imd is not None:
+        pump(lambda: imd.bar.value() == 3 and not imd._pending, timeout=20)
+        chk(imd.table.rowCount() == 3, "G 명함 관리가 잘라낸 셋을 읽음", str(imd.table.rowCount()))
+        imd.close()
+        pump(timeout=0.3)
+    d4 = fd.open_dupes(exec_=False)
+    chk(d4 is not None and d4.btn_undo.isEnabled(), "G 나눈 뒤 [마지막 합치기 되돌리기] 켜짐(합치기와 같은 길)")
+    if d4 is not None:
+        d4.undo(ask=False)
+        pump(timeout=0.5)
+        st = S.BizcardStore()
+        chk(P.card_by_id(st, g_old["id"]) is not None and os.path.exists(g_out) and (FG / "g_1.jpg").exists()
+            and not (FG / "g_1 명함 01.jpg").exists(), "G 되돌리기 — 예전 명함·정리본·원본 제자리, 잘라낸 것은 휴지통",
+            str(sorted(os.listdir(FG))))
+        st.close()
+        # 크게 보기 — F11 전체 화면, Esc 로 돌아옴 (사용자 지시 261119)
+        d4.activateWindow()
+        QTest.keyClick(d4, Qt.Key.Key_F11)
+        pump(timeout=0.2)
+        full = d4.isFullScreen()
+        QTest.keyClick(d4, Qt.Key.Key_Escape)
+        pump(timeout=0.2)
+        chk(bool(d4.windowFlags() & Qt.WindowType.WindowMaximizeButtonHint) and full and not d4.isFullScreen() and d4.isVisible(),
+            "H 중복 검토 창 크게 보기 — 최대화 단추·F11 전체 화면·Esc 로 돌아옴(창은 그대로)")
+        # 세는 중 다시 누르면 멈춤
+        d4.find_multi(ask=False)
+        d4.find_multi(ask=False)
+        pump(lambda: d4._mw_multi.done_event.is_set(), timeout=20)
+        pump(timeout=0.2)
+        chk(d4.btn_multi.text() == "다중 명함 찾기", "G 세는 중 다시 누르면 멈춤 — 단추 글 되돌아옴", d4.btn_multi.text())
+        d4.close()
 except Exception:
     import traceback
     traceback.print_exc()

@@ -592,6 +592,26 @@ def _keys_of(card) -> list:
     return out
 
 
+MOBILE_PREFIX = ("010", "011", "016", "017", "018", "019")
+
+
+def _mobile_keys(card) -> list:
+    """휴대폰 번호만(종류가 휴대폰이거나 01x 로 시작) — 회사 대표 번호·팩스는 여럿이 같이 쓴다(사용자 보고 261119)."""
+    out = []
+    for x in card.get("phones") or []:
+        kind, num = (x[0], x[-1]) if isinstance(x, (list, tuple)) and len(x) >= 2 else ("", x)
+        k = _phone_key(num)
+        if k and kind != "fax" and (kind == "cell" or k.startswith(MOBILE_PREFIX)):
+            out.append(k)
+    return out
+
+
+def _same_person_name(a, b) -> bool:
+    """이름이 같거나 한쪽이 비었으면 True — 이름이 다르면 같은 휴대폰일 때만 같은 사람으로 본다."""
+    na, nb = _nname(a.get("name")), _nname(b.get("name"))
+    return not na or not nb or na == nb
+
+
 def one_off(a: str, b: str) -> bool:
     """숫자 수가 같고 한 자리만 다른 번호(오타 의심)."""
     return len(a) == len(b) and a != b and sum(x != y for x, y in zip(a, b)) == 1
@@ -656,18 +676,22 @@ def dupe_groups(store, order=None) -> list:
             if old is None or _WHY_RANK[why] < _WHY_RANK[old]:
                 edges.setdefault(x, {})[y] = why
 
-    first = {}
+    # 같은 휴대폰 = 같은 사람(이름이 달라도 — 이름을 잘못 읽었을 수 있다). 회사 번호·팩스·메일은 여럿이 같이 쓰므로
+    # 이름이 같을(또는 한쪽이 빈) 때만(사용자 보고 261119 '첫번째 전화번호가 다르고 이름도 다른데 유사하다고 판단하면 안 됨')
+    bucket = {}
     for c in cards:
-        for k in set(_keys_of(c)):
-            if ("t", k) in first:
-                link(c["id"], first[("t", k)], "phone")
-            else:
-                first[("t", k)] = c["id"]
+        mob = set(_mobile_keys(c))
+        for k in mob:
+            bucket.setdefault(("c", k), []).append(c)
+        for k in set(_keys_of(c)) - mob:
+            bucket.setdefault(("t", k), []).append(c)
         for e in {str(e).strip().lower() for e in c.get("emails") or [] if str(e).strip()}:
-            if ("m", e) in first:
-                link(c["id"], first[("m", e)], "mail")
-            else:
-                first[("m", e)] = c["id"]
+            bucket.setdefault(("m", e), []).append(c)
+    for (t, _k), same in bucket.items():
+        for i, a in enumerate(same):
+            for b in same[i + 1:]:
+                if t == "c" or _same_person_name(a, b):
+                    link(a["id"], b["id"], "mail" if t == "m" else "phone")
     by_name, by_nc = {}, {}
     for c in cards:
         n = _nname(c.get("name"))
@@ -679,9 +703,9 @@ def dupe_groups(store, order=None) -> list:
             by_nc.setdefault((n, co), []).append(c)
     for same in by_name.values():
         for i, a in enumerate(same):
-            ka = _keys_of(a)
+            ka = _mobile_keys(a)
             for b in same[i + 1:]:
-                if any(one_off(x, y) for x in ka for y in _keys_of(b)):
+                if any(one_off(x, y) for x in ka for y in _mobile_keys(b)):
                     link(a["id"], b["id"], "typo")
     for same in by_nc.values():
         for b in same[1:]:
@@ -735,14 +759,17 @@ def merge_plan(cards, manual=None) -> dict:
         if m and m not in memo:
             memo = (memo + "\n\n" + m) if memo else m
     fields["memo"] = memo
-    phones, keys = [], []
+    phones, keys, mobs = [], [], []
     for c in cards:
         for kind, num in c.get("phones") or []:
             k = _phone_key(num) or re.sub(r"\D", "", num or "")
-            if not k or k in keys or any(one_off(k, x) for x in keys if len(x) >= 9):
+            mob = bool(_mobile_keys({"phones": [(kind, num)]}))
+            if not k or k in keys or (mob and any(one_off(k, x) for x in mobs)):   # 휴대폰끼리만 오타로 봄(회사 직통은 한 자리 차이가 흔함)
                 continue
             keys.append(k)
             phones.append((kind, num))
+            if mob:
+                mobs.append(k)
     if any(k.startswith("010") for k in keys):
         phones = [(kind, num) for (kind, num), k in zip(phones, keys) if not k.startswith(OLD_MOBILE)]
     fields["phones"] = phones

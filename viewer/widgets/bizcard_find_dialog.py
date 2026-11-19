@@ -12,10 +12,11 @@ import math
 import os
 from pathlib import Path
 
-from PyQt6.QtCore import Qt, QTimer, QSize, QObject, QRectF, QPointF, QDate, pyqtSignal
+from PyQt6.QtCore import (Qt, QTimer, QSize, QObject, QRectF, QPointF, QDate, pyqtSignal, QAbstractTableModel,
+    QModelIndex)
 from PyQt6.QtGui import QPixmap, QIcon, QImage, QImageReader, QPainter, QPainterPath, QColor, QFont, QKeySequence, QShortcut
-from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QComboBox, QTableWidget,
-    QTableWidgetItem, QAbstractItemView, QHeaderView, QSplitter, QWidget, QFormLayout, QPlainTextEdit, QPushButton,
+from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QComboBox, QTableView,
+    QAbstractItemView, QHeaderView, QSplitter, QWidget, QFormLayout, QPlainTextEdit, QPushButton,
     QListWidget, QListWidgetItem, QListView, QMessageBox, QFileDialog, QSizePolicy, QCheckBox, QTabBar, QToolButton,
     QMenu, QInputDialog, QApplication, QDateEdit, QDialogButtonBox, QWidgetAction)
 
@@ -56,6 +57,169 @@ def _list_mail(c) -> str:
 def _today() -> str:
     import datetime
     return datetime.date.today().isoformat()
+
+
+# ── 목록 표 — 가상 표(§5.9 '결과': 상한 없이 찾은 명함 전부, 보이는 줄만 그린다) ──
+class _Cell:
+    """`QTableWidgetItem` 처럼 읽는 칸(text·data) — 표를 부르는 코드·검사가 그대로 쓰게."""
+    __slots__ = ("_m", "_r", "_c")
+
+    def __init__(self, model, r, c):
+        self._m, self._r, self._c = model, r, c
+
+    def row(self):
+        return self._r
+
+    def column(self):
+        return self._c
+
+    def text(self):
+        return self._m.text(self._r, self._c)
+
+    def data(self, role):
+        return self._m.data(self._m.index(self._r, self._c), role)
+
+
+class _CardModel(QAbstractTableModel):
+    """명함 행(dict) 목록 — 칸 글은 명함마다 한 번만 만들어 두고, 정렬은 그 글 차례(파이썬 정렬, 같으면 앞 차례 유지)."""
+
+    def __init__(self, headers, parent=None):
+        super().__init__(parent)
+        self._heads = list(headers)
+        self._rows = []
+        self._disp = []
+        self._at = {}
+
+    @staticmethod
+    def _cells(c):
+        return (c.get("name") or "", c.get("company") or "", c.get("title") or "", _list_phone(c), _list_mail(c),
+                c.get("scanned") or "")
+
+    def _reindex(self):
+        self._at = {c["id"]: i for i, c in enumerate(self._rows)}
+
+    def _perm(self, col, order):
+        n = len(self._rows)
+        if not (0 <= col < len(self._heads)):
+            return list(range(n))
+        d = self._disp
+        return sorted(range(n), key=lambda i: d[i][col], reverse=order == Qt.SortOrder.DescendingOrder)
+
+    def set_rows(self, rows, col=-1, order=Qt.SortOrder.AscendingOrder):
+        self.beginResetModel()
+        self._rows = list(rows)
+        self._disp = [self._cells(c) for c in self._rows]
+        p = self._perm(col, order)
+        self._rows = [self._rows[i] for i in p]
+        self._disp = [self._disp[i] for i in p]
+        self._reindex()
+        self.endResetModel()
+
+    def card(self, r):
+        return self._rows[r] if 0 <= r < len(self._rows) else None
+
+    def row_of_id(self, cid) -> int:
+        return self._at.get(cid, -1)
+
+    def text(self, r, c):
+        return self._disp[r][c] if 0 <= r < len(self._disp) and 0 <= c < len(self._heads) else ""
+
+    def header(self, c):
+        return self._heads[c]
+
+    # ── Qt 모델 ──
+    def rowCount(self, parent=QModelIndex()):
+        return 0 if parent.isValid() else len(self._rows)
+
+    def columnCount(self, parent=QModelIndex()):
+        return 0 if parent.isValid() else len(self._heads)
+
+    def data(self, index, role=Qt.ItemDataRole.DisplayRole):
+        if not index.isValid():
+            return None
+        r, c = index.row(), index.column()
+        if not (0 <= r < len(self._rows)):
+            return None
+        if role in (Qt.ItemDataRole.DisplayRole, Qt.ItemDataRole.EditRole):
+            return self._disp[r][c]
+        if role == ROLE and c == C_NAME:
+            return self._rows[r]["id"]
+        return None
+
+    def headerData(self, section, orientation, role=Qt.ItemDataRole.DisplayRole):
+        if orientation == Qt.Orientation.Horizontal and role == Qt.ItemDataRole.DisplayRole and 0 <= section < len(self._heads):
+            return self._heads[section]
+        return None
+
+    def flags(self, index):
+        f = Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable
+        return f | Qt.ItemFlag.ItemIsDragEnabled if index.isValid() else f
+
+    def sort(self, column, order=Qt.SortOrder.AscendingOrder):
+        """머리말 정렬 — 고른 줄·현재 줄(영구 색인)이 같은 명함을 따라가게."""
+        self.layoutAboutToBeChanged.emit([], QAbstractTableModel.LayoutChangeHint.VerticalSortHint)
+        p = self._perm(column, order)
+        inv = [0] * len(p)
+        for new, old in enumerate(p):
+            inv[old] = new
+        self._rows = [self._rows[i] for i in p]
+        self._disp = [self._disp[i] for i in p]
+        self._reindex()
+        old = self.persistentIndexList()
+        self.changePersistentIndexList(old, [self.index(inv[i.row()], i.column()) if 0 <= i.row() < len(inv) else QModelIndex()
+                                             for i in old])
+        self.layoutChanged.emit([], QAbstractTableModel.LayoutChangeHint.VerticalSortHint)
+
+
+class _CardTable(QTableView):
+    """명함찾기 목록 표 — `QTableWidget` 의 쓰던 부분(item·setCurrentCell·currentRow·rowCount·신호)만 같은 이름으로."""
+    currentCellChanged = pyqtSignal(int, int, int, int)
+    cellClicked = pyqtSignal(int, int)
+
+    def __init__(self, headers, parent=None):
+        super().__init__(parent)
+        self.setModel(_CardModel(headers, self))
+        self.selectionModel().currentChanged.connect(
+            lambda cur, prev: self.currentCellChanged.emit(cur.row(), cur.column(), prev.row(), prev.column()))
+        self.clicked.connect(lambda i: self.cellClicked.emit(i.row(), i.column()))
+
+    def set_cards(self, rows):
+        hh = self.horizontalHeader()
+        col = hh.sortIndicatorSection() if self.isSortingEnabled() else -1
+        self.model().set_rows(rows, col, hh.sortIndicatorOrder())
+
+    def rowCount(self) -> int:
+        return self.model().rowCount()
+
+    def columnCount(self) -> int:
+        return self.model().columnCount()
+
+    def item(self, r, c):
+        m = self.model()
+        return _Cell(m, r, c) if 0 <= r < m.rowCount() and 0 <= c < m.columnCount() else None
+
+    def horizontalHeaderItem(self, c):
+        class _H:
+            def __init__(self, t):
+                self._t = t
+
+            def text(self):
+                return self._t
+        return _H(self.model().header(c)) if 0 <= c < self.model().columnCount() else None
+
+    def itemAt(self, pos):
+        i = self.indexAt(pos)
+        return self.item(i.row(), i.column()) if i.isValid() else None
+
+    def setCurrentCell(self, r, c):
+        self.setCurrentIndex(self.model().index(r, c))
+
+    def currentRow(self) -> int:
+        return self.currentIndex().row()
+
+    def scrollToItem(self, it):
+        if it is not None:
+            self.scrollTo(self.model().index(it.row(), it.column()))
 
 
 class TodoDialog(QDialog):
@@ -516,8 +680,7 @@ class BizcardFindDialog(QDialog):
         lv.addWidget(self.fav)
 
         mid = self.mid = QSplitter(Qt.Orientation.Horizontal)
-        self.table = QTableWidget(0, 6)
-        self.table.setHorizontalHeaderLabels([tr("이름"), tr("회사"), tr("직함"), tr("전화"), tr("메일"), tr("스캔일")])
+        self.table = _CardTable([tr("이름"), tr("회사"), tr("직함"), tr("전화"), tr("메일"), tr("스캔일")])   # 가상 표(§5.9 '결과')
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
@@ -765,30 +928,19 @@ class BizcardFindDialog(QDialog):
             rows = self._tab_members(self._table_tab)
         else:
             since, until = self._range()
-            rows = P.find(self._store(), self.ed_find.text(), since, until)
-        more = len(rows) > P.SEARCH_LIMIT
-        self._rows = rows[:P.SEARCH_LIMIT]
+            rows = P.find(self._store(), self.ed_find.text(), since, until)   # 상한 없이 전부(§5.9 '결과')
+        self._rows = rows
         self._by_id = {c["id"]: c for c in self._rows}
         keep = self._card["id"] if self._card else None
         self._loading = True
         try:
-            self.table.setSortingEnabled(False)             # 채우는 동안 줄이 움직이지 않게
-            self.table.clearContents()
-            self.table.setRowCount(len(self._rows))
-            for r, c in enumerate(self._rows):
-                for col, val in ((C_NAME, c.get("name")), (C_COMP, c.get("company")), (C_TITLE, c.get("title")),
-                                 (C_PHONE, _list_phone(c)), (C_MAIL, _list_mail(c)), (C_DATE, c.get("scanned"))):
-                    it = QTableWidgetItem(val or "")
-                    if col == C_NAME:
-                        it.setData(ROLE, c["id"])
-                    self.table.setItem(r, col, it)
-            self.table.setSortingEnabled(True)              # 지금 머리말 기준으로 다시 정렬
+            self.table.set_cards(self._rows)                # 지금 머리말 기준으로 정렬해 넣는다(가상 표 — 보이는 줄만 그림)
         finally:
             self._loading = False
         if self._table_tab is not None:
             self.lbl_count.setText(tr("'{tab}' {n}명").format(tab=self._tab_name(self._table_tab), n=len(self._rows)))
         else:
-            self.lbl_count.setText((tr("처음 {n}장") if more else tr("{n}장")).format(n=len(self._rows)))
+            self.lbl_count.setText(tr("{n}장").format(n=len(self._rows)))
         pick = self.row_of_id(keep) if keep in self._by_id else (0 if self._rows else -1)
         if pick >= 0:
             self._loading = True
@@ -799,15 +951,10 @@ class BizcardFindDialog(QDialog):
             self._load(None)
 
     def row_of_id(self, cid) -> int:
-        for r in range(self.table.rowCount()):
-            it = self.table.item(r, C_NAME)
-            if it is not None and it.data(ROLE) == cid:
-                return r
-        return -1
+        return self.table.model().row_of_id(cid)
 
     def _card_at(self, r):
-        it = self.table.item(r, C_NAME) if 0 <= r < self.table.rowCount() else None
-        return self._by_id.get(it.data(ROLE)) if it is not None else None
+        return self.table.model().card(r)
 
     def _on_current(self, r, _c, pr, _pc):
         if self._loading or r == pr:

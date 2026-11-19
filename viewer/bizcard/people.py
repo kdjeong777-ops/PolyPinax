@@ -14,7 +14,6 @@ from pathlib import Path
 from viewer.bizcard import recognize as R
 
 PEOPLE_DIR = "인물"            # 인물 사진 폴더 — 정리 폴더 옆(D16 '폴더 통째' 와 같은 자리)
-SEARCH_LIMIT = 500
 _COLS = ("name", "company", "dept", "title", "memo", "address", "emails", "phones", "urls", "en")
 
 
@@ -23,10 +22,11 @@ def _nk(p) -> str:
 
 
 # ── 찾기 ──
-def find(store, text: str = "", since: str = "", until: str = "", limit: int = SEARCH_LIMIT) -> list:
+def find(store, text: str = "", since: str = "", until: str = "", limit=None) -> list:
     """검색 연산자(검색창 SOT §4.2 — 띄어쓰기 AND·`|` OR·`-` NOT·괄호·"구절") — 단위는 명함 하나, 낱말은 모든 칸 글자 **일부**로
     (대소문자·빈칸·하이픈 무시). `#낱말` 은 해시태그(앞부분 일치). 스캔일 범위 YYYY-MM-DD.
-    반환 = 명함 DB 행(dict), 스캔일 최근 먼저, limit+1 장까지(넘쳤는지 부르는 쪽이 안다).
+    반환 = 명함 DB 행(dict), 스캔일 최근 먼저, 찾은 것 전부(명함 SOT §5.9 '결과' — 종전 500장 상한은 '전체 목록이 일부만' 이라 없앰).
+    limit 을 주면 그 장 수까지만.
     261117-30: 칸을 이어 붙인 글을 식으로 보려고 날짜로만 SQL 에서 거르고 낱말은 파이썬에서 본다(명함 수천 장 — 수 ms)."""
     from viewer.query import parse, flat_text
     pq = parse(text or "")
@@ -40,7 +40,8 @@ def find(store, text: str = "", since: str = "", until: str = "", limit: int = S
     q = "SELECT * FROM cards" + (" WHERE " + " AND ".join(where) if where else "")
     q += " ORDER BY IFNULL(scanned,'') DESC, id DESC"
     if pq.empty:
-        q += " LIMIT %d" % (int(limit) + 1)
+        if limit is not None:
+            q += " LIMIT %d" % int(limit)
         return [store._row(r) for r in store.con.execute(q, args).fetchall()]
     out = []
     for r in store.con.execute(q, args):
@@ -57,7 +58,7 @@ def find(store, text: str = "", since: str = "", until: str = "", limit: int = S
             return flat_text(w).lower() in hay
         if pq.test(has):
             out.append(store._row(r))
-            if len(out) > int(limit):
+            if limit is not None and len(out) >= int(limit):
                 break
     return out
 

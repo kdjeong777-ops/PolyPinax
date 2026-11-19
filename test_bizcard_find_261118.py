@@ -929,6 +929,45 @@ try:
     chk(st.con.execute("SELECT COUNT(*) FROM fav_members WHERE card_id=?", (lee["id"],)).fetchone()[0] == 0, "I9 즐겨찾기 칸도 지움")
     st.close()
     chk(dlg.table.rowCount() == 4, "I9 표에서 빠짐", str(dlg.table.rowCount()))
+    # I20 옛 상한(500장)보다 많은 명함 — 빈 찾기 칸을 실제로 누르면 전부(사용자 보고 261119 '전체 목록이 안보이고 일부 목록만')
+    n_fake = 1200
+    st = S.BizcardStore()
+    st.con.executemany(
+        "INSERT INTO cards(front, name, company, title, phones, emails, scanned, tags, en) VALUES(?,?,?,?,?,?,?,?,?)",
+        [(str(TMP / "fake" / ("f%04d.jpg" % i)), "가짜%04d" % i, "가짜회사%d" % (i % 7), "",
+          '[["cell","010-0000-%04d"]]' % (1000 + i), "[]", "2021-01-%02d" % (i % 28 + 1), "[]", "{}") for i in range(n_fake)])
+    st.con.commit()
+    n_db = st.con.execute("SELECT COUNT(*) FROM cards").fetchone()[0]
+    st.close()
+    QTest.mouseClick(dlg.fav_tabs, Qt.MouseButton.LeftButton, pos=dlg.fav_tabs.tabRect(1).center())   # 탭 명단을 보다가
+    pump(timeout=0.3)
+    dlg.ed_find.clear()
+    t0 = time.monotonic()
+    QTest.mouseClick(dlg.ed_find, Qt.MouseButton.LeftButton)                                        # 빈 찾기 칸을 누름
+    pump(lambda: dlg.table.rowCount() == n_db, timeout=5)
+    dt = time.monotonic() - t0
+    chk(n_db > 500 and dlg.table.rowCount() == n_db and dlg.lbl_count.text() == "%d장" % n_db,
+        "I20 옛 상한(500)보다 많은 명함 — 빈 찾기 칸을 누르면 전부·위 줄 n장",
+        "%d/%d %r" % (dlg.table.rowCount(), n_db, dlg.lbl_count.text()))
+    chk(dt < 1.5, "I20 전체 목록이 곧바로(1초 남짓 안)", "%.2fs" % dt)
+    t0 = time.monotonic()
+    dlg.refresh()
+    dt_r = time.monotonic() - t0
+    chk(dt_r < 1.0, "I20 전체 목록 다시 채우기 메인 정지 < 1초", "%.2fs" % dt_r)
+    hh = dlg.table.horizontalHeader()                     # click_head 가 쓰는 머리말 — 지금 창의 것
+    click_head(0)
+    if hh.sortIndicatorOrder() != Qt.SortOrder.AscendingOrder:
+        click_head(0)
+    a_up = col_names()
+    click_head(0)
+    a_dn = col_names()
+    chk(len(a_up) == n_db and a_up == sorted(a_up) and a_dn == sorted(a_up, reverse=True),
+        "I20 많은 명함도 머리말 정렬·반대")
+    r_last = dlg.row_of_id(max(c["id"] for c in dlg._rows))
+    dlg.table.setCurrentCell(r_last, 0)
+    pump(timeout=0.2)
+    chk(dlg._card is not None and dlg._card["name"].startswith("가짜") and dlg.table.item(r_last, 0).text() == dlg._card["name"],
+        "I20 아래쪽 줄을 골라도 그 명함이 세부 칸에")
     dlg.close()
     pump(timeout=0.2)
 except Exception:

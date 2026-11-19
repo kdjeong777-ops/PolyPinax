@@ -238,20 +238,23 @@ class BizcardImportDialog(QDialog):
         self.btn_date.clicked.connect(lambda _c=False: self._set_dates())
         top.addWidget(self.btn_date)
         # 261117-16(사용자 보고 '늘 한 줄만 다시 읽힘' — 표에는 늘 한 줄이 골라져 있다, 사용자 결정 '단추를 둘로'):
-        #   [다시 읽기 ▾] → '고른 줄 다시 읽기 (n장)' · '모두 다시 읽기 (N장)'
-        self.btn_reread = QPushButton(tr("다시 읽기") + " ▾")
+        #   [다시 읽기](메뉴) → '고른 줄 다시 읽기 (n장)' · '모두 다시 읽기 (N장)'
+        self.btn_reread = QPushButton(tr("다시 읽기"))   # 메뉴 단추 — ▾ 없이 Qt 화살표(디자인 SOT §2.7)
         self.btn_reread.setToolTip(tr("지금의 인식으로 다시 읽습니다 — 고른 줄만 또는 모두. 손으로 고친 칸은 그대로 둡니다"))
         self._reread_menu = QMenu(self)
         self._reread_menu.aboutToShow.connect(self._fill_reread_menu)
         self.btn_reread.setMenu(self._reread_menu)
         top.addWidget(self.btn_reread)
+        from viewer.widgets.icons import drop_button
+        drop_button(self.btn_reread)
         # P3(명함 SOT §5.8): vCard 내보내기·기존 vCard 에 합치기
-        self.btn_vcard = QPushButton("vCard ▾")
+        self.btn_vcard = QPushButton("vCard")
         self.btn_vcard.setToolTip(tr("적용한 명함을 vCard(.vcf) 로 내보내거나 기존 vCard 에 합칩니다 — 구글 연락처·휴대폰에서 읽습니다"))
         self._vcard_menu = QMenu(self)
         self._vcard_menu.aboutToShow.connect(self._fill_vcard_menu)
         self.btn_vcard.setMenu(self._vcard_menu)
         top.addWidget(self.btn_vcard)
+        drop_button(self.btn_vcard)
         self.last_vcard = None
         self.btn_del = QPushButton(tr("삭제"))
         self.btn_del.setToolTip(tr("고른 명함의 원본 그림·PDF 와 만든 정리본을 휴지통으로 보내고 기록을 지웁니다 (Delete)"))
@@ -720,10 +723,10 @@ class BizcardImportDialog(QDialog):
         sel = self.selected_rows_idx()
         alln = list(range(len(self._items)))
         for i, (text, rows, merge) in enumerate((
-                (tr("고른 명함 → vCard 파일… ({n}장)"), sel, False),
-                (tr("모든 명함 → vCard 파일… ({n}장)"), alln, False),
-                (tr("고른 명함을 기존 vCard 에 합치기… ({n}장)"), sel, True),
-                (tr("모든 명함을 기존 vCard 에 합치기… ({n}장)"), alln, True))):
+                (tr("고른 명함 → vCard 파일 ({n}장)"), sel, False),
+                (tr("모든 명함 → vCard 파일 ({n}장)"), alln, False),
+                (tr("고른 명함을 기존 vCard 에 합치기 ({n}장)"), sel, True),
+                (tr("모든 명함을 기존 vCard 에 합치기 ({n}장)"), alln, True))):
             if i == 2:
                 m.addSeparator()
             a = m.addAction(text.format(n=len(rows)))

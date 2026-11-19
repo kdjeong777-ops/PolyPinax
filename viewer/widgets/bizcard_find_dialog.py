@@ -418,7 +418,7 @@ class BizcardFindDialog(QDialog):
         self.ed_find.setPlaceholderText(tr("이름·회사·메모 등 — 낱말 여럿은 모두 들어 있는 명함, #낱말은 해시태그"))
         self.ed_find.setClearButtonEnabled(True)
         top.addWidget(self.ed_find, 1)
-        self.btn_tags = QPushButton(tr("해시태그..."))       # 찾기 칸 바로 오른쪽(§5.24.1 '위 줄', 사용자 지시 261119)
+        self.btn_tags = QPushButton(tr("해시태그"))       # 찾기 칸 바로 오른쪽(§5.24.1 '위 줄', 사용자 지시 261119)
         self.btn_tags.setToolTip(tr("고른 명함들에 해시태그를 붙이거나 뗍니다 — 정리본 파일에도 같이, 찾기 칸에서 #낱말로 찾습니다"))
         self.btn_tags.clicked.connect(lambda _c=False: self.edit_tags())
         top.addWidget(self.btn_tags)
@@ -630,7 +630,7 @@ class BizcardFindDialog(QDialog):
         self.photos.customContextMenuRequested.connect(self._photo_menu)
         pvl.addWidget(self.photos)
         prow = QHBoxLayout()                               # 인물 사진 칸 아래 단추(§5.24 '단추', 사용자 지시 261119)
-        self.btn_photo = QPushButton(tr("사진 추가..."))
+        self.btn_photo = QPushButton(tr("사진 추가"))
         self.btn_photo.setToolTip(tr("인물 사진을 '인물' 폴더에 정리본과 같은 이름의 JPG 로 넣습니다 — 위치 정보 등 EXIF 는 뺍니다"))
         self.btn_photo.clicked.connect(lambda _c=False: self._pick_photos())
         self.btn_photo_del = QPushButton(tr("사진 삭제"))
@@ -657,18 +657,20 @@ class BizcardFindDialog(QDialog):
         self.btn_open = QPushButton(tr("명함 보기"))                     # D19: 종전 '사진 모드에서 열기' — 동작 그대로
         self.btn_open.setToolTip(tr("이 명함을 사진 모드에서 엽니다"))
         self.btn_open.clicked.connect(lambda _c=False: self.open_in_photo())
-        self.btn_vcard = QPushButton(tr("주소록 ▾"))                    # §5.24 D22·D23 — 구글 주소록·리멤버 명함첩(vCard)
+        self.btn_vcard = QPushButton(tr("주소록"))       # 메뉴 단추 — 글자에 ▾ 없이 Qt 화살표 하나(디자인 SOT §2.7)                    # §5.24 D22·D23 — 구글 주소록·리멤버 명함첩(vCard)
         self.btn_vcard.setToolTip(tr("주소록 vCard(.vcf) 가져오기·내보내기 — 구글 주소록·리멤버"))
         bm = QMenu(self.btn_vcard)
-        _menu_act(bm, tr("리멤버 vCard 가져오기..."), lambda: self.import_contacts(source="remember"))
-        _menu_act(bm, tr("구글 주소록 vCard 가져오기..."), lambda: self.import_contacts(source="google"))
+        _menu_act(bm, tr("리멤버 vCard 가져오기"), lambda: self.import_contacts(source="remember"))
+        _menu_act(bm, tr("구글 주소록 vCard 가져오기"), lambda: self.import_contacts(source="google"))
         bm.addSeparator()
-        _menu_act(bm, tr("구글 주소록용 vCard 로 내보내기..."), lambda: self.export_vcard(style="google"))
-        _menu_act(bm, tr("리멤버용 vCard 로 내보내기..."), lambda: self.export_vcard(style="remember"))
+        _menu_act(bm, tr("구글 주소록용 vCard 로 내보내기"), lambda: self.export_vcard(style="google"))
+        _menu_act(bm, tr("리멤버용 vCard 로 내보내기"), lambda: self.export_vcard(style="remember"))
         self.btn_vcard.setMenu(bm)
+        from viewer.widgets.icons import drop_button
+        drop_button(self.btn_vcard)
         b_close = QPushButton(tr("닫기"))
         b_close.clicked.connect(lambda _c=False: self.close())
-        for b in (self.btn_vcard, self.btn_open):           # [주소록 ▾] 은 [명함 보기] 왼쪽(§5.24.1 '단추', 사용자 지시 261119)
+        for b in (self.btn_vcard, self.btn_open):           # [주소록] 은 [명함 보기] 왼쪽(§5.24.1 '단추', 사용자 지시 261119)
             bot.addWidget(b)
         bot.addStretch(1)
         bot.addWidget(b_close)
@@ -875,7 +877,7 @@ class BizcardFindDialog(QDialog):
         if not path or not os.path.exists(path):
             self.photo_view.clear()
             if self._card and not V.is_contact(self._card):
-                self.photo_view.setText(tr("(인물 사진 없음 — 끌어 놓거나 [사진 추가...])"))
+                self.photo_view.setText(tr("(인물 사진 없음 — 끌어 놓거나 [사진 추가])"))
             return
         self.photo_view.setPixmap(_scaled(path, max(120, self.photo_view.width()), max(90, self.photo_view.height())))
 
@@ -1294,8 +1296,8 @@ class BizcardFindDialog(QDialog):
         """'+' — 새 즐겨찾기 탭·새 할 일(표에서 고른 명단, 끌어 놓았으면 끈 사람들)."""
         cards = self.selected_cards() if cards is None else cards
         m = QMenu(self)
-        _menu_act(m, tr("새 즐겨찾기 탭... ({n}명)").format(n=len(cards)), lambda: self.fav_new_tab(cards=cards))
-        _menu_act(m, tr("새 할 일... ({n}명)").format(n=len(cards)), lambda: self.todo_new(cards=cards))
+        _menu_act(m, tr("새 즐겨찾기 탭 ({n}명)").format(n=len(cards)), lambda: self.fav_new_tab(cards=cards))
+        _menu_act(m, tr("새 할 일 ({n}명)").format(n=len(cards)), lambda: self.todo_new(cards=cards))
         self._plus_menu_obj = m                        # 검사용
         m.exec(self.btn_fav_tab.mapToGlobal(self.btn_fav_tab.rect().bottomLeft()))
 
@@ -1345,12 +1347,12 @@ class BizcardFindDialog(QDialog):
         fm = m.addMenu(tr("즐겨찾기 탭에 넣기"))
         self._tab_menu_groups(fm, cards, todo=False)
         fm.addSeparator()
-        _menu_act(fm, tr("새 즐겨찾기 탭..."), lambda: self.fav_new_tab(cards=cards))
+        _menu_act(fm, tr("새 즐겨찾기 탭"), lambda: self.fav_new_tab(cards=cards))
         tm = m.addMenu(tr("할 일에 넣기"))
         tm.setIcon(_tab_icon("todo", self.palette()))
         self._tab_menu_groups(tm, cards, todo=True)
         tm.addSeparator()
-        _menu_act(tm, tr("새 할 일..."), lambda: self.todo_new(cards=cards))
+        _menu_act(tm, tr("새 할 일"), lambda: self.todo_new(cards=cards))
         _menu_act(m, tr("이메일 복사"), lambda: self.copy_emails(cards))
         m.addSeparator()
         _menu_act(m, tr("삭제"), lambda: self.delete_cards())
@@ -1370,8 +1372,8 @@ class BizcardFindDialog(QDialog):
             _menu_act(m, tr("이메일 복사"), lambda: self.copy_emails(self._tab_members(RECENT)))
         else:
             if P.todo_info(st, gid) is not None:
-                _menu_act(m, tr("할 일 고치기..."), lambda: self.todo_edit(gid))
-            _menu_act(m, tr("이름 바꾸기..."), lambda: self.fav_rename_tab(i))
+                _menu_act(m, tr("할 일 고치기"), lambda: self.todo_edit(gid))
+            _menu_act(m, tr("이름 바꾸기"), lambda: self.fav_rename_tab(i))
             _menu_act(m, tr("이메일 복사"), lambda: self.copy_emails(self._tab_members(gid)))
             m.addSeparator()
             if self._is_closed(gid):
@@ -1395,7 +1397,7 @@ class BizcardFindDialog(QDialog):
                 if self._is_closed(cid):
                     _menu_act(sm, tr("다시 열기"), lambda c=cid: self.tab_reopen(c))
                 if todo:
-                    _menu_act(sm, tr("할 일 고치기..."), lambda c=cid: self.todo_edit(c))
+                    _menu_act(sm, tr("할 일 고치기"), lambda c=cid: self.todo_edit(c))
                 _menu_act(sm, tr("탭 삭제"), lambda c=cid: self.tab_delete(c))
         self._tab_menu_obj = m                         # 검사용
         m.exec(self.fav_tabs.mapToGlobal(pos))
@@ -1588,8 +1590,8 @@ class BizcardFindDialog(QDialog):
         _menu_act(m, tr("이메일 복사"), lambda: self.copy_emails(cards))
         cm = m.addMenu(tr("다른 탭에 복사"))
         self._tab_menu_groups(cm, cards, exclude=gid)
-        _menu_act(m, tr("새 즐겨찾기 탭으로..."), lambda: self.fav_new_tab(cards=cards))
-        _menu_act(m, tr("새 할 일로..."), lambda: self.todo_new(cards=cards))
+        _menu_act(m, tr("새 즐겨찾기 탭으로"), lambda: self.fav_new_tab(cards=cards))
+        _menu_act(m, tr("새 할 일로"), lambda: self.todo_new(cards=cards))
         m.addSeparator()
         _menu_act(m, tr("최근에서 빼기") if gid == RECENT else tr("탭에서 빼기"), lambda: self.fav_remove_selected())
         self._fav_menu_obj = m                         # 검사용

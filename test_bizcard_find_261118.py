@@ -177,6 +177,17 @@ try:
         print(repr(e))
     chk(ok_old, "A2 옛 DB 를 열어도 깨지지 않음(새 표는 CREATE IF NOT EXISTS, cards 열은 그대로)")
 
+    print("\n=== M. 명함 창 메뉴·단추 글자 — 글 끝 '…'·'...' 없음, 메뉴 단추 글자에 '▾' 없음(디자인 SOT §2.7) ===")
+    import re as _re
+    bad = []
+    for _f in ("viewer/widgets/bizcard_find_dialog.py", "viewer/widgets/bizcard_import_dialog.py"):
+        _src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), _f), encoding="utf-8").read()
+        for _t in _re.findall(r'tr\("([^"]*)"\)', _src):
+            if _re.search(r'[가-힣A-Za-z\]](\.\.\.|…)( \(\{n\}[^"]*\))?$', _t) and not _t.endswith("중…"):
+                bad.append((_f.rsplit("/", 1)[-1], _t))
+        bad += [(_f.rsplit("/", 1)[-1], _m) for _m in _re.findall(r'QPushButton\(([^)\n]*▾[^)\n]*)\)', _src)]
+    chk(not bad, "M 명함 창 두 개의 메뉴·단추 글자에 끝 '…'·'▾' 없음", str(bad[:6]))
+
     print("\n=== B. 메뉴·창 ===")
     from viewer.app import MainWindow
     import modal_guard
@@ -186,8 +197,10 @@ try:
     mw.show()
     pump(timeout=1.0)
     from PyQt6.QtGui import QAction
-    acts = [a for a in mw.findChildren(QAction) if a.text().replace("…", "...") == "명함찾기..."]
-    chk(bool(acts), "B 도구 탭 `명함 ▾` 에 `명함찾기…`")
+    acts = [a for a in mw.findChildren(QAction) if a.text() == "명함찾기"]
+    chk(bool(acts) and not [a for a in mw.findChildren(QAction) if a.text().startswith(("명함찾기", "명함 관리"))
+                            and a.text().endswith(("…", "..."))],
+        "B 도구 탭 `명함 ▾` 에 `명함찾기`(글 끝 '…' 없음 — 디자인 SOT §2.7)")
     gaps, last = [], [time.monotonic()]
 
     def beat():
@@ -624,7 +637,7 @@ try:
         QTest.mouseClick(dlg.btn_fav_tab, Qt.MouseButton.LeftButton)
         pump(timeout=0.1)
         texts = [a.text() for a in shown[-1].actions()] if shown else []
-        act(shown[-1], "새 즐겨찾기 탭...").trigger()
+        act(shown[-1], "새 즐겨찾기 탭").trigger()
         tabs = [dlg.fav_tabs.tabText(i) for i in range(dlg.fav_tabs.count())]
         g_col = dlg.fav_tabs.tabData(tabs.index("동료")) if "동료" in tabs else None
         chk(any("(1" in t for t in texts) and g_col and [c["name"] for c in P.fav_members(st, g_col)] == ["홍길동"]
@@ -664,7 +677,7 @@ try:
         chk(dlg._drop_on_tab(0, dlg.fav) == 0 and dlg._drop_on_tab(0, dlg.table) == 0, "I15 '최근' 에는 넣을 수 없음")
         dlg._fav_menu(dlg.fav.visualItemRect(dlg.fav.selectedItems()[0]).center())
         fm = [a.text() for a in shown[-1].actions() if a.text()]
-        chk(fm[:2] == ["내용 복사", "이메일 복사"] and "다른 탭에 복사" in fm and "새 할 일로..." in fm and fm[-1] == "탭에서 빼기",
+        chk(fm[:2] == ["내용 복사", "이메일 복사"] and "다른 탭에 복사" in fm and "새 할 일로" in fm and fm[-1] == "탭에서 빼기",
             "I15 사람 메뉴 — 내용·이메일 복사·다른 탭에 복사·새 탭/할 일로·빼기", str(fm))
         # 탭 메뉴 — 이메일 복사·탭 마감 [?]·탭 삭제 [?]
         dlg.fav_tabs.setCurrentIndex(ti)

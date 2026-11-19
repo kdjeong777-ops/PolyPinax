@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-19 10:27+0900\n"
+"POT-Creation-Date: 2026-11-19 11:28+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -1602,6 +1602,7 @@ msgid "검색 색인을 고치지 못했습니다. PolyPinax 를 다시 시작�
 msgstr "The search index could not be repaired. Restart PolyPinax, then rebuild it with 'Tools → Index'."
 
 #: viewer/app.py viewer/widgets/bizcard_import_dialog.py
+#: viewer/widgets/bookmark_tree.py
 msgid "명함 관리"
 msgstr "Business Card Manager"
 
@@ -1874,13 +1875,9 @@ msgstr "Delete All Automatic Tags"
 msgid "없는 파일 항목 정리"
 msgstr "Clean Up Missing File Entries"
 
-#: viewer/app.py viewer/widgets/bookmark_tree.py
-msgid "명함 관리..."
-msgstr "Business Card Manager..."
-
-#: viewer/app.py
-msgid "명함찾기..."
-msgstr "Find Business Card..."
+#: viewer/app.py viewer/widgets/bizcard_find_dialog.py
+msgid "명함찾기"
+msgstr "Find Business Card"
 
 #: viewer/app.py viewer/doc_info.py viewer/sign_controller.py
 #: viewer/sign_draft_controller.py viewer/widgets/bookmark_tree.py
@@ -8098,16 +8095,13 @@ msgid "체크하지 않으면 시작일부터 계속"
 msgstr "If unchecked, it continues from the start date"
 
 #: viewer/widgets/bizcard_find_dialog.py
-msgid "명함찾기"
-msgstr "Find Business Card"
-
-#: viewer/widgets/bizcard_find_dialog.py
 msgid "이름·회사·메모 등 — 낱말 여럿은 모두 들어 있는 명함, #낱말은 해시태그"
 msgstr "Name, company, memo, etc. — several words find cards containing all of them, #word filters by hashtag"
 
-#: viewer/widgets/bizcard_find_dialog.py
-msgid "해시태그..."
-msgstr "Hashtags..."
+#: viewer/widgets/bizcard_find_dialog.py viewer/widgets/settings_dialog.py
+#: viewer/widgets/tag_apply_dialog.py
+msgid "해시태그"
+msgstr "Hashtags"
 
 #: viewer/widgets/bizcard_find_dialog.py
 msgid "고른 명함들에 해시태그를 붙이거나 뗍니다 — 정리본 파일에도 같이, 찾기 칸에서 #낱말로 찾습니다"
@@ -8150,8 +8144,8 @@ msgid "끌어 차례를 바꿉니다(첫 사진이 즐겨찾기 그림) — Dele
 msgstr "Drag to reorder (the first photo is the favorites picture) — Delete moves it to the Recycle Bin"
 
 #: viewer/widgets/bizcard_find_dialog.py
-msgid "사진 추가..."
-msgstr "Add Photo..."
+msgid "사진 추가"
+msgstr "Add Photo"
 
 #: viewer/widgets/bizcard_find_dialog.py
 msgid "인물 사진을 '인물' 폴더에 정리본과 같은 이름의 JPG 로 넣습니다 — 위치 정보 등 EXIF 는 뺍니다"
@@ -8174,28 +8168,28 @@ msgid "이 명함을 사진 모드에서 엽니다"
 msgstr "Open this card in photo mode"
 
 #: viewer/widgets/bizcard_find_dialog.py
-msgid "주소록 ▾"
-msgstr "Contacts ▾"
+msgid "주소록"
+msgstr "Contacts"
 
 #: viewer/widgets/bizcard_find_dialog.py
 msgid "주소록 vCard(.vcf) 가져오기·내보내기 — 구글 주소록·리멤버"
 msgstr "Import or export contacts as vCard (.vcf) — Google Contacts, Remember"
 
 #: viewer/widgets/bizcard_find_dialog.py
-msgid "리멤버 vCard 가져오기..."
-msgstr "Import Remember vCard..."
+msgid "리멤버 vCard 가져오기"
+msgstr "Import Remember vCard"
 
 #: viewer/widgets/bizcard_find_dialog.py
-msgid "구글 주소록 vCard 가져오기..."
-msgstr "Import Google Contacts vCard..."
+msgid "구글 주소록 vCard 가져오기"
+msgstr "Import Google Contacts vCard"
 
 #: viewer/widgets/bizcard_find_dialog.py
-msgid "구글 주소록용 vCard 로 내보내기..."
-msgstr "Export vCard for Google Contacts..."
+msgid "구글 주소록용 vCard 로 내보내기"
+msgstr "Export vCard for Google Contacts"
 
 #: viewer/widgets/bizcard_find_dialog.py
-msgid "리멤버용 vCard 로 내보내기..."
-msgstr "Export vCard for Remember..."
+msgid "리멤버용 vCard 로 내보내기"
+msgstr "Export vCard for Remember"
 
 #: viewer/widgets/bizcard_find_dialog.py
 msgid "고친 내용을 저장할까요?"
@@ -8206,16 +8200,16 @@ msgid "즐겨찾기 탭에 넣기"
 msgstr "Add to Favorites Tab"
 
 #: viewer/widgets/bizcard_find_dialog.py
-msgid "새 즐겨찾기 탭..."
-msgstr "New Favorites Tab..."
+msgid "새 즐겨찾기 탭"
+msgstr "New Favorites Tab"
 
 #: viewer/widgets/bizcard_find_dialog.py
 msgid "할 일에 넣기"
 msgstr "Add to To-do"
 
 #: viewer/widgets/bizcard_find_dialog.py
-msgid "새 할 일..."
-msgstr "New To-do..."
+msgid "새 할 일"
+msgstr "New To-do"
 
 #: viewer/widgets/bizcard_find_dialog.py
 msgid "이메일 복사"
@@ -8226,20 +8220,16 @@ msgid "다른 탭에 복사"
 msgstr "Copy to Another Tab"
 
 #: viewer/widgets/bizcard_find_dialog.py
-msgid "새 즐겨찾기 탭으로..."
-msgstr "To New Favorites Tab..."
+msgid "새 즐겨찾기 탭으로"
+msgstr "To New Favorites Tab"
 
 #: viewer/widgets/bizcard_find_dialog.py
-msgid "새 할 일로..."
-msgstr "To New To-do..."
+msgid "새 할 일로"
+msgstr "To New To-do"
 
 #: viewer/widgets/bizcard_find_dialog.py
 msgid "인물 사진"
 msgstr "Portrait Photo"
-
-#: viewer/widgets/bizcard_find_dialog.py
-msgid "주소록"
-msgstr "Contacts"
 
 #: viewer/widgets/bizcard_find_dialog.py
 msgid "할 일"
@@ -8315,8 +8305,8 @@ msgid "탭 이름:"
 msgstr "Tab name:"
 
 #: viewer/widgets/bizcard_find_dialog.py
-msgid "이름 바꾸기..."
-msgstr "Rename..."
+msgid "이름 바꾸기"
+msgstr "Rename"
 
 #: viewer/widgets/bizcard_find_dialog.py
 msgid "탭 삭제"
@@ -8377,8 +8367,8 @@ msgid "(그림 파일이 없습니다)"
 msgstr "(No image file)"
 
 #: viewer/widgets/bizcard_find_dialog.py
-msgid "(인물 사진 없음 — 끌어 놓거나 [사진 추가...])"
-msgstr "(No person photo — drop one here or use [Add Photo...])"
+msgid "(인물 사진 없음 — 끌어 놓거나 [사진 추가])"
+msgstr "(No person photo — drop one here or use [Add Photo])"
 
 #: viewer/widgets/bizcard_find_dialog.py
 #, python-brace-format
@@ -8403,17 +8393,17 @@ msgstr "The last tab that is not a to-do cannot be closed."
 
 #: viewer/widgets/bizcard_find_dialog.py
 #, python-brace-format
-msgid "새 즐겨찾기 탭... ({n}명)"
-msgstr "New Favorites Tab... ({n} people)"
+msgid "새 즐겨찾기 탭 ({n}명)"
+msgstr "New Favorites Tab ({n} people)"
 
 #: viewer/widgets/bizcard_find_dialog.py
 #, python-brace-format
-msgid "새 할 일... ({n}명)"
-msgstr "New To-do... ({n} people)"
+msgid "새 할 일 ({n}명)"
+msgstr "New To-do ({n} people)"
 
 #: viewer/widgets/bizcard_find_dialog.py
-msgid "할 일 고치기..."
-msgstr "Edit To-do..."
+msgid "할 일 고치기"
+msgstr "Edit To-do"
 
 #: viewer/widgets/bizcard_find_dialog.py
 msgid "다시 열기"
@@ -8422,10 +8412,6 @@ msgstr "Reopen"
 #: viewer/widgets/bizcard_find_dialog.py
 msgid "탭 줄에서 보이지 않게 합니다. 지우지 않으므로 탭 메뉴 '마감한 탭'에서 언제든 다시 보거나 다시 열 수 있습니다."
 msgstr "Hides the tab from the tab bar. It is not deleted, so you can view or reopen it anytime from 'Closed Tabs' in the tab menu."
-
-#: viewer/widgets/bizcard_find_dialog.py
-msgid "할 일 고치기"
-msgstr "Edit To-do"
 
 #: viewer/widgets/bizcard_find_dialog.py
 #, python-brace-format
@@ -8528,6 +8514,10 @@ msgid "고른 줄의 스캔일을 왼쪽 날짜로 바꿉니다"
 msgstr "Sets the scan date of the selected rows to the date on the left"
 
 #: viewer/widgets/bizcard_import_dialog.py
+msgid "다시 읽기"
+msgstr "Read Again"
+
+#: viewer/widgets/bizcard_import_dialog.py
 msgid "지금의 인식으로 다시 읽습니다 — 고른 줄만 또는 모두. 손으로 고친 칸은 그대로 둡니다"
 msgstr "Reads cards again with the current recognition — selected rows only or all. Fields you edited by hand are kept"
 
@@ -8585,10 +8575,6 @@ msgstr "Insert"
 #: viewer/widgets/bizcard_import_dialog.py
 msgid "정리 폴더"
 msgstr "Output Folder"
-
-#: viewer/widgets/bizcard_import_dialog.py
-msgid "다시 읽기"
-msgstr "Read Again"
 
 #: viewer/widgets/bizcard_import_dialog.py
 msgid "뒷면"
@@ -8671,23 +8657,23 @@ msgstr "Read All Again ({n})"
 
 #: viewer/widgets/bizcard_import_dialog.py
 #, python-brace-format
-msgid "고른 명함 → vCard 파일… ({n}장)"
-msgstr "Selected cards → vCard file… ({n})"
+msgid "고른 명함 → vCard 파일 ({n}장)"
+msgstr "Selected cards → vCard file ({n})"
 
 #: viewer/widgets/bizcard_import_dialog.py
 #, python-brace-format
-msgid "모든 명함 → vCard 파일… ({n}장)"
-msgstr "All cards → vCard file… ({n})"
+msgid "모든 명함 → vCard 파일 ({n}장)"
+msgstr "All cards → vCard file ({n})"
 
 #: viewer/widgets/bizcard_import_dialog.py
 #, python-brace-format
-msgid "고른 명함을 기존 vCard 에 합치기… ({n}장)"
-msgstr "Merge selected cards into an existing vCard… ({n})"
+msgid "고른 명함을 기존 vCard 에 합치기 ({n}장)"
+msgstr "Merge selected cards into an existing vCard ({n})"
 
 #: viewer/widgets/bizcard_import_dialog.py
 #, python-brace-format
-msgid "모든 명함을 기존 vCard 에 합치기… ({n}장)"
-msgstr "Merge all cards into an existing vCard… ({n})"
+msgid "모든 명함을 기존 vCard 에 합치기 ({n}장)"
+msgstr "Merge all cards into an existing vCard ({n})"
 
 #: viewer/widgets/bizcard_import_dialog.py
 msgid "내보낼 명함이 없습니다 — [적용] 한 명함만 vCard 로 내보냅니다."
@@ -12686,10 +12672,6 @@ msgstr "Dark"
 #: viewer/widgets/settings_dialog.py
 msgid "보기·넘김"
 msgstr "View & Paging"
-
-#: viewer/widgets/settings_dialog.py viewer/widgets/tag_apply_dialog.py
-msgid "해시태그"
-msgstr "Hashtags"
 
 #: viewer/widgets/settings_dialog.py viewer/widgets/voice_settings.py
 msgid "읽기 음성"
@@ -17914,4 +17896,19 @@ msgstr "Getting Started"
 
 #~ msgid "할 일 '{t}' 를 지웁니다 — 명함과 메모는 그대로입니다."
 #~ msgstr "Delete the to-do '{t}'? Cards and memos are kept."
+
+#~ msgid "명함 관리..."
+#~ msgstr "Business Card Manager..."
+
+#~ msgid "명함찾기..."
+#~ msgstr "Find Business Card..."
+
+#~ msgid "해시태그..."
+#~ msgstr "Hashtags..."
+
+#~ msgid "주소록 ▾"
+#~ msgstr "Contacts ▾"
+
+#~ msgid "할 일 고치기..."
+#~ msgstr "Edit To-do..."
 

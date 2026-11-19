@@ -2061,8 +2061,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         _act(tr("인덱스"), self.action_reindex, "tools.reindex", tip=tr("인덱스 재구축 — 열린 폴더의 검색 색인을 처음부터 다시 만듭니다"))   # 261031-16: 종전 '인덱스 재구축'
         # 261117-8(명함 SOT §5.10, D11): 명함 ▾ — 들이기(P2) · 명함찾기(P4, §5.9)
         _sub(tr("명함"), (
-            (tr("명함 관리..."), lambda: self._action_bizcard_import()),   # 261117-9: 종전 '명함 들이기'(사용자 지시)
-            (tr("명함찾기..."), lambda: self._action_bizcard_find())), "tools.bizcard")
+            (tr("명함 관리"), lambda: self._action_bizcard_import()),   # 261117-9: 종전 '명함 들이기'(사용자 지시)
+            (tr("명함찾기"), lambda: self._action_bizcard_find())), "tools.bizcard")
         # PDF
         m_tools.addSeparator()
         _mk_pdf = RibbonIconMark(self, None, tr("PDF 만들기·합치기·암호·서명"), tr("PDF"))

@@ -3971,7 +3971,7 @@ class BookmarkTree(QWidget):
         # ── PDF 모드(·사진 모드 폴더 줄) ──
         if pm and _folder_row is not None and self.bizcard_import is not None:   # 261117-8(명함 SOT §5.10, D11)
             menu.group("bizcard")
-            _bz = menu.addAction(tr("명함 관리..."))
+            _bz = menu.addAction(tr("명함 관리"))
             _bz.triggered.connect(lambda _c=False, f=str(_folder_row): self.bizcard_import(f))
         is_file = self._is_file_node(item)
         is_bookmark = (not is_file and not self._is_folder_node(item) and bool(item.data(0, self.DATA_FILE)))

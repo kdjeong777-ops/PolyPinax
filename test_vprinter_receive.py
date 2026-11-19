@@ -226,6 +226,7 @@ _real_can_receive = getattr(R, "can_receive", lambda: True)
 R.can_receive = lambda: True             # 흐름 검사는 변환 도구가 있는 창(CI 처럼 printer\bin 이 없는 곳에서도) — 없는 창은 X 절
 grays = []
 R.to_gray = lambda src, out, gs=None: (grays.append(out), shutil.copyfile(src, out))
+mw._vp_gather = object()                 # 흐름 검사는 받기 통로를 잡은 창(261117-51 — 못 잡은 창은 R 절)
 mw._prefs["vprinter"] = {"kind": "original", "color": "color"}      # 기본 설정 그대로(종전 '저장 창 없이' 를 켜지 않은 상태)
 dialogs = []
 PD.PrintScopeDialog.exec = lambda self: dialogs.append(1) or 0      # 종전 판은 여기서 저장 창을 띄웠다(취소 = 저장 안 함)
@@ -286,6 +287,80 @@ mw._vprinter_receive(); mw._vprinter_receive()
 chk(len(msgs) == n_msgs and len(conv_calls) == n_conv and p.exists(), "E2 실패한 PS 는 이 창에서 다시 시도·경고하지 않는다(지우지도 않는다)",
     "경고 %d→%d · 변환 %d→%d" % (n_msgs, len(msgs), n_conv, len(conv_calls)))
 tempfile.mkdtemp, os.remove = _mk, _rm
+
+print("\n=== R. 받는 창은 하나 — 엑셀 여러 시트 인쇄(261117-51) ===")
+# 사용자 보고: 창이 없을 때 엑셀 여러 시트를 인쇄 → 창이 두 개 뜨고 'Ghostscript Unrecoverable error' 경고. 두 번째 --printed 가 0.3초만
+#   기다리다 창이 되었고, 통로를 못 잡은 그 창도 쌓인 PS 를 처리해 같은 PS 를 두 창이 함께 변환했다(한쪽이 지우면 다른 쪽 gs 실패)
+rp = spool / "30-0001 Microsoft Excel - 내역.xlsx.ps"; rp.write_bytes(b"%!PS")
+n_msgs, n_conv = len(msgs), len(conv_calls)
+_own = mw._vp_gather
+mw._vp_gather = None                     # 통로를 다른 실행이 잡은 창
+mw._vprinter_receive()
+chk(rp.exists() and len(conv_calls) == n_conv and len(msgs) == n_msgs,
+    "R1 받기 통로를 못 잡은 창은 쌓인 PS 를 건드리지 않는다(같은 PS 를 두 창이 변환하지 않게)",
+    "변환 %d→%d · 경고 %d→%d" % (n_conv, len(conv_calls), n_msgs, len(msgs)))
+mw._vp_gather = _own
+rp.unlink(missing_ok=True)               # 수정 전 코드는 처리해 지웠다
+# 다른 실행이 처리해 PS 가 사라진 뒤의 변환 실패 — 경고하지 않는다
+_fc = R.convert
+
+
+def _gone_convert(ps, out, **k):
+    os.remove(ps)
+    raise RuntimeError("Unrecoverable error, exit code 1")
+
+
+R.convert = _gone_convert
+gp2 = spool / "31-0001 사라짐.ps"; gp2.write_bytes(b"%!PS")
+n_msgs = len(msgs)
+mw._vprinter_receive()
+chk(len(msgs) == n_msgs, "R3 변환이 실패했는데 그 PS 가 이미 없으면(다른 실행이 처리) 경고하지 않는다", str(msgs[n_msgs:]))
+R.convert = _fc
+# R2: 실제 두 프로세스 — 창이 없을 때 --printed 가 0.5초 사이로 둘 뜬다. 앞 실행은 무거운 준비(2.5초) 뒤에야 이벤트 루프를 돈다
+import subprocess as _sp, textwrap as _tw, json as _js
+_race = root / "race.py"
+_race.write_text(_tw.dedent(r'''
+    import os, sys, time, json
+    sys.path.insert(0, %r)
+    from PyQt6.QtCore import QCoreApplication
+    app = QCoreApplication(sys.argv[:1])
+    import viewer.vprinter_controller as VC
+    role = sys.argv[1]
+    fn = getattr(VC, "printed_start", None)
+    if fn is None:                                   # 수정 전: main.py 의 옛 흐름(0.3초 넘기기 → 못 하면 창, 창이 뜬 뒤 통로)
+        from viewer.open_gather import OpenGather, hand_off
+        if hand_off(["spool"], name=VC.print_server_name(), claim_wait_ms=300):
+            print(json.dumps({"role": role, "window": False})); sys.exit(0)
+        time.sleep(2.5)
+        g = OpenGather(name=VC.print_server_name(), lock_file=VC.print_lock_path())
+        g = g if g.claim() else None
+    else:
+        g = fn("spool")
+        if g is None:
+            print(json.dumps({"role": role, "window": False})); sys.exit(0)
+        time.sleep(2.5)                              # 무거운 준비 — 이벤트 루프가 아직 돌지 않는다
+    got = []
+    if g is not None:
+        g.filesReceived.connect(got.extend)
+    t = time.time()
+    while time.time() - t < 6:
+        app.processEvents(); time.sleep(0.02)
+    print(json.dumps({"role": role, "window": True, "owner": g is not None, "got": got + (list(g.pending) if g is not None and not got else [])}))
+''') % os.path.dirname(os.path.abspath(__file__)), encoding="utf-8")
+_env = dict(os.environ, POLYPDF_OPEN_GATHER_NAME="polypdf-vp-race-%d" % os.getpid(), PYTHONIOENCODING="utf-8")
+_pa = _sp.Popen([sys.executable, str(_race), "A"], env=_env, stdout=_sp.PIPE, stderr=_sp.PIPE)
+time.sleep(0.5)
+_pb = _sp.Popen([sys.executable, str(_race), "B"], env=_env, stdout=_sp.PIPE, stderr=_sp.PIPE)
+_outs = []
+for _p in (_pa, _pb):
+    _o, _e = _p.communicate(timeout=60)
+    try:
+        _outs.append(_js.loads(_o.decode("utf-8").strip().splitlines()[-1]))
+    except Exception:
+        _outs.append({"err": (_o + _e).decode("utf-8", "replace")[-300:]})
+_wins = [o for o in _outs if o.get("window")]
+chk(len(_wins) == 1 and _wins[0].get("owner") and _wins[0].get("got") == ["spool"],
+    "R2 창이 없을 때 --printed 가 거의 동시에 둘 → 창은 하나(받기 통로 주인), 둘째는 그 창에 넘기고 끝난다", str(_outs))
 
 print("\n=== T. 예약 작업은 설치본 창만 ===")
 # 261017-18 점검: 개발 main.py·휴대용·시험 프로필 창이 사용자의 예약 작업을 자기 쪽으로 바꿨다(e2e --dev 때 실제로)

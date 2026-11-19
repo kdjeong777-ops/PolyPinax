@@ -21,7 +21,7 @@ from PyQt6.QtWidgets import QMessageBox
 
 from viewer.i18n import tr
 
-__all__ = ["VPrinterMixin", "print_server_name", "print_lock_path", "image_dpi"]
+__all__ = ["VPrinterMixin", "print_server_name", "print_lock_path", "image_dpi", "printed_start"]
 
 PREF_KEY = "vprinter"                        # {"kind": original|default, "default_dir", "color": color|gray, "img_dpi": 150|300|600|0}
 
@@ -45,6 +45,21 @@ def print_lock_path() -> str:
     from viewer.open_gather import lock_path
     p = lock_path()
     return (p[:-5] if p.endswith(".lock") else p) + "-print.lock"
+
+
+def printed_start(spool_dir: str):
+    """`--printed` 실행(main.py, 무거운 준비 **전에**) — 받기 통로를 곧바로 잡으면 그 `OpenGather` 를 돌려준다(이 실행이 받는 창).
+    못 잡으면 받는 쪽(이미 뜬 창이든 막 뜨는 중인 다른 `--printed` 든)에 넘기고 None(창 없이 끝낸다).
+    261117-51(SOT §4.4): 종전에는 0.3초만 찾고 창이 뜬 뒤에야 통로를 잡아, 엑셀이 작업을 여럿 보내면 창이 둘 떠 같은 PS 를 함께 변환했다."""
+    from viewer.open_gather import OpenGather, hand_off
+    g = OpenGather(name=print_server_name(), lock_file=print_lock_path())
+    if g.claim():
+        return g
+    if hand_off([spool_dir], name=print_server_name()):    # 받는 쪽이 준비 중일 수 있어 기본값만큼 넉넉히
+        return None
+    if g.claim():                                            # 받던 창이 그사이 죽었으면
+        return g
+    return None                                              # 받는 창이 살아 있다 — PS 는 남고 그 창이 폴더를 다시 읽는다
 
 
 class _StartWorker(QObject):
@@ -82,13 +97,23 @@ class VPrinterMixin:
         self._vp_busy = False
         self._vp_failed = set()                    # 이 창에서 변환에 실패한 PS — 다시 시도하지 않는다(경고 되풀이 방지, 261017-18)
         self._vp_keep = []
+        pre = getattr(self, "_vp_gather_pre", None)  # `--printed` 실행이 main.py 에서 미리 잡은 통로(261117-51)
+        self._vp_gather_pre = None
         from viewer import vprinter_recv
         if not vprinter_recv.can_receive():        # 변환 도구가 없는 창(로컬 빌드·개발)은 통로를 차지하지 않는다 — 설치본 `--printed` 가 받게(261031-7)
+            if pre is not None:
+                pre.release()
             return
         try:
-            from viewer.open_gather import OpenGather
-            g = OpenGather(name=print_server_name(), lock_file=print_lock_path(), parent=self)
-            if g.claim():
+            g = pre
+            if g is None:
+                from viewer.open_gather import OpenGather
+                g = OpenGather(name=print_server_name(), lock_file=print_lock_path(), parent=self)
+                if not g.claim():
+                    g = None
+            else:
+                g.setParent(self)
+            if g is not None:
                 g.filesReceived.connect(lambda _f: QTimer.singleShot(0, self._vprinter_receive))
                 self._vp_gather = g
         except Exception:
@@ -135,6 +160,8 @@ class VPrinterMixin:
         from viewer import vprinter_recv
         if not vprinter_recv.can_receive():        # 변환하지 못할 PS 는 건드리지 않는다 — 받을 수 있는 창이 처리한다(261031-7)
             return
+        if getattr(self, "_vp_gather", None) is None:   # 받기 통로를 잡은 창 하나만 처리 — 두 창이 같은 PS 를 변환하지 않게(261117-51)
+            return
         self._vp_busy = True
         failed = getattr(self, "_vp_failed", set())
         try:
@@ -175,12 +202,15 @@ class VPrinterMixin:
                 box["plan"], box["conv"] = plan, conv
             except Exception:
                 shutil.rmtree(tmpdir, ignore_errors=True)
+                box["gone"] = not os.path.exists(ps)   # 그새 다른 실행이 처리해 지웠나(261117-51) — 파일 확인도 배경에서
                 raise
             progress(2, 2, tr("완료"))
 
         res = self._run_merge_job(job, tr("PolyPinax 프린터"), cancellable=False)
         if res.get("err") or "conv" not in box:
             self._vp_failed = getattr(self, "_vp_failed", set()) | {ps}
+            if box.get("gone"):                      # 그새 다른 실행이 처리해 지웠다 — 잃은 것이 없으니 알리지 않는다(261117-51)
+                return
             QMessageBox.warning(self, tr("PolyPinax 프린터"),
                                 tr("받은 문서를 PDF 로 바꾸지 못했습니다: {err}").format(err=res.get("err") or "?") + "\n\n"
                                 + tr("받은 인쇄 파일은 지우지 않았습니다 — 다음에 PolyPinax 를 켤 때 다시 바꿔 봅니다."))

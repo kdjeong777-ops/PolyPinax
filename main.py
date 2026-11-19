@@ -594,16 +594,18 @@ def main():
             gather = None
     # 261017(가상 프린터 SOT §4.4): 인쇄 뒤 예약 작업이 띄운 실행 — 켜진 창이 받기 통로를 열어 두었으면 알리고 창 없이 끝난다.
     #   없으면 이 실행이 창이 되어 받은 문서를 처리한다(지난 세션은 복원하지 않는다).
+    #   261117-51: 받기 통로를 **여기서 곧바로** 잡는다 — 창이 뜬 뒤에 잡으면 엑셀처럼 작업을 여럿 보낼 때 둘째 실행도 창이 됐다(SOT §4.4)
     printed = "--printed" in sys.argv[1:]
+    print_gather = None
     if printed:
         try:
-            from viewer.open_gather import hand_off
-            from viewer.vprinter_controller import print_server_name
+            from viewer.vprinter_controller import printed_start
             from viewer.vprinter_recv import user_spool_dir
-            if hand_off([user_spool_dir()], name=print_server_name(), claim_wait_ms=300):
+            print_gather = printed_start(user_spool_dir())
+            if print_gather is None:
                 os._exit(0)
         except Exception:
-            pass
+            print_gather = None
 
     # 260606-29: ★ QApplication 직후 — 무엇보다 먼저 스플래시(앱이름/아이콘/마이그레이션
     #            보다 앞). repaint() 로 동기 즉시 페인트 → 체감 지연 최소화.
@@ -664,6 +666,7 @@ def main():
     #   줄을 서서 '이미 연 것이 있으면 덮지 않는다' 가드가 작동하지 않았다 — 지난 폴더(다운로드)를 메인에서 훑느라
     #   4.4초 선 뒤에야 요청한 파일을 열었다(설치본 실측). 이벤트 루프가 돌기 전이라 복원보다 앞선다.
     win._startup_has_args = bool(pdf_args or photo_args) or printed
+    win._vp_gather_pre = print_gather     # 261117-51: 미리 잡은 받기 통로 — `_vprinter_start` 가 그대로 쓴다
     if pdf_args or printed:               # 사진 인자는 사진 모드로(261112-10, D1 의 예외) — `_photo_open_arg` 가 모드를 바꾼다
         win._photo_force_pdf()           # 261104-2(사진 보기 SOT D1): 파일을 지정해 뜬 창은 PDF 모드로 시작
     win.show()

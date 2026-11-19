@@ -796,12 +796,30 @@ class BizcardFindDialog(QDialog):
         return [c for c in (self._card_at(r) for r in rows) if c is not None]
 
     def _show_card_id(self, cid):
-        """즐겨찾기 사람을 누름 — 표에 있으면 그 줄, 없으면 표는 그대로 두고 그 명함을 보인다."""
-        if self._card is not None and self._card["id"] == cid:
-            return
+        """즐겨찾기 사람을 고름(누름·키보드) — 늘 목록 표에서 그 줄을 골라 보인다(§5.24.2 '즐겨찾기 줄').
+        목록에 없으면(다른 찾기 결과·다른 탭 명단) 목록을 지금 탭 명단으로 바꾼 뒤 고른다. 이미 보던 명함이어도 줄을 다시 고른다."""
         r = self.row_of_id(cid)
+        if r < 0:
+            gid = self._fav_gid()
+            if gid is not None and self._table_tab != gid:
+                if self._dirty and not self._ask_save():
+                    return
+                self._table_tab = gid                      # 목록을 지금 탭 명단으로
+                self.refresh()
+                r = self.row_of_id(cid)
         if r >= 0:
+            self._loading = True
+            self.table.clearSelection()
             self.table.setCurrentCell(r, 0)
+            self.table.selectRow(r)
+            self._loading = False
+            self.table.scrollToItem(self.table.item(r, 0))
+            if self._card is None or self._card["id"] != cid:
+                if self._dirty and not self._ask_save():
+                    return
+                self._load(self._card_at(r))
+            return
+        if self._card is not None and self._card["id"] == cid:
             return
         if self._dirty and not self._ask_save():
             return

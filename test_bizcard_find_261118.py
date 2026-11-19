@@ -786,6 +786,30 @@ try:
     second = dlg.fav.item(1).data(Qt.ItemDataRole.UserRole) if dlg.fav.count() > 1 else None
     chk(shown_first and dlg.fav.count() > 1 and dlg._card and dlg._card["id"] == second != first,
         "I16 사람 칸을 키보드(→)로 옮기면 그 명함을 보임", "%s %s %s" % (first, second, dlg._card and dlg._card["id"]))
+    # I18 사람을 고르면 늘 목록에서 그 줄 — 목록에 없으면 탭 명단으로, 이미 보던 명함이어도 (사용자 보고 261119)
+    dlg.ed_find.setText("홍길동")
+    pump(lambda: dlg.table.rowCount() == 1, timeout=3)
+    dlg.fav_tabs.setCurrentIndex(1)
+    pump(timeout=0.1)
+    k_it = next((dlg.fav.item(i) for i in range(dlg.fav.count()) if dlg.fav.item(i).data(Qt.ItemDataRole.UserRole) == kim["id"]), None)
+
+    def sel_ids():
+        return sorted({dlg.table.item(i.row(), 0).data(Qt.ItemDataRole.UserRole) for i in dlg.table.selectedIndexes()})
+    if k_it is not None:
+        QTest.mouseClick(dlg.fav.viewport(), Qt.MouseButton.LeftButton, pos=dlg.fav.visualItemRect(k_it).center())
+        pump(timeout=0.3)
+    ok_a = (k_it is not None and dlg.row_of_id(kim["id"]) >= 0 and dlg.table.currentRow() == dlg.row_of_id(kim["id"])
+            and sel_ids() == [kim["id"]] and dlg._card and dlg._card["id"] == kim["id"])
+    chk(ok_a, "I18 목록(찾기 결과)에 없는 사람을 고르면 목록을 탭 명단으로 바꾸고 그 줄을 고름",
+        "%s %s" % (dlg.table.rowCount(), sel_ids()))
+    dlg.table.clearSelection()
+    if k_it is not None:
+        k_it = next(dlg.fav.item(i) for i in range(dlg.fav.count()) if dlg.fav.item(i).data(Qt.ItemDataRole.UserRole) == kim["id"])
+        QTest.mouseClick(dlg.fav.viewport(), Qt.MouseButton.LeftButton, pos=dlg.fav.visualItemRect(k_it).center())
+        pump(timeout=0.3)
+    chk(sel_ids() == [kim["id"]], "I18 이미 보던 명함을 다시 골라도 목록에서 그 줄을 고름", str(sel_ids()))
+    dlg.ed_find.setText("")
+    pump(lambda: dlg._table_tab is None and dlg.table.rowCount() >= 3, timeout=3)
     # I8 주소록 가져오기(리멤버 꼴 vCard) — 같은 사람은 빈 칸만, 없는 사람은 그림 없는 명함
     vf = TMP / "contacts.vcf"
     vf.write_text("BEGIN:VCARD\r\nVERSION:3.0\r\nN:;김철수;;;\r\nTEL;TYPE=work,cell:010-0000-0003\r\nEMAIL;TYPE=work:kim@example.com\r\n"

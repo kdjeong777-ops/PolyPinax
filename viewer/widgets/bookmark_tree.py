@@ -761,6 +761,8 @@ class BookmarkTree(QWidget):
         from PyQt6.QtWidgets import QHBoxLayout, QPushButton
         search_row = QHBoxLayout()
         self.search_edit = QLineEdit()
+        from viewer.widgets.search_ghost import SearchGhost   # 261117-42(검색창 SOT §6.1): 찾은 글은 떠나면 흐리게
+        SearchGhost(self.search_edit, instant=True)
         self.search_edit.setPlaceholderText(tr("목록 명칭 검색..."))
         self.search_edit.textChanged.connect(self._on_filter)
         search_row.addWidget(self.search_edit, 1)

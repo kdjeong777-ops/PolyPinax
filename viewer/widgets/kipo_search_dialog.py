@@ -144,6 +144,8 @@ class KipoSearchPanel(QWidget):
         for fld, name in SEARCH_FIELDS:
             self.cmb_mode.addItem(name, fld)
         self.ed = QLineEdit()
+        from viewer.widgets.search_ghost import SearchGhost   # 261117-42(검색창 SOT §6.1): 찾은 글은 떠나면 흐리게
+        SearchGhost(self.ed)
         self.ed.setPlaceholderText("검색어 (예: 콘크리트 포장)")
         self.ed.returnPressed.connect(self._search)
         self.btn_search = QPushButton("검색")
@@ -198,6 +200,8 @@ class KipoSearchPanel(QWidget):
         fb = QHBoxLayout(self.find_bar)
         fb.setContentsMargins(2, 2, 2, 2)
         self.find_edit = QLineEdit()
+        from viewer.widgets.search_ghost import SearchGhost   # 261117-42(검색창 SOT §6.1): 찾은 글은 떠나면 흐리게
+        SearchGhost(self.find_edit, instant=True)
         self.find_edit.setPlaceholderText("내용에서 찾기")
         self.find_edit.returnPressed.connect(lambda: self._find(False))
         b_prev = QPushButton(); b_prev.setIcon(themed_icon("chevron_up"))

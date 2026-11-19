@@ -175,6 +175,8 @@ class KcscSearchPanel(QWidget):
         self.cmb_type.addItem("전체 (전체에서 찾기)", "")     # 제일 위 = 전체
         self.cmb_type.currentIndexChanged.connect(lambda *_: self._apply_filter())
         self.ed = QLineEdit()
+        from viewer.widgets.search_ghost import SearchGhost   # 261117-42(검색창 SOT §6.1): 찾은 글은 떠나면 흐리게
+        SearchGhost(self.ed)
         self.ed.setPlaceholderText("이름 또는 코드 검색 (예: 콘크리트, 114010)")
         self.ed.returnPressed.connect(self._search)
         self.btn_search = QPushButton("검색")
@@ -231,6 +233,8 @@ class KcscSearchPanel(QWidget):
         fb = QHBoxLayout(self.find_bar)
         fb.setContentsMargins(2, 2, 2, 2)
         self.find_edit = QLineEdit()
+        from viewer.widgets.search_ghost import SearchGhost   # 261117-42(검색창 SOT §6.1): 찾은 글은 떠나면 흐리게
+        SearchGhost(self.find_edit, instant=True)
         self.find_edit.setPlaceholderText("내용에서 찾기")
         self.find_edit.returnPressed.connect(lambda: self._find(False))
         b_prev = QPushButton(); b_prev.setIcon(themed_icon("chevron_up"))

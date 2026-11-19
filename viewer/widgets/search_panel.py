@@ -45,6 +45,8 @@ class SearchBar(QWidget):
         layout.setContentsMargins(2, 2, 2, 2)
 
         self.edit = QLineEdit()
+        from viewer.widgets.search_ghost import SearchGhost   # 261117-42(검색창 SOT §6.1): 찾은 글은 떠나면 흐리게
+        self.ghost = SearchGhost(self.edit)
         self.edit.setPlaceholderText(tr("검색...  (Enter: 검색, Ctrl+F: 포커스)"))
         self.edit.returnPressed.connect(self._emit_search)
         layout.addWidget(self.edit, 1)

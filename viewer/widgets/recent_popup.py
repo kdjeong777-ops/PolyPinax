@@ -60,7 +60,9 @@ class RecentSearchPopup(QObject):
         """지금 칸 글자로 좁혀 펼친다 — 맞는 것이 없으면 닫는다."""
         if not self.items:
             return
-        self.completer.setCompletionPrefix(self.edit.text())
+        ed = self.edit
+        armed = ed.hasSelectedText() and ed.selectedText() == ed.text()   # 261117-42: 다 고른 글(흐린 글) = 새로 쓸 참 — 전부
+        self.completer.setCompletionPrefix("" if armed else ed.text())
         if self.completer.completionCount() <= 0:
             self.completer.popup().hide()
             return

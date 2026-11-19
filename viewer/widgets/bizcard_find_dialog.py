@@ -413,6 +413,8 @@ class BizcardFindDialog(QDialog):
 
         top = QHBoxLayout()
         self.ed_find = QLineEdit()
+        from viewer.widgets.search_ghost import SearchGhost   # 261117-42(검색창 SOT §6.1): 찾은 글은 떠나면 흐리게
+        SearchGhost(self.ed_find, instant=True)
         self.ed_find.setPlaceholderText(tr("이름·회사·메모 등 — 낱말 여럿은 모두 들어 있는 명함, #낱말은 해시태그"))
         self.ed_find.setClearButtonEnabled(True)
         top.addWidget(self.ed_find, 1)

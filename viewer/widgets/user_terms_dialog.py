@@ -26,6 +26,8 @@ class UserTermsDialog(QDialog):
                            "사전·자동 뜻보다 <b>가장 먼저</b> 쓰입니다."))
         top = QHBoxLayout()
         self.ed_q = QLineEdit()
+        from viewer.widgets.search_ghost import SearchGhost   # 261117-42(검색창 SOT §6.1): 찾은 글은 떠나면 흐리게
+        SearchGhost(self.ed_q, instant=True)
         self.ed_q.setPlaceholderText("표제어 찾기(한글·영문)")
         self.ed_q.setClearButtonEnabled(True)
         top.addWidget(self.ed_q, 1)

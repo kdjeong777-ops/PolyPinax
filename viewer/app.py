@@ -1672,11 +1672,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         from viewer.widgets.recent_popup import RecentSearchPopup
         self._recent_popup = RecentSearchPopup(self.toolbar_search, self._open_recent_search)
         self._recent_popup.set_items(getattr(self, "_recent_searches", None) or [])
-        # 261117-39(검색창 SOT §6): 찾은 글은 다른 항목으로 떠나면 흐린 자리표시로 — 빈 칸에서 → 로 되살린다
+        # 261117-39·-42(검색창 SOT §6.1): 찾은 글은 떠나면 흐리게 — 다시 누르면 다 골라 새로 쓰기, → 로 되살리기
         from viewer.widgets.search_ghost import SearchGhost
-        _rp = self._recent_popup
-        self._search_ghost = SearchGhost(self.toolbar_search, on_restore=lambda: _rp.is_open() and _rp.open(),
-                                         extra=(_rp.completer.popup(),))
+        self._search_ghost = SearchGhost(self.toolbar_search)
 
     def _style_panel_toolbar(self, dark: bool):
         """260606-26: 세부 줄(종전 패널) 버튼 테두리/배경을 테마별로. 라이트=짙은 회색,
@@ -8411,6 +8409,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self._cf_overlay.open_for(self._content_panel, seed_query=q)
 
     def action_search(self, query: str):
+        _g = getattr(getattr(self, "search_bar", None), "ghost", None)
+        if _g is not None:
+            _g.mark_searched(query)                   # 261117-42(검색창 SOT §6.1): 검색 패널 칸 — 어느 길로 찾았든 이 글이 '찾은 글'
         # 260708: 우측 패널(건설기준/법령/특허) 열려 있으면 슬라이드 오버레이로만 그 본문 검색
         if self._content_panel is not None:
             try:

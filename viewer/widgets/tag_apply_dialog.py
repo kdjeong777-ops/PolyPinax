@@ -272,6 +272,8 @@ class TagApplyDialog(QDialog):
         lv.setContentsMargins(0, 0, 0, 0)
         fr = QHBoxLayout()                       # 261111-16: 찾기(두 목록 모두)·[추가]·정렬
         self.ed_find = QLineEdit()
+        from viewer.widgets.search_ghost import SearchGhost   # 261117-42(검색창 SOT §6.1): 찾은 글은 떠나면 흐리게
+        SearchGhost(self.ed_find, instant=True)
         self.ed_find.setPlaceholderText(tr("태그 찾기 · 새 태그 이름"))
         self.ed_find.setClearButtonEnabled(True)
         self.btn_find_add = QPushButton(tr("추가"))

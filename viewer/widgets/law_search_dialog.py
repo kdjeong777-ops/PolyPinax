@@ -174,6 +174,8 @@ class LawSearchPanel(QWidget):
         # --- 검색줄: 검색박스(둥근·돋보기·테마대응) + 대상 + 종류 + 검색 + 지구본 ---
         top = QHBoxLayout()
         self.ed = QLineEdit()
+        from viewer.widgets.search_ghost import SearchGhost   # 261117-42(검색창 SOT §6.1): 찾은 글은 떠나면 흐리게
+        SearchGhost(self.ed)
         self.ed.setPlaceholderText("법령/고시 검색")
         self.ed.setObjectName("lawSearch")
         self._lead_act = self.ed.addAction(
@@ -241,6 +243,8 @@ class LawSearchPanel(QWidget):
         fb = QHBoxLayout(self.find_bar)
         fb.setContentsMargins(2, 2, 2, 2)
         self.find_edit = QLineEdit()
+        from viewer.widgets.search_ghost import SearchGhost   # 261117-42(검색창 SOT §6.1): 찾은 글은 떠나면 흐리게
+        SearchGhost(self.find_edit, instant=True)
         self.find_edit.setPlaceholderText("내용에서 찾기")
         self.find_edit.addAction(_search_icon("#888888"),
                                  QLineEdit.ActionPosition.LeadingPosition)

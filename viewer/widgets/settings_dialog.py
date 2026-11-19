@@ -633,6 +633,8 @@ class SettingsDialog(QDialog):
         self._outer = outer
         # ── 설정 찾기 ──
         self.ed_search = QLineEdit()
+        from viewer.widgets.search_ghost import SearchGhost   # 261117-42(검색창 SOT §6.1): 찾은 글은 떠나면 흐리게
+        SearchGhost(self.ed_search, instant=True)
         self.ed_search.setPlaceholderText(tr("설정 찾기"))
         self.ed_search.setClearButtonEnabled(True)
         self.ed_search.textChanged.connect(self._on_search)

@@ -52,6 +52,8 @@ class ImageSearchDialog(QDialog):
         v = QVBoxLayout(self)
         top = QHBoxLayout()
         self.ed = QLineEdit(query)
+        from viewer.widgets.search_ghost import SearchGhost   # 261117-42(검색창 SOT §6.1): 찾은 글은 떠나면 흐리게
+        SearchGhost(self.ed)
         self.ed.returnPressed.connect(self._search)
         self.btn = QPushButton(tr("검색"))
         self.btn.clicked.connect(self._search)

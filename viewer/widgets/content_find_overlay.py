@@ -35,6 +35,8 @@ class ContentFindOverlay(QWidget):
         v.setSpacing(6)
         bar = QHBoxLayout()
         self.edit = QLineEdit()
+        from viewer.widgets.search_ghost import SearchGhost   # 261117-42(검색창 SOT §6.1): 찾은 글은 떠나면 흐리게
+        SearchGhost(self.edit, instant=True)
         self.edit.setPlaceholderText(tr("본문 내용 검색"))
         self.count = QLabel("0/0")
         self.count.setStyleSheet("color:#666;min-width:44px;")

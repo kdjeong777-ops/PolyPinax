@@ -81,6 +81,18 @@ class _Cell:
         return self._m.data(self._m.index(self._r, self._c), role)
 
 
+_BOLD = []
+
+
+def _bold_font() -> QFont:
+    """굵은 글꼴 하나(표가 제 글꼴 크기·글꼴과 합친다 — 굵기만 바꿈)."""
+    if not _BOLD:
+        f = QFont()
+        f.setBold(True)
+        _BOLD.append(f)
+    return _BOLD[0]
+
+
 class _CardModel(QAbstractTableModel):
     """명함 행(dict) 목록 — 칸 글은 명함마다 한 번만 만들어 두고, 정렬은 그 글 차례(파이썬 정렬, 같으면 앞 차례 유지)."""
 
@@ -145,6 +157,8 @@ class _CardModel(QAbstractTableModel):
             return self._disp[r][c]
         if role == ROLE and c == C_NAME:
             return self._rows[r]["id"]
+        if role == Qt.ItemDataRole.FontRole and c == C_NAME:
+            return _bold_font()                     # 이름은 굵게(§5.24.1 '이름 굵게', 사용자 지시 261119)
         return None
 
     def headerData(self, section, orientation, role=Qt.ItemDataRole.DisplayRole):
@@ -751,6 +765,10 @@ class BizcardFindDialog(QDialog):
         self.eds, self.chk = {}, {}
         for k, label in FIELDS:
             ed = QLineEdit()
+            if k == "name":                            # 이름은 굵게(§5.24.1 '이름 굵게', 사용자 지시 261119)
+                bf = ed.font()
+                bf.setBold(True)
+                ed.setFont(bf)
             ed.textEdited.connect(lambda _t: self._set_dirty(True))
             cb = QCheckBox(tr(label))
             cb.setToolTip(tr("체크한 칸을 [내용 복사] 로 글로 복사합니다 — 체크는 다음에도 그대로"))

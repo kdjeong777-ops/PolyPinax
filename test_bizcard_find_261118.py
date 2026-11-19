@@ -3,7 +3,7 @@
 
 실제 MainWindow 로(오프스크린, 실제 설정·데이터 폴더를 쓰지 않는다 — 검사 작성 SOT §14.7.2).
 A. 찾기 모듈 — 낱말 일부('도로' → '가나도로공사'), 낱말 여럿은 모두, #태그, 기간, LIKE 특수 글자
-B. 메뉴 `명함 ▾` → `명함찾기…` 로 창(하나만), 글을 치면 250ms 뒤 결과, 기간 콤보
+B. 도구 탭에 `명함 ▾` 없음(261117-56 — 본 화면 명함 아이콘), 명함찾기 창(하나만), 글을 치면 250ms 뒤 결과, 기간 콤보
 C. 인물 사진 — 배경에서 `인물` 폴더의 `<정리본 이름>.jpg`, EXIF 뺌·방향 반영, 둘째는 ` (2)`
 D. 고쳐 저장(실제 키 입력·단추) — 이름·회사가 바뀌면 정리본·뒷면·인물 사진 이름이 바뀌고 DB·#회사 태그가 따라감, 메모만 바꾸면 이름 그대로
 E. 저장 안 한 고침 — 다른 줄을 고르면 묻는다(버리기면 안 남음)
@@ -617,7 +617,7 @@ try:
     t = dlg.fav_copy_selected() if hasattr(dlg, "fav_copy_selected") else ""
     chk("홍길동" in t and "김철수" not in t and QApplication.clipboard().text() == t, "I14 즐겨찾기 사람 메뉴 '내용 복사' = 체크한 칸 글", repr(t[:40]))
     dlg.todo_delete(gid, ask=False)
-    # I19 아래 단추 줄 [명함 관리] — [주소록] 왼쪽, 누르면 메뉴 '명함 관리' 와 같은 함수 (사용자 지시 261119)
+    # I19 아래 단추 줄 [명함 관리] — [주소록] 왼쪽, 누르면 명함 관리 창 길 `_action_bizcard_import`(사용자 지시 261119 — 도구 탭 메뉴는 261117-56 에 없앰)
     bm_ = getattr(dlg, "btn_manage", None)
     calls = []
     _orig_imp = mw._action_bizcard_import
@@ -1057,6 +1057,21 @@ try:
     chk("주소록모임" in (j2["tags"] or []) and not vkeys, "I21 창에서 붙인 태그가 명함 DB 에, 실제 태그 저장소에는 가짜 경로가 남지 않음",
         "%s %d" % (j2["tags"], len(vkeys)))
     cbk.setCurrentIndex(0)
+    # I22 이름은 굵게 — 목록 표 이름 칸·세부 이름 칸(사용자 지시 261119)
+    pump(timeout=0.1)
+    from PyQt6.QtWidgets import QStyleOptionViewItem as _SOV, QStyledItemDelegate as _SD
+    mdl = dlg.table.model()
+    def _opt_font(col):
+        o = _SOV()
+        o.font = dlg.table.font()
+        d = _SD()
+        d.initStyleOption(o, mdl.index(0, col))     # 표가 칸을 그릴 때와 같은 길로 글꼴을 합침
+        return o.font
+    fn, fc = _opt_font(0), _opt_font(1)
+    chk(fn.bold() and not fc.bold() and fn.pointSizeF() == dlg.table.font().pointSizeF()
+        and dlg.eds["name"].font().bold() and not dlg.eds["company"].font().bold(),
+        "I22 목록 이름 칸·세부 이름 칸만 굵게(크기는 표 글꼴 그대로)",
+        "%s %s %s %s" % (fn.bold(), fc.bold(), dlg.eds["name"].font().bold(), dlg.eds["company"].font().bold()))
     dlg.close()
     pump(timeout=0.2)
 except Exception:

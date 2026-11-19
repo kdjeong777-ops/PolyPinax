@@ -223,16 +223,20 @@ def fav_init(store, default_name: str) -> None:
     CREATE TABLE IF NOT EXISTS fav_groups(id INTEGER PRIMARY KEY, name TEXT, pos INTEGER);
     CREATE TABLE IF NOT EXISTS fav_members(group_id INTEGER, card_id INTEGER, pos INTEGER, PRIMARY KEY(group_id, card_id));
     """)
-    have = {r[1] for r in store.con.execute("PRAGMA table_info(fav_groups)")}
-    for col, typ in TODO_COLS:                         # 할 일(D26) — 옛 DB 에는 열을 더한다(옛 판은 이 열을 모른다)
-        if col not in have:
-            store.con.execute("ALTER TABLE fav_groups ADD COLUMN %s %s" % (col, typ))
+    store.con.execute("CREATE TABLE IF NOT EXISTS recent(card_id INTEGER PRIMARY KEY, seen TEXT)")   # '최근' 탭(D27)
+    for table, cols in (("fav_groups", TODO_COLS), ("fav_members", MEMBER_COLS)):
+        have = {r[1] for r in store.con.execute("PRAGMA table_info(%s)" % table)}
+        for col, typ in cols:                          # 할 일(D26)·마감(D28)·메모 글(D29) — 옛 DB 에는 열을 더한다(옛 판은 이 열을 모른다)
+            if col not in have:
+                store.con.execute("ALTER TABLE %s ADD COLUMN %s %s" % (table, col, typ))
     if store.con.execute("SELECT COUNT(*) FROM fav_groups").fetchone()[0] == 0:
         store.con.execute("INSERT INTO fav_groups(name, pos) VALUES(?, 0)", (default_name,))
     store.con.commit()
 
 
-TODO_COLS = (("todo", "INTEGER DEFAULT 0"), ("t_memo", "TEXT DEFAULT ''"), ("t_start", "TEXT DEFAULT ''"), ("t_end", "TEXT DEFAULT ''"))
+TODO_COLS = (("todo", "INTEGER DEFAULT 0"), ("t_memo", "TEXT DEFAULT ''"), ("t_start", "TEXT DEFAULT ''"), ("t_end", "TEXT DEFAULT ''"),
+             ("closed", "INTEGER DEFAULT 0"))
+MEMBER_COLS = (("memo_entry", "TEXT DEFAULT ''"),)
 
 
 def _todo_live(r, today: str) -> bool:
@@ -241,9 +245,31 @@ def _todo_live(r, today: str) -> bool:
 
 
 def fav_groups(store, today: str = None) -> list:
-    """탭 (id, 이름) 차례대로. today(YYYY-MM-DD)를 주면 기간 밖 할 일 탭은 뺀다(D26 — 숨김, 지우지 않음)."""
+    """탭 (id, 이름) 차례대로. today(YYYY-MM-DD)를 주면 마감한 탭·기간 밖 할 일 탭은 뺀다(D26·D28 — 숨김, 지우지 않음)."""
     rows = store.con.execute("SELECT * FROM fav_groups ORDER BY pos, id").fetchall()
-    return [(r["id"], r["name"]) for r in rows if today is None or not r["todo"] or _todo_live(r, today)]
+    return [(r["id"], r["name"]) for r in rows
+            if today is None or not (r["closed"] or (r["todo"] and not _todo_live(r, today)))]
+
+
+def is_todo(store, gid) -> bool:
+    r = store.con.execute("SELECT todo FROM fav_groups WHERE id=?", (gid,)).fetchone()
+    return bool(r and r["todo"])
+
+
+def closed_tabs(store, today: str) -> list:
+    """'마감한 탭 ▸'(D28) — 마감한 탭과 기간 밖 할 일 (id, 이름, 할 일인가)."""
+    rows = store.con.execute("SELECT * FROM fav_groups ORDER BY pos, id").fetchall()
+    return [(r["id"], r["name"], bool(r["todo"])) for r in rows if r["closed"] or (r["todo"] and not _todo_live(r, today))]
+
+
+def fav_close(store, gid: int, closed: bool = True) -> bool:
+    """탭 마감 / 다시 열기(D28). 할 일이 아닌 마지막 열린 탭은 마감하지 않는다(False)."""
+    if closed and not is_todo(store, gid) and store.con.execute(
+            "SELECT COUNT(*) FROM fav_groups WHERE IFNULL(todo, 0)=0 AND IFNULL(closed, 0)=0").fetchone()[0] <= 1:
+        return False
+    store.con.execute("UPDATE fav_groups SET closed=? WHERE id=?", (1 if closed else 0, gid))
+    store.con.commit()
+    return True
 
 
 def todo_info(store, gid: int):
@@ -255,7 +281,7 @@ def todo_info(store, gid: int):
 
 
 def todo_hidden(store, today: str) -> list:
-    """기간 밖 할 일 탭 (id, 제목) — 탭 메뉴 '숨은 할 일'."""
+    """기간 밖 할 일 탭 (id, 제목) — '마감한 탭 ▸' 에 함께(closed_tabs)."""
     rows = store.con.execute("SELECT * FROM fav_groups WHERE todo=1 ORDER BY t_start, id").fetchall()
     return [(r["id"], r["name"]) for r in rows if not _todo_live(r, today)]
 
@@ -278,6 +304,17 @@ def _todo_memo(store, gid: int, card_ids, ongoing: str) -> None:
             continue
         old = (r["memo"] or "").strip()
         update_card(store, cid, {"memo": entry + ("\n\n" + old if old else "")}, commit=False)   # 최신이 맨 위
+        store.con.execute("UPDATE fav_members SET memo_entry=? WHERE group_id=? AND card_id=?", (entry, gid, cid))   # D29
+
+
+def remove_memo_entry(memo: str, entry: str) -> str:
+    """메모에서 할 일 글 하나 빼기(D29) — 글이 그대로 있을 때만, 둘레의 빈 줄 하나도. 없으면 메모 그대로."""
+    if not entry or entry not in (memo or ""):
+        return memo
+    for a in (entry + "\n\n", "\n\n" + entry, entry):
+        if a in memo:
+            return memo.replace(a, "", 1).strip("\n")
+    return memo
 
 
 def todo_add(store, info: dict, card_ids, ongoing: str) -> int:
@@ -309,13 +346,20 @@ def fav_rename_group(store, gid: int, name: str) -> None:
     store.con.commit()
 
 
-def fav_delete_group(store, gid: int) -> bool:
-    """탭 지우기 — 할 일이 아닌 마지막 탭은 지우지 않는다(False). 명함은 그대로."""
+def fav_delete_group(store, gid: int, ongoing: str = "") -> bool:
+    """탭 삭제 — 할 일이 아닌 마지막 탭은 지우지 않는다(False). 명함은 그대로, 할 일로 메모에 적은 글은 빼낸다(D29)."""
     r = store.con.execute("SELECT todo FROM fav_groups WHERE id=?", (gid,)).fetchone()
     if r is None:
         return False
     if not r["todo"] and store.con.execute("SELECT COUNT(*) FROM fav_groups WHERE IFNULL(todo, 0)=0").fetchone()[0] <= 1:
         return False
+    info = todo_info(store, gid)
+    guess = todo_memo_entry(info, ongoing or "…") if info else ""      # 글을 기억하지 않던 옛 할 일
+    for m in store.con.execute("SELECT m.card_id, m.memo_entry, c.memo FROM fav_members m JOIN cards c ON c.id = m.card_id "
+                               "WHERE m.group_id=?", (gid,)).fetchall():
+        new = remove_memo_entry(m["memo"] or "", m["memo_entry"] or guess)
+        if new != (m["memo"] or ""):
+            update_card(store, m["card_id"], {"memo": new}, commit=False)
     store.con.execute("DELETE FROM fav_members WHERE group_id=?", (gid,))
     store.con.execute("DELETE FROM fav_groups WHERE id=?", (gid,))
     store.con.commit()
@@ -362,9 +406,49 @@ def fav_order(store, gid: int, card_ids) -> None:
 
 
 def fav_forget_cards(store, card_ids) -> None:
-    """명함을 지울 때 — 모든 탭에서 그 칸을 뺀다."""
+    """명함을 지울 때 — 모든 탭·최근에서 그 칸을 뺀다."""
     store.con.executemany("DELETE FROM fav_members WHERE card_id=?", [(c,) for c in card_ids])
+    store.con.executemany("DELETE FROM recent WHERE card_id=?", [(c,) for c in card_ids])
     store.con.commit()
+
+
+# ── '최근' 탭 (D27) — 세부 칸에 RECENT_MS 이상 본 명함, 사람이 넣지 않는다 ──
+def recent_add(store, card_id: int, when: str = "") -> None:
+    import datetime
+    when = when or datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    store.con.execute("INSERT INTO recent(card_id, seen) VALUES(?, ?) ON CONFLICT(card_id) DO UPDATE SET seen=excluded.seen",
+                      (card_id, when))
+    store.con.commit()
+
+
+def recent_list(store, since: str = "", until: str = "") -> list:
+    """기간(YYYY-MM-DD, 끝 날짜 포함) 안에 본 명함 — 최근에 본 차례."""
+    q = "SELECT c.* FROM recent r JOIN cards c ON c.id = r.card_id WHERE 1=1"
+    args = []
+    if since:
+        q += " AND substr(r.seen, 1, 10) >= ?"
+        args.append(since)
+    if until:
+        q += " AND substr(r.seen, 1, 10) <= ?"
+        args.append(until)
+    return [store._row(r) for r in store.con.execute(q + " ORDER BY r.seen DESC, r.rowid DESC", args).fetchall()]
+
+
+def recent_remove(store, card_ids) -> None:
+    store.con.executemany("DELETE FROM recent WHERE card_id=?", [(c,) for c in card_ids])
+    store.con.commit()
+
+
+# ── 이메일 복사 (§5.24.1) — 받는 사람 칸에 붙여 쓰기 ──
+def emails_text(cards) -> str:
+    out, seen = [], set()
+    for c in cards:
+        for e in c.get("emails") or []:
+            e = str(e[-1] if isinstance(e, (list, tuple)) else e).strip()
+            if e and e.lower() not in seen:
+                seen.add(e.lower())
+                out.append(e)
+    return ", ".join(out)
 
 
 # ── 인물 사진 차례 (§5.24, D20 — 파일 이름을 차례대로) ──

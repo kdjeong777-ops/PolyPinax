@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-11-19 07:11+0900\n"
+"POT-Creation-Date: 2026-11-19 10:27+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1688,7 +1688,7 @@ msgstr ""
 msgid "최근에 연 폴더·파일·검색어"
 msgstr ""
 
-#: viewer/app.py
+#: viewer/app.py viewer/widgets/bizcard_find_dialog.py
 msgid "최근"
 msgstr ""
 
@@ -2444,7 +2444,7 @@ msgstr ""
 msgid "책갈피 모두 접기"
 msgstr ""
 
-#: viewer/app.py
+#: viewer/app.py viewer/widgets/bizcard_find_dialog.py
 msgid "보기"
 msgstr ""
 
@@ -7855,11 +7855,23 @@ msgid "이름·회사·메모 등 — 낱말 여럿은 모두 들어 있는 명�
 msgstr ""
 
 #: viewer/widgets/bizcard_find_dialog.py
-msgid "새 즐겨찾기 탭"
+msgid "해시태그..."
 msgstr ""
 
 #: viewer/widgets/bizcard_find_dialog.py
-msgid "표의 줄을 끌어 놓으면 이 탭에 넣습니다 — 끌어 차례 바꾸기, Delete 로 빼기"
+msgid "고른 명함들에 해시태그를 붙이거나 뗍니다 — 정리본 파일에도 같이, 찾기 칸에서 #낱말로 찾습니다"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "새 즐겨찾기 탭·새 할 일 — 표에서 고른 명단이 들어갑니다(사람 칸에서 끌어 놓아도)"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "최근 탭 — 이 기간에 본 명함"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "표의 줄을 끌어 놓으면 이 탭에 넣습니다 — 끌어 차례 바꾸기, 다른 탭에 끌어 놓으면 복사, Delete 로 빼기"
 msgstr ""
 
 #: viewer/widgets/bizcard_find_dialog.py
@@ -7935,51 +7947,39 @@ msgid "리멤버용 vCard 로 내보내기..."
 msgstr ""
 
 #: viewer/widgets/bizcard_find_dialog.py
-msgid "해시태그..."
-msgstr ""
-
-#: viewer/widgets/bizcard_find_dialog.py
-msgid "고른 명함들에 해시태그를 붙이거나 뗍니다 — 정리본 파일에도 같이, 찾기 칸에서 #낱말로 찾습니다"
-msgstr ""
-
-#: viewer/widgets/bizcard_find_dialog.py
-msgid "할 일..."
-msgstr ""
-
-#: viewer/widgets/bizcard_find_dialog.py
-msgid "고른 명함들로 할 일(제목·내용·기간)을 만듭니다 — 기간 동안 제목 이름의 즐겨찾기 탭에, 메모 맨 위에 기록"
-msgstr ""
-
-#: viewer/widgets/bizcard_find_dialog.py
-msgid "즐겨찾기에 넣기"
-msgstr ""
-
-#: viewer/widgets/bizcard_find_dialog.py
-msgid "표에서 고른 명함 모두를 지금 즐겨찾기 탭에 넣습니다"
-msgstr ""
-
-#: viewer/widgets/bizcard_find_dialog.py
-msgid "고른 명함을 지웁니다 — 원본·정리본·인물 사진을 휴지통으로"
-msgstr ""
-
-#: viewer/widgets/bizcard_find_dialog.py
 msgid "고친 내용을 저장할까요?"
 msgstr ""
 
 #: viewer/widgets/bizcard_find_dialog.py
-msgid "이름 바꾸기..."
+msgid "즐겨찾기 탭에 넣기"
 msgstr ""
 
 #: viewer/widgets/bizcard_find_dialog.py
-msgid "탭 지우기"
+msgid "새 즐겨찾기 탭..."
 msgstr ""
 
 #: viewer/widgets/bizcard_find_dialog.py
-msgid "새 탭..."
+msgid "할 일에 넣기"
 msgstr ""
 
 #: viewer/widgets/bizcard_find_dialog.py
-msgid "탭에서 빼기"
+msgid "새 할 일..."
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "이메일 복사"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "다른 탭에 복사"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "새 즐겨찾기 탭으로..."
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "새 할 일로..."
 msgstr ""
 
 #: viewer/widgets/bizcard_find_dialog.py
@@ -8020,6 +8020,22 @@ msgid "스캔일"
 msgstr ""
 
 #: viewer/widgets/bizcard_find_dialog.py
+msgid "1주"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "1개월"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "3개월"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "지정"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
 msgid "체크한 칸을 [내용 복사] 로 글로 복사합니다 — 체크는 다음에도 그대로"
 msgstr ""
 
@@ -8048,11 +8064,27 @@ msgid "탭 이름:"
 msgstr ""
 
 #: viewer/widgets/bizcard_find_dialog.py
-msgid "할 일 고치기..."
+msgid "이름 바꾸기..."
 msgstr ""
 
 #: viewer/widgets/bizcard_find_dialog.py
-msgid "숨은 할 일"
+msgid "탭 삭제"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "탭과 그 사람 칸을 완전히 지웁니다. 할 일로 사람 메모에 적은 글도 함께 지웁니다(직접 고친 글은 그대로). 명함은 지우지 않습니다."
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "마감한 탭"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "최근에서 빼기"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "탭에서 빼기"
 msgstr ""
 
 #: viewer/widgets/bizcard_find_dialog.py viewer/widgets/study_panel.py
@@ -8098,12 +8130,55 @@ msgid "(인물 사진 없음 — 끌어 놓거나 [사진 추가...])"
 msgstr ""
 
 #: viewer/widgets/bizcard_find_dialog.py
+#, python-brace-format
+msgid "세부 칸에서 {s}초 넘게 본 명함 — 저절로 들어오고, 빼기만 합니다"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "(마감한 탭 — 다른 탭을 고르면 다시 숨습니다)"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "할 일이 아닌 마지막 탭은 삭제할 수 없습니다."
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "탭 마감"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "할 일이 아닌 마지막 탭은 마감할 수 없습니다."
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+#, python-brace-format
+msgid "새 즐겨찾기 탭... ({n}명)"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+#, python-brace-format
+msgid "새 할 일... ({n}명)"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "할 일 고치기..."
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "다시 열기"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "탭 줄에서 보이지 않게 합니다. 지우지 않으므로 탭 메뉴 '마감한 탭'에서 언제든 다시 보거나 다시 열 수 있습니다."
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
 msgid "할 일 고치기"
 msgstr ""
 
 #: viewer/widgets/bizcard_find_dialog.py
 #, python-brace-format
-msgid "처음 {n}장"
+msgid "'{tab}' {n}명"
 msgstr ""
 
 #: viewer/widgets/bizcard_find_dialog.py
@@ -8117,17 +8192,17 @@ msgstr ""
 
 #: viewer/widgets/bizcard_find_dialog.py
 #, python-brace-format
-msgid "'{tab}' 탭을 지웁니다 — 탭의 {n}명은 빠지고 명함은 그대로입니다."
+msgid "처음 {n}장"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+#, python-brace-format
+msgid "'{tab}' 탭을 삭제합니다 — 탭과 그 {n}명 칸이 완전히 지워지고, 할 일로 메모에 적은 글도 지웁니다. 되돌릴 수 없습니다. 명함과 파일은 그대로입니다."
 msgstr ""
 
 #: viewer/widgets/bizcard_find_dialog.py
 #, python-brace-format
 msgid "할 일 — {n}명"
-msgstr ""
-
-#: viewer/widgets/bizcard_find_dialog.py
-#, python-brace-format
-msgid "할 일 '{t}' 를 지웁니다 — 명함과 메모는 그대로입니다."
 msgstr ""
 
 #: viewer/widgets/bizcard_find_dialog.py

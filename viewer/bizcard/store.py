@@ -256,7 +256,7 @@ class BizcardStore:
 
     def _forget_fav(self, card_id: int):
         """즐겨찾기 칸도 지운다(§5.24) — id 는 다시 쓰일 수 있어 남겨 두면 새 명함이 옛 칸을 물려받는다. 표가 없으면(옛 DB) 그만."""
-        for t in ("fav_members", "contact_src"):        # 즐겨찾기 칸·주소록 출처(§5.24)
+        for t in ("fav_members", "contact_src", "recent"):   # 즐겨찾기 칸·주소록 출처·최근(§5.24)
             try:
                 self.con.execute("DELETE FROM %s WHERE card_id=?" % t, (card_id,))
             except sqlite3.OperationalError:

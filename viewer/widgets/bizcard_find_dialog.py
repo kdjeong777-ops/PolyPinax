@@ -12,12 +12,12 @@ import math
 import os
 from pathlib import Path
 
-from PyQt6.QtCore import Qt, QTimer, QSize, QObject, QRectF, QDate, pyqtSignal
+from PyQt6.QtCore import Qt, QTimer, QSize, QObject, QRectF, QPointF, QDate, pyqtSignal
 from PyQt6.QtGui import QPixmap, QIcon, QImage, QImageReader, QPainter, QPainterPath, QColor, QFont, QKeySequence, QShortcut
 from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QComboBox, QTableWidget,
     QTableWidgetItem, QAbstractItemView, QHeaderView, QSplitter, QWidget, QFormLayout, QPlainTextEdit, QPushButton,
     QListWidget, QListWidgetItem, QListView, QMessageBox, QFileDialog, QSizePolicy, QCheckBox, QTabBar, QToolButton,
-    QMenu, QInputDialog, QApplication, QDateEdit, QDialogButtonBox)
+    QMenu, QInputDialog, QApplication, QDateEdit, QDialogButtonBox, QWidgetAction)
 
 from viewer.i18n import tr, tr_noop
 from viewer.bizcard import people as P
@@ -31,6 +31,8 @@ FAV_ROWS = 2                        # 즐겨찾기 줄 최대 높이(줄 수) �
 PHOTO_ICON = 72                     # 인물 사진 썸네일 줄(큰 화면은 그 위 — §5.24 사진창)
 DETAIL_W = 330                      # 처음 너비 — 세부 칸(§5.24 '처음 너비': 목록은 네 열 최소 폭, 나머지는 사진창)
 FIND_DELAY_MS = 250
+RECENT = -1                         # '최근' 탭의 tabData(명함 DB 의 탭 id 와 겹치지 않음, §5.24.2)
+RECENT_MS = 3000                    # 세부 칸에 이만큼 넘게 보이면 '최근' 에 넣는다(D27)
 FAV_BG = "#cfe2f6"                  # 사진도 명함도 없을 때 — 옅은 파랑
 IMG_FILTER = " ".join("*" + e for e in R.IMG_EXTS)
 # 칸(키, 화면 이름) — 전화는 종류마다 첫 번호만 고친다(나머지는 그대로 둔다)
@@ -199,6 +201,109 @@ def _menu_act(m: QMenu, text: str, fn):
     return a
 
 
+def _menu_act_help(m: QMenu, text: str, fn, help_text: str, parent=None):
+    """오른쪽에 [?] 가 붙은 메뉴 항목 — 글을 누르면 실행, [?] 를 누르면 설명만(실행하지 않는다, §5.24.2 '탭 메뉴')."""
+    w = QWidget(m)
+    h = QHBoxLayout(w)
+    h.setContentsMargins(4, 0, 4, 0)
+    h.setSpacing(2)
+    b = QToolButton(w)
+    b.setText(text)
+    b.setAutoRaise(True)
+    b.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+    b.setStyleSheet("QToolButton{text-align:left; padding:3px 18px;}")
+    q = QToolButton(w)
+    q.setText("?")
+    q.setAutoRaise(True)
+    q.setToolTip(help_text)
+    h.addWidget(b, 1)
+    h.addWidget(q)
+
+    def run():
+        m.close()
+        fn()
+    b.clicked.connect(lambda _c=False: run())
+    q.clicked.connect(lambda _c=False: QMessageBox.information(parent or m, text, help_text))
+    act = QWidgetAction(m)
+    act.setDefaultWidget(w)
+    act.setText(text)
+    m.addAction(act)
+    return act
+
+
+def _tab_icon(kind: str, pal) -> QIcon:
+    """탭 아이콘(그려서 만든 그림) — 'todo' = 체크된 동그라미, 'recent' = 시계(§5.24.2 '탭 줄')."""
+    pm = QPixmap(16, 16)
+    pm.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pm)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    from PyQt6.QtGui import QPen
+    if kind == "todo":
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(pal.highlight().color())
+        p.drawEllipse(1, 1, 14, 14)
+        pen = QPen(pal.highlightedText().color(), 2)
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        p.setPen(pen)
+        p.drawPolyline(*[QPointF(x, y) for x, y in ((4.5, 8.2), (7.0, 10.8), (11.5, 5.5))])
+    else:
+        pen = QPen(pal.text().color(), 1.6)
+        p.setPen(pen)
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.drawEllipse(QRectF(1.5, 1.5, 13, 13))
+        p.drawLine(QPointF(8, 8), QPointF(8, 4))
+        p.drawLine(QPointF(8, 8), QPointF(11, 9.5))
+    p.end()
+    return QIcon(pm)
+
+
+class _DropTabBar(QTabBar):
+    """사람 칸·표에서 끌어 온 명함을 탭 위에 놓으면 그 탭에 복사(§5.24.2 '넣기·복사')."""
+    dropped = pyqtSignal(int, object)                  # (탭 번호, 끌어 온 곳)
+
+    def __init__(self, accepts):
+        super().__init__()
+        self._accepts = accepts
+        self.setAcceptDrops(True)
+
+    def dragEnterEvent(self, e):
+        e.acceptProposedAction() if self._accepts(e) else e.ignore()
+
+    def dragMoveEvent(self, e):
+        e.acceptProposedAction() if self._accepts(e) and self.tabAt(e.position().toPoint()) >= 0 else e.ignore()
+
+    def dropEvent(self, e):
+        i = self.tabAt(e.position().toPoint())
+        if not self._accepts(e) or i < 0:
+            e.ignore()
+            return
+        e.setDropAction(Qt.DropAction.CopyAction)
+        e.accept()
+        self.dropped.emit(i, e.source())
+
+
+class _DropButton(QToolButton):
+    """'+' — 끌어 놓으면 새 탭·새 할 일 메뉴(끈 사람들이 들어간다)."""
+    dropped = pyqtSignal(object)
+
+    def __init__(self, accepts):
+        super().__init__()
+        self._accepts = accepts
+        self.setAcceptDrops(True)
+
+    def dragEnterEvent(self, e):
+        e.acceptProposedAction() if self._accepts(e) else e.ignore()
+
+    def dropEvent(self, e):
+        if not self._accepts(e):
+            e.ignore()
+            return
+        e.setDropAction(Qt.DropAction.CopyAction)
+        e.accept()
+        src = e.source()
+        QTimer.singleShot(0, lambda: self.dropped.emit(src))
+
+
 def _move_rows(lw: QListWidget, rows, to: int) -> None:
     """고른 줄들을 to 앞으로(차례 지킴) — IconMode 의 '자유 위치' 끌기 대신 차례 바꾸기."""
     rows = sorted(set(rows))
@@ -285,6 +390,9 @@ class BizcardFindDialog(QDialog):
         self._dirty = False
         self.photo_busy = False
         self._fav_gen = 0
+        self._peek = None                              # '마감한 탭 ▸ 보기' 로 잠시 보이는 탭(D28)
+        self._table_tab = None                         # 목록 표가 보이는 탭(None = 찾기 결과, §5.24.2 '탭 줄')
+        self._recent_id = None
         self.setWindowTitle(tr("명함찾기"))
         self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowMaximizeButtonHint | Qt.WindowType.WindowMinimizeButtonHint)
         self.setAcceptDrops(True)
@@ -296,6 +404,10 @@ class BizcardFindDialog(QDialog):
         self.ed_find.setPlaceholderText(tr("이름·회사·메모 등 — 낱말 여럿은 모두 들어 있는 명함, #낱말은 해시태그"))
         self.ed_find.setClearButtonEnabled(True)
         top.addWidget(self.ed_find, 1)
+        self.btn_tags = QPushButton(tr("해시태그..."))       # 찾기 칸 바로 오른쪽(§5.24.1 '위 줄', 사용자 지시 261119)
+        self.btn_tags.setToolTip(tr("고른 명함들에 해시태그를 붙이거나 뗍니다 — 정리본 파일에도 같이, 찾기 칸에서 #낱말로 찾습니다"))
+        self.btn_tags.clicked.connect(lambda _c=False: self.edit_tags())
+        top.addWidget(self.btn_tags)
         self.cb_period = QComboBox()
         for key, label in (("all", tr("전체")), ("1m", tr("최근 1개월")), ("3m", tr("최근 3개월")), ("1y", tr("최근 1년")),
                            ("custom", tr("직접"))):
@@ -320,40 +432,61 @@ class BizcardFindDialog(QDialog):
         self._find_timer.setSingleShot(True)
         self._find_timer.setInterval(FIND_DELAY_MS)
         self._find_timer.timeout.connect(self.refresh)
-        self.ed_find.textChanged.connect(lambda _t: self._find_timer.start())
+        self.ed_find.textChanged.connect(lambda _t: self._search_mode())
         self.cb_period.currentIndexChanged.connect(self._on_period)
+        self._recent_timer = QTimer(self)
+        self._recent_timer.setSingleShot(True)
+        self._recent_timer.setInterval(RECENT_MS)
+        self._recent_timer.timeout.connect(self._recent_hit)
 
         # ── 왼쪽: 즐겨찾기 줄 + [표 | 세부] ──
         left = QWidget()
         lv = QVBoxLayout(left)
         lv.setContentsMargins(0, 0, 0, 0)
         tabs_row = QHBoxLayout()
-        self.fav_tabs = QTabBar()
+        self.fav_tabs = _DropTabBar(accepts=lambda e: e.source() in (self.fav, self.table))
+        self.fav_tabs.dropped.connect(self._drop_on_tab)
+        self.fav_tabs.tabBarClicked.connect(self._tab_clicked)
         self.fav_tabs.setMovable(True)
         self.fav_tabs.setExpanding(False)
         self.fav_tabs.setDrawBase(False)
         self.fav_tabs.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.fav_tabs.customContextMenuRequested.connect(self._fav_tab_menu)
         self.fav_tabs.tabBarDoubleClicked.connect(lambda i: self.fav_rename_tab(i))
-        self.fav_tabs.tabMoved.connect(lambda _a, _b: self._fav_save_tab_order())
+        self.fav_tabs.tabMoved.connect(self._tab_moved)
         self.fav_tabs.currentChanged.connect(lambda _i: self._fav_tab_changed())
         tabs_row.addWidget(self.fav_tabs)
-        self.btn_fav_tab = QToolButton()
+        self.btn_fav_tab = _DropButton(accepts=lambda e: e.source() in (self.fav, self.table))
         self.btn_fav_tab.setText("+")
         self.btn_fav_tab.setAutoRaise(True)
-        self.btn_fav_tab.setToolTip(tr("새 즐겨찾기 탭"))
-        self.btn_fav_tab.clicked.connect(lambda _c=False: self.fav_new_tab())
+        self.btn_fav_tab.setToolTip(tr("새 즐겨찾기 탭·새 할 일 — 표에서 고른 명단이 들어갑니다(사람 칸에서 끌어 놓아도)"))
+        self.btn_fav_tab.clicked.connect(lambda _c=False: self.plus_menu())
+        self.btn_fav_tab.dropped.connect(lambda src: self.plus_menu(self._drag_cards(src)))
         tabs_row.addWidget(self.btn_fav_tab)
         tabs_row.addStretch(1)
+        self.cb_recent = QComboBox()                       # '최근' 탭 기간(D27)
+        for key, label in (("1w", tr("1주")), ("1m", tr("1개월")), ("3m", tr("3개월")), ("custom", tr("지정"))):
+            self.cb_recent.addItem(label, key)
+        self.cb_recent.setToolTip(tr("최근 탭 — 이 기간에 본 명함"))
+        self.d_recent_from = QDateEdit(QDate.currentDate().addDays(-7))
+        self.d_recent_to = QDateEdit(QDate.currentDate())
+        for d in (self.d_recent_from, self.d_recent_to):
+            d.setCalendarPopup(True)
+            d.setDisplayFormat("yyyy-MM-dd")
+            d.dateChanged.connect(lambda _d: self._recent_changed())
+        self.cb_recent.currentIndexChanged.connect(lambda _i: self._recent_changed())
+        for w in (self.cb_recent, self.d_recent_from, self.d_recent_to):
+            w.setVisible(False)
+            tabs_row.addWidget(w)
         lv.addLayout(tabs_row)
         self.fav = _OrderList(external=lambda _e: self.fav_add_selected(),
-                              accepts=lambda e: e.source() is self.table)
+                              accepts=lambda e: e.source() is self.table and self._fav_gid() != RECENT)
         self.fav.setIconSize(QSize(FAV_ICON, FAV_ICON))
         self.fav.setGridSize(QSize(FAV_ICON + 22, FAV_ICON + 24))
         self.fav.setUniformItemSizes(True)
         self.fav.setWordWrap(False)
         self.fav.setTextElideMode(Qt.TextElideMode.ElideRight)
-        self.fav.setToolTip(tr("표의 줄을 끌어 놓으면 이 탭에 넣습니다 — 끌어 차례 바꾸기, Delete 로 빼기"))
+        self.fav.setToolTip(tr("표의 줄을 끌어 놓으면 이 탭에 넣습니다 — 끌어 차례 바꾸기, 다른 탭에 끌어 놓으면 복사, Delete 로 빼기"))
         self.fav.reordered.connect(self._fav_save_order)
         self.fav.deleteRequested.connect(lambda: self.fav_remove_selected())
         self.fav.itemClicked.connect(lambda it: self._show_card_id(it.data(ROLE)))
@@ -380,6 +513,8 @@ class BizcardFindDialog(QDialog):
         self.table.sortByColumn(C_DATE, Qt.SortOrder.DescendingOrder)
         self.table.currentCellChanged.connect(self._on_current)
         self.table.cellClicked.connect(lambda r, _c: self._on_clicked(r))
+        self.table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.table.customContextMenuRequested.connect(self._table_menu)
         for seq, fn in ((QKeySequence(QKeySequence.StandardKey.Copy), lambda: self.copy_selected()),
                         (QKeySequence(Qt.Key.Key_Delete), lambda: self.delete_cards())):
             sc = QShortcut(seq, self.table)
@@ -509,21 +644,9 @@ class BizcardFindDialog(QDialog):
         _menu_act(bm, tr("구글 주소록용 vCard 로 내보내기..."), lambda: self.export_vcard(style="google"))
         _menu_act(bm, tr("리멤버용 vCard 로 내보내기..."), lambda: self.export_vcard(style="remember"))
         self.btn_vcard.setMenu(bm)
-        self.btn_tags = QPushButton(tr("해시태그..."))
-        self.btn_tags.setToolTip(tr("고른 명함들에 해시태그를 붙이거나 뗍니다 — 정리본 파일에도 같이, 찾기 칸에서 #낱말로 찾습니다"))
-        self.btn_tags.clicked.connect(lambda _c=False: self.edit_tags())
-        self.btn_todo = QPushButton(tr("할 일..."))
-        self.btn_todo.setToolTip(tr("고른 명함들로 할 일(제목·내용·기간)을 만듭니다 — 기간 동안 제목 이름의 즐겨찾기 탭에, 메모 맨 위에 기록"))
-        self.btn_todo.clicked.connect(lambda _c=False: self.todo_new())
-        self.btn_fav_add = QPushButton(tr("즐겨찾기에 넣기"))
-        self.btn_fav_add.setToolTip(tr("표에서 고른 명함 모두를 지금 즐겨찾기 탭에 넣습니다"))
-        self.btn_fav_add.clicked.connect(lambda _c=False: self.fav_add_selected())
-        self.btn_del = QPushButton(tr("삭제"))
-        self.btn_del.setToolTip(tr("고른 명함을 지웁니다 — 원본·정리본·인물 사진을 휴지통으로"))
-        self.btn_del.clicked.connect(lambda _c=False: self.delete_cards())
         b_close = QPushButton(tr("닫기"))
         b_close.clicked.connect(lambda _c=False: self.close())
-        for b in (self.btn_open, self.btn_tags, self.btn_todo, self.btn_fav_add, self.btn_vcard, self.btn_del):
+        for b in (self.btn_vcard, self.btn_open):           # [주소록 ▾] 은 [명함 보기] 왼쪽(§5.24.1 '단추', 사용자 지시 261119)
             bot.addWidget(b)
         bot.addStretch(1)
         bot.addWidget(b_close)
@@ -557,10 +680,16 @@ class BizcardFindDialog(QDialog):
         self._store().meta_set("copy_fields", [k for k in P.COPY_FIELDS if self.chk[k].isChecked()])
 
     # ── 찾기 ──
+    def _search_mode(self):
+        """찾기 칸·기간을 바꾸면 목록 표는 찾기 결과로(탭 명단 보기를 끝냄)."""
+        self._table_tab = None
+        self._find_timer.start()
+
     def _on_period(self, _i=0):
         custom = self.cb_period.currentData() == "custom"
         for w in (self.ed_from, self.lbl_tilde, self.ed_to):
             w.setVisible(custom)
+        self._table_tab = None
         self.refresh()
 
     def _range(self):
@@ -572,8 +701,11 @@ class BizcardFindDialog(QDialog):
     def refresh(self):
         if self._dirty and not self._ask_save():
             return
-        since, until = self._range()
-        rows = P.find(self._store(), self.ed_find.text(), since, until)
+        if self._table_tab is not None:                # 탭 명단 보기(§5.24.2 '탭 줄')
+            rows = self._tab_members(self._table_tab)
+        else:
+            since, until = self._range()
+            rows = P.find(self._store(), self.ed_find.text(), since, until)
         more = len(rows) > P.SEARCH_LIMIT
         self._rows = rows[:P.SEARCH_LIMIT]
         self._by_id = {c["id"]: c for c in self._rows}
@@ -593,7 +725,10 @@ class BizcardFindDialog(QDialog):
             self.table.setSortingEnabled(True)              # 지금 머리말 기준으로 다시 정렬
         finally:
             self._loading = False
-        self.lbl_count.setText((tr("처음 {n}장") if more else tr("{n}장")).format(n=len(self._rows)))
+        if self._table_tab is not None:
+            self.lbl_count.setText(tr("'{tab}' {n}명").format(tab=self._tab_name(self._table_tab), n=len(self._rows)))
+        else:
+            self.lbl_count.setText((tr("처음 {n}장") if more else tr("{n}장")).format(n=len(self._rows)))
         pick = self.row_of_id(keep) if keep in self._by_id else (0 if self._rows else -1)
         if pick >= 0:
             self._loading = True
@@ -685,6 +820,11 @@ class BizcardFindDialog(QDialog):
         self._enable_card_buttons(card is not None)
         self._show_card()
         self._fill_photos()
+        self._recent_id = card["id"] if card else None     # RECENT_MS 넘게 보이면 '최근' 에(D27)
+        if card:
+            self._recent_timer.start()
+        else:
+            self._recent_timer.stop()
 
     def _flip(self, on: bool):
         if self._loading:
@@ -779,7 +919,7 @@ class BizcardFindDialog(QDialog):
 
     def _enable_card_buttons(self, on: bool):
         img = on and not V.is_contact(self._card)            # 주소록에서 가져온 명함 — 그림·인물 사진 없음
-        for b in (self.btn_tags, self.btn_copy, self.btn_todo, self.btn_fav_add, self.btn_del):
+        for b in (self.btn_tags, self.btn_copy):
             b.setEnabled(on)
         for b in (self.btn_photo, self.btn_open):
             b.setEnabled(img)
@@ -924,38 +1064,125 @@ class BizcardFindDialog(QDialog):
             QApplication.clipboard().setText(t)
         return t
 
-    # ── 즐겨찾기 탭 (§5.24) ──
+    # ── 즐겨찾기 탭 (§5.24.2) — 맨 앞 '최근'(RECENT), 즐겨찾기·할 일 탭 ──
     def _fav_gid(self):
         i = self.fav_tabs.currentIndex()
         return self.fav_tabs.tabData(i) if i >= 0 else None
+
+    def _tab_name(self, gid) -> str:
+        for i in range(self.fav_tabs.count()):
+            if self.fav_tabs.tabData(i) == gid:
+                return self.fav_tabs.tabText(i)
+        r = self._store().con.execute("SELECT name FROM fav_groups WHERE id=?", (gid,)).fetchone() if gid != RECENT else None
+        return r["name"] if r else tr("최근")
 
     def _fav_fill_tabs(self, select=None):
         self.fav_tabs.blockSignals(True)
         while self.fav_tabs.count():
             self.fav_tabs.removeTab(0)
-        pick = 0
         st = self._store()
-        for i, (gid, name) in enumerate(P.fav_groups(st, _today())):     # 기간 밖 할 일 탭은 숨김(D26)
-            self.fav_tabs.addTab(name)
-            self.fav_tabs.setTabData(i, gid)
+        pal = self.palette()
+        self.fav_tabs.addTab(_tab_icon("recent", pal), tr("최근"))
+        self.fav_tabs.setTabData(0, RECENT)
+        self.fav_tabs.setTabToolTip(0, tr("세부 칸에서 {s}초 넘게 본 명함 — 저절로 들어오고, 빼기만 합니다").format(s=RECENT_MS // 1000))
+        pick = 0 if select == RECENT else None
+        groups = P.fav_groups(st, _today())                       # 마감한 탭·기간 밖 할 일은 숨김(D26·D28)
+        if self._peek is not None and all(g != self._peek for g, _n in groups):
+            r = st.con.execute("SELECT name FROM fav_groups WHERE id=?", (self._peek,)).fetchone()
+            if r is not None:
+                groups = groups + [(self._peek, r["name"])]
+            else:
+                self._peek = None
+        for gid, name in groups:
             info = P.todo_info(st, gid)
-            self.fav_tabs.setTabToolTip(i, self._todo_tip(info) if info else "")
+            i = self.fav_tabs.addTab(_tab_icon("todo", pal), name) if info else self.fav_tabs.addTab(name)
+            self.fav_tabs.setTabData(i, gid)
+            tip = self._todo_tip(info) if info else ""
+            if gid == self._peek:
+                tip = (tip + "\n" if tip else "") + tr("(마감한 탭 — 다른 탭을 고르면 다시 숨습니다)")
+            self.fav_tabs.setTabToolTip(i, tip)
             if gid == select:
                 pick = i
+        if pick is None:
+            pick = 1 if self.fav_tabs.count() > 1 else 0
         self.fav_tabs.setCurrentIndex(pick)
         self.fav_tabs.blockSignals(False)
+        self._recent_bar(self._fav_gid() == RECENT)
         self._fav_fill()
 
     def _fav_tab_changed(self):
         gid = self._fav_gid()
+        if self._peek is not None and gid != self._peek:  # 잠시 보던 마감한 탭은 다시 숨김
+            self._peek = None
+            QTimer.singleShot(0, lambda g=gid: self._fav_fill_tabs(g))
         if gid is not None:
             self._store().meta_set("fav_tab", gid)
+        self._recent_bar(gid == RECENT)
         self._fav_fill()
 
-    def _fav_save_tab_order(self):
-        P.fav_order_groups(self._store(), [self.fav_tabs.tabData(i) for i in range(self.fav_tabs.count())])
+    def _tab_clicked(self, i):
+        """탭을 누르면 목록 표에 그 탭 사람들을 모두(사용자 지시 261119) — 찾기 칸·기간을 바꾸면 찾기 결과로."""
+        if i < 0:
+            return
+        self._table_tab = self.fav_tabs.tabData(i)
+        QTimer.singleShot(0, self.refresh)
 
-    def fav_new_tab(self, name=None):
+    def _tab_moved(self, _a, _b):
+        if self.fav_tabs.tabData(0) != RECENT:            # '최근' 은 맨 앞 고정
+            QTimer.singleShot(0, lambda: self._fav_fill_tabs(self._fav_gid()))
+        self._fav_save_tab_order()
+
+    def _fav_save_tab_order(self):
+        P.fav_order_groups(self._store(), [g for g in (self.fav_tabs.tabData(i) for i in range(self.fav_tabs.count()))
+                                           if g != RECENT])
+
+    def _recent_bar(self, on: bool):
+        self.cb_recent.setVisible(on)
+        custom = on and self.cb_recent.currentData() == "custom"
+        for w in (self.d_recent_from, self.d_recent_to):
+            w.setVisible(custom)
+
+    def _recent_range(self):
+        key = self.cb_recent.currentData()
+        if key == "custom":
+            return self.d_recent_from.date().toString("yyyy-MM-dd"), self.d_recent_to.date().toString("yyyy-MM-dd")
+        import datetime
+        days = {"1w": 7, "1m": 31, "3m": 92}.get(key, 7)
+        return (datetime.date.today() - datetime.timedelta(days=days)).isoformat(), ""
+
+    def _recent_changed(self):
+        self._recent_bar(self._fav_gid() == RECENT)
+        if self._fav_gid() == RECENT:
+            self._fav_fill()
+        self._sync_table(RECENT)
+
+    def _recent_hit(self):
+        """세부 칸에 RECENT_MS 넘게 보인 명함 → '최근'(D27). 표는 다시 채우지 않는다(보던 줄이 움직이지 않게)."""
+        c = self._card
+        if c is None or c["id"] != self._recent_id:
+            return
+        P.recent_add(self._store(), c["id"])
+        if self._fav_gid() == RECENT:
+            self._fav_fill()
+
+    def _tab_members(self, gid) -> list:
+        if gid == RECENT:
+            return P.recent_list(self._store(), *self._recent_range())
+        return P.fav_members(self._store(), gid)
+
+    def _sync_table(self, gid):
+        """목록 표가 그 탭 명단을 보이고 있으면 다시 채운다."""
+        if self._table_tab is not None and self._table_tab == gid:
+            self.refresh()
+
+    def _reload_card(self):
+        """메모가 바뀌었을 수 있다(할 일 넣기·탭 삭제) — 지금 명함 다시 읽기."""
+        if self._card is not None:
+            c = P.card_by_id(self._store(), self._card["id"])
+            if c is not None:
+                self._load(c)
+
+    def fav_new_tab(self, name=None, cards=None):
         if name is None:
             name, ok = QInputDialog.getText(self, tr("즐겨찾기"), tr("새 탭 이름(예: 가족·친구):"))
             if not ok:
@@ -963,12 +1190,15 @@ class BizcardFindDialog(QDialog):
         name = (name or "").strip()
         if not name:
             return None
-        gid = P.fav_add_group(self._store(), name)
+        st = self._store()
+        gid = P.fav_add_group(st, name)
+        if cards:
+            P.fav_add(st, gid, [c["id"] for c in cards], ongoing=tr("계속"))
         self._fav_fill_tabs(gid)
         return gid
 
     def fav_rename_tab(self, i, name=None):
-        if i < 0:
+        if i < 0 or self.fav_tabs.tabData(i) == RECENT:
             return
         if name is None:
             name, ok = QInputDialog.getText(self, tr("즐겨찾기"), tr("탭 이름:"), text=self.fav_tabs.tabText(i))
@@ -980,38 +1210,172 @@ class BizcardFindDialog(QDialog):
             self.fav_tabs.setTabText(i, name)
 
     def fav_delete_tab(self, i, ask: bool = True) -> bool:
-        if i < 0:
+        return i >= 0 and self.tab_delete(self.fav_tabs.tabData(i), ask=ask)
+
+    def tab_delete(self, gid, ask: bool = True) -> bool:
+        """탭 삭제(D29) — 탭과 그 사람 칸을 지우고, 할 일로 메모에 적은 글도 빼낸다. 명함은 그대로."""
+        if gid is None or gid == RECENT:
             return False
+        st = self._store()
+        n = len(P.fav_members(st, gid))
+        if ask and QMessageBox.question(self, tr("탭 삭제"), tr(
+                "'{tab}' 탭을 삭제합니다 — 탭과 그 {n}명 칸이 완전히 지워지고, 할 일로 메모에 적은 글도 지웁니다. "
+                "되돌릴 수 없습니다. 명함과 파일은 그대로입니다.").format(tab=self._tab_name(gid), n=n)) != QMessageBox.StandardButton.Yes:
+            return False
+        if not P.fav_delete_group(st, gid, tr("계속")):
+            if ask:
+                QMessageBox.information(self, tr("탭 삭제"), tr("할 일이 아닌 마지막 탭은 삭제할 수 없습니다."))
+            return False
+        if self._peek == gid:
+            self._peek = None
+        cur = self._fav_gid()
+        if self._table_tab == gid:
+            self._table_tab = None
+            self.refresh()
+        self._fav_fill_tabs(cur if cur != gid else None)
+        self._reload_card()
+        return True
+
+    def tab_close(self, gid, ask: bool = True) -> bool:
+        """탭 마감(D28) — 탭 줄에서 숨기고 지우지 않는다('마감한 탭 ▸' 에서 다시)."""
+        if gid is None or gid == RECENT:
+            return False
+        if not P.fav_close(self._store(), gid, True):
+            if ask:
+                QMessageBox.information(self, tr("탭 마감"), tr("할 일이 아닌 마지막 탭은 마감할 수 없습니다."))
+            return False
+        if self._peek == gid:
+            self._peek = None
+        if self._table_tab == gid:
+            self._table_tab = None
+            self.refresh()
+        cur = self._fav_gid()
+        self._fav_fill_tabs(cur if cur != gid else None)
+        return True
+
+    def tab_reopen(self, gid) -> bool:
+        P.fav_close(self._store(), gid, False)
+        self._peek = None
+        self._fav_fill_tabs(gid)
+        return True
+
+    def tab_peek(self, gid):
+        """'마감한 탭 ▸ 보기' — 그 탭을 잠시 탭 줄 끝에(다른 탭을 고르면 다시 숨음)."""
+        self._peek = gid
+        self._fav_fill_tabs(gid)
+
+    def _is_closed(self, gid) -> bool:
+        r = self._store().con.execute("SELECT closed FROM fav_groups WHERE id=?", (gid,)).fetchone()
+        return bool(r and r["closed"])
+
+    def plus_menu(self, cards=None):
+        """'+' — 새 즐겨찾기 탭·새 할 일(표에서 고른 명단, 끌어 놓았으면 끈 사람들)."""
+        cards = self.selected_cards() if cards is None else cards
+        m = QMenu(self)
+        _menu_act(m, tr("새 즐겨찾기 탭... ({n}명)").format(n=len(cards)), lambda: self.fav_new_tab(cards=cards))
+        _menu_act(m, tr("새 할 일... ({n}명)").format(n=len(cards)), lambda: self.todo_new(cards=cards))
+        self._plus_menu_obj = m                        # 검사용
+        m.exec(self.btn_fav_tab.mapToGlobal(self.btn_fav_tab.rect().bottomLeft()))
+
+    def _drag_cards(self, src) -> list:
+        if src is self.fav:
+            return self._fav_selected_cards()
+        if src is self.table:
+            return self.selected_cards()
+        return []
+
+    def _drop_on_tab(self, i, src):
+        """사람 칸·표에서 끌어 탭에 놓음 — 그 탭에 복사(지금 탭에서는 빠지지 않는다)."""
         gid = self.fav_tabs.tabData(i)
-        n = len(P.fav_members(self._store(), gid))
-        if ask and n and QMessageBox.question(
-                self, tr("즐겨찾기"), tr("'{tab}' 탭을 지웁니다 — 탭의 {n}명은 빠지고 명함은 그대로입니다.").format(
-                    tab=self.fav_tabs.tabText(i), n=n)) != QMessageBox.StandardButton.Yes:
-            return False
-        if P.fav_delete_group(self._store(), gid):
-            self._fav_fill_tabs(self._fav_gid() if i != self.fav_tabs.currentIndex() else None)
-            return True
-        return False
+        if gid == RECENT or (src is self.fav and gid == self._fav_gid()):
+            return 0
+        return self.fav_add_selected(self._drag_cards(src), gid=gid)
+
+    def copy_emails(self, cards) -> str:
+        """이메일 복사(§5.24.1) — 쉼표로 이어 클립보드에."""
+        t = P.emails_text(cards)
+        if t:
+            QApplication.clipboard().setText(t)
+        return t
+
+    def _tab_menu_groups(self, menu, cards, exclude=None, todo=None):
+        """탭 고르기 메뉴 — todo None 이면 모두(할 일은 아이콘), True/False 면 그 갈래만."""
+        st = self._store()
+        pal = self.palette()
+        for g, name in P.fav_groups(st, _today()):
+            if g == exclude:
+                continue
+            is_t = P.is_todo(st, g)
+            if todo is not None and is_t != todo:
+                continue
+            a = _menu_act(menu, name, lambda g=g: self.fav_add_selected(cards, gid=g))
+            if is_t:
+                a.setIcon(_tab_icon("todo", pal))
+
+    def _table_menu(self, pos):
+        """목록 오른쪽 메뉴(§5.24.1) — 즐겨찾기·할 일에 넣기·이메일 복사·삭제."""
+        if self.table.itemAt(pos) is None:
+            return
+        cards = self.selected_cards() or ([self._card] if self._card else [])
+        if not cards:
+            return
+        m = QMenu(self)
+        fm = m.addMenu(tr("즐겨찾기 탭에 넣기"))
+        self._tab_menu_groups(fm, cards, todo=False)
+        fm.addSeparator()
+        _menu_act(fm, tr("새 즐겨찾기 탭..."), lambda: self.fav_new_tab(cards=cards))
+        tm = m.addMenu(tr("할 일에 넣기"))
+        tm.setIcon(_tab_icon("todo", self.palette()))
+        self._tab_menu_groups(tm, cards, todo=True)
+        tm.addSeparator()
+        _menu_act(tm, tr("새 할 일..."), lambda: self.todo_new(cards=cards))
+        _menu_act(m, tr("이메일 복사"), lambda: self.copy_emails(cards))
+        m.addSeparator()
+        _menu_act(m, tr("삭제"), lambda: self.delete_cards())
+        self._table_menu_obj = m                       # 검사용
+        m.exec(self.table.viewport().mapToGlobal(pos))
 
     def _fav_tab_menu(self, pos):
+        """탭 메뉴(§5.24.2) — 할 일 고치기·이름 바꾸기·이메일 복사·탭 마감 [?]·탭 삭제 [?]·마감한 탭 ▸."""
         i = self.fav_tabs.tabAt(pos)
         if i < 0:
             return
         st = self._store()
         gid = self.fav_tabs.tabData(i)
         m = QMenu(self)
-        if P.todo_info(st, gid) is not None:
-            _menu_act(m, tr("할 일 고치기..."), lambda: self.todo_edit(gid))
-        _menu_act(m, tr("이름 바꾸기..."), lambda: self.fav_rename_tab(i))
-        _menu_act(m, tr("탭 지우기"), lambda: self.fav_delete_tab(i))
-        _menu_act(m, tr("새 탭..."), lambda: self.fav_new_tab())
-        hidden = P.todo_hidden(st, _today())
-        if hidden:
-            hm = m.addMenu(tr("숨은 할 일"))
-            for hid, title in hidden:
-                sm = hm.addMenu(title)
-                _menu_act(sm, tr("할 일 고치기..."), lambda h=hid: self.todo_edit(h))
-                _menu_act(sm, tr("지우기"), lambda h=hid: self.todo_delete(h))
+        m.setToolTipsVisible(True)
+        if gid == RECENT:
+            _menu_act(m, tr("이메일 복사"), lambda: self.copy_emails(self._tab_members(RECENT)))
+        else:
+            if P.todo_info(st, gid) is not None:
+                _menu_act(m, tr("할 일 고치기..."), lambda: self.todo_edit(gid))
+            _menu_act(m, tr("이름 바꾸기..."), lambda: self.fav_rename_tab(i))
+            _menu_act(m, tr("이메일 복사"), lambda: self.copy_emails(self._tab_members(gid)))
+            m.addSeparator()
+            if self._is_closed(gid):
+                _menu_act(m, tr("다시 열기"), lambda: self.tab_reopen(gid))
+            else:
+                _menu_act_help(m, tr("탭 마감"), lambda: self.tab_close(gid), tr(
+                    "탭 줄에서 보이지 않게 합니다. 지우지 않으므로 탭 메뉴 '마감한 탭'에서 언제든 다시 보거나 다시 열 수 있습니다."), self)
+            _menu_act_help(m, tr("탭 삭제"), lambda: self.tab_delete(gid), tr(
+                "탭과 그 사람 칸을 완전히 지웁니다. 할 일로 사람 메모에 적은 글도 함께 지웁니다(직접 고친 글은 그대로). "
+                "명함은 지우지 않습니다."), self)
+        closed = P.closed_tabs(st, _today())
+        if closed:
+            m.addSeparator()
+            cm = m.addMenu(tr("마감한 탭"))
+            pal = self.palette()
+            for cid, name, todo in closed:
+                sm = cm.addMenu(name)
+                if todo:
+                    sm.setIcon(_tab_icon("todo", pal))
+                _menu_act(sm, tr("보기"), lambda c=cid: self.tab_peek(c))
+                if self._is_closed(cid):
+                    _menu_act(sm, tr("다시 열기"), lambda c=cid: self.tab_reopen(c))
+                if todo:
+                    _menu_act(sm, tr("할 일 고치기..."), lambda c=cid: self.todo_edit(c))
+                _menu_act(sm, tr("탭 삭제"), lambda c=cid: self.tab_delete(c))
+        self._tab_menu_obj = m                         # 검사용
         m.exec(self.fav_tabs.mapToGlobal(pos))
 
     # ── 할 일(todo) — 즐겨찾기 탭 + 기간(D26) ──
@@ -1020,11 +1384,10 @@ class BizcardFindDialog(QDialog):
         period = "%s ~ %s" % (info["start"], info["end"] or tr("계속"))
         return "%s\n%s" % (period, info["memo"]) if info["memo"] else period
 
-    def todo_new(self, info=None) -> int:
-        """[할 일…] — 고른 명함들(없으면 지금 명함)로 할 일 탭을 만든다. info 를 주면 창 없이(검사). 반환 = 탭 id 또는 0."""
-        cards = self.selected_cards() or ([self._card] if self._card else [])
-        if not cards:
-            return 0
+    def todo_new(self, info=None, cards=None) -> int:
+        """새 할 일 — cards(없으면 표에서 고른 명함들·지금 명함)로 할 일 탭을 만든다. info 를 주면 창 없이(검사). 반환 = 탭 id 또는 0."""
+        if cards is None:
+            cards = self.selected_cards() or ([self._card] if self._card else [])
         if info is None:
             dlg = TodoDialog(self, title=tr("할 일 — {n}명").format(n=len(cards)))
             if dlg.exec() != QDialog.DialogCode.Accepted:
@@ -1059,16 +1422,7 @@ class BizcardFindDialog(QDialog):
         return True
 
     def todo_delete(self, gid, ask: bool = True) -> bool:
-        st = self._store()
-        cur = P.todo_info(st, gid)
-        if cur is None:
-            return False
-        if ask and QMessageBox.question(self, tr("할 일"), tr("할 일 '{t}' 를 지웁니다 — 명함과 메모는 그대로입니다.").format(
-                t=cur["title"])) != QMessageBox.StandardButton.Yes:
-            return False
-        ok = P.fav_delete_group(st, gid)
-        self._fav_fill_tabs(self._fav_gid())
-        return ok
+        return P.todo_info(self._store(), gid) is not None and self.tab_delete(gid, ask=ask)
 
     def _fav_fill(self):
         """지금 탭의 사람 칸 — 우선 옅은 파랑 + 첫 글자, 그림은 배경에서 읽어 바꾼다."""
@@ -1079,7 +1433,7 @@ class BizcardFindDialog(QDialog):
             self._fav_fit()
             return
         jobs = []
-        for c in P.fav_members(self._store(), gid):
+        for c in self._tab_members(gid):
             it = QListWidgetItem(QIcon(_rounded(None, c.get("name") or "")), c.get("name") or "")
             it.setData(ROLE, c["id"])
             it.setToolTip(self._fav_tip(c))
@@ -1119,20 +1473,21 @@ class BizcardFindDialog(QDialog):
     def fav_ids(self) -> list:
         return [self.fav.item(i).data(ROLE) for i in range(self.fav.count())]
 
-    def fav_add_selected(self, cards=None) -> int:
-        gid = self._fav_gid()
+    def fav_add_selected(self, cards=None, gid=None) -> int:
+        """넣는 길 하나 — gid(없으면 지금 탭)에 cards(없으면 표에서 고른 명함들). '최근' 에는 넣지 않는다(D27)."""
+        gid = self._fav_gid() if gid is None else gid
         cards = cards if cards is not None else (self.selected_cards() or ([self._card] if self._card else []))
-        if gid is None or not cards:
+        if gid is None or gid == RECENT or not cards:
             return 0
-        todo = P.todo_info(self._store(), gid) is not None
+        todo = P.is_todo(self._store(), gid)
         if todo and self._dirty and not self._ask_save():
             return 0
         n = P.fav_add(self._store(), gid, [c["id"] for c in cards], ongoing=tr("계속"))
-        self._fav_fill()
-        if todo and n and self._card is not None:     # 할 일 탭 — 메모 맨 위에 기록됐다(D26)
-            c = P.card_by_id(self._store(), self._card["id"])
-            if c is not None:
-                self._load(c)
+        if gid == self._fav_gid():
+            self._fav_fill()
+        self._sync_table(gid)
+        if todo and n:                                 # 할 일 탭 — 메모 맨 위에 기록됐다(D26)
+            self._reload_card()
         return n
 
     def fav_remove_selected(self):
@@ -1140,8 +1495,16 @@ class BizcardFindDialog(QDialog):
         ids = [it.data(ROLE) for it in self.fav.selectedItems()]
         if gid is None or not ids:
             return
-        P.fav_remove(self._store(), gid, ids)
+        if gid == RECENT:
+            P.recent_remove(self._store(), ids)
+        else:
+            P.fav_remove(self._store(), gid, ids)
         self._fav_fill()
+        self._sync_table(gid)
+
+    def _fav_selected_cards(self) -> list:
+        st = self._store()
+        return [c for c in (P.card_by_id(st, it.data(ROLE)) for it in self.fav.selectedItems()) if c]
 
     def _fav_save_order(self):
         gid = self._fav_gid()
@@ -1162,19 +1525,27 @@ class BizcardFindDialog(QDialog):
 
     def fav_copy_selected(self) -> str:
         """즐겨찾기 사람 메뉴 '내용 복사' — 고른 사람들의 체크한 칸([내용 복사]와 같은 글)."""
-        st = self._store()
-        cards = [c for c in (P.card_by_id(st, it.data(ROLE)) for it in self.fav.selectedItems()) if c]
-        t = self.copy_text(cards)
+        t = self.copy_text(self._fav_selected_cards())
         if t:
             QApplication.clipboard().setText(t)
         return t
 
     def _fav_menu(self, pos):
+        """사람 메뉴(§5.24.2) — 내용 복사·이메일 복사·다른 탭에 복사·새 탭/할 일로·빼기."""
         if self.fav.itemAt(pos) is None:
             return
+        gid = self._fav_gid()
+        cards = self._fav_selected_cards()
         m = QMenu(self)
         _menu_act(m, tr("내용 복사"), lambda: self.fav_copy_selected())
-        _menu_act(m, tr("탭에서 빼기"), lambda: self.fav_remove_selected())
+        _menu_act(m, tr("이메일 복사"), lambda: self.copy_emails(cards))
+        cm = m.addMenu(tr("다른 탭에 복사"))
+        self._tab_menu_groups(cm, cards, exclude=gid)
+        _menu_act(m, tr("새 즐겨찾기 탭으로..."), lambda: self.fav_new_tab(cards=cards))
+        _menu_act(m, tr("새 할 일로..."), lambda: self.todo_new(cards=cards))
+        m.addSeparator()
+        _menu_act(m, tr("최근에서 빼기") if gid == RECENT else tr("탭에서 빼기"), lambda: self.fav_remove_selected())
+        self._fav_menu_obj = m                         # 검사용
         m.exec(self.fav.mapToGlobal(pos))
 
     # ── 인물 사진 ──

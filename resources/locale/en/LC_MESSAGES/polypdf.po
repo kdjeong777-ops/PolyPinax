@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-19 07:11+0900\n"
+"POT-Creation-Date: 2026-11-19 10:27+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -1730,7 +1730,7 @@ msgstr "My defaults"
 msgid "최근에 연 폴더·파일·검색어"
 msgstr "Recently opened folders, files and searches"
 
-#: viewer/app.py
+#: viewer/app.py viewer/widgets/bizcard_find_dialog.py
 msgid "최근"
 msgstr "Recent"
 
@@ -2510,7 +2510,7 @@ msgstr "Expand All Bookmarks"
 msgid "책갈피 모두 접기"
 msgstr "Collapse All Bookmarks"
 
-#: viewer/app.py
+#: viewer/app.py viewer/widgets/bizcard_find_dialog.py
 msgid "보기"
 msgstr "View"
 
@@ -8106,12 +8106,24 @@ msgid "이름·회사·메모 등 — 낱말 여럿은 모두 들어 있는 명�
 msgstr "Name, company, memo, etc. — several words find cards containing all of them, #word filters by hashtag"
 
 #: viewer/widgets/bizcard_find_dialog.py
-msgid "새 즐겨찾기 탭"
-msgstr "New favorites tab"
+msgid "해시태그..."
+msgstr "Hashtags..."
 
 #: viewer/widgets/bizcard_find_dialog.py
-msgid "표의 줄을 끌어 놓으면 이 탭에 넣습니다 — 끌어 차례 바꾸기, Delete 로 빼기"
-msgstr "Drop rows from the table to add them to this tab — drag to reorder, Delete to remove"
+msgid "고른 명함들에 해시태그를 붙이거나 뗍니다 — 정리본 파일에도 같이, 찾기 칸에서 #낱말로 찾습니다"
+msgstr "Add or remove hashtags on the selected cards — also on the card image files; search with #word"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "새 즐겨찾기 탭·새 할 일 — 표에서 고른 명단이 들어갑니다(사람 칸에서 끌어 놓아도)"
+msgstr "New favorites tab or to-do — the people selected in the list are added (you can also drop people here)"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "최근 탭 — 이 기간에 본 명함"
+msgstr "Recent tab — cards viewed in this period"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "표의 줄을 끌어 놓으면 이 탭에 넣습니다 — 끌어 차례 바꾸기, 다른 탭에 끌어 놓으면 복사, Delete 로 빼기"
+msgstr "Drop list rows here to add them to this tab — drag to reorder, drop on another tab to copy, Delete to remove"
 
 #: viewer/widgets/bizcard_find_dialog.py
 msgid "고친 칸·메모를 명함 DB 에 저장합니다 — 이름·회사를 바꾸면 정리본 파일 이름도 '성명_회사명' 으로"
@@ -8186,52 +8198,40 @@ msgid "리멤버용 vCard 로 내보내기..."
 msgstr "Export vCard for Remember..."
 
 #: viewer/widgets/bizcard_find_dialog.py
-msgid "해시태그..."
-msgstr "Hashtags..."
-
-#: viewer/widgets/bizcard_find_dialog.py
-msgid "고른 명함들에 해시태그를 붙이거나 뗍니다 — 정리본 파일에도 같이, 찾기 칸에서 #낱말로 찾습니다"
-msgstr "Add or remove hashtags on the selected cards — also on the card image files; search with #word"
-
-#: viewer/widgets/bizcard_find_dialog.py
-msgid "할 일..."
-msgstr "To-do..."
-
-#: viewer/widgets/bizcard_find_dialog.py
-msgid "고른 명함들로 할 일(제목·내용·기간)을 만듭니다 — 기간 동안 제목 이름의 즐겨찾기 탭에, 메모 맨 위에 기록"
-msgstr "Creates a to-do (title, details, period) for the selected cards — shown as a favorites tab named after the title during the period and recorded at the top of each memo"
-
-#: viewer/widgets/bizcard_find_dialog.py
-msgid "즐겨찾기에 넣기"
-msgstr "Add to favorites"
-
-#: viewer/widgets/bizcard_find_dialog.py
-msgid "표에서 고른 명함 모두를 지금 즐겨찾기 탭에 넣습니다"
-msgstr "Add all cards selected in the table to the current favorites tab"
-
-#: viewer/widgets/bizcard_find_dialog.py
-msgid "고른 명함을 지웁니다 — 원본·정리본·인물 사진을 휴지통으로"
-msgstr "Delete the selected cards — originals, card images and person photos go to the Recycle Bin"
-
-#: viewer/widgets/bizcard_find_dialog.py
 msgid "고친 내용을 저장할까요?"
 msgstr "Save your changes?"
 
 #: viewer/widgets/bizcard_find_dialog.py
-msgid "이름 바꾸기..."
-msgstr "Rename..."
+msgid "즐겨찾기 탭에 넣기"
+msgstr "Add to Favorites Tab"
 
 #: viewer/widgets/bizcard_find_dialog.py
-msgid "탭 지우기"
-msgstr "Delete tab"
+msgid "새 즐겨찾기 탭..."
+msgstr "New Favorites Tab..."
 
 #: viewer/widgets/bizcard_find_dialog.py
-msgid "새 탭..."
-msgstr "New tab..."
+msgid "할 일에 넣기"
+msgstr "Add to To-do"
 
 #: viewer/widgets/bizcard_find_dialog.py
-msgid "탭에서 빼기"
-msgstr "Remove from tab"
+msgid "새 할 일..."
+msgstr "New To-do..."
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "이메일 복사"
+msgstr "Copy Email Addresses"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "다른 탭에 복사"
+msgstr "Copy to Another Tab"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "새 즐겨찾기 탭으로..."
+msgstr "To New Favorites Tab..."
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "새 할 일로..."
+msgstr "To New To-do..."
 
 #: viewer/widgets/bizcard_find_dialog.py
 msgid "인물 사진"
@@ -8271,6 +8271,22 @@ msgid "스캔일"
 msgstr "Scan Date"
 
 #: viewer/widgets/bizcard_find_dialog.py
+msgid "1주"
+msgstr "1 week"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "1개월"
+msgstr "1 month"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "3개월"
+msgstr "3 months"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "지정"
+msgstr "Region"
+
+#: viewer/widgets/bizcard_find_dialog.py
 msgid "체크한 칸을 [내용 복사] 로 글로 복사합니다 — 체크는 다음에도 그대로"
 msgstr "[Copy details] copies the checked fields as text — the checks are remembered"
 
@@ -8299,12 +8315,28 @@ msgid "탭 이름:"
 msgstr "Tab name:"
 
 #: viewer/widgets/bizcard_find_dialog.py
-msgid "할 일 고치기..."
-msgstr "Edit To-do..."
+msgid "이름 바꾸기..."
+msgstr "Rename..."
 
 #: viewer/widgets/bizcard_find_dialog.py
-msgid "숨은 할 일"
-msgstr "Hidden To-dos"
+msgid "탭 삭제"
+msgstr "Delete Tab"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "탭과 그 사람 칸을 완전히 지웁니다. 할 일로 사람 메모에 적은 글도 함께 지웁니다(직접 고친 글은 그대로). 명함은 지우지 않습니다."
+msgstr "Permanently deletes the tab and its people. Text this to-do wrote into people's memos is deleted too (text you edited is kept). Cards are not deleted."
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "마감한 탭"
+msgstr "Closed Tabs"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "최근에서 빼기"
+msgstr "Remove from Recent"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "탭에서 빼기"
+msgstr "Remove from tab"
 
 #: viewer/widgets/bizcard_find_dialog.py viewer/widgets/study_panel.py
 msgid "그림"
@@ -8349,13 +8381,56 @@ msgid "(인물 사진 없음 — 끌어 놓거나 [사진 추가...])"
 msgstr "(No person photo — drop one here or use [Add Photo...])"
 
 #: viewer/widgets/bizcard_find_dialog.py
+#, python-brace-format
+msgid "세부 칸에서 {s}초 넘게 본 명함 — 저절로 들어오고, 빼기만 합니다"
+msgstr "Cards shown in the details for more than {s} seconds — added automatically; you can only remove them"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "(마감한 탭 — 다른 탭을 고르면 다시 숨습니다)"
+msgstr "(Closed tab — hidden again when you pick another tab)"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "할 일이 아닌 마지막 탭은 삭제할 수 없습니다."
+msgstr "The last tab that is not a to-do cannot be deleted."
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "탭 마감"
+msgstr "Close Tab"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "할 일이 아닌 마지막 탭은 마감할 수 없습니다."
+msgstr "The last tab that is not a to-do cannot be closed."
+
+#: viewer/widgets/bizcard_find_dialog.py
+#, python-brace-format
+msgid "새 즐겨찾기 탭... ({n}명)"
+msgstr "New Favorites Tab... ({n} people)"
+
+#: viewer/widgets/bizcard_find_dialog.py
+#, python-brace-format
+msgid "새 할 일... ({n}명)"
+msgstr "New To-do... ({n} people)"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "할 일 고치기..."
+msgstr "Edit To-do..."
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "다시 열기"
+msgstr "Reopen"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "탭 줄에서 보이지 않게 합니다. 지우지 않으므로 탭 메뉴 '마감한 탭'에서 언제든 다시 보거나 다시 열 수 있습니다."
+msgstr "Hides the tab from the tab bar. It is not deleted, so you can view or reopen it anytime from 'Closed Tabs' in the tab menu."
+
+#: viewer/widgets/bizcard_find_dialog.py
 msgid "할 일 고치기"
 msgstr "Edit To-do"
 
 #: viewer/widgets/bizcard_find_dialog.py
 #, python-brace-format
-msgid "처음 {n}장"
-msgstr "First {n}"
+msgid "'{tab}' {n}명"
+msgstr "'{tab}' {n} people"
 
 #: viewer/widgets/bizcard_find_dialog.py
 msgid "파일 이름을 바꾸지 못했습니다 — 다른 프로그램이 열고 있는지 확인하세요."
@@ -8368,18 +8443,19 @@ msgstr "{n} cards"
 
 #: viewer/widgets/bizcard_find_dialog.py
 #, python-brace-format
-msgid "'{tab}' 탭을 지웁니다 — 탭의 {n}명은 빠지고 명함은 그대로입니다."
-msgstr "Delete the '{tab}' tab? Its {n} people are removed from the tab; the cards stay."
+msgid "처음 {n}장"
+msgstr "First {n}"
+
+# | 그대로입니다."
+#: viewer/widgets/bizcard_find_dialog.py
+#, python-brace-format
+msgid "'{tab}' 탭을 삭제합니다 — 탭과 그 {n}명 칸이 완전히 지워지고, 할 일로 메모에 적은 글도 지웁니다. 되돌릴 수 없습니다. 명함과 파일은 그대로입니다."
+msgstr "Delete the '{tab}' tab? The tab and its {n} people are permanently removed, and text this to-do wrote into memos is deleted too. This cannot be undone. Cards and files are kept."
 
 #: viewer/widgets/bizcard_find_dialog.py
 #, python-brace-format
 msgid "할 일 — {n}명"
 msgstr "To-do — {n} people"
-
-#: viewer/widgets/bizcard_find_dialog.py
-#, python-brace-format
-msgid "할 일 '{t}' 를 지웁니다 — 명함과 메모는 그대로입니다."
-msgstr "Delete the to-do '{t}'? Cards and memos are kept."
 
 #: viewer/widgets/bizcard_find_dialog.py
 #, python-brace-format
@@ -17817,4 +17893,25 @@ msgstr "Getting Started"
 
 #~ msgid "주소록 가져오기 (vCard)..."
 #~ msgstr "Import contacts (vCard)..."
+
+#~ msgid "고른 명함들로 할 일(제목·내용·기간)을 만듭니다 — 기간 동안 제목 이름의 즐겨찾기 탭에, 메모 맨 위에 기록"
+#~ msgstr "Creates a to-do (title, details, period) for the selected cards — shown as a favorites tab named after the title during the period and recorded at the top of each memo"
+
+#~ msgid "표에서 고른 명함 모두를 지금 즐겨찾기 탭에 넣습니다"
+#~ msgstr "Add all cards selected in the table to the current favorites tab"
+
+#~ msgid "고른 명함을 지웁니다 — 원본·정리본·인물 사진을 휴지통으로"
+#~ msgstr "Delete the selected cards — originals, card images and person photos go to the Recycle Bin"
+
+#~ msgid "탭 지우기"
+#~ msgstr "Delete tab"
+
+#~ msgid "새 탭..."
+#~ msgstr "New tab..."
+
+#~ msgid "숨은 할 일"
+#~ msgstr "Hidden To-dos"
+
+#~ msgid "할 일 '{t}' 를 지웁니다 — 명함과 메모는 그대로입니다."
+#~ msgstr "Delete the to-do '{t}'? Cards and memos are kept."
 

@@ -21,7 +21,7 @@ if os.path.isdir(r"C:\Windows\Fonts"):
     os.environ.setdefault("QT_QPA_FONTDIR", r"C:\Windows\Fonts")
 sys.stdout.reconfigure(encoding="utf-8")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from PyQt6.QtCore import QStandardPaths, QCoreApplication, Qt, QTimer
+from PyQt6.QtCore import QStandardPaths, QCoreApplication, Qt, QTimer, QDate
 QStandardPaths.setTestModeEnabled(True)             # 검사 작성 SOT §14.7.2
 from PyQt6.QtWidgets import QApplication, QMessageBox, QDialog
 from PyQt6.QtTest import QTest
@@ -150,16 +150,21 @@ try:
         ost.delete_card(oid)                              # 즐겨찾기·출처 표 없이 지우기
         uv0 = ost.con.execute("PRAGMA user_version").fetchone()[0]
         P.fav_init(ost, "즐겨찾기")
-        P.fav_init(ost, "즐겨찾기")                       # 할 일 열(D26)이 이미 있으면 ALTER 를 건너뜀
+        P.fav_init(ost, "즐겨찾기")                       # 할 일·마감·메모 글 열(D26·D28·D29)이 이미 있으면 ALTER 를 건너뜀
         cols = [r[1] for r in ost.con.execute("PRAGMA table_info(fav_groups)")]
+        mcols = [r[1] for r in ost.con.execute("PRAGMA table_info(fav_members)")]
         ok_old = ok_old and len(P.fav_groups(ost)) == 1 and ost.count() == 0 and cols.count("todo") == 1 \
+            and cols.count("closed") == 1 and mcols.count("memo_entry") == 1 \
+            and ost.con.execute("SELECT COUNT(*) FROM sqlite_master WHERE name='recent'").fetchone()[0] == 1 \
             and ost.con.execute("PRAGMA user_version").fetchone()[0] == uv0
         if not ok_old:
             print("A2", cols, uv0)
         ost.close()
         con = dbutil.connect(old_db, dbutil.BUSY_MS_BG)  # 옛 판(beta.17)의 즐겨찾기 쿼리 — 새 열이 있어도 그대로
         con.execute("INSERT INTO fav_groups(name, pos) VALUES('옛 판 탭', 1)")
-        ok_old = ok_old and [r[1] for r in con.execute("SELECT id, name FROM fav_groups ORDER BY pos, id")] == ["즐겨찾기", "옛 판 탭"]
+        con.execute("INSERT OR IGNORE INTO fav_members(group_id, card_id, pos) VALUES(1, 99, 0)")   # 옛 판의 넣기
+        ok_old = ok_old and [r[1] for r in con.execute("SELECT id, name FROM fav_groups ORDER BY pos, id")] == ["즐겨찾기", "옛 판 탭"] \
+            and con.execute("SELECT memo_entry FROM fav_members WHERE card_id=99").fetchone()[0] == ""
         con.rollback(); con.close()
         ost = S.BizcardStore(old_db)
         ok_old = ok_old and len(P.fav_groups(ost, "2026-01-01")) == 1     # 옛 판이 넣은 행(todo 기본 0)은 보통 탭
@@ -411,9 +416,9 @@ try:
     for n in ("홍길동", "김철수"):
         sm.select(dlg.table.model().index(dlg.row_of_id(rows[n]["id"]), 0),
                   QItemSelectionModel.SelectionFlag.Select | QItemSelectionModel.SelectionFlag.Rows)
-    QTest.mouseClick(dlg.btn_fav_add, Qt.MouseButton.LeftButton)
-    chk(dlg.fav.count() == 2 and dlg.fav_tabs.count() == 1, "I5 고른 둘을 한 번에 즐겨찾기 탭에", str(dlg.fav.count()))
-    QTest.mouseClick(dlg.btn_fav_add, Qt.MouseButton.LeftButton)
+    dlg.fav_add_selected()                              # 표 오른쪽 메뉴 '즐겨찾기 탭에 넣기' 와 같은 함수(I15)
+    chk(dlg.fav.count() == 2 and dlg.fav_tabs.count() == 2, "I5 고른 둘을 한 번에 즐겨찾기 탭에(맨 앞은 '최근')", str(dlg.fav.count()))
+    dlg.fav_add_selected()
     chk(dlg.fav.count() == 2, "I5 이미 있으면 건너뜀")
     chk(pump(lambda: getattr(dlg, "fav_icons_pending", 0) == 0, timeout=5)
         and dlg.fav.item(dlg.fav_ids().index(rows["홍길동"]["id"])).data(Qt.ItemDataRole.UserRole + 1),
@@ -422,17 +427,18 @@ try:
     _move_rows(dlg.fav, [1], 0)
     dlg.fav.reordered.emit()
     order = dlg.fav_ids()
-    gid = dlg.fav_tabs.tabData(0)
+    gid = dlg.fav_tabs.tabData(1)
     dlg.fav_new_tab("가족")
-    chk(dlg.fav_tabs.count() == 2 and dlg.fav.count() == 0, "I5 새 탭(빈 탭으로 바뀜)")
-    dlg.fav_rename_tab(1, "친구")
-    dlg.fav_tabs.setCurrentIndex(0)
-    chk(dlg.fav_ids() == order and dlg.fav_tabs.tabText(1) == "친구", "I5 차례·탭 이름이 저장됨", str(dlg.fav_ids()))
+    chk(dlg.fav_tabs.count() == 3 and dlg.fav.count() == 0, "I5 새 탭(빈 탭으로 바뀜)")
+    dlg.fav_rename_tab(2, "친구")
+    dlg.fav_tabs.setCurrentIndex(1)
+    chk(dlg.fav_ids() == order and dlg.fav_tabs.tabText(2) == "친구", "I5 차례·탭 이름이 저장됨", str(dlg.fav_ids()))
     dlg.fav.item(0).setSelected(True)
     QTest.keyClick(dlg.fav, Qt.Key.Key_Delete)
     chk(dlg.fav.count() == 1, "I5 Delete 로 탭에서 빼기(명함은 그대로)", str(dlg.fav.count()))
-    chk(dlg.fav_delete_tab(1, ask=False) and dlg.fav_tabs.count() == 1 and not dlg.fav_delete_tab(0, ask=False),
-        "I5 탭 지우기 — 마지막 하나는 지우지 않음")
+    chk(dlg.fav_delete_tab(2, ask=False) and dlg.fav_tabs.count() == 2 and not dlg.fav_delete_tab(1, ask=False)
+        and not dlg.fav_delete_tab(0, ask=False),
+        "I5 탭 삭제 — 할 일이 아닌 마지막 탭·'최근' 은 지우지 않음")
     it = dlg.fav.item(0)
     QTest.mouseClick(dlg.fav.viewport(), Qt.MouseButton.LeftButton, pos=dlg.fav.visualItemRect(it).center())
     pump(timeout=0.1)
@@ -525,7 +531,7 @@ try:
     yesterday = (datetime.date.today() - datetime.timedelta(days=1)).isoformat()
     gid = None
     old_memo = (P.card_by_id(dlg._store(), hong["id"])["memo"] or "").strip()
-    if td is not None and hasattr(dlg, "btn_todo"):
+    if td is not None:
         def _fake_todo_exec(self):
             self.ed_title.setText("현장 점검")
             self.ed_memo.setPlainText("자료 준비")
@@ -537,7 +543,7 @@ try:
             for c in (hong, kim):
                 sm.select(dlg.table.model().index(dlg.row_of_id(c["id"]), 0),
                           QItemSelectionModel.SelectionFlag.Select | QItemSelectionModel.SelectionFlag.Rows)
-            QTest.mouseClick(dlg.btn_todo, Qt.MouseButton.LeftButton)
+            dlg.todo_new()                              # '+'·표 오른쪽 메뉴의 '새 할 일…' 과 같은 함수(I15)
             pump(timeout=0.2)
         finally:
             td.exec = _orig_td
@@ -546,12 +552,12 @@ try:
         gid = dlg.fav_tabs.tabData(ti) if ti >= 0 else None
         tip = dlg.fav_tabs.tabToolTip(ti) if ti >= 0 else ""
         chk(ti >= 0 and "자료 준비" in tip and today_s in tip and sorted(c["name"] for c in P.fav_members(dlg._store(), gid)) == ["김철수", "홍길동"],
-            "I14 [할 일…] → 작업 제목 탭에 고른 사람들, 탭 위 글에 내용·기간", "%s %r" % (tabs, tip))
+            "I14 새 할 일 → 작업 제목 탭에 고른 사람들, 탭 위 글에 내용·기간", "%s %r" % (tabs, tip))
         hm = P.card_by_id(dlg._store(), hong["id"])["memo"]
         chk(old_memo and hm == "[%s ~ 계속] 현장 점검\n자료 준비\n\n%s" % (today_s, old_memo),
             "I14 할 일에 든 사람 메모 맨 위에 기간·제목·내용, 종전 메모는 그 아래", repr(hm[:60]))
     else:
-        chk(False, "I14 [할 일…] 단추와 할 일 창")
+        chk(False, "I14 할 일 창")
     st = dlg._store()
     g_future = P.todo_add(st, {"title": "다음 주 일", "memo": "", "start": tomorrow, "end": ""}, [kim["id"]], "계속")
     g_past = P.todo_add(st, {"title": "지난 일", "memo": "", "start": yesterday, "end": yesterday}, [kim["id"]], "계속") \
@@ -580,6 +586,158 @@ try:
     t = dlg.fav_copy_selected() if hasattr(dlg, "fav_copy_selected") else ""
     chk("홍길동" in t and "김철수" not in t and QApplication.clipboard().text() == t, "I14 즐겨찾기 사람 메뉴 '내용 복사' = 체크한 칸 글", repr(t[:40]))
     dlg.todo_delete(gid, ask=False)
+    # I15 탭·메뉴 개편 — 아이콘·끌어 복사·'+'·표/탭/사람 메뉴·이메일 복사·마감·삭제(메모 글)·최근·탭 명단 보기 (사용자 지시 261119)
+    from PyQt6.QtWidgets import QMenu, QInputDialog, QToolButton, QWidgetAction
+    st = dlg._store()
+    chk(not any(hasattr(dlg, b) for b in ("btn_todo", "btn_fav_add", "btn_del"))
+        and abs(dlg.btn_tags.mapTo(dlg, dlg.btn_tags.rect().center()).y() - dlg.ed_find.mapTo(dlg, dlg.ed_find.rect().center()).y()) <= 4
+        and dlg.btn_tags.x() > dlg.ed_find.x()
+        and abs(dlg.btn_vcard.y() - dlg.btn_open.y()) <= 2 and dlg.btn_vcard.x() < dlg.btn_open.x(),
+        "I15 [즐겨찾기에 넣기]·[할 일…]·[삭제] 없음, [해시태그…] 는 찾기 칸 오른쪽, [주소록 ▾] 은 [명함 보기] 왼쪽")
+    shown = []
+    _orig_exec = QMenu.exec
+    QMenu.exec = lambda self, *a, **k: shown.append(self)
+    _orig_get = QInputDialog.getText
+    try:
+        def sel(*cards):
+            dlg.table.clearSelection()
+            for c in cards:
+                sm.select(dlg.table.model().index(dlg.row_of_id(c["id"]), 0),
+                          QItemSelectionModel.SelectionFlag.Select | QItemSelectionModel.SelectionFlag.Rows)
+
+        def act(menu, *path):
+            for name in path[:-1]:
+                menu = next(a.menu() for a in menu.actions() if a.menu() is not None and a.menu().title() == name)
+            return next(a for a in menu.actions() if a.text() == path[-1] or a.text().startswith(path[-1]))
+        # '+' — 새 즐겨찾기 탭(고른 명단 포함)
+        sel(hong)
+        QInputDialog.getText = staticmethod(lambda *a, **k: ("동료", True))
+        QTest.mouseClick(dlg.btn_fav_tab, Qt.MouseButton.LeftButton)
+        pump(timeout=0.1)
+        texts = [a.text() for a in shown[-1].actions()] if shown else []
+        act(shown[-1], "새 즐겨찾기 탭...").trigger()
+        tabs = [dlg.fav_tabs.tabText(i) for i in range(dlg.fav_tabs.count())]
+        g_col = dlg.fav_tabs.tabData(tabs.index("동료")) if "동료" in tabs else None
+        chk(any("(1" in t for t in texts) and g_col and [c["name"] for c in P.fav_members(st, g_col)] == ["홍길동"]
+            and dlg.fav_tabs.tabText(0) == "최근",
+            "I15 '+' → 새 즐겨찾기 탭에 표에서 고른 명단, 맨 앞은 '최근'", "%s %s" % (texts, tabs))
+        # 할 일 탭 아이콘
+        g_t = P.todo_add(st, {"title": "견적 보내기", "memo": "자료", "start": today_s, "end": ""}, [hong["id"]], "계속")
+        dlg._fav_fill_tabs(g_t)
+        ti = dlg.fav_tabs.currentIndex()
+        chk(not dlg.fav_tabs.tabIcon(ti).isNull() and dlg.fav_tabs.tabIcon(tabs.index("동료")).isNull()
+            and not dlg.fav_tabs.tabIcon(0).isNull(), "I15 할 일 탭(과 최근 탭)은 이름 앞에 아이콘, 즐겨찾기 탭은 없음")
+        # 표 오른쪽 메뉴 — 즐겨찾기 탭에 넣기 ▸ 동료 · 이메일 복사
+        sel(hong, kim)
+        dlg._table_menu(dlg.table.visualRect(dlg.table.model().index(dlg.row_of_id(kim["id"]), 0)).center())
+        m = shown[-1]
+        top = [a.text() for a in m.actions() if a.text()]
+        act(m, "즐겨찾기 탭에 넣기", "동료").trigger()
+        act(m, "이메일 복사").trigger()
+        chk(top[:2] == ["즐겨찾기 탭에 넣기", "할 일에 넣기"] and "삭제" in top
+            and sorted(c["name"] for c in P.fav_members(st, g_col)) == ["김철수", "홍길동"]
+            and QApplication.clipboard().text() == "hong@example.com",
+            "I15 표 오른쪽 메뉴 — 즐겨찾기 탭에 넣기 ▸·할 일에 넣기 ▸·이메일 복사·삭제", "%s %r" % (top, QApplication.clipboard().text()))
+        chk(P.emails_text([{"emails": ["a@x.com", "b@x.com"]}, {"emails": ["A@X.com"]}, {"emails": []}]) == "a@x.com, b@x.com",
+            "I15 이메일 복사 = 쉼표로 이음, 같은 주소 한 번, 메일 없는 명함 건너뜀")
+        # 사람 칸에서 골라 다른 탭에 끌어 놓으면 복사(지금 탭에서는 그대로)
+        dlg.fav_tabs.setCurrentIndex(tabs.index("동료"))
+        pump(timeout=0.1)
+        dlg.fav.clearSelection()
+        for i in range(dlg.fav.count()):
+            if dlg.fav.item(i).data(Qt.ItemDataRole.UserRole) == kim["id"]:
+                dlg.fav.item(i).setSelected(True)
+        ti = [dlg.fav_tabs.tabData(i) for i in range(dlg.fav_tabs.count())].index(g_t)
+        n = dlg._drop_on_tab(ti, dlg.fav)
+        chk(n == 1 and sorted(c["name"] for c in P.fav_members(st, g_t)) == ["김철수", "홍길동"] and dlg.fav.count() == 2
+            and P.card_by_id(st, kim["id"])["memo"].startswith("[%s ~ 계속] 견적 보내기" % today_s),
+            "I15 사람 칸 → 다른 탭에 끌어 놓으면 복사(할 일이면 메모 맨 위 기록), 지금 탭은 그대로")
+        chk(dlg._drop_on_tab(0, dlg.fav) == 0 and dlg._drop_on_tab(0, dlg.table) == 0, "I15 '최근' 에는 넣을 수 없음")
+        dlg._fav_menu(dlg.fav.visualItemRect(dlg.fav.selectedItems()[0]).center())
+        fm = [a.text() for a in shown[-1].actions() if a.text()]
+        chk(fm[:2] == ["내용 복사", "이메일 복사"] and "다른 탭에 복사" in fm and "새 할 일로..." in fm and fm[-1] == "탭에서 빼기",
+            "I15 사람 메뉴 — 내용·이메일 복사·다른 탭에 복사·새 탭/할 일로·빼기", str(fm))
+        # 탭 메뉴 — 이메일 복사·탭 마감 [?]·탭 삭제 [?]
+        dlg.fav_tabs.setCurrentIndex(ti)
+        dlg._fav_tab_menu(dlg.fav_tabs.tabRect(ti).center())
+        m = shown[-1]
+        wacts = {a.text(): a for a in m.actions() if isinstance(a, QWidgetAction)}
+        info = []
+        _orig_info = QMessageBox.information
+        QMessageBox.information = staticmethod(lambda *a, **k: info.append(a[1:3]) or QMessageBox.StandardButton.Ok)
+        try:
+            q = [b for b in wacts["탭 삭제"].defaultWidget().findChildren(QToolButton) if b.text() == "?"] if "탭 삭제" in wacts else []
+            if q:
+                QTest.mouseClick(q[0], Qt.MouseButton.LeftButton)
+        finally:
+            QMessageBox.information = _orig_info
+        chk(set(wacts) == {"탭 마감", "탭 삭제"} and q and info and "메모" in info[-1][1] and P.todo_info(st, g_t) is not None,
+            "I15 탭 메뉴의 '탭 마감'·'탭 삭제' 오른쪽 [?] — 누르면 설명만(실행하지 않음)", str(info))
+        act(m, "이메일 복사").trigger()
+        chk(QApplication.clipboard().text() == "hong@example.com", "I15 탭 메뉴 '이메일 복사' = 그 탭 사람 모두")
+        # 탭 마감 → 마감한 탭 ▸ 보기·다시 열기
+        chk(dlg.tab_close(g_col, ask=False) and g_col not in [dlg.fav_tabs.tabData(i) for i in range(dlg.fav_tabs.count())]
+            and g_col in [c for c, _n, _t in P.closed_tabs(st, today_s)] and P.fav_members(st, g_col),
+            "I15 탭 마감 — 탭 줄에서 숨고 지우지 않음(마감한 탭)")
+        dlg.tab_peek(g_col)
+        peek_on = dlg._fav_gid() == g_col
+        dlg.fav_tabs.setCurrentIndex(1)
+        pump(timeout=0.2)
+        chk(peek_on and g_col not in [dlg.fav_tabs.tabData(i) for i in range(dlg.fav_tabs.count())],
+            "I15 마감한 탭 '보기' 는 잠시 — 다른 탭을 고르면 다시 숨음")
+        dlg.tab_reopen(g_col)
+        chk(g_col in [dlg.fav_tabs.tabData(i) for i in range(dlg.fav_tabs.count())], "I15 다시 열기")
+        # 탭 삭제 — 할 일로 적은 메모 글도 지움(사람이 고친 다른 글은 그대로)
+        hm0 = P.card_by_id(st, hong["id"])["memo"]
+        P.update_card(st, hong["id"], {"memo": hm0 + "\n손으로 쓴 줄"})
+        g_old = P.todo_add(st, {"title": "옛 할 일", "memo": "", "start": today_s, "end": ""}, [hong["id"]], "계속")
+        st.con.execute("UPDATE fav_members SET memo_entry='' WHERE group_id=?", (g_old,))   # 글을 기억하지 않던 옛 할 일
+        st.con.commit()
+        chk(dlg.tab_delete(g_t, ask=False) and dlg.tab_delete(g_old, ask=False)
+            and P.card_by_id(st, hong["id"]) and P.card_by_id(st, kim["id"]) and os.path.exists(hong["front"]),
+            "I15 탭 삭제 — 명함 행·정리본 파일은 그대로")
+        hm = P.card_by_id(st, hong["id"])["memo"]
+        km = P.card_by_id(st, kim["id"])["memo"]
+        chk("견적 보내기" not in hm and "옛 할 일" not in hm and hm.endswith("손으로 쓴 줄") and "견적 보내기" not in km
+            and dlg.eds["name"].text() and P.todo_info(st, g_t) is None,
+            "I15 탭 삭제 — 그 할 일로 메모에 적은 글을 지움(옛 할 일은 지금 제목·기간으로), 손으로 쓴 줄은 그대로", repr(hm[-40:]))
+        P.update_card(st, hong["id"], {"memo": hm0})
+        # 최근 탭 — 세부 칸에 RECENT_MS 넘게 본 명함, 빼기만, 기간
+        dlg._recent_timer.setInterval(60)
+        dlg.table.setCurrentCell(dlg.row_of_id(kim["id"]), 0)
+        pump(lambda: kim["id"] in [c["id"] for c in P.recent_list(st)], timeout=2)
+        P.recent_add(st, hong["id"], "2020-01-05 10:00:00")
+        dlg.fav_tabs.setCurrentIndex(0)
+        pump(timeout=0.1)
+        ids_1w = dlg.fav_ids()
+        dlg.cb_recent.setCurrentIndex(dlg.cb_recent.findData("custom"))
+        dlg.d_recent_from.setDate(QDate(2020, 1, 1))
+        dlg.d_recent_to.setDate(QDate(2020, 1, 31))
+        pump(timeout=0.1)
+        ids_2020 = dlg.fav_ids()
+        chk(kim["id"] in ids_1w and hong["id"] not in ids_1w and ids_2020 == [hong["id"]] and dlg.cb_recent.isVisible(),
+            "I15 최근 — 세부 칸에 오래 본 명함이 저절로, 기간(1주·지정)으로 거름", "%s %s" % (ids_1w, ids_2020))
+        dlg.fav.item(0).setSelected(True)
+        QTest.keyClick(dlg.fav, Qt.Key.Key_Delete)
+        chk(hong["id"] not in [c["id"] for c in P.recent_list(st)] and dlg.fav.count() == 0, "I15 최근 — Delete 로 빼기")
+        dlg.cb_recent.setCurrentIndex(0)
+        # 탭을 누르면 목록 표에 그 탭 명단 — 찾기 칸을 고치면 찾기 결과로
+        ci = [dlg.fav_tabs.tabData(i) for i in range(dlg.fav_tabs.count())].index(g_col)
+        QTest.mouseClick(dlg.fav_tabs, Qt.MouseButton.LeftButton, pos=dlg.fav_tabs.tabRect(ci).center())
+        pump(timeout=0.3)
+        names_tab = sorted(dlg.table.item(r, 0).text() for r in range(dlg.table.rowCount()))
+        lbl = dlg.lbl_count.text()
+        dlg.ed_find.setText("")
+        dlg.ed_find.setText(" ")
+        pump(lambda: dlg.table.rowCount() >= 3, timeout=3)
+        chk(names_tab == ["김철수", "홍길동"] and "동료" in lbl and dlg.table.rowCount() >= 3,
+            "I15 탭을 누르면 목록 표에 그 탭 사람들, 찾기 칸을 고치면 찾기 결과로", "%s %r %d" % (names_tab, lbl, dlg.table.rowCount()))
+        dlg.ed_find.setText("")
+        pump(timeout=0.4)
+        dlg.tab_delete(g_col, ask=False)
+    finally:
+        QMenu.exec = _orig_exec
+        QInputDialog.getText = _orig_get
     # I8 주소록 가져오기(리멤버 꼴 vCard) — 같은 사람은 빈 칸만, 없는 사람은 그림 없는 명함
     vf = TMP / "contacts.vcf"
     vf.write_text("BEGIN:VCARD\r\nVERSION:3.0\r\nN:;김철수;;;\r\nTEL;TYPE=work,cell:010-0000-0003\r\nEMAIL;TYPE=work:kim@example.com\r\n"

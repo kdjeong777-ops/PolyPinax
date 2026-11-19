@@ -148,12 +148,61 @@ class ImportWorker(QObject):
                     if keep:
                         st.edit_put(it.key, keep)
                     hit = {"result": res, "edit": keep}
+                else:
+                    card = st.card_by_src(it.key)       # 적용한 뒤 명함찾기에서 고쳤으면 그 값(명함 SOT §5.17 '명함 DB 우선', 261117-62)
+                    if card and (card.get("updated") or 0) > (hit.get("updated") or 0):
+                        ed = db_overlay(hit["result"], hit["edit"] or {}, card)
+                        if ed != (hit["edit"] or {}):
+                            st.edit_put(it.key, ed)
+                            hit["edit"] = ed
                 self.itemDone.emit(self._rows[i], hit["result"], hit["edit"] or {})
                 self.progressed.emit(i + 1, n)
                 _t.sleep(0.001)                   # 응답성 SOT §4 ④ — 메인에 숨 쉴 틈
             self.finishedAll.emit(True)
         finally:
             st.close()
+
+
+OVERLAY_KEYS = ("name", "company", "dept", "title", "cell", "tel", "email")
+
+
+def _first_ph(phones, kind) -> str:
+    for x in phones or []:
+        if len(x) >= 2 and x[0] == kind:
+            return str(x[1])
+    return ""
+
+
+def db_overlay(res: dict, edit: dict, card: dict) -> dict:
+    """명함 관리 줄의 손 고침(edit)에 명함 DB 값을 얹는다 — 인식값과 다른 칸(또는 이미 고친 칸)은 DB 값으로(261117-15 '손으로 고친 칸'
+    과 같은 자리 — [다시 읽기] 도 지킨다). 다른 열쇠(on·keep_back·scanned·_ok)는 그대로."""
+    def rec(k):
+        if k == "cell":
+            return _first_ph(res.get("phones"), "cell")
+        if k == "tel":
+            return _first_ph(res.get("phones"), "work")
+        if k == "email":
+            return str((res.get("emails") or [""])[0] or "")
+        if k == "company":
+            return R.strip_corp(res.get("company") or "")
+        return str(res.get(k) or "")
+
+    def db(k):
+        if k == "cell":
+            return _first_ph(card.get("phones"), "cell")
+        if k == "tel":
+            return _first_ph(card.get("phones"), "work")
+        if k == "email":
+            return str((card.get("emails") or [""])[0] or "")
+        if k == "company":
+            return R.strip_corp(card.get("company") or "")
+        return str(card.get(k) or "")
+    out = dict(edit or {})
+    for k in OVERLAY_KEYS:
+        v = db(k).strip()
+        if v != rec(k).strip() or k in out:
+            out[k] = v                      # 인식값과 같으면 넣지 않는다(다시 매긴 값이 다를 수 있어 이미 있던 열쇠는 DB 값으로)
+    return out
 
 
 class MultiWorker(QObject):

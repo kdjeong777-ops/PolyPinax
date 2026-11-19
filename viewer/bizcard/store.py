@@ -94,10 +94,10 @@ class BizcardStore:
 
     # ── 인식 캐시 ──
     def recog_get(self, src, sig: str) -> Optional[dict]:
-        r = self.con.execute("SELECT sig, result, edit FROM recog WHERE src_key=?", (_key(src),)).fetchone()
+        r = self.con.execute("SELECT sig, result, edit, updated FROM recog WHERE src_key=?", (_key(src),)).fetchone()
         if r is None or sig_tail(r["sig"]) != sig_tail(sig):
             return None
-        return {"result": json.loads(r["result"] or "{}"), "edit": json.loads(r["edit"] or "{}")}
+        return {"result": json.loads(r["result"] or "{}"), "edit": json.loads(r["edit"] or "{}"), "updated": r["updated"] or 0}
 
     def recog_put(self, src, sig: str, result: dict):
         self.con.execute("INSERT INTO recog(src_key, sig, result, edit, updated) VALUES(?,?,?,?,?) "

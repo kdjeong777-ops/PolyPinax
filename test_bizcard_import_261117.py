@@ -6,7 +6,7 @@ A. 폴더 훑기 — 앞뒤 짝, 하위 pdf\\ 원본이 원천(PNG 짝은 원천
 B. DB — 인식 캐시는 원천이 바뀌면 버림, 고침 보관, 사람 행 찾기(FTS)·스캔일 범위, 이름 1위 비율
 C. 적용 — PDF 는 300 dpi JPG 앞·뒤, JPG 는 바이트 그대로, '넣지 않음' 뒷면은 안 만듦, 같은 이름은 ' (2)',
    같은 원천을 다시 적용하면 새 파일 없이 DB 만(메모 지킴), 원본은 그대로
-D. 앱 — 도구 탭 `명함 ▾`(tools.bizcard) 자리, 폴더 줄 우클릭 연결, 창을 열어 배경 인식(가짜 인식기)이 표를 채움,
+D. 앱 — 도구 탭 `명함 ▾`(tools.bizcard) 없음(261117-56), 폴더 줄 우클릭 연결, 창을 열어 배경 인식(가짜 인식기)이 표를 채움,
    이름 풀다운 고침이 새 파일 이름·캐시에 들어감, [적용] 단추를 눌러 정리본·해시태그(#명함·#회사·#한글), 메인 정지 < 1초
 """
 import os, sys, tempfile, shutil, time, io
@@ -525,7 +525,47 @@ try:
     from PyQt6.QtWidgets import QPushButton as _QPB
     chk(not hits and not any(b.isDefault() or b.autoDefault() for b in dn.findChildren(_QPB) if b.window() is dn),
         "P 칸에서 Enter 가 단추를 누르지 않음(기본 단추 없음)", str(len(hits)))
+    ra_key = dn._items[ra].key
     dn.close()
+    pump(timeout=0.5)
+    # Q. 적용한 명함을 명함찾기에서 고치면 명함 관리도 그 값(261117-62, 사용자 보고 '명함관리의 이름이 이상한 이름')
+    print("=== Q. 명함찾기 고침 → 명함 관리 ===")
+    from viewer.bizcard import people as PP
+    time.sleep(0.05)
+    sq = S.BizcardStore()
+    cq = sq.card_by_src(ra_key)
+    chk(cq is not None, "Q 적용한 명함이 DB 에 있음")
+    if cq is not None:
+        PP.update_card(sq, cq["id"], {"name": "고친이름", "title": "가짜직함", "phones": [("cell", "010-0000-0777")]})   # 명함찾기 [저장] 과 같은 길
+    sq.close()
+    mw._action_bizcard_import(str(F7))
+    dq = mw._bizcard_dlg
+    chk(pump(lambda: dq.bar.value() >= 1 and not dq._pending and dq.table.rowCount() >= 5, timeout=30), "Q 창을 다시 열어 읽기 끝")
+    rq = next((i for i, it in enumerate(dq._items) if it.key == ra_key), -1)
+    got_q = (dq.cell(rq, BD.C_NAME), dq.table.item(rq, BD.C_TITLE).text(), dq.table.item(rq, BD.C_CELL).text()) if rq >= 0 else None
+    chk(got_q == ("고친이름", "가짜직함", "010-0000-0777"), "Q 명함 관리 줄이 명함찾기에서 고친 이름·직함·휴대폰", str(got_q))
+    chk(rq >= 0 and dq.table.item(rq, BD.C_FILE).text().startswith("고친이름"), "Q 새 파일 이름 칸도 고친 이름")
+    other = next((i for i, it in enumerate(dq._items) if it.key != ra_key and dq.cell(i, BD.C_NAME)), -1)
+    chk(other >= 0 and dq.cell(other, BD.C_NAME) != "고친이름", "Q 다른 줄은 그대로")
+    sq = S.BizcardStore()
+    hq = sq.recog_get(ra_key, S.source_sig([dq._items[rq].pdf, dq._items[rq].front, dq._items[rq].back])) if rq >= 0 else None
+    sq.close()
+    chk(hq is not None and (hq.get("edit") or {}).get("name") == "고친이름", "Q 인식 캐시의 고침에도 들어가 [다시 읽기] 가 지킴")
+    # 명함 관리에서 그 줄을 다시 [적용] 해도 옛 인식 값이 명함 DB 를 덮지 않는다
+    if rq >= 0:
+        for i in range(dq.table.rowCount()):
+            dq.table.item(i, BD.C_ON).setCheckState(Qt.CheckState.Checked if i == rq else Qt.CheckState.Unchecked)
+        QTest.mouseClick(dq.btn_apply, Qt.MouseButton.LeftButton)
+        pump(lambda: hasattr(dq, "applied"), timeout=30)
+    sq = S.BizcardStore()
+    cq2 = sq.card_by_src(ra_key)
+    n_rows = sq.con.execute("SELECT COUNT(*) FROM cards WHERE src_key=?", (S._key(ra_key),)).fetchone()[0]
+    sq.close()
+    chk(hasattr(dq, "applied") and cq2 is not None and cq2["name"] == "고친이름" and cq2.get("title") == "가짜직함"
+        and ("cell", "010-0000-0777") in [tuple(x) for x in cq2["phones"]] and n_rows == 1,
+        "Q 명함 관리에서 다시 [적용] 해도 명함 DB 는 고친 값 그대로(옛 캐시가 덮지 않음, 행 하나)",
+        str(cq2 and (cq2["name"], cq2.get("title"), n_rows)))
+    dq.close()
     pump(timeout=0.5)
     mw.close()
 except Exception:

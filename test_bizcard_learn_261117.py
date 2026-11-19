@@ -7,7 +7,7 @@ C. 누리집·메일 도메인 → 직장 — www.seoul.go.kr 이고 회사 줄�
 D. 다시 매기기 — 양식 상자 안의 후보가 1위로(OCR 없이), 배운 가중치를 쓰면 순위가 바뀜
 E. 가중치 배우기 — 표본이 모자라면 None, 충분하면 1위 정확도가 기본 이상, 표본에는 이름 글자가 없다
 F. 앱 — 명함 관리 창: 미리 보기 위치 지정이 그 자리만 읽어 이름 칸을 채우고 같은 회사 양식으로 기억(다른 줄 다시 매김),
-   [적용] 뒤 도메인 → 직장을 배움, 메뉴 글자 '명함 관리'
+   [적용] 뒤 도메인 → 직장을 배움, 글자 '명함 관리'(명함찾기 단추 — 261117-56 에 도구 탭 메뉴는 없앰)
 G. 세로로 누운 명함 — 0도에서 연락처를 못 찾으면 돌려 읽는다(OCR, 없으면 SKIP)
 """
 import os, sys, tempfile, shutil, time, json
@@ -165,7 +165,12 @@ try:
     mw.show(); pump(timeout=1.0)
     from PyQt6.QtGui import QAction
     acts = [a.text() for a in mw.findChildren(QAction) if "명함" in a.text()]
-    chk(any(t.startswith("명함 관리") for t in acts) and not any("들이기" in t for t in acts), "F 메뉴 글자 '명함 관리'", str(acts))
+    # 261117-56: 본 뷰어 도구 탭의 `명함 ▾` 는 없앴다 — '명함 관리' 는 명함찾기 아래 줄 단추(명함 SOT §5.24.1 '단추')
+    from viewer.widgets.bizcard_find_dialog import BizcardFindDialog as _BFD
+    _fd = _BFD(mw)
+    chk(_fd.btn_manage.text() == "명함 관리" and not any("들이기" in t for t in acts), "F 글자 '명함 관리'(명함찾기 단추, 옛 '들이기' 없음)",
+        "%r %s" % (_fd.btn_manage.text(), acts))
+    _fd.close()
     mw._action_bizcard_import(str(F))
     dlg = mw._bizcard_dlg
     chk(dlg.windowTitle() == "명함 관리", "F 창 제목 '명함 관리'", dlg.windowTitle())

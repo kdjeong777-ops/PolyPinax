@@ -1414,7 +1414,15 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             try:
                 cur = self.main_view.current_file() if self.main_view else None
                 if cur and str(cur).lower().endswith(".pdf"):
-                    parts.append(Path(cur).name)
+                    # 261117-52(책갈피창·저장 SOT §4.8.3): 그 폴더 밖이면 전체 경로 — 종전에는 이름만이라
+                    #   Downloads 에 저장한 병합 파일이 'Documents… — 이름' 으로 보였다
+                    folders = [f for f in (lf, getattr(self, "_folder_right", None)
+                                           if getattr(self, "_split_on", False) else None) if f]
+                    from viewer.pathutil import norm_key      # 문자열만 견준다(resolve 는 파일 핸들을 연다 — rel_key)
+                    kc = norm_key(os.path.abspath(str(cur)))
+                    inside = any(kc.startswith(norm_key(os.path.abspath(str(f))).rstrip("\\/") + os.sep)
+                                 for f in folders)
+                    parts.append(Path(cur).name if inside else str(Path(cur)))
             except Exception:
                 pass
             title = "  —  ".join(parts)
@@ -6168,7 +6176,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             # 260915-2(§4.8.3, 사용자 지시): 책갈피창 폴더(하위 폴더 포함)에 저장됐으면 폴더를 다시
             #   읽고 새 파일을 골라 본문에 연다 — 완료창은 띄우지 않는다. 그 밖의 폴더면 종전대로.
             def _after_shown():
-                self._index_single_file(out)        # 백그라운드
+                # 261117-52: 색인은 `_reveal_created_file` → `_open_saved_file` 이 열기 **전에** 건다
                 # 260606-24: 책갈피는 병합 시 원본별로 이미 임베드 → auto면 '단어장'만 생성
                 if auto:
                     self._action_build_study()      # 백그라운드(확인창) — 새 파일이 열린 뒤
@@ -6234,7 +6242,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
 
         def _post():
             # 병합과 같은 길(§4.8.3) — 책갈피창 폴더 안이면 다시 읽고 골라 연다, 아니면 원본 아래에 넣고 연다
-            if self._reveal_created_file(out, then=lambda: self._index_single_file(out)):
+            if self._reveal_created_file(out):          # 색인은 그 안의 `_open_saved_file` 이 먼저(261117-52)
                 return
             try:
                 self.bookmark_tree.add_or_refresh_file(out, after=str(src))
@@ -6249,6 +6257,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
 
         책갈피창에 저장하지 않은 편집이 있으면 다시 읽지 않고(편집이 사라진다) 노드만 넣는다.
         폴더 목록은 비동기로 채워질 수 있어(`filesListed`) 채워진 뒤에 고른다.
+        261117-52: 여는 것은 `_open_saved_file` 하나(색인을 먼저 건다) — 부르는 쪽은 `then` 에서 색인하지 않는다.
 
         260915-6(§4.8.3, 사용자 지시): 책갈피창이 **파일 모드**면 저장 위치와 상관없이 **파일 모드 그대로**
         목록에 더하고(파일명 순) 그 파일을 골라 연다 — 종전에는 폴더 안이면 폴더를 다시 읽어 폴더 모드로 바뀌었고,
@@ -6267,7 +6276,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                     bt.tree.blockSignals(False)
                 bt._pending_nav = None
                 self._refresh_search_scope()
-                self._load_main(HistoryItem(str(path), 0, "", "bookmark"))
+                self._open_saved_file(str(path), 0)     # 261117-52: 저장 뒤 여는 길 하나(색인 먼저)
             except Exception:
                 pass
             if then is not None:
@@ -6309,7 +6318,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                     bt.tree.setCurrentItem(node)
                     bt.tree.scrollToItem(node)          # 접힌 폴더는 펼쳐서 보인다
                 bt._pending_nav = None
-                self._load_main(HistoryItem(str(path), 0, "", "bookmark"))
+                self._open_saved_file(str(path), 0)     # 261117-52: 저장 뒤 여는 길 하나(색인 먼저)
             except Exception:
                 pass
             if then is not None:

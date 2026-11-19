@@ -72,8 +72,7 @@ groups = [g for g in groups if g]
 # 261031-16(디자인 SOT §2.9.1, 사용자 지시·결정): 묶음 다섯 — 생성 | PDF | 변환·번역 | 환경설정·사전 관리 | 등록·설치
 # 마스터 §14.7.2 의 19: 메뉴 항목은 이름이 아니라 명령 id 목록으로 견준다
 GROUPS = [["tools.ocr", "tools.build_study", "tools.online_enrich",          # 261107-13: 인터넷 사전 보강은 단어장 옆
-           "tools.bookmarker", "tools.study_and_bookmarks", "tools.autotag", "tools.reindex",
-           "tools.bizcard"],                                                   # 261117-8: 명함 ▾(명함 SOT §5.10, D11)
+           "tools.bookmarker", "tools.study_and_bookmarks", "tools.autotag", "tools.reindex"],   # 261117-56: 명함 ▾ 없앰(명함 SOT §5.27)
           ["tools.img2pdf", "tools.merge", "tools.nup", "tools.encrypt", "tools.sign"],
           ["file.export", "tools.translate"],
           ["tools.settings", "tools.install"]]        # 261107-17: 사전 관리 단추 없앰 · 환경설정과 등록·설치 ▾ 는 한 묶음 '설정·설치'

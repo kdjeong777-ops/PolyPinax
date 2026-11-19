@@ -120,14 +120,14 @@ def _profile() -> str:
 APP_USER_MODEL_ID = _branding.AUMID     # 261114-8: 이사 판부터 LocalTools.PolyPinax(설치본 바로가기와 같게)
 
 
-def _set_app_user_model_id() -> str:
+def _set_app_user_model_id(suffix: str = "") -> str:
     """261016-7(마스터 §14.2, 사용자 보고 '업데이트 뒤 작업 표시줄에 흰 백지'): 작업 표시줄 앱 ID 를 정한다 — **창을 만들기 전에**.
 
     ID 가 없으면 작업 표시줄은 창에 건 아이콘 대신 **exe 아이콘을 Windows 아이콘 캐시에서** 찾는다. 업데이트는 '제거 → 설치' 라
     exe 가 잠시 없는 사이 캐시가 빈 아이콘을 잡으면 흰 백지가 남았다(설치 끝 `ie4uinit -show`·exe 시각 바꾸기로는 Windows 11 에서
     되풀이). ID 를 주면 작업 표시줄이 **창 아이콘**(앱에 든 icon.png)을 쓴다. 시작 메뉴 바로가기도 같은 ID(설치 프로그램 [Icons]).
     시험 프로필은 다른 ID — 시험 창이 사용자 창과 한 단추로 묶이지 않게. 정한 ID(실패하면 '')."""
-    aid = APP_USER_MODEL_ID + ("." + _profile() if _profile() else "")
+    aid = APP_USER_MODEL_ID + suffix + ("." + _profile() if _profile() else "")   # suffix '.Bizcard' = 명함 프로그램(명함 SOT §5.27)
     if sys.platform != "win32":
         return ""
     try:
@@ -550,6 +550,27 @@ def _startup_args(args):
         return ([a for a in args if a.lower().endswith(".pdf") and os.path.exists(a)], [])
 
 
+def _set_app_names(app) -> None:
+    """설정 폴더를 정하는 앱·조직 이름 — 본 뷰어와 명함 프로그램(`--bizcard`, 명함 SOT §5.27)이 같은 폴더를 쓰게 한 곳에서."""
+    app.setApplicationName(APP_ID + ("-" + _profile() if _profile() else ""))   # 261009-19: 시험 프로필은 다른 폴더
+    app.setOrganizationName("LocalTools")      # ★ 설정 폴더 %APPDATA%\LocalTools\<앱 이름> — 빠지면 %APPDATA%\<앱 이름> 으로 갈린다(261114-6 결함)
+
+
+def _run_bizcard(app) -> int:
+    """명함 SOT §5.27(D32): `--bizcard` — 본 창·스플래시·색인 없이 명함찾기 창 하나(viewer.bizcard.standalone).
+    설정·데이터 폴더(앱 이름·시험 프로필·휴대용)와 화면 언어는 본 뷰어와 같게."""
+    _set_app_names(app)
+    _ico = resource_path("icon.png")
+    if _ico:
+        app.setWindowIcon(QIcon(_ico))
+    _install_excepthook()
+    _install_language(app)
+    from viewer.bizcard import standalone
+    import getpass
+    name = app.applicationName() + standalone.SERVER_SUFFIX + "-" + "".join(ch for ch in getpass.getuser() if ch.isalnum())
+    return standalone.run(app, name)
+
+
 def main():
     _st = os.environ.get("POLYPDF_STUDY_SELFTEST")
     if _st:
@@ -562,9 +583,12 @@ def main():
         )
     except Exception:
         pass
-    _set_app_user_model_id()             # 261016-7: 창(스플래시 포함)을 만들기 전에 — 작업 표시줄이 창 아이콘을 쓰게
+    bizcard = "--bizcard" in sys.argv[1:]          # 명함 SOT §5.27(D32): 명함 프로그램 — 따로 묶이는 작업 표시줄 ID
+    _set_app_user_model_id(".Bizcard" if bizcard else "")   # 261016-7: 창(스플래시 포함)을 만들기 전에 — 작업 표시줄이 창 아이콘을 쓰게
     app = QApplication(sys.argv)
     _portable_note = _setup_portable()   # 261009-22(마스터 §14.9): 넘기기 통로 이름(open_gather)을 정하기 **전에**
+    if bizcard:
+        sys.exit(_run_bizcard(app))
 
     # 260915-3(마스터 §4.9, 사용자 지시): 탐색기에서 PDF 여러 개를 골라 열면 Windows 가 파일마다
     #   따로 실행한다 → 먼저 뜬 실행(대표)에게 파일을 넘기고 이 실행은 창 없이 끝난다.
@@ -620,8 +644,7 @@ def main():
         splash = None
 
     # 스플래시가 뜬 뒤 나머지 초기 설정(모두 가벼움)
-    app.setApplicationName(APP_ID + ("-" + _profile() if _profile() else ""))   # 261009-19: 시험 프로필은 다른 폴더
-    app.setOrganizationName("LocalTools")      # ★ 설정 폴더 %APPDATA%\LocalTools\<앱 이름> — 빠지면 %APPDATA%\<앱 이름> 으로 갈린다(261114-6 결함)
+    _set_app_names(app)                         # 261009-19·261114-6: 앱·조직 이름(설정 폴더) — 명함 프로그램과 한 함수
     if _ico:
         app.setWindowIcon(QIcon(_ico))    # v1.6.1 G1: 작업표시줄/타이틀바 아이콘
 

@@ -830,12 +830,12 @@ class BizcardImportDialog(QDialog):
         from viewer.bizcard.importer import MultiWorker
         if paths is None:
             paths = self._multi_unseen(M.candidates(self._folder))
+        self._bar_saved = (self.bar.minimum(), self.bar.maximum(), self.bar.value(), self.bar.format())   # 세기 전 막대(_multi_idle 이 되돌림)
         if not paths:
             after()
             return
         self.multi_found = []
         self._multi_after = after
-        self._bar_saved = (self.bar.minimum(), self.bar.maximum(), self.bar.value(), self.bar.format())
         w = MultiWorker(paths, self._db, force=force, show_all=show_all)
         self._multi_worker = w
         self.bar.setRange(0, max(1, len(paths)))

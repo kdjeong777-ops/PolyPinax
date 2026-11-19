@@ -887,8 +887,22 @@ TV_SCREEN = QRectF(1.3, 2.9, 11.0, 9.2)                 # 화면 — 몸체 대�
 def _mode_tv(p, photo: bool, dark: bool):
     """261104-2(사용자 지시 '내용 구분이 안 돼 — 크게, 한 화면에 PDF 또는 사진만'): 화면에는 **지금 모드 그림 하나**만,
     화면을 채워 크게 — PDF 모드는 붉은 PDF 문서, 사진 모드는 산·해 사진. 종전 시안 C 는 두 장을 겹쳐 작아 구분이 안 됐다."""
-    import math
     d = bool(dark)
+    screen = _tv_body(p, d, -45 if photo else -135)
+    s = TV_SCREEN
+    p.save()
+    p.setClipPath(screen)
+    if photo:
+        _tv_photo(p, d, s.x(), s.y(), s.width(), s.height(), True)        # 사진이 화면 전체
+    else:
+        w, h = 7.6, s.height() - 0.8                                       # 세로 문서 — 화면 높이를 거의 다
+        _tv_pdf(p, d, s.x() + (s.width() - w) / 2, s.y() + 0.4, w, h, True)
+    p.restore()
+
+
+def _tv_body(p, d: bool, needle_deg: float):
+    """TV 몸체·다리·다이얼·스피커·화면 유리 — 모드 토글과 명함 아이콘(명함 SOT §5.27)이 함께 쓴다. 반환 = 화면 경로."""
+    import math
     body = QColor(FILE_GRAY[d])
     p.setPen(Qt.PenStyle.NoPen)
     p.setBrush(body)
@@ -900,7 +914,7 @@ def _mode_tv(p, photo: bool, dark: bool):
     p.setPen(Qt.PenStyle.NoPen)
     p.setBrush(knob)
     p.drawEllipse(QPointF(14.0, 5.0), 0.95, 0.95)
-    a = math.radians(-45 if photo else -135)                        # 바늘 — 켜진 모드 쪽
+    a = math.radians(needle_deg)                                    # 바늘 — 켜진 모드 쪽
     p.setPen(QPen(body, 0.55, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
     p.drawLine(QPointF(14.0, 5.0), QPointF(14.0 + 0.8 * math.cos(a), 5.0 + 0.8 * math.sin(a)))
     p.setPen(Qt.PenStyle.NoPen)
@@ -915,14 +929,7 @@ def _mode_tv(p, photo: bool, dark: bool):
     p.setPen(Qt.PenStyle.NoPen)
     p.setBrush(QColor(TV_GLASS[d]))
     p.drawPath(screen)
-    p.save()
-    p.setClipPath(screen)
-    if photo:
-        _tv_photo(p, d, s.x(), s.y(), s.width(), s.height(), True)        # 사진이 화면 전체
-    else:
-        w, h = 7.6, s.height() - 0.8                                       # 세로 문서 — 화면 높이를 거의 다
-        _tv_pdf(p, d, s.x() + (s.width() - w) / 2, s.y() + 0.4, w, h, True)
-    p.restore()
+    return screen
 
 
 def mode_tv_icon(photo: bool, dark: bool | None = None, size: int = 16, *, dpr: float = 2.0) -> QIcon:
@@ -941,6 +948,58 @@ def mode_tv_icon(photo: bool, dark: bool | None = None, size: int = 16, *, dpr: 
         p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         p.scale(size / 16.0, size / 16.0)
         _mode_tv(p, bool(photo), bool(dark))
+    finally:
+        p.end()
+    return QIcon(pm)
+
+
+BIZCARD_PAPER = {False: "#ffffff", True: "#e8edf2"}     # 명함 종이(261117-56, 명함 SOT §5.27)
+
+
+def _bizcard(p, dark: bool):
+    """PolyCardex 아이콘 — 모드 토글과 **같은 TV**(사용자 지시 261119 '동일한 TV에 넣어서 통일성'), 화면 가득 흰 명함
+    (왼쪽 파란 사람 머리·어깨 + 오른쪽 회색 글 줄 셋)."""
+    d = bool(dark)
+    screen = _tv_body(p, d, -90)                          # 바늘은 가운데(PDF·사진 어느 쪽도 아님)
+    s = TV_SCREEN
+    p.save()
+    p.setClipPath(screen)
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(QColor(BIZCARD_PAPER[d]))
+    card = QRectF(s.x() + 0.7, s.y() + 1.2, s.width() - 1.4, s.height() - 2.4)
+    p.drawRoundedRect(card, 0.8, 0.8)
+    p.setBrush(QColor(ACCENT["play"][d]))                 # 사람 — 강조 파랑(디자인 SOT 색 토큰)
+    cx, cy = card.x() + 2.6, card.y() + 2.4
+    p.drawEllipse(QPointF(cx, cy), 1.3, 1.3)
+    path = QPainterPath()
+    path.moveTo(cx - 2.0, card.bottom() - 0.6)
+    path.cubicTo(cx - 2.0, cy + 1.3, cx + 2.0, cy + 1.3, cx + 2.0, card.bottom() - 0.6)
+    path.closeSubpath()
+    p.drawPath(path)
+    p.setPen(QPen(QColor(FILE_GRAY[d]), 0.9, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+    x0 = card.x() + 5.4
+    for k, x1 in enumerate((card.right() - 0.8, card.right() - 0.8, card.right() - 2.2)):
+        y = card.y() + 1.6 + k * 1.9
+        p.drawLine(QPointF(x0, y), QPointF(x1, y))
+    p.restore()
+
+
+def bizcard_icon(dark: bool | None = None, size: int = 16, *, dpr: float = 2.0) -> QIcon:
+    """본 화면 탭 줄의 PolyCardex 아이콘(명함 SOT §5.27) — 모드 토글 오른쪽, 같은 TV·같은 크기."""
+    if dark is None:
+        try:
+            from viewer import theme
+            dark = theme.is_dark()
+        except Exception:
+            dark = False
+    pm = QPixmap(int(size * dpr), int(size * dpr))
+    pm.setDevicePixelRatio(dpr)
+    pm.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pm)
+    try:
+        p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        p.scale(size / 16.0, size / 16.0)
+        _bizcard(p, bool(dark))
     finally:
         p.end()
     return QIcon(pm)

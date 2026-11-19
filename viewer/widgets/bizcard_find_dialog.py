@@ -553,9 +553,10 @@ class _OrderList(QListWidget):
 
 
 class BizcardFindDialog(QDialog):
-    def __init__(self, parent=None, db=None):
+    def __init__(self, parent=None, db=None, host=None):
+        """host = 본 뷰어 대신 일을 하는 객체(별도 명함 프로그램 — `standalone.Host`, §5.27 '경계'). 없으면 parent(MainWindow)."""
         super().__init__(parent)
-        self._mw = parent
+        self._mw = host if host is not None else parent
         self._db = db
         self._st = None
         self._rows = []
@@ -834,7 +835,7 @@ class BizcardFindDialog(QDialog):
         self.btn_manage = QPushButton(tr("명함 관리"))      # 메뉴 '명함 관리' 와 같은 길(§5.24.1 '단추', 사용자 지시 261119)
         self.btn_manage.setToolTip(tr("명함 폴더의 확인 표 창(명함 관리)을 엽니다"))
         self.btn_manage.clicked.connect(lambda _c=False: self.open_manage())
-        self.btn_manage.setVisible(callable(getattr(self.parent(), "_action_bizcard_import", None)))
+        self.btn_manage.setVisible(callable(getattr(self._mw, "_action_bizcard_import", None)))
         self.btn_dupe = QPushButton(tr("중복 검토"))        # §5.24.8 D30 — 번호·메일 등으로 같은 사람 묶어 합치기
         self.btn_dupe.setToolTip(tr("같은 사람으로 보이는 명함(같은 번호·메일, 번호 오타, 같은 이름·회사)을 묶어 우선순위대로 합칩니다"))
         self.btn_dupe.clicked.connect(lambda _c=False: self.open_dupes())
@@ -851,7 +852,7 @@ class BizcardFindDialog(QDialog):
 
     def open_manage(self):
         """[명함 관리] — 메뉴 '명함 관리' 와 같은 함수(MainWindow._action_bizcard_import, 대상 폴더 규칙도 같음 §5.12)."""
-        fn = getattr(self.parent(), "_action_bizcard_import", None)
+        fn = getattr(self._mw, "_action_bizcard_import", None)
         if callable(fn):
             fn()
 

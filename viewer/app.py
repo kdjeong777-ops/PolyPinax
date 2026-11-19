@@ -285,6 +285,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self._wire_signals()
         self._restore_settings()
         self._photo_init()                   # 261104-2(사진 보기 SOT 4.1·4.10): 보기 종류·모드 토글 — 리본·설정 뒤
+        self._bizcard_btn_init()             # 261117-56(명함 SOT §5.27): 모드 토글 오른쪽 명함 아이콘 — 별도 프로그램
         # 260628(FIX): API 키 미입력 게이팅을 **시작 시에도** 적용. 종전에는
         #   `_apply_prefs`(설정 확인 시)에서만 불려서, 키가 없어도 프로그램을 새로 켜면
         #   법령·건설기준·특허 버튼이 그대로 보이고 메뉴도 활성 상태였다.
@@ -2059,10 +2060,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             (tr("자동 태그 전체 삭제"), self._autotag_clear_all),
             (tr("없는 파일 항목 정리"), self._autotag_prune_missing)), "tools.autotag")
         _act(tr("인덱스"), self.action_reindex, "tools.reindex", tip=tr("인덱스 재구축 — 열린 폴더의 검색 색인을 처음부터 다시 만듭니다"))   # 261031-16: 종전 '인덱스 재구축'
-        # 261117-8(명함 SOT §5.10, D11): 명함 ▾ — 들이기(P2) · 명함찾기(P4, §5.9)
-        _sub(tr("명함"), (
-            (tr("명함 관리"), lambda: self._action_bizcard_import()),   # 261117-9: 종전 '명함 들이기'(사용자 지시)
-            (tr("명함찾기"), lambda: self._action_bizcard_find())), "tools.bizcard")
+        # 261117-56(명함 SOT §5.27, D32): 종전 도구 탭 `명함 ▾`(tools.bizcard)는 없앴다 — 본 화면 명함 아이콘(별도 프로그램)으로
         # PDF
         m_tools.addSeparator()
         _mk_pdf = RibbonIconMark(self, None, tr("PDF 만들기·합치기·암호·서명"), tr("PDF"))
@@ -7568,6 +7566,45 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             self._bizcard_follow_done = getattr(self, "_bizcard_follow_done", 0) + 1
         threading.Thread(target=_job, daemon=True, name="bizcard-follow").start()
 
+    # ── 명함 프로그램 (명함 SOT §5.27, D32) ──
+    def _bizcard_btn_init(self):
+        """탭 줄 왼쪽 칸, PDF↔사진 모드 아이콘 바로 오른쪽에 명함 아이콘. 명함 폴더가 비면 숨김(_gate_api_dependent_ui)."""
+        from PyQt6.QtWidgets import QToolButton
+        from PyQt6.QtCore import QSize
+        from viewer.photo_controller import MODE_ICON_PX
+        lay = self._ribbon.left_fill.layout() if getattr(self, "_ribbon", None) is not None else None
+        if lay is None:
+            return
+        b = QToolButton(self._ribbon.left_fill)
+        b.setObjectName("bizcardApp")
+        b.setAutoRaise(True)
+        b.setIconSize(QSize(MODE_ICON_PX, MODE_ICON_PX))
+        b.setFocusPolicy(Qt.FocusPolicy.TabFocus)
+        from viewer.bizcard.standalone import APP_TITLE
+        tip = tr("{name} — 명함찾기를 따로 띄웁니다").format(name=APP_TITLE)
+        b.setToolTip(tip)
+        b.setAccessibleName(tip)
+        b.clicked.connect(lambda _c=False: self._bizcard_launch())
+        i = lay.indexOf(getattr(self, "_photo_btn", None)) if getattr(self, "_photo_btn", None) is not None else -1
+        lay.insertWidget(i + 1 if i >= 0 else 0, b)
+        self._bizcard_btn = b
+        self._bizcard_refresh_icon()
+
+    def _bizcard_refresh_icon(self, dark=None):
+        b = getattr(self, "_bizcard_btn", None)
+        if b is not None:
+            from viewer.widgets.icons import bizcard_icon
+            from viewer.photo_controller import MODE_ICON_PX
+            b.setIcon(bizcard_icon(dark, MODE_ICON_PX))
+
+    def _bizcard_launch(self):
+        """명함 아이콘 — 명함 프로그램을 별도 프로세스로(`main.py --bizcard`). 이미 떠 있으면 그 창이 앞으로."""
+        from viewer.bizcard import standalone
+        self._bizcard_proc = standalone.launch()
+        if self._bizcard_proc is None:
+            from viewer.bizcard.standalone import APP_TITLE
+            QMessageBox.warning(self, APP_TITLE, tr("명함 프로그램을 띄우지 못했습니다."))
+
     def _action_bizcard_find(self):
         """명함 SOT §5.9(P4): 명함찾기 창 — 하나만(다시 누르면 앞으로)."""
         old = getattr(self, "_bizcard_find_dlg", None)
@@ -10959,12 +10996,12 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         _act_en(va.get("study"), True)
         for a in getattr(self, "_ko_only_acts", []):
             _act_en(a, True)
-        # 명함 SOT §5.24(사용자 지시): 환경설정 명함 폴더가 비어 있으면 도구 탭 `명함 ▾` 숨김 — 메뉴·모음도 같은 액션.
-        #   숨기기만(끄지 않음) — 폴더가 없을 때 들어가는 길은 환경설정·사진 모드 폴더 줄 우클릭 '명함 관리…'
+        # 명함 SOT §5.24.6·§5.27(사용자 지시): 환경설정 명함 폴더가 비어 있으면 본 화면 명함 아이콘 숨김(설정을 바꾸면 곧바로).
+        #   폴더가 없을 때 들어가는 길은 환경설정·사진 모드 폴더 줄 우클릭 '명함 관리'
         _pic = p.get("picture") if isinstance(p.get("picture"), dict) else {}
-        _bz = (getattr(self, "_cmds", None) or {}).get("tools.bizcard")
-        if _bz is not None:
-            _bz.setVisible(bool(str(_pic.get("bizcard_folder") or "").strip()))
+        _bzb = getattr(self, "_bizcard_btn", None)
+        if _bzb is not None:
+            _bzb.setVisible(bool(str(_pic.get("bizcard_folder") or "").strip()))
         tabs = getattr(self, "search_tabs", None)
         sp = getattr(self, "study_panel", None)
         if tabs is not None and sp is not None:
@@ -11080,6 +11117,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 pass
         try:
             self._photo_refresh_button(dark)       # 261104-2(사진 보기 SOT 4.1): 모드 토글 그림
+            self._bizcard_refresh_icon(dark)       # 261117-56(명함 SOT §5.27): 명함 아이콘
         except Exception:
             pass
         # 261025-10(디자인 SOT §4.5): 본문 도구 줄·단어장의 색 아이콘(캡쳐 카메라·읽기 ▶/■)도 테마 색으로

@@ -198,9 +198,8 @@ try:
     pump(timeout=1.0)
     from PyQt6.QtGui import QAction
     acts = [a for a in mw.findChildren(QAction) if a.text() == "명함찾기"]
-    chk(bool(acts) and not [a for a in mw.findChildren(QAction) if a.text().startswith(("명함찾기", "명함 관리"))
-                            and a.text().endswith(("…", "..."))],
-        "B 도구 탭 `명함 ▾` 에 `명함찾기`(글 끝 '…' 없음 — 디자인 SOT §2.7)")
+    chk(not acts and "tools.bizcard" not in (getattr(mw, "_cmds", None) or {}),
+        "B 도구 탭에 `명함 ▾`·`명함찾기` 없음 — 본 화면 명함 아이콘이 별도 프로그램으로(261117-56, 명함 SOT §5.27)")
     gaps, last = [], [time.monotonic()]
 
     def beat():
@@ -362,10 +361,11 @@ try:
     TR.mkdir()
     _btm._trash_fn = lambda: (lambda p: shutil.move(p, str(TR / (Path(p).parent.name + "_" + Path(p).name))))   # 시험용 휴지통
     QMessageBox.question = staticmethod(lambda *a, **k: QMessageBox.StandardButton.Yes)
-    # I1 명함 단추 — 명함 폴더가 비면 숨김
-    bz = mw._cmds.get("tools.bizcard")
+    # I1 명함 아이콘(본 화면 탭 줄, 명함 SOT §5.27) — 명함 폴더가 비면 숨김
+    bz = getattr(mw, "_bizcard_btn", None)
+    mw._prefs.setdefault("picture", {}).pop("bizcard_folder", None)
     mw._gate_api_dependent_ui(mw._prefs)
-    chk(bz is not None and not bz.isVisible(), "I1 명함 폴더가 비면 도구 탭 `명함` 숨김")
+    chk(bz is not None and not bz.isVisible(), "I1 명함 폴더가 비면 명함 아이콘 숨김")
     mw._prefs.setdefault("picture", {})["bizcard_folder"] = str(F)
     mw._gate_api_dependent_ui(mw._prefs)
     chk(bz is not None and bz.isVisible(), "I1 명함 폴더를 정하면 보임")

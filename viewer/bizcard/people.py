@@ -63,6 +63,25 @@ def find(store, text: str = "", since: str = "", until: str = "", limit=None) ->
     return out
 
 
+KINDS = ("all", "ko", "en", "card", "nocard")     # 찾기 칸 앞 구분(명함 SOT §5.24.1, 사용자 지시 261119)
+_HANGUL = re.compile(r"[가-힣ㄱ-ㆎ]")
+_LATIN = re.compile(r"[A-Za-z]")
+
+
+def kind_ok(card: dict, kind: str) -> bool:
+    """구분 — 'ko' = 이름에 한글, 'en' = 이름이 영어(로마자, 한글 없음), 'card' = 명함 그림 있음, 'nocard' = 그림 없는 주소록 명함."""
+    if kind in ("ko", "en"):
+        name = str(card.get("name") or "")
+        if _HANGUL.search(name):
+            return kind == "ko"
+        return kind == "en" and bool(_LATIN.search(name))
+    if kind in ("card", "nocard"):
+        from viewer.bizcard.vcard import is_contact
+        has = bool(card.get("front")) and not is_contact(card)      # 그림 없는 주소록 명함(D22)은 '명함 없음'
+        return has if kind == "card" else not has
+    return True
+
+
 def _like(s: str) -> str:
     return s.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 

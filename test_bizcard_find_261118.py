@@ -23,7 +23,7 @@ sys.stdout.reconfigure(encoding="utf-8")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from PyQt6.QtCore import QStandardPaths, QCoreApplication, Qt, QTimer, QDate
 QStandardPaths.setTestModeEnabled(True)             # 검사 작성 SOT §14.7.2
-from PyQt6.QtWidgets import QApplication, QMessageBox, QDialog
+from PyQt6.QtWidgets import QApplication, QMessageBox, QDialog, QPushButton
 from PyQt6.QtTest import QTest
 from pathlib import Path
 
@@ -223,8 +223,9 @@ try:
     chk(pump(lambda: dlg.table.rowCount() == 1, timeout=3), "B 글을 치면 잠시 뒤 결과가 줄어듦", str(dlg.table.rowCount()))
     chk(dlg.eds["name"].text() == "홍길동" and dlg.eds["cell"].text() == "010-0000-0001" and dlg.ed_memo.toPlainText() == "골프 모임",
         "B 첫 결과의 칸·메모가 오른쪽에")
-    chk(dlg.btn_flip.isEnabled() and os.path.normcase(dlg.shown) == os.path.normcase(dlg._card["front"]),
-        "B 사진창 — 명함 앞면, 뒷면이 있으면 앞↔뒤 단추 켜짐")
+    chk(dlg.dots.isVisible() and dlg.dots.count == 2 and dlg.dots.current == 0
+        and os.path.normcase(dlg.shown) == os.path.normcase(dlg._card["front"]),
+        "B 사진창 — 명함 앞면, 뒷면이 있으면 쪽 점 둘(왼쪽 채움)")
     dlg.ed_find.clear()
     pump(lambda: dlg.table.rowCount() == 3, timeout=3)
     dlg.cb_period.setCurrentIndex(dlg.cb_period.findData("1y"))
@@ -404,12 +405,20 @@ try:
     pump(timeout=0.1)
     click_head(1)
     chk(dlg._card and dlg._card["id"] == hong["id"] and dlg.table.currentRow() == dlg.row_of_id(hong["id"]), "I2 정렬해도 고른 명함 그대로")
-    # I3 앞↔뒤 단추
-    QTest.mouseClick(dlg.btn_flip, Qt.MouseButton.LeftButton)
-    b1 = dlg.shown
-    QTest.mouseClick(dlg.btn_flip, Qt.MouseButton.LeftButton)
-    chk(os.path.normcase(b1) == os.path.normcase(hong["back"]) and os.path.normcase(dlg.shown) == os.path.normcase(hong["front"]),
-        "I3 동그란 단추 — 누르면 뒷면, 또 누르면 앞면")
+    # I3 쪽 점 표시 — 작은 원 둘, 지금 면 채움, 누르면 그 면 (사용자 지시 261119)
+    dd_ = dlg.dots
+    QTest.mouseClick(dd_, Qt.MouseButton.LeftButton, pos=dd_.dot_center(1).toPoint())
+    b1, cur1 = dlg.shown, dd_.current
+    QTest.mouseClick(dd_, Qt.MouseButton.LeftButton, pos=dd_.dot_center(0).toPoint())
+    chk(os.path.normcase(b1) == os.path.normcase(hong["back"]) and cur1 == 1
+        and os.path.normcase(dlg.shown) == os.path.normcase(hong["front"]) and dd_.current == 0 and dd_.D <= 8,
+        "I3 쪽 점 — 오른쪽 원을 누르면 뒷면(그 원 채움), 왼쪽 원을 누르면 앞면, 원은 작게(지름 8 이하)")
+    kim_ = next(c for c in dlg._rows if c["name"] == "김철수")
+    dlg.table.setCurrentCell(dlg.row_of_id(kim_["id"]), 0)
+    pump(timeout=0.1)
+    chk(not dd_.isVisible(), "I3 뒷면이 없는 명함은 점 표시 숨김(한 면)")
+    dlg.table.setCurrentCell(dlg.row_of_id(hong["id"]), 0)
+    pump(timeout=0.1)
     # I4 체크한 칸 복사 — 기억
     for k, cb in dlg.chk.items():
         if cb.isChecked() != (k in ("name", "cell")):
@@ -968,6 +977,86 @@ try:
     pump(timeout=0.2)
     chk(dlg._card is not None and dlg._card["name"].startswith("가짜") and dlg.table.item(r_last, 0).text() == dlg._card["name"],
         "I20 아래쪽 줄을 골라도 그 명함이 세부 칸에")
+    # I21 찾기 칸 앞 구분 · Enter 가 [해시태그] 를 누르지 않음 · [해시태그] 는 늘 '해시태그 수정' 창(사용자 지시 261119)
+    st = S.BizcardStore()
+    st.con.executemany("INSERT INTO cards(front, name, company, phones, emails, scanned, tags, en) VALUES(?,?,?,?,?,?,?,?)",
+                       [("contact:zz1", "Jane Fakeperson", "Acme", "[]", "[]", "2021-02-01", "[]", "{}"),
+                        (str(TMP / "fake" / "en1.jpg"), "Zed Nobody", "Acme", "[]", "[]", "2021-02-01", "[]", "{}")])
+    st.con.commit()
+    st.close()
+    cbk = getattr(dlg, "cb_kind", None)
+    chk(cbk is not None and dlg.layout().itemAt(0).layout().indexOf(cbk) == 0
+        and [cbk.itemData(i) for i in range(cbk.count())] == ["all", "ko", "en", "card", "nocard"],
+        "I21 찾기 칸 앞에 구분(전체·한글·영어·명함 있음·명함 없음)")
+    got = {}
+    if cbk is not None:
+        dlg.ed_find.clear()
+        dlg.refresh()
+        for k in ("all", "ko", "en", "card", "nocard"):
+            cbk.setCurrentIndex(cbk.findData(k))
+            pump(timeout=0.1)
+            got[k] = list(dlg._rows)
+    import re as _re
+    hz = lambda c: bool(_re.search("[가-힣]", c.get("name") or ""))
+    nm = lambda rows: sorted(c["name"] for c in rows)
+    chk(got and "Jane Fakeperson" in nm(got["en"]) and "Zed Nobody" in nm(got["en"]) and not any(hz(c) for c in got["en"])
+        and got["ko"] and all(hz(c) for c in got["ko"]) and len(got["ko"]) + len(got["en"]) <= len(got["all"])
+        and all(str(c["front"]).startswith("contact:") for c in got["nocard"]) and "Jane Fakeperson" in nm(got["nocard"])
+        and not any(str(c["front"]).startswith("contact:") for c in got["card"])
+        and len(got["card"]) + len(got["nocard"]) == len(got["all"]) and dlg.lbl_count.text() == "%d장" % len(got["nocard"]),
+        "I21 한글·영어 = 이름 글자, 명함 있음·없음 = 그림(주소록 명함은 없음)", str({k: len(v) for k, v in got.items()}))
+    # Enter — 세부 칸을 고치다 Enter 를 눌러도 [해시태그] 창이 뜨지 않음
+    hits = []
+    _orig_et = dlg.edit_tags
+    dlg.edit_tags = lambda *a, **k: hits.append(1)
+    try:
+        ed = dlg.eds["dept"]
+        QTest.mouseClick(ed, Qt.MouseButton.LeftButton)
+        QTest.keyClicks(ed, "x")
+        QTest.keyClick(ed, Qt.Key.Key_Return)
+        QTest.keyClick(dlg.ed_find, Qt.Key.Key_Return)
+        pump(timeout=0.2)
+    finally:
+        dlg.edit_tags = _orig_et
+    chk(not hits and not any(b.isDefault() or b.autoDefault() for b in dlg.findChildren(QPushButton) if b.window() is dlg),
+        "I21 Enter 가 [해시태그] 를 누르지 않음(기본 단추 없음)",
+        "%d %s" % (len(hits), [b.text() for b in dlg.findChildren(QPushButton) if b.window() is dlg and (b.isDefault() or b.autoDefault())]))
+    if dlg._dirty:
+        dlg._load(dlg._card)                              # 고친 'x' 는 버림(아래 창 열기에서 묻지 않게)
+        dlg._set_dirty(False)
+    # 그림 없는 명함도 '해시태그 수정' 창 — 옛 '해시태그 편집' 창(TagEditDialog)은 뜨지 않음
+    import viewer.widgets.tag_edit_dialog as _ted
+    seen2, old_ed = {}, []
+    def _fake_exec2(self):
+        seen2["paths"] = list(self._paths)
+        seen2["tips"] = [self.lst_files.item(i).toolTip() for i in range(self.lst_files.count())]
+        self.apply_tags(True, tags=["주소록모임"])
+        return 0
+    _ted_exec = _ted.TagEditDialog.exec
+    _ted.TagEditDialog.exec = lambda self: old_ed.append(1) or 0
+    _tad.TagApplyDialog.exec = _fake_exec2
+    try:
+        cbk.setCurrentIndex(cbk.findData("nocard"))
+        pump(timeout=0.1)
+        jane = next(c for c in dlg._rows if c["name"] == "Jane Fakeperson")
+        dlg.table.clearSelection()
+        dlg.table.selectRow(dlg.row_of_id(jane["id"]))
+        pump(timeout=0.1)
+        QTest.mouseClick(dlg.btn_tags, Qt.MouseButton.LeftButton)
+        pump(timeout=0.2)
+    finally:
+        _tad.TagApplyDialog.exec = _orig_exec
+        _ted.TagEditDialog.exec = _ted_exec
+    st = S.BizcardStore()
+    j2 = P.card_by_id(st, jane["id"])
+    st.close()
+    vkeys = [k for k in mw.bookmark_tree._tags._data if "polypinax-bizcard-tags" in k]
+    chk(not old_ed and len(seen2.get("paths", [])) == 1 and os.path.basename(seen2["paths"][0]) == "Jane Fakeperson_Acme"
+        and "polypinax" not in (seen2.get("tips") or [""])[0],
+        "I21 그림 없는 주소록 명함도 '해시태그 수정' 창(옛 편집 창 아님, 이름_회사로 보임)", "%s %s" % (old_ed, seen2))
+    chk("주소록모임" in (j2["tags"] or []) and not vkeys, "I21 창에서 붙인 태그가 명함 DB 에, 실제 태그 저장소에는 가짜 경로가 남지 않음",
+        "%s %d" % (j2["tags"], len(vkeys)))
+    cbk.setCurrentIndex(0)
     dlg.close()
     pump(timeout=0.2)
 except Exception:

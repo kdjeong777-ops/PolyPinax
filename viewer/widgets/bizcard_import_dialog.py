@@ -343,6 +343,9 @@ class BizcardImportDialog(QDialog):
         b_close.clicked.connect(lambda _c=False: self.close())
         bot.addWidget(b_close)
         v.addLayout(bot)
+        for b in self.findChildren(QPushButton):      # 칸에서 Enter 가 [새 명함 읽기] 를 누르지 않게 — 기본 단추 없음(§5.24.1 'Enter', 261117-59)
+            b.setAutoDefault(False)
+            b.setDefault(False)
 
         self._fill_empty_rows()
         self.multi_found = []

@@ -24,6 +24,7 @@ from viewer.i18n import tr, tr_noop
 from viewer.bizcard import people as P
 from viewer.bizcard import recognize as R
 from viewer.bizcard import vcard as V
+from viewer.widgets.page_dots import PageDots   # 쪽 점 표시(디자인 SOT §4.5 '쪽 점', 261117-57)
 
 C_NAME, C_COMP, C_TITLE, C_PHONE, C_MAIL, C_DATE = range(6)   # 전화·메일 열(§5.9 '결과', 사용자 지시 261119)
 ROLE = Qt.ItemDataRole.UserRole
@@ -371,6 +372,35 @@ class FavIconWorker(QObject):
 _KEEP = []
 
 
+def _virtual_key(card) -> str:
+    """그림 없는 명함의 '해시태그 수정' 창 자리 — 디스크에 없는 경로(메모리 사본에만, §5.24.4). 보이는 이름 = 이름_회사."""
+    import tempfile
+    label = "_".join(x for x in (card.get("name"), card.get("company")) if x) or tr("명함 {n}").format(n=card.get("id"))
+    label = "".join(ch if ch not in '\\/:*?"<>|' else " " for ch in str(label)).strip() or "card"
+    return os.path.join(tempfile.gettempdir(), "polypinax-bizcard-tags", str(card.get("id")), label)
+
+
+def _card_tag_store(real):
+    """태그 저장소의 메모리 사본 — 창이 고치는 동안 디스크에 쓰지 않는다(그림 없는 명함의 가상 경로가 실제 저장소에 남지 않게).
+    기존 태그 목록·등록 차례는 실제 저장소 것 그대로."""
+    import json
+    from viewer.tag_store import TagStore
+
+    class _CardTagStore(TagStore):
+        def __init__(self):
+            self._path = Path(os.devnull)
+            self._data = json.loads(json.dumps(real._data, ensure_ascii=False))
+            self._bulk_depth = 0
+            self._dirty = False
+
+        def _save(self):
+            self._dirty = False
+
+        def backup(self) -> bool:
+            return False
+    return _CardTagStore()
+
+
 def _menu_act(m: QMenu, text: str, fn):
     a = m.addAction(text)
     a.triggered.connect(lambda _c=False: fn())
@@ -577,6 +607,12 @@ class BizcardFindDialog(QDialog):
         v = QVBoxLayout(self)
 
         top = QHBoxLayout()
+        self.cb_kind = QComboBox()                     # 찾기 칸 앞 구분(§5.24.1 '위 줄', 사용자 지시 261119)
+        for key, label in zip(P.KINDS, (tr("전체"), tr("한글"), tr("영어"), tr("명함 있음"), tr("명함 없음"))):
+            self.cb_kind.addItem(label, key)
+        self.cb_kind.setToolTip(tr("한글·영어 = 이름 글자, 명함 있음·없음 = 명함 그림(없음 = 주소록에서 들인 명함)"))
+        self.cb_kind.currentIndexChanged.connect(lambda _i: self._on_period())
+        top.addWidget(self.cb_kind)
         self.ed_find = QLineEdit()
         from viewer.widgets.search_ghost import SearchGhost   # 261117-42(검색창 SOT §6.1): 찾은 글은 떠나면 흐리게
         SearchGhost(self.ed_find, instant=True)
@@ -759,15 +795,10 @@ class BizcardFindDialog(QDialog):
         self.pv.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Ignored)
         self.pv.setToolTip(tr("인물 사진을 여기에 끌어 놓으면 이 명함의 인물 사진으로 넣습니다"))
         cv.addWidget(self.pv, 1)
-        self.btn_flip = QToolButton()
-        self.btn_flip.setFixedSize(16, 16)
-        self.btn_flip.setStyleSheet("QToolButton{border-radius:8px;border:1px solid palette(mid);background:palette(button);}"
-                                    "QToolButton:checked{background:palette(highlight);}"
-                                    "QToolButton:disabled{background:transparent;}")
-        self.btn_flip.setCheckable(True)
-        self.btn_flip.setToolTip(tr("명함 앞면 ↔ 뒷면"))
-        self.btn_flip.toggled.connect(lambda on: self._flip(on))
-        cv.addWidget(self.btn_flip, 0, Qt.AlignmentFlag.AlignHCenter)
+        self.dots = PageDots()                         # 쪽 점 표시 — 앞·뒷면(사용자 지시 261119, 종전 앞↔뒤 동그란 단추)
+        self.dots.setToolTip(tr("명함 앞면 ↔ 뒷면"))
+        self.dots.picked.connect(lambda i: self._flip(i == 1))
+        cv.addWidget(self.dots, 0, Qt.AlignmentFlag.AlignHCenter)
         self.photo_split.addWidget(cardw)
         photow = QWidget()
         pvl = QVBoxLayout(photow)
@@ -846,6 +877,9 @@ class BizcardFindDialog(QDialog):
         bot.addStretch(1)
         bot.addWidget(b_close)
         v.addLayout(bot)
+        for b in self.findChildren(QPushButton):      # Enter 가 [해시태그] 등을 누르지 않게 — 기본 단추 없음(사용자 보고 261119)
+            b.setAutoDefault(False)
+            b.setDefault(False)
         self._enable_card_buttons(False)
         self._init_store_bits()
         QTimer.singleShot(0, self.refresh)
@@ -930,6 +964,9 @@ class BizcardFindDialog(QDialog):
         else:
             since, until = self._range()
             rows = P.find(self._store(), self.ed_find.text(), since, until)   # 상한 없이 전부(§5.9 '결과')
+            kind = self.cb_kind.currentData()
+            if kind and kind != "all":
+                rows = [c for c in rows if P.kind_ok(c, kind)]
         self._rows = rows
         self._by_id = {c["id"]: c for c in self._rows}
         keep = self._card["id"] if self._card else None
@@ -1039,8 +1076,7 @@ class BizcardFindDialog(QDialog):
             else:
                 self.lbl_file.setText(os.path.basename(card["front"]) if card else "")
             has_back = bool(card and card.get("back") and os.path.exists(card["back"]))
-            self.btn_flip.setChecked(False)
-            self.btn_flip.setEnabled(has_back)
+            self.dots.set_state(2 if has_back else 1, 0)
         finally:
             self._loading = False
         self._set_dirty(False)
@@ -1057,6 +1093,7 @@ class BizcardFindDialog(QDialog):
         if self._loading:
             return
         self._side = "back" if on else "front"
+        self.dots.set_state(self.dots.count, 1 if on else 0)
         self._show_card()
 
     def _show_card(self):
@@ -2024,20 +2061,10 @@ class BizcardFindDialog(QDialog):
         if self._dirty and not self._ask_save():
             return None
         from viewer.tag_store import normalize_tags
-        if text is None:
-            files = [c for c in cards if c.get("front") and not V.is_contact(c) and os.path.exists(c["front"])]
-            if files:                                   # 책갈피창 '해시태그 수정' 창과 같은 길(§5.24, 사용자 지시 261118)
-                return self.tag_apply(files)
+        if text is None:                                # 늘 책갈피창 '해시태그 수정' 창 하나(§5.24.4, 사용자 지시 261118·261119)
+            return self.tag_apply(cards)
         init = P.common_tags(cards)
         store = self._tagstore()
-        if text is None:                                # 그림 없는 주소록 명함만 — 명함 DB 태그 칸만
-            from viewer.widgets.tag_edit_dialog import TagEditDialog
-            existing = sorted(set(store.all_tags()) | {t for c in self._rows for t in c.get("tags") or []})
-            title = (cards[0].get("name") or "") if len(cards) == 1 else tr("명함 {n}장").format(n=len(cards))
-            dlg = TagEditDialog(title, init, existing, self)
-            if not dlg.exec():
-                return None
-            text = dlg.tags()
         new = normalize_tags(text)
         added = [t for t in new if t not in init]
         removed = [t for t in init if t not in new]
@@ -2054,19 +2081,37 @@ class BizcardFindDialog(QDialog):
         return len(cards)
 
     def tag_apply(self, cards) -> int:
-        """책갈피창 '해시태그 수정' 창(`TagApplyDialog`, 태그 SOT §8.7)에 명함들의 정리본 앞면을 썸네일로 넘긴다.
-        창을 닫으면 명함마다 앞면에서 더하고 뗀 사람 태그를 명함 DB 태그 칸·뒷면 파일에 같게. 반환 = 바뀐 명함 수."""
+        """책갈피창 '해시태그 수정' 창(`TagApplyDialog`, 태그 SOT §8.7)에 명함들의 정리본 앞면을 썸네일로 넘긴다(그림 없는 명함은
+        이름만). 창을 닫으면 명함마다 앞면에서 더하고 뗀 사람 태그를 명함 DB 태그 칸·뒷면 파일에 같게. 반환 = 바뀐 명함 수."""
         from viewer.widgets.tag_apply_dialog import TagApplyDialog
-        store = self._tagstore()
-        fronts = [os.path.realpath(c["front"]) for c in cards]
+        real = self._tagstore()
+        # 창은 태그 저장소의 메모리 사본(_card_tag_store)에서 — 그림 없는 주소록 명함(D22)도 같은 창에 '파일' 하나로 넣는다(가상 경로,
+        # 썸네일 없음). 닫은 뒤 바뀐 그림 파일 기록만 실제 저장소로, 명함마다 더하고 뗀 사람 태그를 명함 DB·뒷면 파일에(§5.24.4).
+        store = _card_tag_store(real)
+        fronts, files, virt = [], set(), {}
+        for c in cards:
+            f = c.get("front")
+            if f and not V.is_contact(c) and os.path.exists(f):
+                f = os.path.realpath(f)
+                files.add(f)
+            else:
+                f = _virtual_key(c)
+                store.set(f, list(c.get("tags") or []))
+                virt[f] = c
+            fronts.append(f)
         before = {f: list(store.get_manual(f) or []) for f in fronts}
         mw = self._mw
         prefs = getattr(mw, "_prefs", None) if mw is not None else None
         keep = mw.__dict__.setdefault("_thread_keep", []) if mw is not None else _KEEP
         state = prefs.get("tag_apply_window") if isinstance(prefs, dict) else None
         dlg = TagApplyDialog(store, fronts, fronts, self, keep=keep, state=state)
+        for i in range(dlg.lst_files.count()):          # 가상 경로는 보이지 않게
+            it = dlg.lst_files.item(i)
+            if it.data(Qt.ItemDataRole.UserRole) in virt:
+                it.setToolTip(tr("그림 없는 주소록 명함 — 명함 DB 태그 칸에만"))
         self._tag_apply_dialog = dlg                   # 검사용
         dlg.exec()
+        after = {f: list(store.get_manual(f) or []) for f in fronts}
         if isinstance(prefs, dict) and dlg.state_out != (prefs.get("tag_apply_window") or {}):
             prefs["tag_apply_window"] = dict(dlg.state_out)   # 크기·최대화·정렬 기억 — 책갈피창과 같은 설정
             try:
@@ -2076,18 +2121,21 @@ class BizcardFindDialog(QDialog):
         st = self._store()
         n = 0
         # 여러 장이어도 메인을 오래 세우지 않게 — 태그 저장소는 한 번에 모아 저장(bulk), 명함 DB 는 마지막에 한 번 커밋
-        with store.bulk():
+        with real.bulk():
+            for f in files:                             # 바뀐 그림 파일 기록(자동 태그 거절 포함)을 실제 저장소로
+                rec = store.record(f)
+                if rec != real.record(f):
+                    real.put_record(f, rec)
             for c, f in zip(cards, fronts):
-                after = list(store.get_manual(f) or [])
-                add = [t for t in after if t not in before[f]]
-                rem = [t for t in before[f] if t not in after]
+                add = [t for t in after[f] if t not in before[f]]
+                rem = [t for t in before[f] if t not in after[f]]
                 if not add and not rem:
                     continue
                 b = c.get("back")
                 if b and os.path.exists(b):
                     b = os.path.realpath(b)
-                    cur = [t for t in (store.get_manual(b) or []) if t not in rem]
-                    store.set(b, list(dict.fromkeys(cur + add)))
+                    cur = [t for t in (real.get_manual(b) or []) if t not in rem]
+                    real.set(b, list(dict.fromkeys(cur + add)))
                 row = P.card_by_id(st, c["id"]) or c            # 대화상자 뒤 — 명함은 id 로 다시 읽는다
                 P.update_card(st, c["id"], {"tags": list(dict.fromkeys([t for t in row.get("tags") or [] if t not in rem] + add))},
                               commit=False)

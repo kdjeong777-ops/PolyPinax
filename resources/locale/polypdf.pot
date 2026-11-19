@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-11-19 18:17+0900\n"
+"POT-Creation-Date: 2026-11-19 20:21+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -577,7 +577,8 @@ msgstr ""
 msgid "한국어"
 msgstr ""
 
-#: viewer/app.py viewer/study/ocr.py viewer/widgets/voice_settings.py
+#: viewer/app.py viewer/study/ocr.py viewer/widgets/bizcard_find_dialog.py
+#: viewer/widgets/voice_settings.py
 msgid "영어"
 msgstr ""
 
@@ -8008,6 +8009,10 @@ msgid "명함찾기"
 msgstr ""
 
 #: viewer/widgets/bizcard_find_dialog.py
+msgid "한글·영어 = 이름 글자, 명함 있음·없음 = 명함 그림(없음 = 주소록에서 들인 명함)"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
 msgid "이름·회사·메모 등 — 낱말 여럿은 모두 들어 있는 명함, #낱말은 해시태그"
 msgstr ""
 
@@ -8154,6 +8159,23 @@ msgstr ""
 
 #: viewer/widgets/bizcard_find_dialog.py
 msgid "종료일이 시작일보다 앞입니다."
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+#, python-brace-format
+msgid "명함 {n}"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "한글"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "명함 있음"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "명함 없음"
 msgstr ""
 
 #: viewer/widgets/bizcard_find_dialog.py
@@ -8327,17 +8349,16 @@ msgid "탭 줄에서 보이지 않게 합니다. 지우지 않으므로 탭 메�
 msgstr ""
 
 #: viewer/widgets/bizcard_find_dialog.py
+msgid "그림 없는 주소록 명함 — 명함 DB 태그 칸에만"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
 #, python-brace-format
 msgid "'{tab}' {n}명"
 msgstr ""
 
 #: viewer/widgets/bizcard_find_dialog.py
 msgid "파일 이름을 바꾸지 못했습니다 — 다른 프로그램이 열고 있는지 확인하세요."
-msgstr ""
-
-#: viewer/widgets/bizcard_find_dialog.py
-#, python-brace-format
-msgid "명함 {n}장"
 msgstr ""
 
 #: viewer/widgets/bizcard_find_dialog.py

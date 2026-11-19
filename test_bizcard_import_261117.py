@@ -512,6 +512,19 @@ try:
     chk(hid == ["라마바_김철수"] and not dn.table.isRowHidden(4), "P '새 명함만' — 적용한 줄만 숨김", str(hid))
     dn.chk_new.setChecked(False)
     chk(not any(dn.table.isRowHidden(r) for r in range(dn.table.rowCount())), "P 끄면 다시 모두")
+    # Enter — 스캔일 칸에서 Enter 를 눌러도 [새 명함 읽기] 등 단추가 눌리지 않음(기본 단추 없음, 261117-59)
+    hits = []
+    _orig_rn = dn.read_new
+    dn.read_new = lambda *a, **k: hits.append(1) or 0
+    try:
+        QTest.mouseClick(dn.ed_date, Qt.MouseButton.LeftButton)
+        QTest.keyClick(dn.ed_date, Qt.Key.Key_Return)
+        pump(timeout=0.2)
+    finally:
+        dn.read_new = _orig_rn
+    from PyQt6.QtWidgets import QPushButton as _QPB
+    chk(not hits and not any(b.isDefault() or b.autoDefault() for b in dn.findChildren(_QPB) if b.window() is dn),
+        "P 칸에서 Enter 가 단추를 누르지 않음(기본 단추 없음)", str(len(hits)))
     dn.close()
     pump(timeout=0.5)
     mw.close()

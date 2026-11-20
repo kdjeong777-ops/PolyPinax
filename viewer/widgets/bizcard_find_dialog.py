@@ -51,6 +51,7 @@ FIELDS = (("name", tr_noop("이름")), ("company", tr_noop("회사")), ("dept", 
           ("fax", tr_noop("팩스")), ("email", tr_noop("메일")), ("address", tr_noop("주소")), ("url", tr_noop("누리집")))
 MEMO_LABEL = tr_noop("메모")
 PHONE_KEYS = ("cell", "work", "fax")
+DROP_TINT, DROP_TINT_HOT = "0.04", "0.14"   # 놓을 자리 틀 바탕(강조색 투명도) — 창 위 / 그 자리 위(§5.24.3 '끌어 놓기')
 
 
 def _list_phone(c) -> str:
@@ -576,19 +577,32 @@ class _OrderList(QListWidget):
     def _ok(self, e) -> bool:
         return e.source() is self or bool(self._accepts and self._accepts(e))
 
+    drag_hint = None           # 바깥 파일을 끄는 동안 알림(e, 떠나거나 놓으면 None) — 놓을 자리 표시(§5.24.3)
+
+    def _hint(self, e):
+        if self.drag_hint is not None and (e is None or e.source() is not self):
+            self.drag_hint(e)
+
     def dragEnterEvent(self, e):
         if self._ok(e):
             e.acceptProposedAction()
         else:
             e.ignore()
+        self._hint(e)
 
     def dragMoveEvent(self, e):
         if self._ok(e):
             e.acceptProposedAction()
         else:
             e.ignore()
+        self._hint(e)
+
+    def dragLeaveEvent(self, e):
+        super().dragLeaveEvent(e)
+        self._hint(None)
 
     def dropEvent(self, e):
+        self._hint(None)
         if e.source() is self:
             idx = self.indexAt(e.position().toPoint())
             to = idx.row() if idx.isValid() else self.count()
@@ -888,6 +902,7 @@ class BizcardFindDialog(QDialog):
         self.photos.currentItemChanged.connect(lambda _c, _p: self._show_photo())
         self.photos.setToolTip(tr("끌어 차례를 바꿉니다(첫 사진이 즐겨찾기 그림) — Delete 로 지우기(휴지통)"))
         self.photos.reordered.connect(self._photo_reordered)
+        self.photos.drag_hint = self._photos_drag          # 썸네일 줄 위에서도 놓을 자리 표시(§5.24.3 '끌어 놓기')
         self.photos.deleteRequested.connect(lambda: self.delete_photos())
         self.photos.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.photos.customContextMenuRequested.connect(self._photo_menu)
@@ -2082,14 +2097,70 @@ class BizcardFindDialog(QDialog):
         if files:
             self.add_photos(files)
 
+    # 끌어 놓기(§5.24.3 '끌어 놓기') — 놓는 자리는 사진창(photo_split) 하나, 끄는 동안 그 자리를 점선 틀로 보인다.
+    #   종전엔 창이 들어오기(enter)만 받고 움직이기(move)를 받지 않아 Windows 에서 '놓을 수 없음' 이 되어 놓아지지 않았다.
+    def _drop_ok(self, e) -> bool:
+        md = e.mimeData()
+        return bool(self._photo_front()) and md.hasUrls() and any(self._is_img(u.toLocalFile()) for u in md.urls())
+
+    def _in_drop_zone(self, pos) -> bool:
+        from PyQt6.QtCore import QRect, QPoint
+        z = self.photo_split
+        return z.isVisible() and QRect(z.mapTo(self, QPoint(0, 0)), z.size()).contains(pos)
+
+    def _show_drop_zone(self, on: bool, hot: bool = False):
+        """놓을 자리 표시 — 사진창 위에 겹친 틀(마우스·끌기를 받지 않는다). hot = 그 안에 올림(바탕도 칠함)."""
+        from PyQt6.QtCore import QRect, QPoint
+        z = getattr(self, "drop_zone", None)
+        if not on:
+            if z is not None:
+                z.hide()
+            return
+        if z is None:
+            z = self.drop_zone = QLabel(tr("여기에 놓으면 인물 사진으로 넣습니다"), self)
+            z.setObjectName("bizDropZone")
+            z.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            z.setWordWrap(True)
+            z.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        h = self.palette().color(self.palette().ColorRole.Highlight)
+        z.setStyleSheet("QLabel#bizDropZone{border:2px dashed %s;border-radius:8px;background:rgba(%d,%d,%d,%s);"
+                        "color:%s;font-weight:bold;}" % (h.name(), h.red(), h.green(), h.blue(),
+                                                         DROP_TINT_HOT if hot else DROP_TINT, h.name()))
+        z.setGeometry(QRect(self.photo_split.mapTo(self, QPoint(0, 0)), self.photo_split.size()))
+        z.raise_()
+        z.show()
+
     def dragEnterEvent(self, e):
-        if self._photo_front() and e.mimeData().hasUrls() and any(self._is_img(u.toLocalFile()) for u in e.mimeData().urls()):
+        if self._drop_ok(e):
+            e.acceptProposedAction()                   # 창 어디로 들어와도 받아 두고 — 놓는 것은 사진창 안에서만(move)
+            self._show_drop_zone(True, self._in_drop_zone(e.position().toPoint()))
+        else:
+            e.ignore()
+
+    def dragMoveEvent(self, e):
+        hot = self._drop_ok(e) and self._in_drop_zone(e.position().toPoint())
+        if hot:
             e.acceptProposedAction()
+        else:
+            e.ignore()
+        self._show_drop_zone(self._drop_ok(e), hot)
+
+    def dragLeaveEvent(self, e):
+        self._show_drop_zone(False)
 
     def dropEvent(self, e):
-        self._drop_files(e)
+        self._show_drop_zone(False)
+        if self._drop_ok(e) and self._in_drop_zone(e.position().toPoint()):
+            self._drop_files(e)
+        else:
+            e.ignore()
+
+    def _photos_drag(self, e):
+        """썸네일 줄 위(그 줄이 직접 받는다)에서도 같은 틀 — e = 끌기 이벤트, None = 떠남·놓음."""
+        self._show_drop_zone(e is not None and self._drop_ok(e), True)
 
     def _drop_files(self, e):
+        self._show_drop_zone(False)
         files = [u.toLocalFile() for u in e.mimeData().urls() if self._is_img(u.toLocalFile())]
         if files:
             e.acceptProposedAction()

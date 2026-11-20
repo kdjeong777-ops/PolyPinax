@@ -8296,6 +8296,10 @@ msgid "그림"
 msgstr ""
 
 #: viewer/widgets/bizcard_find_dialog.py
+msgid "여기에 놓으면 인물 사진으로 넣습니다"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
 msgid "사진 이름을 다 바꾸지 못했습니다 — 다른 프로그램이 열고 있는지 확인하세요."
 msgstr ""
 

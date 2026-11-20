@@ -33,9 +33,11 @@ ROLE = Qt.ItemDataRole.UserRole
 FAV_ICON = 56                       # 즐겨찾기 사람 칸 그림(카톡 꼴 둥근 네모)
 FAV_ROWS = 2                        # 즐겨찾기 줄 최대 높이(줄 수) — 넘치면 그 칸 안에서 굴림
 PHOTO_ICON = 72                     # 인물 사진 썸네일 줄(큰 화면은 그 위 — §5.24 사진창)
-DETAIL_BG = {                        # 세부내용 카드 — 띠(목록 머리말도)·띠 글·테두리 / 본문 / 메모(디자인 SOT §2.5 '명함 세부 카드', 261120-4)
-    "light": {"head": "#e3efff", "head_fg": "#1456c4", "border": "#cfe0ff", "body": "#f3f8ff", "memo": "#ffffff"},
-    "dark": {"head": "#1f3556", "head_fg": "#9cc3ff", "border": "#2d4d7a", "body": "#232a35", "memo": "#1e1e20"},
+DETAIL_BG = {                        # 세부내용 카드·목록 표 — 띠(머리말)·띠 글·테두리 / 본문 / 메모 / 고른 줄 — 회색 톤(디자인 SOT §2.5 '명함 세부 카드', 261120-4)
+    "light": {"head": "#e4e4e4", "head_fg": "#1a1a1a", "border": "#c8c8c8", "body": "#f5f5f5", "memo": "#ffffff",
+              "sel": "#d8d8d8", "sel_fg": "#1a1a1a"},
+    "dark": {"head": "#38383c", "head_fg": "#e6e6e6", "border": "#4a4a50", "body": "#2e2e31", "memo": "#1e1e20",
+             "sel": "#424247", "sel_fg": "#ffffff"},
 }
 DETAIL_W = 330                     # 처음 너비 — 세부 칸(§5.24 '처음 너비': 목록은 네 열 최소 폭, 나머지는 사진창)
 FIND_DELAY_MS = 250
@@ -754,6 +756,8 @@ class BizcardFindDialog(QDialog):
         self.table.setDragEnabled(True)
         self.table.setDragDropMode(QAbstractItemView.DragDropMode.DragOnly)
         self.table.verticalHeader().setVisible(False)
+        self.table.setAlternatingRowColors(True)            # 줄 번갈아 색·세로 선 없음(§5.24.1 '목록 표 꾸밈')
+        self.table.setShowGrid(False)
         hh = self.table.horizontalHeader()
         hh.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
         hh.setStretchLastSection(True)
@@ -1241,10 +1245,16 @@ class BizcardFindDialog(QDialog):
         if css != self._detail_css:                    # 같은 값이면 다시 넣지 않는다(스타일 바뀜이 되돌아오지 않게)
             self._detail_css = css
             self.detail_box.setStyleSheet(css)
-            # 목록 표 머리말 = 세부내용 띠와 같은 색(§5.24.1 '세부내용 묶음', 사용자 지시 261120)
-            self.table.horizontalHeader().setStyleSheet(
-                "QHeaderView::section{background:%(head)s;color:%(head_fg)s;border:none;"
+            # 목록 표 = 세부내용 카드와 한 벌(§5.24.1 '목록 표 꾸밈', 261120-7·-8, 사용자 지시 261120 '전반적으로 어울리게'):
+            #   머리말 = 띠 색, 테두리 = 카드 테, 줄은 메모 바탕·본문 바탕 번갈아, 세로 선 없음, 고른 줄 = 고른 줄 색(회색 톤 — 사용자 결정 261120)
+            self.table.setStyleSheet(
+                "QTableView{background:%(memo)s;alternate-background-color:%(body)s;border:1px solid %(border)s;"
+                "gridline-color:%(border)s;selection-background-color:%(sel)s;selection-color:%(sel_fg)s;outline:0;}"
+                "QTableView::item{padding:2px 4px;border:none;}"
+                "QTableView::item:selected{background:%(sel)s;color:%(sel_fg)s;}"   # 창이 뒤로 가도 같은 고른 줄
+                "QTableView QHeaderView::section{background:%(head)s;color:%(head_fg)s;border:none;"
                 "border-right:1px solid %(border)s;border-bottom:1px solid %(border)s;padding:4px 6px;}" % c)
+            self.fav.setStyleSheet("QListWidget{border:1px solid %(border)s;}" % c)   # 즐겨찾기 칸 테두리도 같은 테
 
     def changeEvent(self, e):
         from PyQt6.QtCore import QEvent

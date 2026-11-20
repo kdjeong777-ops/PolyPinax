@@ -1113,6 +1113,22 @@ try:
         "I24 세부내용 카드 — 가운데 굵은 제목 띠·옅은 본문(칸 가장자리 = 본문 바탕, 테두리 없음)·더 옅은 메모, [저장]은 밖·목록 머리말 = 띠 색",
         "%s %s %s" % (ok_box, px_l, _want("light")))
     light_bg = (_want("light") or ("?",))[0]
+
+    def _rows_px():
+        """목록 표에서 고르지 않은 두 줄(짝·홀)의 빈 자리 색 — 직함 칸 오른쪽 끝 안쪽."""
+        dlg.table.clearSelection()
+        pump(timeout=0.1)
+        img = dlg.table.viewport().grab().toImage()
+        out = []
+        for r in (2, 3):
+            rc = dlg.table.visualRect(dlg.table.model().index(r, 2))
+            out.append(img.pixelColor(rc.right() - 3, rc.center().y()).name())
+        return tuple(out)
+    d_l = getattr(BF, "DETAIL_BG", {}).get("light", {})
+    rp = _rows_px()
+    chk(isinstance(d_l, dict) and rp == (d_l.get("memo"), d_l.get("body")) and dlg.table.alternatingRowColors()
+        and not dlg.table.showGrid(),
+        "I24 목록 줄은 메모 바탕·본문 바탕을 번갈아(카드와 한 벌), 격자 선 없음", "%s %s" % (rp, d_l))
     bolds = {k: ed.font().bold() for k, ed in dlg.eds.items()}
     chk(bolds.get("name") and bolds.get("cell") and not any(v for k, v in bolds.items() if k not in ("name", "cell")),
         "I24 세부 칸은 이름·휴대폰만 굵게", str(bolds))

@@ -865,7 +865,13 @@ class BizcardFindDialog(QDialog):
         photow = QWidget()
         pvl = QVBoxLayout(photow)
         pvl.setContentsMargins(6, 0, 0, 0)
-        pvl.addWidget(QLabel(tr("인물 사진")))
+        self.photo_sep = QWidget()                     # 위 명함과 아래 인물 사진 사이 가로 구분선(§5.24.3 '인물 사진' — 제목 글 대신)
+        self.photo_sep.setObjectName("bizPhotoSep")
+        self.photo_sep.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.photo_sep.setFixedHeight(1)
+        pvl.addSpacing(4)
+        pvl.addWidget(self.photo_sep)
+        pvl.addSpacing(4)
         # 위 = 큰 화면, 아래 = 썸네일 한 줄(§5.24 사진창, 사용자 지시 261119)
         self.photo_view = QLabel()
         self.photo_view.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -901,6 +907,8 @@ class BizcardFindDialog(QDialog):
         self.photo_split.setStretchFactor(0, 2)
         self.photo_split.setStretchFactor(1, 3)
         self.photo_split.splitterMoved.connect(lambda _p, _i: QTimer.singleShot(0, self._show_card))
+        self._detail_css = ""
+        self._style_detail()                           # 사진창 구분선까지 한 번 더(세부 카드보다 늦게 만든다)
 
         self.split = QSplitter(Qt.Orientation.Horizontal)
         self.split.addWidget(left)
@@ -1268,6 +1276,8 @@ class BizcardFindDialog(QDialog):
                 "QTableView QHeaderView::section{background:%(head)s;color:%(head_fg)s;border:none;"
                 "border-right:1px solid %(border)s;border-bottom:1px solid %(border)s;padding:4px 6px;}" % c)
             self.fav.setStyleSheet("QListWidget{border:1px solid %(border)s;}" % c)   # 즐겨찾기 칸 테두리도 같은 테
+            if getattr(self, "photo_sep", None) is not None:
+                self.photo_sep.setStyleSheet("QWidget#bizPhotoSep{background:%(border)s;}" % c)   # 사진창 구분선(§5.24.3)
 
     def changeEvent(self, e):
         from PyQt6.QtCore import QEvent

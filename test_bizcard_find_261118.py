@@ -1141,6 +1141,20 @@ try:
     chk(px_d == _want("dark") and px_l2 == _want("light") and _want("dark") != _want("light"),
         "I24 다크로 바꾸면 카드 세 색도 다크 값, 돌아오면 라이트 값", "%s %s" % (px_d, px_l2))
 
+    # I25 사진창 — '인물 사진' 제목 글 없음·위 명함과 아래 인물 사진 사이 가로 구분선(사용자 지시 261120)
+    from PyQt6.QtWidgets import QLabel as _QL2
+    sep = getattr(dlg, "photo_sep", None)
+    titles = [w.text() for w in dlg.findChildren(_QL2) if w.text() == "인물 사진"]
+    sep_px = ""
+    if sep is not None:
+        y_sep = sep.mapTo(dlg, sep.rect().topLeft()).y()
+        y_pv = dlg.pv.mapTo(dlg, dlg.pv.rect().bottomLeft()).y()
+        y_ph = dlg.photo_view.mapTo(dlg, dlg.photo_view.rect().topLeft()).y()
+        sep_px = sep.grab().toImage().pixelColor(sep.width() // 2, 0).name()
+    chk(not titles and sep is not None and sep.isVisible() and sep.height() == 1 and y_pv < y_sep < y_ph
+        and sep_px == getattr(BF, "DETAIL_BG", {}).get("light", {}).get("border"),
+        "I25 사진창 — '인물 사진' 글 없음, 명함과 인물 사진 사이 1px 구분선(카드 테 색)", "%s %s %s" % (titles, sep, sep_px))
+
     print("\n=== I23. 흐린 찾기 글 → 전체 목록 · 구분 기억 · 즐겨찾기 이름 굵게 · Gmail 보내기 (사용자 지시 261120) ===")
     import urllib.parse as _up
     import viewer.widgets.bizcard_find_dialog as BF

@@ -460,15 +460,49 @@ def recent_remove(store, card_ids) -> None:
 
 
 # ── 이메일 복사 (§5.24.1) — 받는 사람 칸에 붙여 쓰기 ──
-def emails_text(cards) -> str:
-    out, seen = [], set()
+def email_list(cards) -> tuple:
+    """고른 명함들의 메일 주소(여럿이면 모두, 같은 주소 한 번) + 메일 없는 명함 수 (명함 SOT §5.24.1 '이메일 복사')."""
+    out, seen, missing = [], set(), 0
     for c in cards:
+        got = False
         for e in c.get("emails") or []:
             e = str(e[-1] if isinstance(e, (list, tuple)) else e).strip()
-            if e and e.lower() not in seen:
+            if not e:
+                continue
+            got = True
+            if e.lower() not in seen:
                 seen.add(e.lower())
                 out.append(e)
-    return ", ".join(out)
+        if not got:
+            missing += 1
+    return out, missing
+
+
+def emails_text(cards) -> str:
+    return ", ".join(email_list(cards)[0])
+
+
+# ── Gmail 보내기 (명함 SOT §5.24.1 'Gmail 보내기', 사용자 결정 261120) — 브라우저 쓰기 창 주소만, 네트워크 없음(§2.1) ──
+GMAIL_COMPOSE = "https://mail.google.com/mail/?view=cm&fs=1"
+GMAIL_URL_MAX = 2000                # 주소 한 개 최대 길이 — 넘으면 쓰기 창을 나눠 연다
+
+
+def gmail_urls(emails, field: str = "to", account: str = "", limit: int = GMAIL_URL_MAX) -> list:
+    """Gmail 쓰기 창 주소들 — field('to'·'bcc') 칸에 주소를 넣고, 한 주소가 limit 를 넘지 않게 차례대로 나눈다.
+    account(보낼 구글 계정)가 있으면 authuser 로. 주소가 하나도 없으면 []."""
+    from urllib.parse import quote
+    base = GMAIL_COMPOSE + ("&authuser=" + quote(account.strip(), safe="@") if (account or "").strip() else "")
+    head = "%s&%s=" % (base, field)
+    urls, cur = [], ""
+    for e in emails:
+        q = quote(e, safe="@")
+        if cur and len(head) + len(cur) + 1 + len(q) > limit:
+            urls.append(head + cur)
+            cur = ""
+        cur = (cur + "," + q) if cur else q
+    if cur:
+        urls.append(head + cur)
+    return urls
 
 
 # ── 인물 사진 차례 (§5.24, D20 — 파일 이름을 차례대로) ──

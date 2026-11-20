@@ -8038,6 +8038,10 @@ msgid "표의 줄을 끌어 놓으면 이 탭에 넣습니다 — 끌어 차례 
 msgstr ""
 
 #: viewer/widgets/bizcard_find_dialog.py
+msgid "세부내용"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
 msgid "고친 칸·메모를 명함 DB 에 저장합니다 — 이름·회사를 바꾸면 정리본 파일 이름도 '성명_회사명' 으로"
 msgstr ""
 
@@ -8115,6 +8119,26 @@ msgstr ""
 
 #: viewer/widgets/bizcard_find_dialog.py
 msgid "고친 내용을 저장할까요?"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "Gmail 보내기"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "받는 사람"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "숨은 참조"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "보낼 계정 바꾸기"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "보낼 Gmail 주소 — 브라우저에 구글 계정이 여럿이면 이 계정으로 엽니다(비우면 기본 계정):"
 msgstr ""
 
 #: viewer/widgets/bizcard_find_dialog.py
@@ -8237,6 +8261,10 @@ msgstr ""
 
 #: viewer/widgets/bizcard_find_dialog.py
 msgid "탭 이름:"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "메일 주소가 있는 사람이 없습니다."
 msgstr ""
 
 #: viewer/widgets/bizcard_find_dialog.py
@@ -8363,7 +8391,17 @@ msgstr ""
 
 #: viewer/widgets/bizcard_find_dialog.py
 #, python-brace-format
+msgid "메일 없는 {n}명은 뺐습니다."
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+#, python-brace-format
 msgid "'{tab}' 탭을 삭제합니다 — 탭과 그 {n}명 칸이 완전히 지워지고, 할 일로 메모에 적은 글도 지웁니다. 되돌릴 수 없습니다. 명함과 파일은 그대로입니다."
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+#, python-brace-format
+msgid "주소가 {n}개라 쓰기 창 {w}개로 나눠 엽니다."
 msgstr ""
 
 #: viewer/widgets/bizcard_find_dialog.py

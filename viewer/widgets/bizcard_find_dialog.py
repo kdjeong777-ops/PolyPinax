@@ -33,7 +33,8 @@ ROLE = Qt.ItemDataRole.UserRole
 FAV_ICON = 56                       # 즐겨찾기 사람 칸 그림(카톡 꼴 둥근 네모)
 FAV_ROWS = 2                        # 즐겨찾기 줄 최대 높이(줄 수) — 넘치면 그 칸 안에서 굴림
 PHOTO_ICON = 72                     # 인물 사진 썸네일 줄(큰 화면은 그 위 — §5.24 사진창)
-DETAIL_W = 330                      # 처음 너비 — 세부 칸(§5.24 '처음 너비': 목록은 네 열 최소 폭, 나머지는 사진창)
+DETAIL_BG = {"light": "#e6e6e6", "dark": "#38383c"}   # 세부내용 묶음 바탕(디자인 SOT §2.5 '명함 세부 묶음 바탕', 261120-4)
+DETAIL_W = 330                     # 처음 너비 — 세부 칸(§5.24 '처음 너비': 목록은 네 열 최소 폭, 나머지는 사진창)
 FIND_DELAY_MS = 250
 RECENT = -1                         # '최근' 탭의 tabData(명함 DB 의 탭 id 와 겹치지 않음, §5.24.2)
 FAV_KEY_MS = 120                    # 사람 칸을 키보드로 넘길 때 — 멈춘 뒤 마지막 사람만 그린다(§5.24.2)
@@ -82,6 +83,13 @@ class _Cell:
 
     def data(self, role):
         return self._m.data(self._m.index(self._r, self._c), role)
+
+
+def _open_url(url: str) -> bool:
+    """기본 브라우저로 주소를 연다 — Gmail 보내기(§5.24.1, 앱은 네트워크를 쓰지 않음 §2.1). 검사가 바꿔 받는다."""
+    from PyQt6.QtCore import QUrl
+    from PyQt6.QtGui import QDesktopServices
+    return QDesktopServices.openUrl(QUrl(url))
 
 
 _BOLD = []
@@ -618,6 +626,7 @@ class BizcardFindDialog(QDialog):
         self._peek = None                              # '마감한 탭 ▸ 보기' 로 잠시 보이는 탭(D28)
         self._table_tab = None                         # 목록 표가 보이는 탭(None = 찾기 결과, §5.24.2 '탭 줄')
         self._recent_id = None
+        self._ghost_all = False                        # 흐린 찾기 글을 다시 골라 전체 목록을 보는 중(§5.24.1 '찾기 칸 흐린 글')
         self.setWindowTitle(tr("명함찾기"))
         self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowMaximizeButtonHint | Qt.WindowType.WindowMinimizeButtonHint)
         self.setAcceptDrops(True)
@@ -629,7 +638,7 @@ class BizcardFindDialog(QDialog):
         for key, label in zip(P.KINDS, (tr("전체"), tr("한글"), tr("영어"), tr("명함 있음"), tr("명함 없음"))):
             self.cb_kind.addItem(label, key)
         self.cb_kind.setToolTip(tr("한글·영어 = 이름 글자, 명함 있음·없음 = 명함 그림(없음 = 주소록에서 들인 명함)"))
-        self.cb_kind.currentIndexChanged.connect(lambda _i: self._on_period())
+        self.cb_kind.currentIndexChanged.connect(lambda _i: self._on_kind())
         top.addWidget(self.cb_kind)
         self.ed_find = QLineEdit()
         from viewer.widgets.search_ghost import SearchGhost   # 261117-42(검색창 SOT §6.1): 찾은 글은 떠나면 흐리게
@@ -763,13 +772,23 @@ class BizcardFindDialog(QDialog):
         mid.addWidget(self.table)
 
         detail = QWidget()
-        rv = QVBoxLayout(detail)
-        rv.setContentsMargins(6, 0, 0, 0)
+        dv = QVBoxLayout(detail)
+        dv.setContentsMargins(6, 0, 0, 0)
+        self.detail_box = QWidget()                    # 세부내용 한 묶음 — 둥근 네모·옅은 바탕(§5.24.1 '세부내용 묶음', 261120-4)
+        self.detail_box.setObjectName("bizDetailBox")
+        self.detail_box.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        rv = QVBoxLayout(self.detail_box)
+        rv.setContentsMargins(10, 8, 10, 8)
+        lbl_detail = QLabel(tr("세부내용"))
+        tf = lbl_detail.font()
+        tf.setBold(True)
+        lbl_detail.setFont(tf)
+        rv.addWidget(lbl_detail)
         form = QFormLayout()
         self.eds, self.chk = {}, {}
         for k, label in FIELDS:
             ed = QLineEdit()
-            if k == "name":                            # 이름은 굵게(§5.24.1 '이름 굵게', 사용자 지시 261119)
+            if k in ("name", "cell"):                  # 이름·휴대폰은 굵게(§5.24.1 '이름 굵게', 261117-61·261120-4)
                 bf = ed.font()
                 bf.setBold(True)
                 ed.setFont(bf)
@@ -792,6 +811,9 @@ class BizcardFindDialog(QDialog):
         self.lbl_file.setWordWrap(True)
         self.lbl_file.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         rv.addWidget(self.lbl_file)
+        dv.addWidget(self.detail_box, 1)
+        self._detail_css = ""
+        self._style_detail()
         self.btn_save = QPushButton(tr("저장"))
         self.btn_save.setToolTip(tr("고친 칸·메모를 명함 DB 에 저장합니다 — 이름·회사를 바꾸면 정리본 파일 이름도 '성명_회사명' 으로"))
         self.btn_save.clicked.connect(lambda _c=False: self.save())
@@ -802,7 +824,7 @@ class BizcardFindDialog(QDialog):
         srow = QHBoxLayout()                               # [저장] 오른쪽에 [내용 복사](§5.24, 사용자 지시 261119)
         srow.addWidget(self.btn_save, 1)
         srow.addWidget(self.btn_copy, 1)
-        rv.addLayout(srow)
+        dv.addLayout(srow)                             # [저장]·[내용 복사] 는 묶음 밖 아래
         mid.addWidget(detail)
         mid.setStretchFactor(0, 3)
         mid.setStretchFactor(1, 2)
@@ -957,14 +979,24 @@ class BizcardFindDialog(QDialog):
             cb.setChecked(k in on)
             cb.blockSignals(False)
         self._fav_fill_tabs(st.meta_get("fav_tab", None))
+        i = self.cb_kind.findData(st.meta_get("find_kind", "all"))   # 구분 기억(§5.24.1 '구분', 사용자 지시 261120)
+        self.cb_kind.blockSignals(True)
+        self.cb_kind.setCurrentIndex(max(0, i))
+        self.cb_kind.blockSignals(False)
 
     def _save_copy_fields(self):
         self._store().meta_set("copy_fields", [k for k in P.COPY_FIELDS if self.chk[k].isChecked()])
+
+    def _on_kind(self):
+        """구분을 바꿈 — 기억하고(명함 DB meta) 찾기 결과로."""
+        self._store().meta_set("find_kind", self.cb_kind.currentData() or "all")
+        self._on_period()
 
     # ── 찾기 ──
     def _search_mode(self):
         """찾기 칸·기간을 바꾸면 목록 표는 찾기 결과로(탭 명단 보기를 끝냄)."""
         self._table_tab = None
+        self._ghost_all = False                        # 칸 글이 바뀜 — 흐린 글 전체 보기 끝
         self._find_timer.start()
 
     def _on_period(self, _i=0):
@@ -987,7 +1019,8 @@ class BizcardFindDialog(QDialog):
             rows = self._tab_members(self._table_tab)
         else:
             since, until = self._range()
-            rows = P.find(self._store(), self.ed_find.text(), since, until)   # 상한 없이 전부(§5.9 '결과')
+            q = "" if self._ghost_all else self.ed_find.text()   # 흐린 글을 다시 고름 = 전체(§5.24.1 '찾기 칸 흐린 글')
+            rows = P.find(self._store(), q, since, until)   # 상한 없이 전부(§5.9 '결과')
             kind = self.cb_kind.currentData()
             if kind and kind != "all":
                 rows = [c for c in rows if P.kind_ok(c, kind)]
@@ -1175,6 +1208,30 @@ class BizcardFindDialog(QDialog):
         super().resizeEvent(e)
         QTimer.singleShot(0, self._show_card)
         QTimer.singleShot(0, self._fav_fit)
+
+    def _style_detail(self):
+        """세부내용 묶음 꾸밈 — 바탕 DETAIL_BG(테마별), 칸은 테두리·바탕 없이, 가리킴 = 옅은 입력 바탕, 초점 = 입력 바탕 + 강조 밑줄."""
+        pal = QApplication.palette()
+        dark = pal.color(pal.ColorRole.Window).lightness() < 128
+        b = pal.color(pal.ColorRole.Base)
+        sel = "QWidget#bizDetailBox QLineEdit, QWidget#bizDetailBox QPlainTextEdit"
+        css = ("QWidget#bizDetailBox{background:%s;border-radius:8px;}"
+               "%s{border:none;background:transparent;padding:2px 4px;}"
+               "%s{background:rgba(%d,%d,%d,0.55);}"
+               "%s{background:palette(base);border-bottom:1px solid palette(highlight);}") % (
+            DETAIL_BG["dark" if dark else "light"], sel,
+            sel.replace("QLineEdit,", "QLineEdit:hover,") + ":hover", b.red(), b.green(), b.blue(),
+            sel.replace("QLineEdit,", "QLineEdit:focus,") + ":focus")
+        if css != self._detail_css:                    # 같은 값이면 다시 넣지 않는다(스타일 바뀜이 되돌아오지 않게)
+            self._detail_css = css
+            self.detail_box.setStyleSheet(css)
+
+    def changeEvent(self, e):
+        from PyQt6.QtCore import QEvent
+        if e.type() in (QEvent.Type.PaletteChange, QEvent.Type.ApplicationPaletteChange, QEvent.Type.StyleChange) \
+                and getattr(self, "detail_box", None) is not None:
+            self._style_detail()                       # 테마를 바꾸면 묶음 바탕도(디자인 SOT §2.5 '명함 세부 묶음 바탕')
+        super().changeEvent(e)
 
     def showEvent(self, e):
         super().showEvent(e)
@@ -1603,6 +1660,50 @@ class BizcardFindDialog(QDialog):
             clipboard_util.set_text(t)                # 클립보드는 한 길(스크린샷 SOT §8.4 — 261117-26 덧고침)
         return t
 
+    # ── Gmail 보내기 (§5.24.1 'Gmail 보내기', 사용자 결정 261120) ──
+    def _gmail_menu(self, m, cards):
+        """'Gmail 보내기 ▸ 받는 사람 · 숨은 참조 · 보낼 계정 바꾸기' — 탭 메뉴·사람 메뉴가 같이 쓴다."""
+        gm = m.addMenu(tr("Gmail 보내기"))
+        _menu_act(gm, tr("받는 사람"), lambda: self.gmail_send(cards, "to"))
+        _menu_act(gm, tr("숨은 참조"), lambda: self.gmail_send(cards, "bcc"))
+        gm.addSeparator()
+        _menu_act(gm, tr("보낼 계정 바꾸기"), lambda: self.gmail_account(ask=True))
+
+    def gmail_account(self, ask: bool = False):
+        """보낼 구글 계정 — 처음 한 번(또는 ask) 묻고 명함 DB meta 에 기억. 빈 값 = 브라우저 기본 계정. 물음을 닫으면 None."""
+        st = self._store()
+        cur = st.meta_get("gmail_account", None)
+        if cur is not None and not ask:
+            return cur
+        text, ok = QInputDialog.getText(self, tr("Gmail 보내기"),
+                                        tr("보낼 Gmail 주소 — 브라우저에 구글 계정이 여럿이면 이 계정으로 엽니다(비우면 기본 계정):"),
+                                        text=cur or "")
+        if not ok:
+            return None
+        text = (text or "").strip()
+        st.meta_set("gmail_account", text)
+        return text
+
+    def gmail_send(self, cards, field: str = "to") -> int:
+        """고른 사람들의 메일 주소를 Gmail 쓰기 창(브라우저)의 field 칸에 — 길면 여러 창. 연 창 수."""
+        emails, missing = P.email_list(cards)
+        if not emails:
+            QMessageBox.information(self, tr("Gmail 보내기"), tr("메일 주소가 있는 사람이 없습니다."))
+            return 0
+        acct = self.gmail_account()
+        if acct is None:
+            return 0
+        urls = P.gmail_urls(emails, field, acct)
+        if len(urls) > 1 and QMessageBox.question(
+                self, tr("Gmail 보내기"),
+                tr("주소가 {n}개라 쓰기 창 {w}개로 나눠 엽니다.").format(n=len(emails), w=len(urls))) != QMessageBox.StandardButton.Yes:
+            return 0
+        for u in urls:
+            _open_url(u)
+        if missing:
+            QMessageBox.information(self, tr("Gmail 보내기"), tr("메일 없는 {n}명은 뺐습니다.").format(n=missing))
+        return len(urls)
+
     def _tab_menu_groups(self, menu, cards, exclude=None, todo=None):
         """탭 고르기 메뉴 — todo None 이면 모두(할 일은 아이콘), True/False 면 그 갈래만."""
         st = self._store()
@@ -1651,11 +1752,13 @@ class BizcardFindDialog(QDialog):
         m.setToolTipsVisible(True)
         if gid == RECENT:
             _menu_act(m, tr("이메일 복사"), lambda: self.copy_emails(self._tab_members(RECENT)))
+            self._gmail_menu(m, self._tab_members(RECENT))
         else:
             if P.todo_info(st, gid) is not None:
                 _menu_act(m, tr("할 일 고치기"), lambda: self.todo_edit(gid))
             _menu_act(m, tr("이름 바꾸기"), lambda: self.fav_rename_tab(i))
             _menu_act(m, tr("이메일 복사"), lambda: self.copy_emails(self._tab_members(gid)))
+            self._gmail_menu(m, self._tab_members(gid))
             m.addSeparator()
             if self._is_closed(gid):
                 _menu_act(m, tr("다시 열기"), lambda: self.tab_reopen(gid))
@@ -1741,11 +1844,29 @@ class BizcardFindDialog(QDialog):
 
     def eventFilter(self, obj, e):
         from PyQt6.QtCore import QEvent
-        if obj is getattr(self, "ed_find", None) and e.type() in (QEvent.Type.FocusIn, QEvent.Type.MouseButtonPress) \
-                and self._table_tab is not None:
-            self._table_tab = None                         # 탭 명단 보기 → 찾기 결과(비었으면 전체)
-            QTimer.singleShot(0, self.refresh)
+        if obj is getattr(self, "ed_find", None):
+            t = e.type()
+            if t in (QEvent.Type.FocusIn, QEvent.Type.MouseButtonPress):
+                go = False
+                if self._table_tab is not None:
+                    self._table_tab = None                 # 탭 명단 보기 → 찾기 결과(비었으면 전체)
+                    go = True
+                # 흐린 글을 다시 고름(흐린 글 거르개보다 먼저 받는다 — 아직 흐림) → 커서 맨 앞·전체 목록(사용자 지시 261120)
+                if obj.property("searchGhostDim") and not self._ghost_all:
+                    self._ghost_all = True
+                    go = True
+                if go:
+                    QTimer.singleShot(0, self.refresh)
+            elif self._ghost_all and t in (QEvent.Type.KeyPress, QEvent.Type.ContextMenu, QEvent.Type.InputMethod):
+                QTimer.singleShot(0, self._ghost_check)    # →·Ctrl 조합·메뉴로 흐린 글을 되살렸나(그 뒤에 본다)
         return super().eventFilter(obj, e)
+
+    def _ghost_check(self):
+        """흐린 글이 되살아났거나 바뀌었으면 칸 글의 결과로 돌아간다."""
+        if self._ghost_all and not self.ed_find.property("searchGhostDim"):
+            self._ghost_all = False
+            self._find_timer.stop()
+            self.refresh()
 
     def _fav_fill(self):
         """지금 탭의 사람 칸 — 우선 옅은 파랑 + 첫 글자, 그림은 배경에서 읽어 바꾼다."""
@@ -1763,8 +1884,11 @@ class BizcardFindDialog(QDialog):
             self._fav_fit()
             return
         jobs = []
+        bold = QFont(self.fav.font())                  # 이름은 굵게 — 사람 칸 글꼴에 굵기만(§5.24.2 '즐겨찾기 줄', 사용자 지시 261120)
+        bold.setBold(True)
         for c in self._tab_members(gid):
             it = QListWidgetItem(QIcon(_rounded(None, c.get("name") or "")), c.get("name") or "")
+            it.setFont(bold)
             it.setData(ROLE, c["id"])
             it.setToolTip(self._fav_tip(c))
             it.setTextAlignment(Qt.AlignmentFlag.AlignHCenter)
@@ -1869,6 +1993,7 @@ class BizcardFindDialog(QDialog):
         m = QMenu(self)
         _menu_act(m, tr("내용 복사"), lambda: self.fav_copy_selected())
         _menu_act(m, tr("이메일 복사"), lambda: self.copy_emails(cards))
+        self._gmail_menu(m, cards)
         cm = m.addMenu(tr("다른 탭에 복사"))
         self._tab_menu_groups(cm, cards, exclude=gid)
         _menu_act(m, tr("새 즐겨찾기 탭으로"), lambda: self.fav_new_tab(cards=cards))

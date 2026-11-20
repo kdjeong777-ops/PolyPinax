@@ -1072,6 +1072,168 @@ try:
         and dlg.eds["name"].font().bold() and not dlg.eds["company"].font().bold(),
         "I22 목록 이름 칸·세부 이름 칸만 굵게(크기는 표 글꼴 그대로)",
         "%s %s %s %s" % (fn.bold(), fc.bold(), dlg.eds["name"].font().bold(), dlg.eds["company"].font().bold()))
+
+    print("\n=== I24. 세부내용 묶음·테두리 없는 칸·이름과 휴대폰 굵게 (261120-4, 사용자 지시 261120) ===")
+    from PyQt6.QtWidgets import QLabel as _QL
+    import viewer.widgets.bizcard_find_dialog as BF
+    box = getattr(dlg, "detail_box", None)
+
+    def _edge_px(ed):
+        """묶음을 그려 입력 칸 왼쪽 가장자리 바로 안쪽 점의 색 — 테두리가 있으면 테두리·입력 바탕 색."""
+        img = box.grab().toImage()
+        p = ed.mapTo(box, ed.rect().topLeft())
+        return img.pixelColor(p.x() + 1, p.y() + ed.height() // 2).name()
+    pump(timeout=0.1)
+    ok_box = box is not None and box.isAncestorOf(dlg.eds["name"])
+    title = [w.text() for w in box.findChildren(_QL)] if box is not None else []
+    light_bg = BF.DETAIL_BG["light"] if hasattr(BF, "DETAIL_BG") else "?"
+    px_l = _edge_px(dlg.eds["company"]) if box is not None else ""
+    chk(ok_box and "세부내용" in title and box.isAncestorOf(dlg.ed_memo) and not box.isAncestorOf(dlg.btn_save)
+        and px_l == light_bg,
+        "I24 세부내용 한 묶음(제목·칸·메모, [저장]은 밖) — 입력 칸 가장자리가 묶음 바탕(테두리·입력 바탕 없음)",
+        "%s %s %s %s" % (ok_box, title, px_l, light_bg))
+    bolds = {k: ed.font().bold() for k, ed in dlg.eds.items()}
+    chk(bolds.get("name") and bolds.get("cell") and not any(v for k, v in bolds.items() if k not in ("name", "cell")),
+        "I24 세부 칸은 이름·휴대폰만 굵게", str(bolds))
+    mw.apply_theme("dark")
+    pump(timeout=0.3)
+    px_d = _edge_px(dlg.eds["company"]) if box is not None else ""
+    mw.apply_theme("light")
+    pump(timeout=0.3)
+    px_l2 = _edge_px(dlg.eds["company"]) if box is not None else ""
+    chk(hasattr(BF, "DETAIL_BG") and px_d == BF.DETAIL_BG["dark"] and px_l2 == light_bg,
+        "I24 다크로 바꾸면 묶음 바탕도 다크 값, 돌아오면 라이트 값", "%s %s" % (px_d, px_l2))
+
+    print("\n=== I23. 흐린 찾기 글 → 전체 목록 · 구분 기억 · 즐겨찾기 이름 굵게 · Gmail 보내기 (사용자 지시 261120) ===")
+    import urllib.parse as _up
+    import viewer.widgets.bizcard_find_dialog as BF
+    dlg.activateWindow()
+    dlg.ed_find.clear()
+    dlg.refresh()
+    pump(timeout=0.1)
+    n_all = len(dlg._rows)
+    QTest.mouseClick(dlg.ed_find, Qt.MouseButton.LeftButton)
+    QTest.keyClicks(dlg.ed_find, "Acme")
+    pump(lambda: len(dlg._rows) == 2, timeout=3)
+    n_hit = len(dlg._rows)
+    r0 = dlg.table.visualRect(dlg.table.model().index(0, 1)).center()
+    QTest.mouseClick(dlg.table.viewport(), Qt.MouseButton.LeftButton, pos=r0)   # 칸을 떠남 — 흐려짐
+    pump(timeout=0.4)
+    dim1, n_leave = bool(dlg.ed_find.property("searchGhostDim")), len(dlg._rows)
+    QTest.mouseClick(dlg.ed_find, Qt.MouseButton.LeftButton)                    # 흐린 글을 다시 누름 — 커서 맨 앞
+    pump(lambda: len(dlg._rows) == n_all, timeout=2)
+    n_home, cur_home, txt_home = len(dlg._rows), dlg.ed_find.cursorPosition(), dlg.ed_find.text()
+    chk(n_hit == 2 and dim1 and n_leave == 2 and n_home == n_all and cur_home == 0 and txt_home == "Acme"
+        and dlg.ed_find.property("searchGhostDim"),
+        "I23 흐린 찾기 글을 다시 누르면(커서 맨 앞) 전체 목록 — 처음 떠날 때는 결과 그대로, 흐린 글은 칸에 남음",
+        "%d %s %d %d/%d cur=%d %r" % (n_hit, dim1, n_leave, n_home, n_all, cur_home, txt_home))
+    QTest.keyClick(dlg.ed_find, Qt.Key.Key_Right)                               # → 로 되살리기 — 그 글의 결과
+    pump(lambda: len(dlg._rows) == 2, timeout=2)
+    n_restore = len(dlg._rows)
+    QTest.mouseClick(dlg.table.viewport(), Qt.MouseButton.LeftButton, pos=r0)
+    pump(timeout=0.3)
+    QTest.mouseClick(dlg.ed_find, Qt.MouseButton.LeftButton)
+    pump(lambda: len(dlg._rows) == n_all, timeout=2)
+    n_home2 = len(dlg._rows)
+    QTest.keyClicks(dlg.ed_find, "Zed")                                          # 첫 입력 — 친 글의 결과
+    pump(lambda: len(dlg._rows) == 1, timeout=3)
+    chk(n_restore == 2 and n_home2 == n_all and dlg.ed_find.text() == "Zed" and [c["name"] for c in dlg._rows] == ["Zed Nobody"],
+        "I23 → 로 되살리면 그 글의 결과, 다시 흐린 글을 누르면 전체, 첫 입력이면 친 글의 결과",
+        "%d %d %r %s" % (n_restore, n_home2, dlg.ed_find.text(), [c["name"] for c in dlg._rows]))
+    dlg.ed_find.clear()
+    pump(timeout=0.4)
+
+    # Gmail 보내기 — 브라우저 여는 길은 가짜로 받는다(실제 브라우저를 띄우지 않음)
+    st = S.BizcardStore()
+    st.con.executemany("INSERT INTO cards(front, name, company, phones, emails, scanned, tags, en) VALUES(?,?,?,?,?,?,?,?)",
+                       [("contact:gm%d" % i, "메일가짜%02d" % i, "", "[]", '["fake%02d@example.com"]' % i, "2021-03-01", "[]", "{}")
+                        for i in range(150)] + [("contact:gmnone", "메일없음가짜", "", "[]", "[]", "2021-03-01", "[]", "{}")])
+    st.con.commit()
+    gm_ids = [r[0] for r in st.con.execute("SELECT id FROM cards WHERE front LIKE 'contact:gm%' ORDER BY id")]
+    hong_c = next(c for c in P.find(st, "홍길동"))
+    g_mail = P.fav_add_group(st, "메일시험")
+    P.fav_add(st, g_mail, [hong_c["id"]] + gm_ids)
+    st.close()
+    dlg._fav_fill_tabs(g_mail)
+    pump(timeout=0.2)
+    gi = [dlg.fav_tabs.tabData(i) for i in range(dlg.fav_tabs.count())].index(g_mail)
+    dlg.fav_tabs.setCurrentIndex(gi)
+    pump(timeout=0.2)
+    chk(dlg.fav.count() == 152 and all(dlg.fav.item(i).font().bold() for i in range(dlg.fav.count())),
+        "I23 즐겨찾기 사람 칸의 이름은 굵게", "%d" % dlg.fav.count())
+    opened, asked, info2, ques = [], [], [], []
+    shown = []
+    _o_exec, _o_get, _o_info, _o_q = QMenu.exec, QInputDialog.getText, QMessageBox.information, QMessageBox.question
+    _o_open = getattr(BF, "_open_url", None)
+    QMenu.exec = lambda self, *a, **k: shown.append(self)
+    QInputDialog.getText = staticmethod(lambda *a, **k: asked.append(k.get("text", "")) or ("me@example.com", True))
+    QMessageBox.information = staticmethod(lambda *a, **k: info2.append(a[2] if len(a) > 2 else "") or QMessageBox.StandardButton.Ok)
+    QMessageBox.question = staticmethod(lambda *a, **k: ques.append(a[2] if len(a) > 2 else "") or QMessageBox.StandardButton.Yes)
+    BF._open_url = lambda u: opened.append(u) or True
+
+    def _act(menu, *path):
+        for name in path[:-1]:
+            menu = next(a.menu() for a in menu.actions() if a.menu() is not None and a.menu().title() == name)
+        return next(a for a in menu.actions() if a.text() == path[-1])
+
+    def _q(u):
+        return _up.parse_qs(_up.urlsplit(u).query)
+    try:
+        dlg._fav_tab_menu(dlg.fav_tabs.tabRect(gi).center())
+        _act(shown[-1], "Gmail 보내기", "숨은 참조").trigger()
+        pump(timeout=0.1)
+        want = {"hong@example.com"} | {"fake%02d@example.com" % i for i in range(150)}
+        got_bcc = [a for u in opened for a in ",".join(_q(u).get("bcc", [])).split(",") if a]
+        chk(len(opened) >= 2 and all(len(u) <= BF.P.GMAIL_URL_MAX for u in opened) and set(got_bcc) == want
+            and len(got_bcc) == len(want) and not any("to" in _q(u) for u in opened)
+            and all(u.startswith("https://mail.google.com/mail/?") and _q(u).get("view") == ["cm"] for u in opened),
+            "I23 탭 메뉴 'Gmail 보내기 ▸ 숨은 참조' — 그 탭 사람 모두의 메일을 숨은 참조로, 주소가 길면 여러 쓰기 창(각 2000자 이하)",
+            "%d %s" % (len(opened), [len(u) for u in opened]))
+        chk(asked == [""] and all(_q(u).get("authuser") == ["me@example.com"] for u in opened) and ques
+            and any("1" in s for s in info2),
+            "I23 보낼 계정을 처음 한 번 묻고 authuser 로 붙임·여러 창이면 먼저 확인·메일 없는 1명은 뺐다고 알림",
+            "%s %s %s" % (asked, ques, info2))
+        opened.clear(); info2.clear()
+        dlg.fav.clearSelection()
+        for i in range(dlg.fav.count()):
+            if dlg.fav.item(i).data(Qt.ItemDataRole.UserRole) == hong_c["id"]:
+                dlg.fav.item(i).setSelected(True)
+        dlg._fav_menu(dlg.fav.visualItemRect(dlg.fav.selectedItems()[0]).center())
+        fm2 = [a.text() for a in shown[-1].actions() if a.text()]
+        _act(shown[-1], "Gmail 보내기", "받는 사람").trigger()
+        pump(timeout=0.1)
+        chk(fm2[:3] == ["내용 복사", "이메일 복사", "Gmail 보내기"] and len(opened) == 1
+            and _q(opened[0]).get("to") == ["hong@example.com"] and "bcc" not in _q(opened[0]) and asked == [""] and not info2,
+            "I23 사람 메뉴 'Gmail 보내기 ▸ 받는 사람' — 고른 사람만, 계정은 다시 묻지 않음", "%s %s %s" % (fm2, opened, asked))
+        opened.clear()
+        dlg._fav_menu(dlg.fav.visualItemRect(dlg.fav.selectedItems()[0]).center())
+        _act(shown[-1], "Gmail 보내기", "보낼 계정 바꾸기").trigger()
+        chk(asked == ["", "me@example.com"] and not opened, "I23 '보낼 계정 바꾸기' 는 지난 값을 채워 다시 묻고 창은 열지 않음", str(asked))
+        st = S.BizcardStore()
+        acct = st.meta_get("gmail_account", None)
+        st.close()
+        chk(acct == "me@example.com", "I23 보낼 계정은 명함 DB meta 에 기억", repr(acct))
+        chk(P.gmail_urls(["a@example.com"], "to", "") == ["https://mail.google.com/mail/?view=cm&fs=1&to=a@example.com"]
+            and P.gmail_urls([], "bcc", "") == [] and P.email_list([{"emails": ["a@x.com"]}, {"emails": []}, {"emails": ["A@X.com"]}]) == (["a@x.com"], 1),
+            "I23 Gmail 주소 만들기(계정 비우면 authuser 없음)·주소 모으기(메일 없는 사람 수)")
+    finally:
+        QMenu.exec, QInputDialog.getText, QMessageBox.information, QMessageBox.question = _o_exec, _o_get, _o_info, _o_q
+        if _o_open is not None:
+            BF._open_url = _o_open
+
+    # 구분 기억 — 다시 열면 그대로
+    dlg.cb_kind.setCurrentIndex(dlg.cb_kind.findData("en"))
+    pump(timeout=0.2)
+    dlg.close()
+    pump(timeout=0.2)
+    mw._action_bizcard_find()
+    dlg = mw._bizcard_find_dlg
+    pump(lambda: dlg.table.rowCount() > 0, timeout=5)
+    pump(timeout=0.3)
+    kind2 = dlg.cb_kind.currentData()
+    chk(kind2 == "en" and dlg._rows and all(not _re.search("[가-힣]", c.get("name") or "") for c in dlg._rows),
+        "I23 찾기 칸 앞 구분은 창을 다시 열어도 그대로(명함 DB meta)", "%s %d" % (kind2, len(dlg._rows)))
+    dlg.cb_kind.setCurrentIndex(0)
     dlg.close()
     pump(timeout=0.2)
 except Exception:

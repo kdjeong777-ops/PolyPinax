@@ -560,7 +560,7 @@ def _run_bizcard(app) -> int:
     """명함 SOT §5.27(D32): `--bizcard` — 본 창·스플래시·색인 없이 명함찾기 창 하나(viewer.bizcard.standalone).
     설정·데이터 폴더(앱 이름·시험 프로필·휴대용)와 화면 언어는 본 뷰어와 같게."""
     _set_app_names(app)
-    _ico = resource_path("icon.png")
+    _ico = resource_path("polycardex.png") or resource_path("icon.png")   # 261120-5: 바로가기와 같은 자기 아이콘(작업 표시줄은 창 아이콘)
     if _ico:
         app.setWindowIcon(QIcon(_ico))
     _install_excepthook()

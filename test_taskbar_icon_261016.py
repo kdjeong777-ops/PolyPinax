@@ -50,7 +50,8 @@ try:
         os.environ.pop("POLYPDF_PROFILE", None)
     iss = open(os.path.join(HERE, "installer", "PolyPDF.iss"), encoding="utf-8").read()
     icons = iss[iss.index("\n[Icons]"):iss.index("\n[Registry]")]      # 줄 머리의 섹션(주석 속 '[Icons]' 글자가 아니라)
-    app_lines = [ln for ln in icons.splitlines() if "{#MyAppExe}" in ln and not ln.lstrip().startswith(";")]
+    app_lines = [ln for ln in icons.splitlines() if "{#MyAppExe}" in ln and not ln.lstrip().startswith(";")
+                 and "--bizcard" not in ln]          # 261120-5: 명함 프로그램 바로가기는 자기 ID — test_bizcard_shortcut_261120 이 본다
     # 261114-8: 설치 프로그램은 `LocalTools.{#MyAppId}` — MyAppId 는 이사 스위치가 꺼져 있으면 PolyPDF(앱의 branding.AUMID 와 같다)
     from viewer import branding as _br
     want = 'AppUserModelID: "LocalTools.{#MyAppId}"'

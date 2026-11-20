@@ -24,6 +24,8 @@
 #endif
 #define MyAppName "PolyPinax"
 #define MyAppPublisher "kdjeong777-ops"
+; 명함 프로그램 이름 — viewer/bizcard/standalone.APP_TITLE 과 같게(명함 SOT §5.27, 261120-5)
+#define MyCardName "PolyCardex"
 #define MyAppExe MyAppId + ".exe"
 #define MyProgId "PolyPDF.pdf"
 ; 이사 전 제품 단위 ID(branding.OLD_ID) — 이사 뒤 남은 옛 설치 폴더 정리에만 쓴다(아래 CleanOldAppDir)
@@ -88,6 +90,10 @@ Source: "{#DistDir}\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExe}"; AppUserModelID: "LocalTools.{#MyAppId}"
 Name: "{group}\{cm:UninstallIcon}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExe}"; AppUserModelID: "LocalTools.{#MyAppId}"; Tasks: desktopicon
+; 261120-5(명함 SOT §5.27 '바로가기'): 명함 프로그램 PolyCardex — 같은 실행 파일을 --bizcard 로, 자기 아이콘·자기 앱 ID(main.py 의 '.Bizcard')
+;   바탕 화면은 위 바탕 화면 선택과 함께. 제거하면 [Icons] 바로가기는 Inno 가 함께 지운다.
+Name: "{group}\{#MyCardName}"; Filename: "{app}\{#MyAppExe}"; Parameters: "--bizcard"; IconFilename: "{app}\_internal\resources\polycardex.ico"; AppUserModelID: "LocalTools.{#MyAppId}.Bizcard"
+Name: "{autodesktop}\{#MyCardName}"; Filename: "{app}\{#MyAppExe}"; Parameters: "--bizcard"; IconFilename: "{app}\_internal\resources\polycardex.ico"; AppUserModelID: "LocalTools.{#MyAppId}.Bizcard"; Tasks: desktopicon
 
 [Registry]
 ; ── 261008-27: PolyPDF 언어 — 앱이 처음 켜질 때 이 값으로 초기 설정한다(다국어 SOT §4·§10.1). 제거 때 지운다 ──

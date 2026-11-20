@@ -296,7 +296,8 @@ jobs:
           # 261010-2: 표식 글은 ASCII 만 — 한글 줄이 CI 에서 깨졌다(릴리스 portable zip 을 내려받아 실측). 한글 안내는 README.
           @("$env:APP_EXE portable mode marker.",
             "If this file exists next to $env:APP_EXE.exe, settings and the search index are stored in the Data folder here.",
-            "Delete it to use the user folder (%APPDATA%) instead.") |
+            "Delete it to use the user folder (%APPDATA%) instead.",
+            "Business cards (PolyCardex): run $env:APP_EXE.exe --bizcard (e.g. a shortcut with that argument).") |
             Out-File -FilePath "$pst\$env:APP_EXE\$env:APP_EXE.portable" -Encoding utf8
           Compress-Archive -Path "$pst\$env:APP_EXE" -DestinationPath $port -Force
           # 260628(보안 A): 자동 업데이트 무결성 검증용 SHA-256 자산.

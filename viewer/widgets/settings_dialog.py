@@ -905,6 +905,18 @@ class SettingsDialog(QDialog):
         for b in (b_bz, b_bz_mv, b_bz_clr):
             row_bz.addWidget(b)
         pl.addLayout(row_bz)
+        # 명함 SOT §5.11 '번호 꼴'(사용자 결정): 전화번호 기본 국가 — 한국이면 +82 번호를 국내 꼴(010-…)로
+        row_pc = QHBoxLayout()
+        row_pc.addWidget(QLabel(tr("전화번호 기본 국가:")))
+        self.cmb_phone_country = QComboBox()
+        self.cmb_phone_country.addItem(tr("한국 — +82 번호를 010-… 국내 꼴로"), "KR")
+        self.cmb_phone_country.addItem(tr("지정 안 함 — +82 번호도 국제 꼴 그대로"), "")
+        _pc = self._pic.get("phone_country", "KR")
+        self.cmb_phone_country.setCurrentIndex(max(0, self.cmb_phone_country.findData(_pc if _pc in ("KR", "") else "KR")))
+        self.cmb_phone_country.setToolTip(tr("명함 인식·명함찾기·명함 관리·주소록 가져오기에서 전화번호를 적는 꼴"))
+        row_pc.addWidget(self.cmb_phone_country)
+        row_pc.addStretch(1)
+        pl.addLayout(row_pc)
         layout.addWidget(grp)
 
     def _build_tags(self, layout):
@@ -1319,7 +1331,8 @@ class SettingsDialog(QDialog):
             "picture": dict(self._pic, view_kind=str(self.cmb_view_kind.currentData() or "mixed"),
                             slide_interval_s=int(self.sp_slide_s.value()),    # 261104-2 · 261104-7
                             warp_backup_dir=self.ed_warp_backup.text().strip(),    # 261106-15
-                            bizcard_folder=self.ed_bizcard.text().strip()),        # 261117-10(명함 SOT §5.12)
+                            bizcard_folder=self.ed_bizcard.text().strip(),         # 261117-10(명함 SOT §5.12)
+                            phone_country=str(self.cmb_phone_country.currentData() or "")),   # 명함 SOT §5.11 '번호 꼴'
             "page_scroll_mode": self.cmb_page_scroll_mode.currentData() or "page",
             "hyperlink_top_offset_px": int(self.spin_hl_offset.value()),   # 260609-11(C8)
             "theme": self.cmb_theme.currentData(),                          # 260606-13

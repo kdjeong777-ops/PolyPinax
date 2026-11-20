@@ -23,6 +23,7 @@ from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdi
 from viewer.i18n import tr, tr_noop
 from viewer import clipboard_util
 from viewer.bizcard import people as P
+from viewer.bizcard import phone as PH          # 번호 꼴 한 곳(§5.11 '번호 꼴')
 from viewer.bizcard import recognize as R
 from viewer.bizcard import vcard as V
 from viewer.widgets.page_dots import PageDots   # 쪽 점 표시(디자인 SOT §4.5 '쪽 점', 261117-57)
@@ -43,12 +44,13 @@ IMG_FILTER = " ".join("*" + e for e in R.IMG_EXTS)
 FIELDS = (("name", tr_noop("이름")), ("company", tr_noop("회사")), ("dept", tr_noop("부서")), ("title", tr_noop("직함")), ("cell", tr_noop("휴대폰")), ("work", tr_noop("전화")),
           ("fax", tr_noop("팩스")), ("email", tr_noop("메일")), ("address", tr_noop("주소")), ("url", tr_noop("누리집")))
 MEMO_LABEL = tr_noop("메모")
+PHONE_KEYS = ("cell", "work", "fax")
 
 
 def _list_phone(c) -> str:
     """목록 '전화' 칸 — 휴대폰, 없으면 첫 전화(§5.9 '결과')."""
     ph = [p for p in (c.get("phones") or []) if isinstance(p, (list, tuple)) and len(p) >= 2]
-    return next((n for k, n in ph if k == "cell"), "") or next((n for k, n in ph if k != "fax"), "")
+    return PH.normalize(next((n for k, n in ph if k == "cell"), "") or next((n for k, n in ph if k != "fax"), ""))
 
 
 def _list_mail(c) -> str:
@@ -601,6 +603,7 @@ class BizcardFindDialog(QDialog):
     def __init__(self, parent=None, db=None, host=None):
         """host = 본 뷰어 대신 일을 하는 객체(별도 명함 프로그램 — `standalone.Host`, §5.27 '경계'). 없으면 parent(MainWindow)."""
         super().__init__(parent)
+        PH.reload()                                    # 환경설정 '전화번호 기본 국가'(§5.11 '번호 꼴')
         self._mw = host if host is not None else parent
         self._db = db
         self._st = None
@@ -771,6 +774,8 @@ class BizcardFindDialog(QDialog):
                 bf.setBold(True)
                 ed.setFont(bf)
             ed.textEdited.connect(lambda _t: self._set_dirty(True))
+            if k in PHONE_KEYS:
+                PH.attach(ed)                          # 치는 대로 하이픈·떠날 때 적을 꼴(§5.11 '번호 꼴')
             cb = QCheckBox(tr(label))
             cb.setToolTip(tr("체크한 칸을 [내용 복사] 로 글로 복사합니다 — 체크는 다음에도 그대로"))
             cb.toggled.connect(lambda _on: self._save_copy_fields())
@@ -1083,7 +1088,7 @@ class BizcardFindDialog(QDialog):
                     "address": "", "url": ""}
             if card:
                 vals.update({k: card.get(k) or "" for k in ("name", "company", "dept", "title", "address")})
-                vals.update(cell=first("cell"), work=first("work"), fax=first("fax"),
+                vals.update(cell=PH.normalize(first("cell")), work=PH.normalize(first("work")), fax=PH.normalize(first("fax")),
                             email=(card.get("emails") or [""])[0], url=(card.get("urls") or [""])[0])
             for k, ed in self.eds.items():
                 ed.setText(vals[k])
@@ -1224,6 +1229,8 @@ class BizcardFindDialog(QDialog):
     def _edited(self) -> dict:
         c = self._card
         g = {k: ed.text().strip() for k, ed in self.eds.items()}
+        for k in PHONE_KEYS:
+            g[k] = PH.normalize(g[k])
         old_ph = [tuple(x) for x in c.get("phones") or []]
         phones, used = [], set()
         for kind in ("cell", "work", "fax"):

@@ -18,6 +18,7 @@ from PyQt6.QtWidgets import (QRubberBand, QMenu,
 )
 
 from viewer.i18n import tr, language
+from viewer.bizcard import phone as PH          # 번호 꼴 한 곳(§5.11 '번호 꼴')
 from viewer.bizcard import recognize as R
 from viewer.bizcard.importer import scan_folder, ImportWorker, OUT_DIR
 
@@ -90,10 +91,15 @@ class ChoiceDelegate(QStyledItemDelegate):
     """후보 풀다운은 **고칠 때만** 만든다 — 종전에는 줄마다 QComboBox 위젯 3개(1000장 = 3000개)를 만들고 스타일시트로
     칠해 표를 채우는 동안 메인이 1초 넘게 섰다('응답 없음', 사용자 보고 261117-12)."""
 
+    phone_cols = ()            # 휴대폰·전화 열 — 치는 대로 하이픈, 넣을 때 적을 꼴(§5.11 '번호 꼴')
+
     def createEditor(self, parent, option, index):
         ch = index.data(CHOICES)
         if not ch:
-            return super().createEditor(parent, option, index)
+            ed = super().createEditor(parent, option, index)
+            if index.column() in self.phone_cols and isinstance(ed, QLineEdit):
+                PH.attach(ed)
+            return ed
         cb = QComboBox(parent)
         cb.setEditable(bool(index.data(FREE)))
         cb.addItems([str(x) for x in ch])
@@ -108,6 +114,8 @@ class ChoiceDelegate(QStyledItemDelegate):
     def setModelData(self, editor, model, index):
         if isinstance(editor, QComboBox):
             model.setData(index, editor.currentText().strip(), Qt.ItemDataRole.EditRole)
+        elif index.column() in self.phone_cols and isinstance(editor, QLineEdit):
+            model.setData(index, PH.normalize(editor.text()), Qt.ItemDataRole.EditRole)
         else:
             super().setModelData(editor, model, index)
         hook = getattr(self, "on_committed", None)       # 261117-20: 값을 바꾸지 않고 넣어도 '사람이 확인함'
@@ -194,6 +202,7 @@ def trash_paths(parent, mw, targets) -> set:
 class BizcardImportDialog(QDialog):
     def __init__(self, folder, parent=None, db=None, out_dir=None):
         super().__init__(parent)
+        PH.reload()                                    # 환경설정 '전화번호 기본 국가'(§5.11 '번호 꼴')
         self._mw = parent
         self._folder = Path(folder)
         self._db = db
@@ -290,6 +299,7 @@ class BizcardImportDialog(QDialog):
             self.table.setColumnWidth(c, w)
         _dlg = ChoiceDelegate(self.table)
         _dlg.on_committed = self._on_committed
+        _dlg.phone_cols = (C_CELL, C_TEL)
         self.table.setItemDelegate(_dlg)
         _QS, _QK = self._del_key
         _dk = _QS(_QK(_QK.StandardKey.Delete), self.table, activated=self.delete_selected)
@@ -448,8 +458,8 @@ class BizcardImportDialog(QDialog):
             ph = [tuple(x) for x in (val.get("phones") or [])]
             self.table.item(r, C_DEPT).setText(val.get("dept", ""))
             self.table.item(r, C_TITLE).setText(val.get("title", ""))
-            self.table.item(r, C_CELL).setText(val.get("cell", _first(ph, ("cell",))))
-            self.table.item(r, C_TEL).setText(val.get("tel", _first(ph, ("work",))))
+            self.table.item(r, C_CELL).setText(PH.normalize(val.get("cell", _first(ph, ("cell",)))))
+            self.table.item(r, C_TEL).setText(PH.normalize(val.get("tel", _first(ph, ("work",)))))
             self.table.item(r, C_MAIL).setText(val.get("email", (val.get("emails") or [""])[0]))
             if "scanned" in it.edit:
                 self.table.item(r, C_DATE).setText(it.edit["scanned"])
@@ -481,8 +491,8 @@ class BizcardImportDialog(QDialog):
         name = self.cell(r, C_NAME)
         comp = self.cell(r, C_COMP)
         keep = self.cell(r, C_BACK) == tr("넣음")
-        cell = self.table.item(r, C_CELL).text().strip()
-        tel = self.table.item(r, C_TEL).text().strip()
+        cell = PH.normalize(self.table.item(r, C_CELL).text())
+        tel = PH.normalize(self.table.item(r, C_TEL).text())
         mail = self.table.item(r, C_MAIL).text().strip()
         phones = [tuple(x) for x in (res.get("phones") or [])]
         fixed = [p for p in phones if p[0] not in ("cell", "work")] + [p for p in phones if p[0] in ("cell", "work")]

@@ -12998,6 +12998,18 @@ msgid "지정 안 함"
 msgstr ""
 
 #: viewer/widgets/settings_dialog.py
+msgid "한국 — +82 번호를 010-… 국내 꼴로"
+msgstr ""
+
+#: viewer/widgets/settings_dialog.py
+msgid "지정 안 함 — +82 번호도 국제 꼴 그대로"
+msgstr ""
+
+#: viewer/widgets/settings_dialog.py
+msgid "명함 인식·명함찾기·명함 관리·주소록 가져오기에서 전화번호를 적는 꼴"
+msgstr ""
+
+#: viewer/widgets/settings_dialog.py
 msgid "자동 해시태그"
 msgstr ""
 
@@ -13168,6 +13180,10 @@ msgstr ""
 
 #: viewer/widgets/settings_dialog.py
 msgid "명함 폴더:"
+msgstr ""
+
+#: viewer/widgets/settings_dialog.py
+msgid "전화번호 기본 국가:"
 msgstr ""
 
 #: viewer/widgets/settings_dialog.py

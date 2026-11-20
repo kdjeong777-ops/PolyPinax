@@ -13335,6 +13335,18 @@ msgid "지정 안 함"
 msgstr "Clear"
 
 #: viewer/widgets/settings_dialog.py
+msgid "한국 — +82 번호를 010-… 국내 꼴로"
+msgstr "Korea — write +82 numbers as domestic 010-…"
+
+#: viewer/widgets/settings_dialog.py
+msgid "지정 안 함 — +82 번호도 국제 꼴 그대로"
+msgstr "None — keep +82 numbers in international form"
+
+#: viewer/widgets/settings_dialog.py
+msgid "명함 인식·명함찾기·명함 관리·주소록 가져오기에서 전화번호를 적는 꼴"
+msgstr "How phone numbers are written in business card recognition, Find Business Card, Business Card Manager and contact import"
+
+#: viewer/widgets/settings_dialog.py
 msgid "자동 해시태그"
 msgstr "Automatic hashtags"
 
@@ -13513,6 +13525,10 @@ msgstr "Slideshow auto-advance:"
 #: viewer/widgets/settings_dialog.py
 msgid "명함 폴더:"
 msgstr "Business card folder:"
+
+#: viewer/widgets/settings_dialog.py
+msgid "전화번호 기본 국가:"
+msgstr "Default phone country:"
 
 # | 수가 한도를 넘으면 자동으로 한도가 늘어납니다.</small>"
 #: viewer/widgets/settings_dialog.py

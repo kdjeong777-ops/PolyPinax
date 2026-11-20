@@ -9,6 +9,7 @@ import os
 import re
 import urllib.parse
 
+from viewer.bizcard import phone as _phone
 from viewer.bizcard.recognize import COMPOUND_SURNAMES
 from viewer.i18n import tr
 
@@ -120,7 +121,7 @@ def card_to_vcard(card: dict, drive_folder: str = "", lang: str = "ko", card_wor
         out.append("TITLE:%s" % esc(main["title"]))
     for kind, num in card.get("phones") or []:
         if num:
-            out.append("TEL;TYPE=%s:%s" % (TEL_TYPE.get(kind, "VOICE"), esc(num)))
+            out.append("TEL;TYPE=%s:%s" % (TEL_TYPE.get(kind, "VOICE"), esc(_phone.normalize(num))))
     for e in card.get("emails") or []:
         if e:
             out.append("EMAIL;TYPE=INTERNET:%s" % esc(e))
@@ -146,7 +147,7 @@ def _remember_vcard(card: dict, lang: str = "ko") -> str:
     kinds = {"cell": "work,cell", "work": "work", "fax": "work,fax"}
     for kind, num in card.get("phones") or []:
         if num:
-            out.append("TEL;TYPE=%s:%s" % (kinds.get(kind, "work"), esc(num)))
+            out.append("TEL;TYPE=%s:%s" % (kinds.get(kind, "work"), esc(_phone.normalize(num))))
     if main["company"] or main["dept"]:
         out.append("ORG:%s;%s" % (esc(main["company"]), esc(main["dept"])))
     if main["title"]:
@@ -383,7 +384,7 @@ def people_from_vcf(text: str, card_words=()) -> list:
         elif name == "TITLE":
             cur["title"] = val.strip()
         elif name == "TEL" and val.strip():
-            cur["phones"].append((_tel_kind(params), val.strip()))
+            cur["phones"].append((_tel_kind(params), _phone.normalize(val)))   # 번호 꼴 한 곳(§5.11)
         elif name == "EMAIL" and val.strip():
             cur["emails"].append(val.strip())
         elif name == "URL" and val.strip():

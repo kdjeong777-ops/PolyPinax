@@ -22,6 +22,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
+from viewer.bizcard import phone as _phone       # 번호 꼴 한 곳(§5.11 '번호 꼴')
+
 # ── 상수 (명함 SOT §4.2.1·§5.2) ──────────────────────────────────────────
 CONTACT_DPI = 300        # 전화·메일·주소용 — 원본 PDF 그대로
 NAME_DPI = 150           # 이름·회사용 — 낮게 그린 뒤
@@ -418,15 +420,11 @@ def _fix_digits(s: str) -> str:
 
 
 def norm_phone(area: str, mid: str, last: str, intl: bool = False) -> Optional[str]:
+    """한국 꼴로 읽힌 세 묶음 → 국내 꼴(꼴은 `phone.format_kr` 한 곳 — §5.11 '번호 꼴'). 휴대폰·지역번호만, 그 밖은 None.
+    `+82` 로 읽힌 것도 국내 꼴로 돌려준다 — 기본 국가가 한국이 아닐 때 국제 꼴로 바꾸는 것은 `pick_phones` 끝에서."""
     a = area.lstrip("0")
-    if a in _MOBILE:
-        return "0%s-%s-%s" % (a, mid, last) if len(mid) in (3, 4) else None
-    if a in _AREA:
-        if a == "2" and len(mid) in (3, 4):
-            return "02-%s-%s" % (mid, last)
-        return "0%s-%s-%s" % (a, mid, last) if len(mid) in (3, 4) else None
-    if a in ("1",) or (len(a) == 3 and a.startswith("15")) or (len(a) == 3 and a.startswith("16")):
-        return None
+    if (a in _MOBILE or a in _AREA) and len(mid) in (3, 4):
+        return _phone.format_kr("0" + a + mid + last) or None
     return None
 
 
@@ -444,7 +442,7 @@ def phone_kind(line: str, number: str, pos: int) -> str:
 def pick_phones(texts: list) -> list:
     """여러 번 읽은 줄들 → [(kind, 번호)] (§5.22). 한 자리만 다르게 읽힌 같은 번호는 묶어 **많이 나온 것**으로,
     종류는 붙은 표시(F·Fax / M·HP / T·Tel)를 판끼리 세어 정하고, 전화는 'T·Tel' 표시가 붙은 번호를 앞에."""
-    occ = []
+    occ, intl = [], set()                              # intl — '+82' 로 읽힌 번호(기본 국가가 한국이 아니면 국제 꼴로, §5.11)
     for tx in texts:
         t = _fix_digits(tx)
         spans = []
@@ -452,6 +450,8 @@ def pick_phones(texts: list) -> list:
             num = norm_phone(m.group(2), m.group(3), m.group(4), bool(m.group(1)))
             if not num:
                 continue
+            if m.group(1) and "+" in m.group(1):
+                intl.add(num)
             spans.append(m.span())
             before = " " + t[:m.start()][-12:]
             lab = "fax" if _LABEL_FAX.search(before) else "cell" if _LABEL_CELL.search(before) \
@@ -467,9 +467,11 @@ def pick_phones(texts: list) -> list:
                 continue
             before = " " + t[:m.start()][-12:]
             lab = "fax" if _LABEL_FAX.search(before) else "cell" if _LABEL_CELL.search(before)                 else "tel" if _LABEL_TEL.search(before) else ""
-            num = loose_phone(m.group(0))
+            num = loose_phone(m.group(0), _phone.KR)
             if not num or not (lab or num.startswith("+")):
                 continue                               # 표시도 '+' 도 없으면 번호인지 알 수 없다(날짜·주소 숫자)
+            if m.group(0).lstrip().startswith("+82"):
+                intl.add(num)
             if num.startswith("01") and lab in ("", "tel"):
                 lab = "cell"
             occ.append((num, lab))
@@ -499,28 +501,30 @@ def pick_phones(texts: list) -> list:
             kind = "cell" if num.startswith("01") else "work"
         out.append((("tel" in labs), g["first"], kind, num))
     out.sort(key=lambda x: (not x[0], x[1]))           # 'T·Tel' 표시가 붙은 번호가 앞(첫 전화)
-    return [(k, n) for _l, _f, k, n in out]
+    kr = _phone.country() == _phone.KR
+    return [(k, n if kr or n not in intl else _phone.to_intl(n)) for _l, _f, k, n in out]
 
 
 _PHONE_LOOSE = re.compile(r"(?<![\d+])(?:\+\s?\d{1,3}[\s.\-]?)?\(?\d{2,8}\)?(?:[\s.\-]{1,2}\(?\d{2,8}\)?){1,4}(?![\d])")
 
 
-def loose_phone(s: str) -> str:
-    """한국 꼴이 아닌 번호 덩어리 → 적을 꼴. '+' 국제 번호는 묶음 그대로 '-' 로, +82 와 묶음이 다른 국내 번호는
-    한국 꼴로, 북미 10자리는 3-3-4. 번호로 보기 어려우면 ""(§5.23)."""
+def loose_phone(s: str, ctry: str = None) -> str:
+    """한국 꼴이 아닌 번호 덩어리 → 적을 꼴. '+' 국제 번호는 묶음 그대로 '-' 로, 묶음이 다른 국내 번호는
+    한국 꼴로(`phone.format_kr`), `+82` 는 기본 국가가 한국이면 국내 꼴·아니면 `+82-…`(§5.11), 북미 10자리는 3-3-4.
+    번호로 보기 어려우면 ""(§5.23)."""
     plus = s.lstrip().startswith("+")
     groups = re.findall(r"\d+", s)
     d = "".join(groups)
-    if plus and d.startswith("82"):
+    kr82 = plus and d.startswith("82")
+    if kr82:
         d, plus = "0" + d[2:].lstrip("0"), False
     if not plus and d.startswith("0"):
-        if d.startswith("01") and len(d) == 11:
-            return "%s-%s-%s" % (d[:3], d[3:7], d[7:])
-        if d.startswith("02") and len(d) in (9, 10):
-            return "02-%s-%s" % (d[2:-4], d[-4:])
-        if d[1:3] in _AREA and len(d) in (10, 11):
-            return "%s-%s-%s" % (d[:3], d[3:-4], d[-4:])
-        return ""
+        ok = (d.startswith("01") and len(d) == 11) or (d.startswith("02") and len(d) in (9, 10)) \
+            or (d[1:3] in _AREA and len(d) in (10, 11))
+        num = _phone.format_kr(d) if ok else ""
+        if num and kr82 and (_phone.country() if ctry is None else ctry) != _phone.KR:
+            num = _phone.to_intl(num)
+        return num
     if plus:
         return "+" + "-".join(groups) if 9 <= len(d) <= 14 else ""
     if len(d) == 10 and d[0] in "23456789":

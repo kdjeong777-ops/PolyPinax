@@ -33,7 +33,10 @@ ROLE = Qt.ItemDataRole.UserRole
 FAV_ICON = 56                       # 즐겨찾기 사람 칸 그림(카톡 꼴 둥근 네모)
 FAV_ROWS = 2                        # 즐겨찾기 줄 최대 높이(줄 수) — 넘치면 그 칸 안에서 굴림
 PHOTO_ICON = 72                     # 인물 사진 썸네일 줄(큰 화면은 그 위 — §5.24 사진창)
-DETAIL_BG = {"light": "#e6e6e6", "dark": "#38383c"}   # 세부내용 묶음 바탕(디자인 SOT §2.5 '명함 세부 묶음 바탕', 261120-4)
+DETAIL_BG = {                        # 세부내용 카드 — 제목 띠·테두리 / 본문 / 메모(디자인 SOT §2.5 '명함 세부 카드', 261120-4)
+    "light": {"head": "#e6e6e6", "body": "#f4f4f4", "memo": "#fbfbfb"},
+    "dark": {"head": "#38383c", "body": "#323236", "memo": "#29292c"},
+}
 DETAIL_W = 330                     # 처음 너비 — 세부 칸(§5.24 '처음 너비': 목록은 네 열 최소 폭, 나머지는 사진창)
 FIND_DELAY_MS = 250
 RECENT = -1                         # '최근' 탭의 tabData(명함 DB 의 탭 id 와 겹치지 않음, §5.24.2)
@@ -774,16 +777,25 @@ class BizcardFindDialog(QDialog):
         detail = QWidget()
         dv = QVBoxLayout(detail)
         dv.setContentsMargins(6, 0, 0, 0)
-        self.detail_box = QWidget()                    # 세부내용 한 묶음 — 둥근 네모·옅은 바탕(§5.24.1 '세부내용 묶음', 261120-4)
+        self.detail_box = QWidget()                    # 세부내용 카드 — 제목 띠·옅은 본문·더 옅은 메모(§5.24.1 '세부내용 묶음', 261120-4)
         self.detail_box.setObjectName("bizDetailBox")
         self.detail_box.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        rv = QVBoxLayout(self.detail_box)
-        rv.setContentsMargins(10, 8, 10, 8)
-        lbl_detail = QLabel(tr("세부내용"))
-        tf = lbl_detail.font()
+        cardv = QVBoxLayout(self.detail_box)
+        cardv.setContentsMargins(1, 1, 1, 1)           # 테두리 1px 안쪽
+        cardv.setSpacing(0)
+        self.detail_head = QLabel(tr("세부내용"))       # 가운데 굵은 제목 띠
+        self.detail_head.setObjectName("bizDetailHead")
+        self.detail_head.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        tf = self.detail_head.font()
         tf.setBold(True)
-        lbl_detail.setFont(tf)
-        rv.addWidget(lbl_detail)
+        self.detail_head.setFont(tf)
+        cardv.addWidget(self.detail_head)
+        body = QWidget()
+        body.setObjectName("bizDetailBody")
+        body.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        cardv.addWidget(body, 1)
+        rv = QVBoxLayout(body)
+        rv.setContentsMargins(10, 8, 10, 8)
         form = QFormLayout()
         self.eds, self.chk = {}, {}
         for k, label in FIELDS:
@@ -1210,18 +1222,21 @@ class BizcardFindDialog(QDialog):
         QTimer.singleShot(0, self._fav_fit)
 
     def _style_detail(self):
-        """세부내용 묶음 꾸밈 — 바탕 DETAIL_BG(테마별), 칸은 테두리·바탕 없이, 가리킴 = 옅은 입력 바탕, 초점 = 입력 바탕 + 강조 밑줄."""
+        """세부내용 카드 꾸밈 — 색은 DETAIL_BG(테마별): 제목 띠·테두리 head, 본문 body, 메모 memo.
+        본문 칸은 테두리·바탕 없이, 가리킴 = 옅은 입력 바탕, 초점 = 입력 바탕 + 강조 밑줄."""
         pal = QApplication.palette()
-        dark = pal.color(pal.ColorRole.Window).lightness() < 128
+        c = DETAIL_BG["dark" if pal.color(pal.ColorRole.Window).lightness() < 128 else "light"]
         b = pal.color(pal.ColorRole.Base)
-        sel = "QWidget#bizDetailBox QLineEdit, QWidget#bizDetailBox QPlainTextEdit"
-        css = ("QWidget#bizDetailBox{background:%s;border-radius:8px;}"
-               "%s{border:none;background:transparent;padding:2px 4px;}"
-               "%s{background:rgba(%d,%d,%d,0.55);}"
-               "%s{background:palette(base);border-bottom:1px solid palette(highlight);}") % (
-            DETAIL_BG["dark" if dark else "light"], sel,
-            sel.replace("QLineEdit,", "QLineEdit:hover,") + ":hover", b.red(), b.green(), b.blue(),
-            sel.replace("QLineEdit,", "QLineEdit:focus,") + ":focus")
+        ed = "QWidget#bizDetailBox QLineEdit"
+        css = ("QWidget#bizDetailBox{background:%(body)s;border:1px solid %(head)s;border-radius:8px;}"
+               "QLabel#bizDetailHead{background:%(head)s;padding:6px;border-top-left-radius:7px;border-top-right-radius:7px;}"
+               "QWidget#bizDetailBody{background:%(body)s;border-bottom-left-radius:7px;border-bottom-right-radius:7px;}"
+               "%(ed)s{border:none;background:transparent;padding:2px 4px;}"
+               "%(ed)s:hover{background:rgba(%(r)d,%(g)d,%(b)d,0.55);}"
+               "QWidget#bizDetailBox QPlainTextEdit{border:none;background:%(memo)s;border-radius:6px;padding:2px;}"
+               "%(ed)s:focus, QWidget#bizDetailBox QPlainTextEdit:focus"
+               "{background:palette(base);border-bottom:1px solid palette(highlight);}") % dict(
+            c, ed=ed, r=b.red(), g=b.green(), b=b.blue())
         if css != self._detail_css:                    # 같은 값이면 다시 넣지 않는다(스타일 바뀜이 되돌아오지 않게)
             self._detail_css = css
             self.detail_box.setStyleSheet(css)
@@ -1230,7 +1245,7 @@ class BizcardFindDialog(QDialog):
         from PyQt6.QtCore import QEvent
         if e.type() in (QEvent.Type.PaletteChange, QEvent.Type.ApplicationPaletteChange, QEvent.Type.StyleChange) \
                 and getattr(self, "detail_box", None) is not None:
-            self._style_detail()                       # 테마를 바꾸면 묶음 바탕도(디자인 SOT §2.5 '명함 세부 묶음 바탕')
+            self._style_detail()                       # 테마를 바꾸면 묶음 바탕도(디자인 SOT §2.5 '명함 세부 카드')
         super().changeEvent(e)
 
     def showEvent(self, e):

@@ -1083,26 +1083,40 @@ try:
         img = box.grab().toImage()
         p = ed.mapTo(box, ed.rect().topLeft())
         return img.pixelColor(p.x() + 1, p.y() + ed.height() // 2).name()
+    def _card_px():
+        """그린 카드에서 — 제목 띠 왼쪽 안쪽 점·본문 칸 가장자리 점·메모 안쪽 점의 색."""
+        img = box.grab().toImage()
+        hd = getattr(dlg, "detail_head", None)
+        hp = hd.mapTo(box, hd.rect().topLeft()) if hd is not None else None
+        mp = dlg.ed_memo.mapTo(box, dlg.ed_memo.rect().topLeft())
+        return ((img.pixelColor(hp.x() + 4, hp.y() + hd.height() // 2).name() if hp is not None else ""),
+                _edge_px(dlg.eds["company"]),
+                img.pixelColor(mp.x() + dlg.ed_memo.width() - 6, mp.y() + dlg.ed_memo.height() - 6).name())
+
+    def _want(theme):
+        d = getattr(BF, "DETAIL_BG", {}).get(theme)
+        return (d.get("head"), d.get("body"), d.get("memo")) if isinstance(d, dict) else None
     pump(timeout=0.1)
     ok_box = box is not None and box.isAncestorOf(dlg.eds["name"])
-    title = [w.text() for w in box.findChildren(_QL)] if box is not None else []
-    light_bg = BF.DETAIL_BG["light"] if hasattr(BF, "DETAIL_BG") else "?"
-    px_l = _edge_px(dlg.eds["company"]) if box is not None else ""
-    chk(ok_box and "세부내용" in title and box.isAncestorOf(dlg.ed_memo) and not box.isAncestorOf(dlg.btn_save)
-        and px_l == light_bg,
-        "I24 세부내용 한 묶음(제목·칸·메모, [저장]은 밖) — 입력 칸 가장자리가 묶음 바탕(테두리·입력 바탕 없음)",
-        "%s %s %s %s" % (ok_box, title, px_l, light_bg))
+    hd = getattr(dlg, "detail_head", None)
+    px_l = _card_px() if box is not None else ()
+    chk(ok_box and hd is not None and hd.text() == "세부내용" and bool(hd.alignment() & Qt.AlignmentFlag.AlignHCenter)
+        and hd.font().bold() and box.isAncestorOf(dlg.ed_memo) and not box.isAncestorOf(dlg.btn_save)
+        and px_l == _want("light") and len(set(px_l)) == 3,
+        "I24 세부내용 카드 — 가운데 굵은 제목 띠·옅은 본문(칸 가장자리 = 본문 바탕, 테두리 없음)·더 옅은 메모, [저장]은 밖",
+        "%s %s %s" % (ok_box, px_l, _want("light")))
+    light_bg = (_want("light") or ("?",))[0]
     bolds = {k: ed.font().bold() for k, ed in dlg.eds.items()}
     chk(bolds.get("name") and bolds.get("cell") and not any(v for k, v in bolds.items() if k not in ("name", "cell")),
         "I24 세부 칸은 이름·휴대폰만 굵게", str(bolds))
     mw.apply_theme("dark")
     pump(timeout=0.3)
-    px_d = _edge_px(dlg.eds["company"]) if box is not None else ""
+    px_d = _card_px() if box is not None else ()
     mw.apply_theme("light")
     pump(timeout=0.3)
-    px_l2 = _edge_px(dlg.eds["company"]) if box is not None else ""
-    chk(hasattr(BF, "DETAIL_BG") and px_d == BF.DETAIL_BG["dark"] and px_l2 == light_bg,
-        "I24 다크로 바꾸면 묶음 바탕도 다크 값, 돌아오면 라이트 값", "%s %s" % (px_d, px_l2))
+    px_l2 = _card_px() if box is not None else ()
+    chk(px_d == _want("dark") and px_l2 == _want("light") and _want("dark") != _want("light"),
+        "I24 다크로 바꾸면 카드 세 색도 다크 값, 돌아오면 라이트 값", "%s %s" % (px_d, px_l2))
 
     print("\n=== I23. 흐린 찾기 글 → 전체 목록 · 구분 기억 · 즐겨찾기 이름 굵게 · Gmail 보내기 (사용자 지시 261120) ===")
     import urllib.parse as _up

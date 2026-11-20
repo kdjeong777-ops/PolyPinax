@@ -1091,11 +1091,18 @@ try:
         mp = dlg.ed_memo.mapTo(box, dlg.ed_memo.rect().topLeft())
         return ((img.pixelColor(hp.x() + 4, hp.y() + hd.height() // 2).name() if hp is not None else ""),
                 _edge_px(dlg.eds["company"]),
-                img.pixelColor(mp.x() + dlg.ed_memo.width() - 6, mp.y() + dlg.ed_memo.height() - 6).name())
+                img.pixelColor(mp.x() + dlg.ed_memo.width() - 6, mp.y() + dlg.ed_memo.height() - 6).name(),
+                _head_px())
+
+    def _head_px():
+        """목록 표 머리말(첫 칸 왼쪽 안쪽 점)의 색."""
+        hh = dlg.table.horizontalHeader()
+        img = hh.grab().toImage()
+        return img.pixelColor(6, hh.height() // 2).name()
 
     def _want(theme):
         d = getattr(BF, "DETAIL_BG", {}).get(theme)
-        return (d.get("head"), d.get("body"), d.get("memo")) if isinstance(d, dict) else None
+        return (d.get("head"), d.get("body"), d.get("memo"), d.get("head")) if isinstance(d, dict) else None
     pump(timeout=0.1)
     ok_box = box is not None and box.isAncestorOf(dlg.eds["name"])
     hd = getattr(dlg, "detail_head", None)
@@ -1103,7 +1110,7 @@ try:
     chk(ok_box and hd is not None and hd.text() == "세부내용" and bool(hd.alignment() & Qt.AlignmentFlag.AlignHCenter)
         and hd.font().bold() and box.isAncestorOf(dlg.ed_memo) and not box.isAncestorOf(dlg.btn_save)
         and px_l == _want("light") and len(set(px_l)) == 3,
-        "I24 세부내용 카드 — 가운데 굵은 제목 띠·옅은 본문(칸 가장자리 = 본문 바탕, 테두리 없음)·더 옅은 메모, [저장]은 밖",
+        "I24 세부내용 카드 — 가운데 굵은 제목 띠·옅은 본문(칸 가장자리 = 본문 바탕, 테두리 없음)·더 옅은 메모, [저장]은 밖·목록 머리말 = 띠 색",
         "%s %s %s" % (ok_box, px_l, _want("light")))
     light_bg = (_want("light") or ("?",))[0]
     bolds = {k: ed.font().bold() for k, ed in dlg.eds.items()}

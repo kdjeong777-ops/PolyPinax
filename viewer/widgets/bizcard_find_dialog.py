@@ -33,9 +33,9 @@ ROLE = Qt.ItemDataRole.UserRole
 FAV_ICON = 56                       # 즐겨찾기 사람 칸 그림(카톡 꼴 둥근 네모)
 FAV_ROWS = 2                        # 즐겨찾기 줄 최대 높이(줄 수) — 넘치면 그 칸 안에서 굴림
 PHOTO_ICON = 72                     # 인물 사진 썸네일 줄(큰 화면은 그 위 — §5.24 사진창)
-DETAIL_BG = {                        # 세부내용 카드 — 제목 띠·테두리 / 본문 / 메모(디자인 SOT §2.5 '명함 세부 카드', 261120-4)
-    "light": {"head": "#e6e6e6", "body": "#f4f4f4", "memo": "#fbfbfb"},
-    "dark": {"head": "#38383c", "body": "#323236", "memo": "#29292c"},
+DETAIL_BG = {                        # 세부내용 카드 — 띠(목록 머리말도)·띠 글·테두리 / 본문 / 메모(디자인 SOT §2.5 '명함 세부 카드', 261120-4)
+    "light": {"head": "#e3efff", "head_fg": "#1456c4", "border": "#cfe0ff", "body": "#f3f8ff", "memo": "#ffffff"},
+    "dark": {"head": "#1f3556", "head_fg": "#9cc3ff", "border": "#2d4d7a", "body": "#232a35", "memo": "#1e1e20"},
 }
 DETAIL_W = 330                     # 처음 너비 — 세부 칸(§5.24 '처음 너비': 목록은 네 열 최소 폭, 나머지는 사진창)
 FIND_DELAY_MS = 250
@@ -1228,8 +1228,9 @@ class BizcardFindDialog(QDialog):
         c = DETAIL_BG["dark" if pal.color(pal.ColorRole.Window).lightness() < 128 else "light"]
         b = pal.color(pal.ColorRole.Base)
         ed = "QWidget#bizDetailBox QLineEdit"
-        css = ("QWidget#bizDetailBox{background:%(body)s;border:1px solid %(head)s;border-radius:8px;}"
-               "QLabel#bizDetailHead{background:%(head)s;padding:6px;border-top-left-radius:7px;border-top-right-radius:7px;}"
+        css = ("QWidget#bizDetailBox{background:%(body)s;border:1px solid %(border)s;border-radius:8px;}"
+               "QLabel#bizDetailHead{background:%(head)s;color:%(head_fg)s;padding:6px;border-bottom:1px solid %(border)s;"
+               "border-top-left-radius:7px;border-top-right-radius:7px;}"
                "QWidget#bizDetailBody{background:%(body)s;border-bottom-left-radius:7px;border-bottom-right-radius:7px;}"
                "%(ed)s{border:none;background:transparent;padding:2px 4px;}"
                "%(ed)s:hover{background:rgba(%(r)d,%(g)d,%(b)d,0.55);}"
@@ -1240,6 +1241,10 @@ class BizcardFindDialog(QDialog):
         if css != self._detail_css:                    # 같은 값이면 다시 넣지 않는다(스타일 바뀜이 되돌아오지 않게)
             self._detail_css = css
             self.detail_box.setStyleSheet(css)
+            # 목록 표 머리말 = 세부내용 띠와 같은 색(§5.24.1 '세부내용 묶음', 사용자 지시 261120)
+            self.table.horizontalHeader().setStyleSheet(
+                "QHeaderView::section{background:%(head)s;color:%(head_fg)s;border:none;"
+                "border-right:1px solid %(border)s;border-bottom:1px solid %(border)s;padding:4px 6px;}" % c)
 
     def changeEvent(self, e):
         from PyQt6.QtCore import QEvent

@@ -223,7 +223,8 @@ print(NL + "=== 검사 작성 SOT §14.7.1 — 검사 색인(이름 규칙으로
 # ★ 이 표는 검사 작성 SOT §14.7.1 의 표와 **같은 내용**이다. 한쪽만 고치지 말 것. (261108-1: 마스터 §14.7 을 그 문서로 옮김 — 번호 그대로)
 TEST_SOT = "검사 작성 작업 계획서.md"
 # 마스터 소유('그 밖의 전부') 검사의 이름이 있어야 하는 곳 — 마스터와 거기서 떨어진 절(261108-1)
-MASTER_FAMILY = ("PolyPDF 뷰어 통합 작업 계획서.md", "책갈피창·저장 작업 계획서.md", TEST_SOT, "릴리스 작업 계획서.md")
+MASTER_FAMILY = ("PolyPDF 뷰어 통합 작업 계획서.md", "책갈피창·저장 작업 계획서.md", TEST_SOT, "릴리스 작업 계획서.md",
+                 "편집 꾸밈 작업 계획서.md", "인쇄·다단 작업 계획서.md")   # 261117-63: 마스터에서 뗀 두 SOT
 OWNER_RULES = [
     (("test_text_",), "텍스트 창"),
     (("test_study_", "test_vocab_", "test_ocr_", "test_dict_"), "단어장/단어학습"),
@@ -469,12 +470,21 @@ if HAVE_SOT:
                         + '(?:' + _D + '{6}|.*수정' + _D + '|.*Phase ' + _D + ')'
                         + '.*' + _ESC + '(v' + _D + '+' + _ESC + '.' + _D + '+'
                         + _ESC + '.' + _D + '+' + _ESC + ')')
+    # 261117-63(사용자 결정 '연대기 검사 넓히기'): `##` 만 보던 것을 `###`~`#####` 절 제목까지,
+    #   제목 꼬리의 옛 버전 표기 `(v1.6.2)`·`(1.4.2 현재)`, 본문의 작업 번호 사슬 '(261008-1 → 261014-1 → …)' 도 잡는다.
+    CHRON_H = _re.compile(r'^#{2,5} §?\d+(?:\.\d+)*[a-z]?\.? .*(?:\(v\d+\.\d+\.\d+\)|\(\d+\.\d+\.\d+ 현재\)|— v\d+\.\d+\.\d+ 갱신)')
+    CHAIN = _re.compile(r'\b\d{6}-\d+[^|\n]{0,40}? → \d{6}-\d+[^|\n]{0,40}? → \d{6}-\d+')
     for name, txt in SOTS.items():
         if '아카이브' in name or name == 'CLAUDE.md':
             continue        # 아카이브는 이력을 담는 곳이다
         bad_ch = [l for l in txt.splitlines() if CHRON.match(l)]
         chk(not bad_ch, '연대기 장이 SOT 본문에 남아 있지 않다 — ' + name,
             str(len(bad_ch)) + '장' if bad_ch else '')
+        nobody = _re.sub(r'^## 0\..*?(?=^## [1-9])', '', txt, flags=_re.S | _re.M)   # §0 표는 이력이라 뺀다
+        bad_h = [l[:60] for l in nobody.splitlines() if CHRON_H.match(l)]
+        chk(not bad_h, '절 제목에 옛 버전 표기가 없다(제목은 지금 사양 — 버전은 §0) — ' + name, str(bad_h[:4]))
+        bad_c = [m.group(0)[:60] for m in CHAIN.finditer(nobody)]
+        chk(not bad_c, '본문에 작업 번호 사슬(A → B → C)이 없다 — 경위는 아카이브, 근거는 마지막 번호 하나 — ' + name, str(bad_c[:3]))
     # 아카이브도 CLAUDE.md 에 등재돼 있어야 한다(어디에 무엇이 있는지 한곳에서 보이게)
     claude = SOTS.get('CLAUDE.md', '')
     arch = [n for n in SOTS if '아카이브' in n]

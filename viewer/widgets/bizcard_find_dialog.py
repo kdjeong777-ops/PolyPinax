@@ -1274,10 +1274,19 @@ class BizcardFindDialog(QDialog):
                 "QTableView::item{padding:2px 4px;border:none;}"
                 "QTableView::item:selected{background:%(sel)s;color:%(sel_fg)s;}"   # 창이 뒤로 가도 같은 고른 줄
                 "QTableView QHeaderView::section{background:%(head)s;color:%(head_fg)s;border:none;"
-                "border-right:1px solid %(border)s;border-bottom:1px solid %(border)s;padding:4px 6px;}" % c)
+                "border-right:1px solid %(border)s;border-bottom:1px solid %(border)s;padding:4px 6px;}"
+                # 정렬 화살표는 글 오른쪽(windows11 스타일은 글 위에 그려 머리말이 높아진다)
+                "QTableView QHeaderView::up-arrow, QTableView QHeaderView::down-arrow"
+                "{subcontrol-origin:padding;subcontrol-position:center right;width:9px;height:9px;}" % c)
             self.fav.setStyleSheet("QListWidget{border:1px solid %(border)s;}" % c)   # 즐겨찾기 칸 테두리도 같은 테
             if getattr(self, "photo_sep", None) is not None:
                 self.photo_sep.setStyleSheet("QWidget#bizPhotoSep{background:%(border)s;}" % c)   # 사진창 구분선(§5.24.3)
+        self._match_head()
+
+    def _match_head(self):
+        """목록 표 머리말 높이 = 세부내용 제목 띠 높이(§5.24.1 '목록 표 꾸밈', 사용자 지시 261120) — 위 끝·아래 끝이 나란히."""
+        self.detail_head.ensurePolished()
+        self.table.horizontalHeader().setFixedHeight(self.detail_head.sizeHint().height())
 
     def changeEvent(self, e):
         from PyQt6.QtCore import QEvent

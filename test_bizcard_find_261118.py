@@ -1155,6 +1155,21 @@ try:
         and sep_px == getattr(BF, "DETAIL_BG", {}).get("light", {}).get("border"),
         "I25 사진창 — '인물 사진' 글 없음, 명함과 인물 사진 사이 1px 구분선(카드 테 색)", "%s %s %s" % (titles, sep, sep_px))
 
+    # I26 목록 머리말 높이·위 끝 = 세부내용 제목 띠(사용자 지시 261120 '목록 머리글 높이를 오른쪽 세부내용과 맞춰')
+    hh2, hd2 = dlg.table.horizontalHeader(), getattr(dlg, "detail_head", None)
+    from PyQt6.QtWidgets import QStyleFactory as _QSF
+    _w11 = _QSF.create("windows11") or _QSF.create("windowsvista")   # 명함 프로그램은 앱 스타일을 바꾸지 않는다 — 정렬 화살표를 글 위에 그림
+    if _w11 is not None:
+        hh2.setStyle(_w11)
+        dlg._detail_css = ""
+        dlg._style_detail()
+        pump(timeout=0.2)
+    y_h = hh2.mapTo(dlg, hh2.rect().topLeft()).y()
+    y_d = hd2.mapTo(dlg, hd2.rect().topLeft()).y() if hd2 is not None else -99
+    chk(hd2 is not None and hh2.height() == hd2.height() and abs(y_h - y_d) <= 1,
+        "I26 목록 머리말 높이·위 끝이 세부내용 제목 띠와 같음",
+        "%d/%s %d/%d" % (hh2.height(), hd2.height() if hd2 is not None else None, y_h, y_d))
+
     print("\n=== I23. 흐린 찾기 글 → 전체 목록 · 구분 기억 · 즐겨찾기 이름 굵게 · Gmail 보내기 (사용자 지시 261120) ===")
     import urllib.parse as _up
     import viewer.widgets.bizcard_find_dialog as BF

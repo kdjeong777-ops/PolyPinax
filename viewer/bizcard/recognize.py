@@ -60,8 +60,9 @@ DEPT_EN = re.compile(r"\b(dept\.?|department|division|div\.|team|center|centre|o
 TITLES_EN = ("ceo", "president", "director", "manager", "engineer", "professor", "researcher", "chairman", "vice",
              "executive", "general", "senior", "principal", "head", "chief", "officer", "ph.d", "phd", "dr.",
              "team leader", "leader", "consultant", "associate", "assistant")
-CORP_MARKS_KO = ("주식회사", "유한회사", "합자회사", "사단법인", "재단법인", "(주)", "㈜", "(유)", "(사)", "(재)",
-                 "(株)", "( 주)", "(주 )")
+CORP_MARKS_KO = ("주식회사", "유한회사", "합자회사", "합명회사", "사단법인", "재단법인", "농업회사법인", "영농조합법인", "의료법인",
+                 "학교법인", "사회복지법인", "(주)", "㈜", "(유)", "(사)", "(재)", "(합)", "[주]", "[유]",
+                 "(株)", "( 주)", "(주 )")     # §5.28 — 협동조합은 이름의 일부라 넣지 않는다
 ORG_WORDS_KO = ("회사", "기업", "건설", "산업", "기술", "엔지니어링", "공사", "공단", "협회", "학회", "연구원", "연구소",
                 "대학교", "대학", "아스콘", "개발", "그룹", "컨설팅", "공업", "화학", "테크", "솔루션", "시스템", "조합",
                 "재단", "은행", "청", "시청", "구청", "도청", "부", "처", "원")
@@ -186,7 +187,7 @@ def clean_name_en(s: str) -> str:
 def strip_corp(s: str) -> str:
     """회사명에서 법인 꼴·앞뒤 기호를 뗀다(R4). 한 글자씩 띄운 회사명은 붙인다."""
     t = _nfc(s)
-    t = re.sub(r"\(\s*([주유사재株])\s*\)", "", t)
+    t = re.sub(r"[(\[]\s*([주유사재합株])\s*[)\]]", "", t)       # (주)·[주]·(합) …(§5.28)
     t = re.sub(r"[\[【〔(]\s*[주유쥐]\s*[\]】〕)I]?(?=\s|$)", "", t)          # 깨져 읽힌 '[주】'·'【쥐'(§5.22)
     for m in CORP_MARKS_KO:
         t = t.replace(m, " ")
@@ -930,7 +931,7 @@ def name_candidates_en(lines: list, emails: list, hint: str = "") -> list:
     return sorted(cands.values(), key=lambda c: (-c.score, c.text))   # 같은 점수는 글자 차례(실행마다 같게 — set 차례는 실행마다 다르다)
 
 
-_MARK = r"(?:\(\s*[주유사재株]\s*\)|㈜|주식회사|유한회사|사단법인|재단법인)"
+_MARK = r"(?:\(\s*[주유사재합株]\s*\)|\[\s*[주유]\s*\]|㈜|주식회사|유한회사|합자회사|합명회사|사단법인|재단법인|농업회사법인|영농조합법인|의료법인|학교법인|사회복지법인)"   # §5.28
 _MARK_RX = re.compile(_MARK)
 _WORD_OK = re.compile(r"[가-힣A-Za-z0-9&·\-]+")
 
@@ -1296,11 +1297,36 @@ NAME_STRONG = 4.0        # 1위 후보 점수가 이 아래이거나
 NAME_GAP = 1.0           #   2위와의 차이가 이 아래면 '약함' — 이름 덧읽기·확인 표 '확인 필요'
 
 
+BLOCK_READ = True         # 굵거나 큰 구획을 잘라 한 줄로 다시 읽어 그 판에 더한다(§5.28)
+
+def block_lines(im) -> list:
+    """이름용 그림 → 굵거나 큰 구획(`layout.pick_blocks`)을 둘레를 조금 넓혀 잘라 한 줄(psm 7)로 읽은 [Line](그림 비율 좌표)."""
+    from viewer.bizcard import layout
+    try:
+        picks = layout.pick_blocks(layout.leaves(im))
+    except Exception:
+        return []
+    IW, IH = im.size
+    out = []
+    for b in picks:
+        h = b["y1"] - b["y0"]
+        dx = 0.3 * h * IH / max(1, IW)
+        x0, x1 = max(0.0, b["x0"] - dx), min(1.0, b["x1"] + dx)
+        y0, y1 = max(0.0, b["y0"] - 0.2 * h), min(1.0, b["y1"] + 0.2 * h)
+        crop = im.crop((int(x0 * IW), int(y0 * IH), int(x1 * IW) + 1, int(y1 * IH) + 1))
+        for ln in ocr_lines(prep_box(crop), 7, win=False):
+            out.append(Line(ln.text, (y1 - y0) * 0.8, ln.conf, y0, (x0 + x1) / 2, (y0 + y1) / 2, "b"))
+    return out
+
+
 def read_side(images: list, hint_name: str = "", hint_company: str = "", extra: bool = True) -> Optional[SideResult]:
     """한 면을 그림 여럿으로 읽어 합친다 — 줄은 모두 모아 한 번에 뽑고, 두 판에서 모두 나온 이름에 덤."""
     if not images:
         return None
     per = [ocr_lines(im) for im in images]
+    if extra and BLOCK_READ:
+        # 굵거나 큰 구획 다시 읽기(§5.28) — 이름용 그림의 기본 판에. 약할 때만 읽으면 정답 대조 학습·평가 모두 떨어져 늘 읽는다
+        per[-1] = per[-1] + block_lines(images[-1])
     allines = [ln for ls in per for ln in ls]
     r = parse_lines(allines, hint_name, hint_company)
     if extra and _weak_name(r):
@@ -1455,6 +1481,75 @@ def unglue_name(company: str, name: str) -> str:
     return company
 
 
+# ── 회사 다듬기(§5.28, 정답 대조 학습 2/3 로 고침) ──
+TIDY_TAIL = tuple(sorted(set(ORG_TAIL_STRONG) | {"대학교", "대학원", "사무소", "연구원", "공사", "공단", "관리청", "관리사무소",
+                                                 "협동조합", "주식회사", "산업", "아스콘", "레미콘"}, key=len, reverse=True))
+TIDY_DOWN = 3.0          # 구호·학회 목록·끝말만으로 된 낱말을 내리는 값
+TIDY_DUP = 0.3           # 다듬은 글이 같은 후보가 여럿이면 덤
+_SLOGAN = re.compile(r"(하는|일등|벤처|중소|우수|유망|전문|친환경|강소|선도|글로벌|혁신|으뜸|최고의?)\s*기업$")
+_AFTER_TAIL = re.compile(r"(교수|과장|팀장|부장|차장|주무관|학과|학부|본부|센터|연구소|과$|팀$|실$|부$|소장|원장)")
+_TIDY_GENERIC = re.compile(r"(?:%s)+" % "|".join(re.escape(t) for t in TIDY_TAIL))
+
+
+def tidy_company(t: str, name: str = "") -> str:
+    """회사 후보 글 다듬기 — 앞뒤 찌꺼기, 기관 끝말 뒤의 낱말·부서·직함·짧은 조각, 끝에 붙은 그 명함의 이름을 뗀다(§5.28)."""
+    s = re.sub(r"[、「」『』〔〕\[\]()（）|ㅣ©®■▲•·…“”\"'`^_~]+", " ", _nfc(t)).strip()
+    if len(_HANGUL.findall(s)) >= 2:
+        toks = s.split()
+        while len(toks) > 1 and not _HANGUL.search(toks[0]) and (len(toks[0]) < 2 or not toks[0].isupper()):
+            toks.pop(0)                                    # 앞 영문 조각('e_') — 대문자 약칭('ABC')은 둔다
+        while len(toks) > 1 and not _HANGUL.search(toks[-1]) and len(toks[-1]) <= 5 and not toks[-1].isupper() \
+                and "&" not in toks[-1]:
+            toks.pop()                                     # 뒤 소문자 영문 조각
+        for i, tk in enumerate(toks[:-1]):                 # 기관 끝말로 끝난 낱말 뒤 낱말(사람 이름·부서)
+            if _HANGUL.search(tk) and tk.endswith(TIDY_TAIL):
+                toks = toks[:i + 1]
+                break
+        if len(toks) > 1 and re.fullmatch(r"[가-힣]{3}", toks[-1]) and toks[-1][0] in SURNAMES:
+            toks = toks[:-1]                               # 끝 낱말이 사람 이름 꼴
+        s = "".join(toks) if all(_HANGUL.search(x) for x in toks) else " ".join(toks)
+        s = re.sub(r"[^가-힣A-Za-z0-9& ]", "", s).strip()
+        ends = sorted({m.end() for tl in TIDY_TAIL for m in re.finditer(re.escape(tl), s) if m.start() > 0}, reverse=True)
+        for e in ends:                                     # 기관 끝말 뒤에 붙은 부서·직함·짧은 조각 — 가장 뒤 끝말부터
+            rest = s[e:]
+            if not rest or rest.startswith(TIDY_TAIL):
+                continue
+            if _AFTER_TAIL.search(rest) or title_token(rest) or (dept_token(rest) and not rest.endswith(TIDY_TAIL)) \
+                    or (re.fullmatch(r"[가-힣]{1,2}", rest) and not s.endswith(TIDY_TAIL) and not s.endswith(ORG_PIECES_KO)):
+                s = s[:e]
+                break
+    if name and re.fullmatch(r"[가-힣]{3}", name) and name[0] in SURNAMES and len(s) >= len(name) + 2 and s.endswith(name):
+        s = s[:-len(name)]
+    return s
+
+
+def tidy_companies(comps: list, name: str = "") -> list:
+    """회사 후보(사전) 다듬기·다시 매기기(§5.28) — 같은 글은 묶어 덤, 구호·학회 목록·끝말만인 낱말은 내림,
+    앞부분만 읽힌 것보다 기관 끝말까지 있는 긴 것을 앞으로."""
+    many_societies = sum(1 for c in comps if "학회" in c.get("text", "")) >= 2
+    out = {}
+    for c in comps:
+        t = tidy_company(c.get("text", ""), name)
+        if len(t) < 2:
+            continue
+        sc = float(c.get("score", 0))
+        if _TIDY_GENERIC.fullmatch(t) and len(t) <= 4:
+            sc -= TIDY_DOWN
+        if _SLOGAN.search(t) or (many_societies and t.endswith("학회")):
+            sc -= TIDY_DOWN
+        if t in out:
+            o = out[t]
+            o["score"] = round(max(o["score"], sc) + TIDY_DUP, 3)
+        else:
+            out[t] = dict(c, text=t, score=round(sc, 3))
+    keys = list(out)
+    for a in keys:
+        for b in keys:
+            if a != b and b.startswith(a) and len(b) - len(a) <= 6 and b.endswith(TIDY_TAIL) and not a.endswith(TIDY_TAIL):
+                out[b]["score"] = max(out[b]["score"], round(out[a]["score"] + 0.1, 3))
+    return sorted(out.values(), key=lambda c: (-c["score"], c["text"]))
+
+
 def rescore(res: dict, weights: Optional[dict] = None, layouts: Optional[dict] = None,
             domain_map: Optional[dict] = None, corrections: Optional[dict] = None) -> dict:
     """캐시에 남은 인식 결과(사전)를 지금의 가중치·양식·도메인 표로 다시 매긴다 — OCR 은 다시 하지 않는다(§5.11).
@@ -1496,6 +1591,8 @@ def rescore(res: dict, weights: Optional[dict] = None, layouts: Optional[dict] =
     comps.sort(key=lambda c: -c["score"])
     if names and r.get("name") in [c["text"] for c in names] + [""]:
         r["name"] = names[0]["text"]
+    if comps and _HANGUL.search(comps[0]["text"]):
+        comps = tidy_companies(comps, r.get("name", ""))   # §5.28 — 한글 1위일 때만(이름이 정해진 뒤 — 회사 끝에 붙은 이름을 뗀다)
     if comps:
         r["company"] = unglue_name(comps[0]["text"], r.get("name", ""))
     r["name_cands"], r["company_cands"] = names, comps

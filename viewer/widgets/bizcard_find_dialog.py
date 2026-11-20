@@ -60,6 +60,30 @@ def _list_phone(c) -> str:
     return PH.normalize(next((n for k, n in ph if k == "cell"), "") or next((n for k, n in ph if k != "fax"), ""))
 
 
+def edited_fields(c, g: dict, memo: str) -> dict:
+    """세부 칸 글 g(칸 → 글)·메모 → 명함 c 에 넣을 값 — 전화는 종류마다 첫 번호만 바꾸고 나머지는 둔다, 번호는 적을 꼴(§5.11).
+    명함찾기 [저장]·중복 검토 '명함 고치기'(§5.24.8)가 같이 쓴다."""
+    g = {k: (v or "").strip() for k, v in g.items()}
+    for k in PHONE_KEYS:
+        g[k] = PH.normalize(g.get(k, ""))
+    old_ph = [tuple(x) for x in c.get("phones") or []]
+    phones, used = [], set()
+    for kind in ("cell", "work", "fax"):
+        if g[kind]:
+            phones.append((kind, g[kind]))
+        first = next((i for i, (k, _n) in enumerate(old_ph) if k == kind), None)
+        if first is not None:
+            used.add(first)
+    phones += [p for i, p in enumerate(old_ph) if i not in used]
+    emails = ([g["email"]] if g.get("email") else []) + list((c.get("emails") or [])[1:])
+    urls = ([g["url"]] if g.get("url") else []) + list((c.get("urls") or [])[1:])
+    name = g.get("name", "")
+    name = R.clean_name_ko(name) if R._HANGUL.search(name) and not R._LATIN.search(name) else name
+    return {"name": name, "company": R.strip_corp(g.get("company", "")), "dept": g.get("dept", ""),
+            "title": g.get("title", ""), "address": g.get("address", ""), "phones": phones, "emails": emails,
+            "urls": urls, "memo": memo}
+
+
 def _list_mail(c) -> str:
     e = (c.get("emails") or [""])[0]
     return str(e[-1] if isinstance(e, (list, tuple)) else e or "")
@@ -1398,25 +1422,30 @@ class BizcardFindDialog(QDialog):
 
     # ── 저장 ──
     def _edited(self) -> dict:
-        c = self._card
-        g = {k: ed.text().strip() for k, ed in self.eds.items()}
-        for k in PHONE_KEYS:
-            g[k] = PH.normalize(g[k])
-        old_ph = [tuple(x) for x in c.get("phones") or []]
-        phones, used = [], set()
-        for kind in ("cell", "work", "fax"):
-            if g[kind]:
-                phones.append((kind, g[kind]))
-            first = next((i for i, (k, _n) in enumerate(old_ph) if k == kind), None)
-            if first is not None:
-                used.add(first)
-        phones += [p for i, p in enumerate(old_ph) if i not in used]
-        emails = ([g["email"]] if g["email"] else []) + list((c.get("emails") or [])[1:])
-        urls = ([g["url"]] if g["url"] else []) + list((c.get("urls") or [])[1:])
-        name = R.clean_name_ko(g["name"]) if R._HANGUL.search(g["name"]) and not R._LATIN.search(g["name"]) else g["name"]
-        return {"name": name, "company": R.strip_corp(g["company"]), "dept": g["dept"], "title": g["title"],
-                "address": g["address"], "phones": phones, "emails": emails, "urls": urls,
-                "memo": self.ed_memo.toPlainText()}
+        return edited_fields(self._card, {k: ed.text() for k, ed in self.eds.items()}, self.ed_memo.toPlainText())
+
+    def store_card_edit(self, c, new):
+        """고친 값 new(`edited_fields`)를 명함 c 에 — 이름·회사가 바뀌면 정리본·뒷면·인물 사진 이름, 앱이 붙인 해시태그만 바꿈,
+        손으로 고친 칸은 주소록 출처를 지움. [저장]·중복 검토 '명함 고치기'(§5.24.8)가 같은 길. 반환 = 바뀐 칸들(실패면 None)."""
+        from viewer.bizcard.apply import tags_for, LANG_TAGS
+        st = self._store()
+        old_tags = list(c.get("tags") or [])
+        langs = [t for t in old_tags if t in LANG_TAGS]
+        old_auto = set(tags_for({"name": c.get("name") or "", "company": c.get("company") or "", "langs": langs,
+                                 "langs_ordered": False})) | set(langs)     # 앱이 붙인 것만 바꾼다(언어는 다시 하나로 — D25)
+        new_tags = list(dict.fromkeys(tags_for({"name": new["name"], "company": new["company"], "langs": langs,
+                                                "langs_ordered": False})
+                                      + [t for t in old_tags if t not in old_auto]))     # 사람이 붙인 해시태그는 그대로
+        got = self.rename_card_files(c, new["name"], new["company"])
+        if got is None:
+            return None
+        nf, nb = got
+        fields = dict(new, front=nf, back=nb, tags=new_tags)
+        P.update_card(st, c["id"], fields)
+        P.forget_srcs(st, c["id"], [k for k in ("name", "company", "dept", "title", "address", "memo")
+                                    if (new.get(k) or "") != (c.get(k) or "")])   # 손으로 고친 칸 — 주소록이 덮어쓰지 않게(D24)
+        self._retag([x for x in (nf, nb) if x and os.path.exists(x)], old_auto, new_tags)
+        return fields
 
     def save(self) -> bool:
         """고친 칸·메모 저장. 이름·회사가 바뀌면 정리본·뒷면·인물 사진 이름도(한 길). True = 저장함."""
@@ -1430,25 +1459,11 @@ class BizcardFindDialog(QDialog):
         if not new["name"]:
             QMessageBox.information(self, tr("명함찾기"), tr("이름을 비울 수 없습니다."))
             return False
-        from viewer.bizcard.apply import tags_for, unique_path, BACK_SUFFIX, LANG_TAGS
-        st = self._store()
-        old_tags = list(c.get("tags") or [])
-        langs = [t for t in old_tags if t in LANG_TAGS]
-        old_auto = set(tags_for({"name": c.get("name") or "", "company": c.get("company") or "", "langs": langs,
-                                 "langs_ordered": False})) | set(langs)     # 앱이 붙인 것만 바꾼다(언어는 다시 하나로 — D25)
-        new_tags = list(dict.fromkeys(tags_for({"name": new["name"], "company": new["company"], "langs": langs,
-                                                "langs_ordered": False})
-                                      + [t for t in old_tags if t not in old_auto]))     # 사람이 붙인 해시태그는 그대로
-        front, back = c["front"], c.get("back") or ""
-        got = self.rename_card_files(c, new["name"], new["company"])
-        if got is None:
+        front = c["front"]
+        fields = self.store_card_edit(c, new)
+        if fields is None:
             return False
-        nf, nb = got
-        fields = dict(new, front=nf, back=nb, tags=new_tags)
-        P.update_card(st, c["id"], fields)
-        P.forget_srcs(st, c["id"], [k for k in ("name", "company", "dept", "title", "address", "memo")
-                                    if (new.get(k) or "") != (c.get(k) or "")])   # 손으로 고친 칸 — 주소록이 덮어쓰지 않게(D24)
-        self._retag([x for x in (nf, nb) if x and os.path.exists(x)], old_auto, new_tags)
+        nf = fields["front"]
         self._dirty = False
         self.btn_save.setEnabled(False)
         self._card = dict(c, **fields)

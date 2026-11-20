@@ -7850,6 +7850,10 @@ msgstr ""
 msgid "메모"
 msgstr ""
 
+#: viewer/widgets/bizcard_dupe_dialog.py
+msgid "명함 고치기"
+msgstr ""
+
 #: viewer/widgets/bizcard_dupe_dialog.py viewer/widgets/bizcard_find_dialog.py
 msgid "중복 검토"
 msgstr ""

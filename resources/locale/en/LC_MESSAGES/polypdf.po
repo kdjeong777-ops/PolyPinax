@@ -8101,6 +8101,10 @@ msgstr "Website"
 msgid "메모"
 msgstr "Note"
 
+#: viewer/widgets/bizcard_dupe_dialog.py
+msgid "명함 고치기"
+msgstr "Edit Business Card"
+
 #: viewer/widgets/bizcard_dupe_dialog.py viewer/widgets/bizcard_find_dialog.py
 msgid "중복 검토"
 msgstr "Review Duplicates"

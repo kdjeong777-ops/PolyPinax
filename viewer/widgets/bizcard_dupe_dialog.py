@@ -46,6 +46,53 @@ def _val(fields, k) -> str:
 _KEEP = []
 
 
+class CardEditDialog(QDialog):
+    """명함 하나 고치기(§5.24.8 '명함 고치기') — 칸은 명함찾기 세부 칸과 같다, 값은 `edited_fields` 로."""
+
+    def __init__(self, card, parent=None):
+        super().__init__(parent)
+        from PyQt6.QtWidgets import QFormLayout, QLineEdit, QPlainTextEdit, QDialogButtonBox
+        from viewer.bizcard import phone as PH
+        from viewer.widgets import bizcard_find_dialog as FD
+        self.card = card
+        self.setWindowTitle(tr("명함 고치기"))
+        v = QVBoxLayout(self)
+        form = QFormLayout()
+        ph = card.get("phones") or []
+        first = lambda kind: next((n for k, n in ph if k == kind), "")
+        vals = {k: card.get(k) or "" for k in ("name", "company", "dept", "title", "address")}
+        vals.update(cell=PH.normalize(first("cell")), work=PH.normalize(first("work")), fax=PH.normalize(first("fax")),
+                    email=(card.get("emails") or [""])[0], url=(card.get("urls") or [""])[0])
+        self.eds = {}
+        for k, label in FD.FIELDS:
+            ed = QLineEdit(vals.get(k, ""))
+            if k in FD.PHONE_KEYS:
+                PH.attach(ed)                          # 치는 대로 하이픈(§5.11 '번호 꼴')
+            form.addRow(tr(label), ed)
+            self.eds[k] = ed
+        self.ed_memo = QPlainTextEdit(card.get("memo") or "")
+        self.ed_memo.setMinimumHeight(80)
+        form.addRow(tr(FD.MEMO_LABEL), self.ed_memo)
+        v.addLayout(form)
+        bb = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
+        bb.button(QDialogButtonBox.StandardButton.Save).setText(tr("저장"))
+        bb.button(QDialogButtonBox.StandardButton.Cancel).setText(tr("취소"))
+        bb.accepted.connect(self._ok)
+        bb.rejected.connect(self.reject)
+        v.addWidget(bb)
+        self.resize(420, self.sizeHint().height())
+
+    def values(self) -> dict:
+        from viewer.widgets.bizcard_find_dialog import edited_fields
+        return edited_fields(self.card, {k: ed.text() for k, ed in self.eds.items()}, self.ed_memo.toPlainText())
+
+    def _ok(self):
+        if not self.values()["name"]:
+            QMessageBox.information(self, tr("명함 고치기"), tr("이름을 비울 수 없습니다."))
+            return
+        self.accept()
+
+
 class _ImgWorker(QObject):
     """명함 그림 읽기(배경) — (세대, 큰 그림 세대, 줄 번호(-1 = 큰 그림), 경로, 그림). 명함찾기와 같은 축소 읽기 `_read`."""
     one = pyqtSignal(int, object, int, str, QImage)
@@ -476,12 +523,36 @@ class BizcardDupeDialog(QDialog):
 
     def _menu(self, pos):
         it = self.before.itemAt(pos)
-        if it is None or it.parent() is None:
+        if it is None:
             return
         gi, cid = it.data(0, ROLE)
         m = QMenu(self)
-        m.addAction(tr("대표로"), lambda: self.set_rep(gi, cid))
+        if it.parent() is not None:
+            m.addAction(tr("대표로"), lambda: self.set_rep(gi, cid))
+        m.addAction(tr("명함 고치기"), lambda: self.edit_card(gi, cid))   # 그 명함 자체(§5.24.8 '명함 고치기')
+        self._last_menu = m
         m.exec(self.before.viewport().mapToGlobal(pos))
+
+    def edit_card(self, gi, cid, dlg=None) -> bool:
+        """'적용 전' 명함 하나를 고쳐 명함 DB 에 — 명함찾기 [저장] 과 같은 길(`store_card_edit`). 묶음은 그대로, 그 줄·합친 결과만 새로.
+        dlg = 검사용(이미 값을 넣은 CardEditDialog — 실행하지 않고 그 값으로)."""
+        g = self.groups[gi]
+        c = next((x for x in g["cards"] if x["id"] == cid), None)
+        if c is None:
+            return False
+        if dlg is None:
+            dlg = CardEditDialog(c, self)
+            if dlg.exec() != QDialog.DialogCode.Accepted:
+                return False
+        fields = self.fd.store_card_edit(c, dlg.values())
+        if fields is None:
+            return False
+        fresh = P.card_by_id(self.fd._store(), cid) or dict(c, **fields)
+        g["cards"] = [fresh if x["id"] == cid else x for x in g["cards"]]
+        self.fill()
+        if not getattr(self.fd, "_dirty", False):
+            self.fd.refresh()                            # 명함찾기 목록도 고친 값으로(보던 고침이 있으면 건드리지 않음)
+        return True
 
     def toggle_full(self):
         if self.isFullScreen():

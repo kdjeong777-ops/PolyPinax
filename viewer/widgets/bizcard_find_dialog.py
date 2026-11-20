@@ -1188,19 +1188,32 @@ class BizcardFindDialog(QDialog):
         self.photo_shown = path or ""
         if not path or not os.path.exists(path):
             self.photo_view.clear()
-            if self._card and not V.is_contact(self._card):
+            if self._photo_front():
                 self.photo_view.setText(tr("(인물 사진 없음 — 끌어 놓거나 [사진 추가])"))
             return
         self.photo_view.setPixmap(_scaled(path, max(120, self.photo_view.width()), max(90, self.photo_view.height())))
+
+    def _bizcard_folder(self) -> str:
+        """명함 폴더(환경설정 picture.bizcard_folder) — 그림 없는 주소록 명함의 인물 사진 자리(§5.24.3). 창마다 한 번 읽는다."""
+        if getattr(self, "_bz_folder", None) is None:
+            from viewer.bizcard.standalone import bizcard_folder
+            self._bz_folder = bizcard_folder()
+        return self._bz_folder
+
+    def _photo_front(self, c=None) -> str:
+        """인물 사진 기준 경로(`people.photo_front`) — 그림 없는 주소록 명함도 명함 폴더가 있으면 자리가 있다."""
+        c = self._card if c is None else c
+        return P.photo_front(c, self._bizcard_folder()) if c else ""
 
     def _fill_photos(self, select: str = ""):
         self.photos.blockSignals(True)
         try:
             self.photos.clear()
             c = self._card
-            if c and not V.is_contact(c):
+            pf = self._photo_front()
+            if pf:
                 cur = None
-                for p in P.person_photos(c["front"]):
+                for p in P.person_photos(pf):
                     it = QListWidgetItem(QIcon(_scaled(p, PHOTO_ICON, PHOTO_ICON)), "")
                     it.setData(ROLE, p)
                     it.setToolTip(os.path.basename(p))
@@ -1215,7 +1228,7 @@ class BizcardFindDialog(QDialog):
             self.photos.blockSignals(False)
         self._show_photo()
         if hasattr(self, "btn_photo_del"):
-            self.btn_photo_del.setEnabled(bool(self._card) and not V.is_contact(self._card) and self.photos.count() > 0)
+            self.btn_photo_del.setEnabled(bool(self._photo_front()) and self.photos.count() > 0)
 
     def photo_paths(self) -> list:
         return [self.photos.item(i).data(ROLE) for i in range(self.photos.count())]
@@ -1292,13 +1305,14 @@ class BizcardFindDialog(QDialog):
         self.btn_save.setEnabled(self._dirty)
 
     def _enable_card_buttons(self, on: bool):
-        img = on and not V.is_contact(self._card)            # 주소록에서 가져온 명함 — 그림·인물 사진 없음
+        img = on and not V.is_contact(self._card)            # 주소록에서 가져온 명함 — 명함 그림 없음
+        ph = on and bool(self._photo_front())                 # 인물 사진은 그림 없는 명함도(명함 폴더가 있으면, §5.24.3)
         for b in (self.btn_tags, self.btn_copy):
             b.setEnabled(on)
-        for b in (self.btn_photo, self.btn_open):
-            b.setEnabled(img)
-        self.photos.setEnabled(img)
-        self.btn_photo_del.setEnabled(img and self.photos.count() > 0)
+        self.btn_open.setEnabled(img)
+        self.btn_photo.setEnabled(ph and not self.photo_busy)
+        self.photos.setEnabled(ph)
+        self.btn_photo_del.setEnabled(ph and self.photos.count() > 0)
 
     def _ask_save(self) -> bool:
         """저장 안 한 고침 — 저장·버리기·취소. True = 넘어가도 됨."""
@@ -1379,6 +1393,15 @@ class BizcardFindDialog(QDialog):
         from viewer.bizcard.apply import unique_path, BACK_SUFFIX
         front, back = c["front"], c.get("back") or ""
         nf, nb = front, back
+        if V.is_contact(c):                            # 그림 없는 주소록 명함 — 인물 사진 이름만 새 `성명_회사명` 으로(§5.24.3)
+            old_pf = self._photo_front(c)
+            new_pf = P.contact_photo_front(name, company, self._bizcard_folder())
+            if old_pf and new_pf and os.path.normcase(old_pf) != os.path.normcase(new_pf):
+                for i, ph in enumerate(P.person_photos(old_pf)):
+                    dst = Path(ph).with_name(P.photo_name(new_pf, i, os.path.splitext(ph)[1]))
+                    if not dst.exists() and self._rename(ph, str(dst)):
+                        log is not None and log.append((ph, str(dst)))
+            return nf, nb
         want = R.card_filename(name, company, os.path.splitext(front)[1] or ".jpg")
         if (name, company) != (c.get("name") or "", c.get("company") or "") and os.path.exists(front) \
                 and os.path.normcase(Path(front).stem.split(" (")[0]) != os.path.normcase(Path(want).stem):
@@ -1923,7 +1946,8 @@ class BizcardFindDialog(QDialog):
             it.setToolTip(self._fav_tip(c))
             it.setTextAlignment(Qt.AlignmentFlag.AlignHCenter)
             self.fav.addItem(it)
-            photos = P.person_photos(c["front"]) if c.get("front") and not V.is_contact(c) else []
+            pf = self._photo_front(c)
+            photos = P.person_photos(pf) if pf else []
             if photos:
                 jobs.append((c["id"], photos[0], False))
             elif c.get("front") and os.path.exists(c["front"]):
@@ -2040,7 +2064,7 @@ class BizcardFindDialog(QDialog):
             self.add_photos(files)
 
     def dragEnterEvent(self, e):
-        if self._card and not V.is_contact(self._card) and e.mimeData().hasUrls() and any(self._is_img(u.toLocalFile()) for u in e.mimeData().urls()):
+        if self._photo_front() and e.mimeData().hasUrls() and any(self._is_img(u.toLocalFile()) for u in e.mimeData().urls()):
             e.acceptProposedAction()
 
     def dropEvent(self, e):
@@ -2057,17 +2081,18 @@ class BizcardFindDialog(QDialog):
         return bool(p) and os.path.splitext(p)[1].lower() in R.IMG_EXTS
 
     def add_photos(self, files):
-        if not self._card or self.photo_busy or V.is_contact(self._card):
+        pf = self._photo_front()
+        if not self._card or self.photo_busy or not pf:
             return
         from viewer.workers import run_in_thread
         self.photo_busy = True
         self.btn_photo.setEnabled(False)
-        w = PhotoWorker(self._card["front"], files)
+        w = PhotoWorker(pf, files)
         card_id = self._card["id"]
 
         def _done(made, bad):
             self.photo_busy = False
-            self.btn_photo.setEnabled(self._card is not None)
+            self.btn_photo.setEnabled(bool(self._photo_front()))
             self.last_photos = made
             if self._card and self._card["id"] == card_id:
                 self._fill_photos(select=made[-1] if made else "")
@@ -2088,7 +2113,7 @@ class BizcardFindDialog(QDialog):
         if not c or self.photo_busy:
             self._fill_photos()
             return False
-        plan = P.photo_renames(c["front"], ordered)
+        plan = P.photo_renames(self._photo_front(c), ordered)
         ok = True
         done = []
         for src, tmp, _final in plan:
@@ -2141,7 +2166,7 @@ class BizcardFindDialog(QDialog):
         if self.photo_busy:
             QMessageBox.information(self, tr("명함찾기"), tr("인물 사진을 넣는 중입니다 — 끝난 뒤에 다시 하세요."))
             return 0
-        files = {c["id"]: P.card_files(c) for c in cards}
+        files = {c["id"]: P.card_files(c, self._bizcard_folder()) for c in cards}
         n_o = sum(len(f[0]) for f in files.values())
         n_c = sum(len(f[1]) for f in files.values())
         n_p = sum(len(f[2]) for f in files.values())

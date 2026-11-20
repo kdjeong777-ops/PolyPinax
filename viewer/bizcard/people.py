@@ -152,6 +152,33 @@ def person_photos(front) -> list:
     return [str(d / n) for _k, n in sorted(got)]
 
 
+CONTACT_PHOTO_SUFFIX = "_주소록"     # 같은 이름의 그림 명함과 인물 사진이 섞이지 않게(§5.24.3 '그림 없는 명함')
+
+
+def contact_photo_front(name: str, company: str, folder) -> str:
+    """그림 없는 주소록 명함의 인물 사진 기준 경로(가상) — `<명함 폴더>\\정리\\<성명_회사명>.jpg`.
+    인물 사진은 그 `parent.parent\\인물` = 그림 명함과 같은 `<명함 폴더>\\인물` 에 `성명_회사명.jpg` 로 놓인다.
+    같은 정리 폴더에 같은 이름의 그림 명함(정리본)이 있으면 `_주소록` 을 붙인다. 명함 폴더·이름이 없으면 ""."""
+    if not folder or not (name or "").strip():
+        return ""
+    from viewer.bizcard.importer import OUT_DIR
+    out = Path(folder) / OUT_DIR
+    stem = Path(R.card_filename(name, company)).stem
+    if any((out / (stem + e)).exists() for e in R.IMG_EXTS):
+        stem += CONTACT_PHOTO_SUFFIX
+    return str(out / (stem + ".jpg"))
+
+
+def photo_front(card, folder=None) -> str:
+    """인물 사진 기준 경로 — 그림 명함은 정리본 앞면, 그림 없는 주소록 명함은 `contact_photo_front`(folder = 명함 폴더)."""
+    if not card:
+        return ""
+    from viewer.bizcard.vcard import is_contact
+    if not is_contact(card):
+        return card.get("front") or ""
+    return contact_photo_front(card.get("name") or "", card.get("company") or "", folder)
+
+
 def _real(front) -> str:
     """명함 DB 경로는 소문자 열쇠 — 새 이름을 지을 때는 실제 대소문자로."""
     return os.path.realpath(front) if front and os.path.exists(front) else str(front)
@@ -193,7 +220,9 @@ def update_card(store, card_id: int, fields: dict, commit: bool = True) -> None:
         elif k == "en":
             v = json.dumps(v or {}, ensure_ascii=False)
         elif k in ("front", "back", "src_key"):
-            v = _nk(v) if v else ""
+            from viewer.bizcard.vcard import CONTACT_PREFIX
+            # 주소록 명함의 열쇠 `contact:…` 는 경로가 아니다 — 경로 열쇠로 바꾸면 [저장] 뒤 그림 없는 명함이 아니게 된다(§5.24.5)
+            v = (v if str(v).startswith(CONTACT_PREFIX) else _nk(v)) if v else ""
         sets.append("%s=?" % k)
         args.append(v)
     sets.append("updated=?")
@@ -525,12 +554,14 @@ def photo_renames(front, ordered) -> list:
 
 
 # ── 지울 파일 (§5.24 D18 — 명함 관리 [삭제] 와 같은 것 + 인물 사진) ──
-def card_files(card: dict) -> tuple:
-    """(원본 [앞·뒤·PDF], 정리본 [앞·뒤], 인물 사진) — 있는 파일만, 실제 경로. 원본은 원천 폴더를 다시 훑어 찾는다."""
+def card_files(card: dict, folder=None) -> tuple:
+    """(원본 [앞·뒤·PDF], 정리본 [앞·뒤], 인물 사진) — 있는 파일만, 실제 경로. 원본은 원천 폴더를 다시 훑어 찾는다.
+    folder = 명함 폴더(그림 없는 주소록 명함의 인물 사진 자리 — `photo_front`)."""
     from viewer.bizcard.importer import scan_folder, PDF_DIR
     from viewer.bizcard.vcard import is_contact
-    if is_contact(card):                        # 주소록에서 가져온 명함 — 파일 없음
-        return [], [], []
+    if is_contact(card):                        # 주소록에서 가져온 명함 — 그림 파일 없음, 인물 사진만
+        pf = photo_front(card, folder)
+        return [], [], person_photos(pf) if pf else []
     src = card.get("src_key") or ""
     orig = []
     if src:

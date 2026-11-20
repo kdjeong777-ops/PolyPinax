@@ -297,6 +297,13 @@ def _repair_progids() -> None:
     except Exception:
         pass
     try:
+        # 261120-16(사진 SOT §4.45 '파일 아이콘'): 이미 등록한 사진 ProgID 의 아이콘을 파랑 사진 아이콘으로(다르면만, 탐색기에 알림)
+        from viewer.pdf_default import Reg
+        from viewer.photo_default import fix_icons
+        fix_icons(Reg(), sys.executable)
+    except Exception:
+        pass
+    try:
         # 261114-23 덧붙임 2(beta.14 설치 시험): 옛 Program Files\PolyPDF 가 지워져 죽은 사용자 바로가기·작업 표시줄 고정을 지금 실행 파일로
         from viewer.move_fix import repair_shortcuts, shortcut_folders, move_log, installed_start_link
         # 261115-25: 설치본(휴대용 아님)이고 설치본 시작 메뉴 바로가기가 있으면 사용자 시작 메뉴의 옛 바로가기는 지운다(겹침·제거 뒤 남음).

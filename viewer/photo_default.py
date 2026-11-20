@@ -28,14 +28,53 @@ URI_PLAIN = "ms-settings:defaultapps"
 EXTS = tuple(sorted(PHOTO_EXTS))
 
 
+ICON_FILE = "polypix.ico"                    # 261120-16(사진 SOT §4.45 '파일 아이콘', 디자인 SOT §4.7): 파랑 바탕·흰 산
+SHCNE_ASSOCCHANGED = 0x08000000
+
+
 def open_with_key(ext: str) -> str:
     return r"Software\Classes\%s\OpenWithProgids" % ext
 
 
-def write_user_keys(reg, exe: str, desc: str, app_name: str, app_desc: str) -> None:
+def icon_value(exe: str, ico: str | None = None) -> str:
+    """사진 ProgID 의 `DefaultIcon` 값 — 실행본 자원의 `polypix.ico`, 없으면 종전대로 exe 의 대표 아이콘."""
+    if ico is None:
+        from viewer.resources_path import resource_path
+        ico = resource_path(ICON_FILE)
+    return '"%s",0' % (ico or exe)
+
+
+def notify_assoc_changed() -> None:
+    """탐색기에 파일 연결(아이콘)이 바뀌었다고 알린다 — 알리지 않으면 아이콘 캐시가 옛 그림을 계속 보인다."""
+    try:
+        import ctypes
+        ctypes.windll.shell32.SHChangeNotify(SHCNE_ASSOCCHANGED, 0, None, None)
+    except Exception:
+        pass
+
+
+def fix_icons(reg, exe: str, ico: str | None = None, notify=notify_assoc_changed) -> list:
+    """261120-16: 이미 등록한 PC — HKCU 에 있는 사진 ProgID(옛 이름 포함)의 아이콘이 `icon_value` 와 다르면 고친다.
+    등록이 없는 ProgID 는 건드리지 않는다(새로 만들지 않는다). 하나라도 고쳤으면 탐색기에 알린다. 고친 키 목록."""
+    want = icon_value(exe, ico)
+    done = []
+    for pid in _br.ALL_PHOTO_PROG_IDS:
+        base = r"Software\Classes\%s" % pid
+        if not reg.get(HKCU, base + r"\shell\open\command"):
+            continue
+        key = base + r"\DefaultIcon"
+        if reg.get(HKCU, key) != want:
+            reg.set(HKCU, key, "", want)
+            done.append(key)
+    if done:
+        notify()
+    return done
+
+
+def write_user_keys(reg, exe: str, desc: str, app_name: str, app_desc: str, ico: str | None = None) -> None:
     """HKCU 에 사진 후보 등록 — 다시 부르면 이 exe 로 고쳐 쓴다(휴대용 폴더를 옮긴 경우)."""
     reg.set(HKCU, PROG_KEY, "", desc)
-    reg.set(HKCU, PROG_KEY + r"\DefaultIcon", "", '"%s",0' % exe)
+    reg.set(HKCU, PROG_KEY + r"\DefaultIcon", "", icon_value(exe, ico))
     reg.set(HKCU, PROG_KEY + r"\shell\open\command", "", _cmd(exe))
     reg.set(HKCU, CAPS, "ApplicationName", app_name)
     reg.set(HKCU, CAPS, "ApplicationDescription", app_desc)
@@ -51,6 +90,7 @@ def prepare(exe: str, frozen: bool, reg, desc: str = "Photo (PolyPinax)", app_na
     if not frozen:
         return {"kind": "dev", "uris": []}
     write_user_keys(reg, exe, desc, app_name, app_desc)
+    notify_assoc_changed()                    # 261120-16: 새 아이콘이 탐색기에 곧바로 보이게
     return {"kind": "user", "uris": [URI_USER, URI_PLAIN]}
 
 

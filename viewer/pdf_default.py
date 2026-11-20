@@ -163,7 +163,11 @@ def repair_user_progids(reg, exe: str, exists=os.path.exists) -> list:
             reg.set(HKCU, key, "", _cmd(exe))
             icon = r"Software\Classes\%s\DefaultIcon" % pid
             if reg.get(HKCU, icon):
-                reg.set(HKCU, icon, "", '"%s",0' % exe)
+                if pid == PROG_ID:
+                    reg.set(HKCU, icon, "", '"%s",0' % exe)
+                else:                         # 261120-16(사진 SOT §4.45): 사진 ProgID 는 파랑 사진 아이콘
+                    from viewer.photo_default import icon_value
+                    reg.set(HKCU, icon, "", icon_value(exe))
             done.append(key)
     return done
 

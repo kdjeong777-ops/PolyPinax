@@ -93,6 +93,30 @@ class ChoiceDelegate(QStyledItemDelegate):
 
     phone_cols = ()            # 휴대폰·전화 열 — 치는 대로 하이픈, 넣을 때 적을 꼴(§5.11 '번호 꼴')
 
+    def paint(self, painter, option, index):
+        """지금 칸(←→ 로 옮기는 칸) — 고른 줄 안에서도 고르지 않은 칸처럼(바탕·글 색) 그리고 강조색 2px 테두리.
+        고르기는 줄 단위라 칸 색만으로는 어느 칸인지 모른다(§5.10 '지금 칸', 사용자 보고 '좌우로 옮길 때 선택된 셀이 뭔지 모름')."""
+        view = self.parent()
+        if view is None or not hasattr(view, "currentIndex") or index != view.currentIndex() or not view.hasFocus():
+            super().paint(painter, option, index)
+            return
+        from PyQt6.QtWidgets import QStyle, QStyleOptionViewItem
+        from PyQt6.QtGui import QPen
+        opt = QStyleOptionViewItem(option)
+        opt.state &= ~QStyle.StateFlag.State_Selected     # 고른 줄 색을 빼고(글·'확인 필요' 바탕은 칸 그대로)
+        opt.state &= ~QStyle.StateFlag.State_HasFocus     # 스타일의 점선 초점 틀 대신 아래 테두리
+        pal = option.palette
+        painter.save()
+        painter.fillRect(option.rect, pal.color(pal.ColorRole.Base))
+        painter.restore()
+        super().paint(painter, opt, index)
+        painter.save()
+        painter.setRenderHint(painter.RenderHint.Antialiasing, True)
+        painter.setPen(QPen(pal.color(pal.ColorRole.Highlight), 2))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawRoundedRect(option.rect.adjusted(1, 1, -1, -1), 3, 3)
+        painter.restore()
+
     def createEditor(self, parent, option, index):
         ch = index.data(CHOICES)
         if not ch:
@@ -316,6 +340,11 @@ class BizcardImportDialog(QDialog):
         self._drain.setInterval(15)
         self._drain.timeout.connect(self._drain_pending)
         self.table.currentCellChanged.connect(lambda r, *_: self._show_preview(r))
+        # 머리말을 눌러 정렬(§5.10 '정렬') — 표 자체 정렬(setSortingEnabled)은 줄 번호 = self._items 차례를 깨므로 쓰지 않고 sort_by 로
+        self._sort = (-1, Qt.SortOrder.AscendingOrder)
+        hh.setSectionsClickable(True)
+        hh.setSortIndicatorShown(False)
+        hh.sectionClicked.connect(self._on_head_clicked)
         split.addWidget(self.table)
 
         right = QWidget()
@@ -408,9 +437,88 @@ class BizcardImportDialog(QDialog):
             it.setText(text)
 
     def _on_item_ready(self, r, res, edit):
-        self._pending.append((r, res, edit))
+        # 워커가 보낸 r 은 워커를 시작할 때의 줄 번호 — 그사이 정렬했을 수 있어 그 명함 자체로 쌓는다(§5.10 '정렬')
+        w = self.sender()
+        item = None
+        if w is not None and hasattr(w, "_rows") and hasattr(w, "_items"):
+            m = getattr(w, "_row_item", None)
+            if m is None:
+                m = w._row_item = dict(zip(w._rows, w._items))
+            item = m.get(r)
+        if item is None and 0 <= r < len(self._items):
+            item = self._items[r]
+        if item is None:
+            return
+        self._pending.append((item, res, edit))
         if not self._drain.isActive():
             self._drain.start()
+
+    def _row_of(self, item) -> int:
+        """명함(_items 의 원소) → 지금 줄 번호, 없으면 -1. 표를 정렬·더하기·지우기 해도 맞게(필요할 때만 다시 셈)."""
+        ix = getattr(self, "_row_ix", None) or {}
+        r = ix.get(id(item), -1)
+        if not (0 <= r < len(self._items) and self._items[r] is item):
+            self._row_ix = {id(x): i for i, x in enumerate(self._items)}
+            r = self._row_ix.get(id(item), -1)
+        return r
+
+    def _on_head_clicked(self, col: int):
+        cur_col, order = self._sort
+        if col == cur_col:
+            order = Qt.SortOrder.DescendingOrder if order == Qt.SortOrder.AscendingOrder else Qt.SortOrder.AscendingOrder
+        else:
+            order = Qt.SortOrder.AscendingOrder
+        self.sort_by(col, order)
+
+    def sort_by(self, col: int, order=Qt.SortOrder.AscendingOrder):
+        """그 열로 줄을 정렬 — 칸을 꺼내 새 자리에 끼우고 self._items 도 같은 차례로. 고른 줄·지금 칸·거르기는 그 명함을 따라간다."""
+        n = len(self._items)
+        if n == 0 or self.region_busy:
+            return
+        t = self.table
+        if col == C_ON:
+            keys = [0 if (t.item(r, C_ON) and t.item(r, C_ON).checkState() == Qt.CheckState.Checked) else 1 for r in range(n)]
+            keyf = lambda r: keys[r]
+        else:
+            txt = [(t.item(r, col).text().strip() if t.item(r, col) else "") for r in range(n)]
+            keyf = lambda r: (txt[r] == "", txt[r].casefold())
+        desc = order == Qt.SortOrder.DescendingOrder
+        rows = sorted(range(n), key=keyf, reverse=desc)
+        if desc and col != C_ON:                       # 내림차순에서도 빈 칸은 끝
+            rows = [r for r in rows if txt[r]] + [r for r in rows if not txt[r]]
+        cur_item = self._items[t.currentRow()] if 0 <= t.currentRow() < n else None
+        cur_col = max(0, t.currentColumn())
+        sel = {id(self._items[i.row()]) for i in t.selectedIndexes() if 0 <= i.row() < n}
+        ncol = t.columnCount()
+        self._loading = True
+        t.setUpdatesEnabled(False)
+        t.blockSignals(True)
+        try:
+            cells = [[t.takeItem(r, c) for c in range(ncol)] for r in range(n)]
+            for new_r, old_r in enumerate(rows):
+                for c in range(ncol):
+                    if cells[old_r][c] is not None:
+                        t.setItem(new_r, c, cells[old_r][c])
+            self._items = [self._items[r] for r in rows]   # 새 목록 — 도는 워커는 옛 목록을 그대로 쥔다
+            self._row_ix = None
+            t.clearSelection()
+            for r, it in enumerate(self._items):
+                if id(it) in sel:
+                    t.selectRow(r)
+        finally:
+            t.blockSignals(False)
+            t.setUpdatesEnabled(True)
+            self._loading = False
+        self._sort = (col, order)
+        hh = t.horizontalHeader()
+        hh.setSortIndicatorShown(True)
+        hh.setSortIndicator(col, order)
+        self._apply_filter()
+        if cur_item is not None:
+            r = self._row_of(cur_item)
+            from PyQt6.QtCore import QItemSelectionModel
+            t.selectionModel().setCurrentIndex(t.model().index(r, cur_col), QItemSelectionModel.SelectionFlag.NoUpdate)
+            t.scrollTo(t.model().index(r, cur_col))
 
     def _drain_pending(self):
         from PyQt6.QtCore import QElapsedTimer
@@ -419,7 +527,10 @@ class BizcardImportDialog(QDialog):
         self.table.setUpdatesEnabled(False)
         try:
             while self._pending and clock.elapsed() < FILL_BUDGET_MS:
-                self._set_row(*self._pending.pop(0))
+                item, res, edit = self._pending.pop(0)
+                r = self._row_of(item)                     # 정렬·지우기 뒤에도 그 명함의 줄(§5.10 '정렬')
+                if r >= 0:
+                    self._set_row(r, res, edit)
         finally:
             self.table.setUpdatesEnabled(True)
         if not self._pending:

@@ -221,6 +221,7 @@ try:
         if pf is not None:
             tx = menu_on(pf)
             chk(not any(t.startswith("인쇄") for t in tx), "F 사진 모드 폴더 행에는 '인쇄' 가 없다", str(tx[:3]))
+            chk("명함 관리" in tx, "F 사진 모드 폴더 행에 '명함 관리'(도구 묶음 — 종전 없는 묶음으로 메뉴가 죽음, 261117-8 덧고침)", str(tx))
     mw._set_photo_mode(False); pump(timeout=0.3)
 finally:
     QMenu.exec = _orig_exec

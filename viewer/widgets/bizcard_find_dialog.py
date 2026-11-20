@@ -21,6 +21,7 @@ from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdi
     QMenu, QInputDialog, QApplication, QDateEdit, QDialogButtonBox, QWidgetAction)
 
 from viewer.i18n import tr, tr_noop
+from viewer import clipboard_util
 from viewer.bizcard import people as P
 from viewer.bizcard import recognize as R
 from viewer.bizcard import vcard as V
@@ -1358,7 +1359,7 @@ class BizcardFindDialog(QDialog):
     def copy_selected(self) -> str:
         t = self.copy_text()
         if t:
-            QApplication.clipboard().setText(t)
+            clipboard_util.set_text(t)                # 클립보드는 한 길(스크린샷 SOT §8.4 — 261117-26 덧고침)
         return t
 
     # ── 즐겨찾기 탭 (§5.24.2) — 맨 앞 '최근'(RECENT), 즐겨찾기·할 일 탭 ──
@@ -1592,7 +1593,7 @@ class BizcardFindDialog(QDialog):
         """이메일 복사(§5.24.1) — 쉼표로 이어 클립보드에."""
         t = P.emails_text(cards)
         if t:
-            QApplication.clipboard().setText(t)
+            clipboard_util.set_text(t)                # 클립보드는 한 길(스크린샷 SOT §8.4 — 261117-26 덧고침)
         return t
 
     def _tab_menu_groups(self, menu, cards, exclude=None, todo=None):
@@ -1849,7 +1850,7 @@ class BizcardFindDialog(QDialog):
         """즐겨찾기 사람 메뉴 '내용 복사' — 고른 사람들의 체크한 칸([내용 복사]와 같은 글)."""
         t = self.copy_text(self._fav_selected_cards())
         if t:
-            QApplication.clipboard().setText(t)
+            clipboard_util.set_text(t)                # 클립보드는 한 길(스크린샷 SOT §8.4 — 261117-26 덧고침)
         return t
 
     def _fav_menu(self, pos):

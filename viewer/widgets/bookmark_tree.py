@@ -3969,10 +3969,6 @@ class BookmarkTree(QWidget):
             menu.exec(gpos)
             return
         # ── PDF 모드(·사진 모드 폴더 줄) ──
-        if pm and _folder_row is not None and self.bizcard_import is not None:   # 261117-8(명함 SOT §5.10, D11)
-            menu.group("bizcard")
-            _bz = menu.addAction(tr("명함 관리"))
-            _bz.triggered.connect(lambda _c=False, f=str(_folder_row): self.bizcard_import(f))
         is_file = self._is_file_node(item)
         is_bookmark = (not is_file and not self._is_folder_node(item) and bool(item.data(0, self.DATA_FILE)))
         files = [str(it.data(0, self.DATA_FILE)) for it in self._selected_file_nodes()]
@@ -4078,6 +4074,10 @@ class BookmarkTree(QWidget):
         elif _ff:
             menu.group("tool")                       # 261014-16(텍스트 창 SOT §5.5): 폴더 행 — 그 아래 파일 전체에 OCR 글자층
             self._add_ocr_layer_action(menu, _ff)
+        if pm and _folder_row is not None and self.bizcard_import is not None:   # 261117-8(명함 SOT §5.10, D11)
+            menu.group("tool")                       # 도구 묶음(디자인 SOT §2.9.8 의 1) — 종전 없는 묶음 'bizcard' 로 단언이 터졌다(261117-8 덧고침)
+            _bz = menu.addAction(tr("명함 관리"))
+            _bz.triggered.connect(lambda _c=False, f=str(_folder_row): self.bizcard_import(f))
         # 끝 — 260615-4: ⑫ 즐겨찾기 등록(현재 폴더 / 현재 파일)
         self._mi_fav(menu, _dir_target if is_file else None)
         if pm:                                       # 261104-13(사진 보기 SOT 4.38): 사진 모드 줄 표기 — 메뉴 끝

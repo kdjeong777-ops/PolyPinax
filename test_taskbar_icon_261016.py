@@ -59,7 +59,8 @@ try:
     chk(app_lines and all(want in ln for ln in app_lines) and "LocalTools." + my_id == getattr(main, "APP_USER_MODEL_ID", "?") == _br.AUMID,
         "C 앱 바로가기(시작 메뉴·바탕 화면)에 같은 ID", str(app_lines))
     src = inspect.getsource(main.main)
-    i_set, i_app = src.find("_set_app_user_model_id()"), src.find("QApplication(sys.argv)")
+    _m = re.search(r"^\s*_set_app_user_model_id\(", src, re.M)   # 261117-56 덧고침: 인자(명함 프로그램 '.Bizcard')가 붙어도 부르는 자리로
+    i_set, i_app = (_m.start() if _m else -1), src.find("QApplication(sys.argv)")
     chk(0 <= i_set < i_app, "D 창을 만들기 전에(QApplication 앞) 정한다")
     chk(os.path.exists(os.path.join(HERE, "resources", "icon.png")), "E 창 아이콘 원천 resources/icon.png 가 있다")
 except Exception:

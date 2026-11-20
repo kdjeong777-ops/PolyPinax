@@ -355,7 +355,12 @@ try:
     dm = mw._bizcard_dlg
     gaps.clear(); last[0] = time.monotonic()
     hb.start(20)
-    chk(pump(lambda: dm.bar.value() == 600 and not dm._pending, timeout=120), "E 600장 끝까지", str(dm.bar.value()))
+    _t0 = time.monotonic()
+    # 261117-50 덧고침: 다 읽은 뒤 다중 명함 세기(§5.26)가 같은 막대를 0 부터 다시 쓴다 — 막대 값이 아니라 읽기 워커 끝·표 채움으로
+    #   (종전 조건은 600장 세기까지 기다려 전체 검사·배터리에서 120초를 넘겼다 — 544)
+    _ok = pump(lambda: dm._worker is not None and dm._worker.done_event.is_set() and not dm._pending, timeout=120)
+    print("  E 600장 읽기 %.1f초" % (time.monotonic() - _t0))
+    chk(_ok and dm.table.rowCount() == 600, "E 600장 끝까지 읽음", "%s %d" % (_ok, dm.table.rowCount()))
     hb.stop()
     chk(max(gaps or [0]) < 0.5, "E 표를 채우는 동안 메인 정지 < 0.5초(종전 1000장 1.9초)", "%.2f" % max(gaps or [0]))
     dm.close()

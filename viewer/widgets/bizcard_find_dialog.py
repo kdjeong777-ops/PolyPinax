@@ -957,7 +957,10 @@ class BizcardFindDialog(QDialog):
         self.btn_dupe.clicked.connect(lambda _c=False: self.open_dupes())
         b_close = QPushButton(tr("닫기"))
         b_close.clicked.connect(lambda _c=False: self.close())
-        for b in (self.btn_manage, self.btn_dupe, self.btn_vcard, self.btn_open):   # [명함 관리] → [주소록] → [명함 보기](§5.24.1 '단추', 사용자 지시 261119)
+        self.btn_new_card = QPushButton(tr("새 명함 입력"))  # 맨 앞(§5.24.1 '새 명함 입력', 261120-15)
+        self.btn_new_card.setToolTip(tr("새 명함이나 새 인물 정보를 손으로 넣습니다 — 명함 그림·인물 사진도 함께"))
+        self.btn_new_card.clicked.connect(lambda _c=False: self.new_card())
+        for b in (self.btn_new_card, self.btn_manage, self.btn_dupe, self.btn_vcard, self.btn_open):   # [새 명함 입력] → [명함 관리] → [주소록] → [명함 보기](§5.24.1 '단추')
             bot.addWidget(b)
         bot.addStretch(1)
         bot.addWidget(b_close)
@@ -968,6 +971,39 @@ class BizcardFindDialog(QDialog):
         self._enable_card_buttons(False)
         self._init_store_bits()
         QTimer.singleShot(0, self.refresh)
+
+    def new_card(self, exec_: bool = True):
+        """[새 명함 입력](§5.24.1 '새 명함 입력') — 저장되면 목록을 다시 채워 새 명함을 고르고, 같은 사람일 수 있으면 [중복 검토]를 묻는다."""
+        if self._dirty and not self._ask_save():
+            return None
+        from viewer.widgets.bizcard_new_dialog import NewCardDialog
+        dlg = NewCardDialog(self, db=self._db, folder=self._bizcard_folder())
+        self.new_dlg = dlg                                   # 검사가 찾는다
+        if not exec_:
+            dlg.finished.connect(lambda _r: self.after_new_card(dlg))
+            dlg.show()
+            return dlg
+        dlg.exec()
+        self.after_new_card(dlg)
+        return dlg
+
+    def after_new_card(self, dlg):
+        if not getattr(dlg, "new_id", 0):
+            return
+        c = P.card_by_id(self._store(), dlg.new_id)
+        if c and not V.is_contact(c):                    # 그림 명함 — 정리본 파일 태그도(§5.5, 명함 관리 [적용]과 같게)
+            self._retag([x for x in (c["front"], c.get("back") or "") if x and os.path.exists(x)], set(), c.get("tags") or [])
+        self._table_tab = None
+        self.ed_find.clear()
+        self.refresh()
+        r = self.row_of_id(dlg.new_id)
+        if r >= 0:
+            self.table.setCurrentCell(r, 0)
+        if dlg.dupes and QMessageBox.question(
+                self, tr("새 명함 입력"),
+                tr("같은 휴대폰·메일의 명함이 {n}장 있습니다 — 같은 사람일 수 있습니다. [중복 검토]를 열까요?").format(n=len(dlg.dupes))) \
+                == QMessageBox.StandardButton.Yes:
+            self.open_dupes()
 
     def open_manage(self):
         """[명함 관리] — 메뉴 '명함 관리' 와 같은 함수(MainWindow._action_bizcard_import, 대상 폴더 규칙도 같음 §5.12)."""

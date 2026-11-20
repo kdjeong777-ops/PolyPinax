@@ -8118,6 +8118,16 @@ msgid "같은 사람으로 보이는 명함(같은 번호·메일, 번호 오타
 msgstr ""
 
 #: viewer/widgets/bizcard_find_dialog.py
+#: viewer/widgets/bizcard_import_dialog.py viewer/widgets/bizcard_new_dialog.py
+msgid "새 명함 입력"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "새 명함이나 새 인물 정보를 손으로 넣습니다 — 명함 그림·인물 사진도 함께"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
 msgid "고친 내용을 저장할까요?"
 msgstr ""
 
@@ -8396,6 +8406,11 @@ msgstr ""
 #: viewer/widgets/bizcard_find_dialog.py
 #, python-brace-format
 msgid "메일 없는 {n}명은 뺐습니다."
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+#, python-brace-format
+msgid "같은 휴대폰·메일의 명함이 {n}장 있습니다 — 같은 사람일 수 있습니다. [중복 검토]를 열까요?"
 msgstr ""
 
 #: viewer/widgets/bizcard_find_dialog.py
@@ -8700,6 +8715,11 @@ msgstr ""
 
 #: viewer/widgets/bizcard_import_dialog.py
 #, python-brace-format
+msgid "같은 휴대폰·메일의 명함이 {n}장 있습니다 — 명함찾기의 [중복 검토]에서 합칠 수 있습니다."
+msgstr ""
+
+#: viewer/widgets/bizcard_import_dialog.py
+#, python-brace-format
 msgid "명함 {n}장을 지웁니다 — 원본 파일까지 휴지통으로 보냅니다(원본 {f}개·정리본 {o}개). 인식 기록도 지웁니다."
 msgstr ""
 
@@ -8737,6 +8757,44 @@ msgstr ""
 #: viewer/widgets/bizcard_multi_dialog.py
 #, python-brace-format
 msgid "이미 한 장으로 들어간 명함 {k}장은 지웁니다(휴지통)."
+msgstr ""
+
+#: viewer/widgets/bizcard_new_dialog.py
+msgid "명함 그림"
+msgstr ""
+
+#: viewer/widgets/bizcard_new_dialog.py viewer/widgets/sign_dialogs.py
+msgid "빼기"
+msgstr ""
+
+#: viewer/widgets/bizcard_new_dialog.py viewer/widgets/settings_dialog.py
+msgid "고르기"
+msgstr ""
+
+#: viewer/widgets/bizcard_new_dialog.py
+msgid "명함 폴더가 정해지지 않아 명함 그림·인물 사진은 넣을 수 없습니다(환경설정에서 정함)."
+msgstr ""
+
+#: viewer/widgets/bizcard_new_dialog.py viewer/widgets/sign_dialogs.py
+msgid "이름을 넣으세요."
+msgstr ""
+
+#: viewer/widgets/bizcard_new_dialog.py
+msgid "뒷면만 넣을 수는 없습니다 — 앞면 그림을 고르세요."
+msgstr ""
+
+#: viewer/widgets/bizcard_new_dialog.py
+msgid "앞면"
+msgstr ""
+
+#: viewer/widgets/bizcard_new_dialog.py
+#, python-brace-format
+msgid "명함을 넣지 못했습니다({err})."
+msgstr ""
+
+#: viewer/widgets/bizcard_new_dialog.py
+#, python-brace-format
+msgid "인물 사진 {n}개를 넣지 못했습니다."
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
@@ -12968,10 +13026,6 @@ msgid "PDF 를 처음 덮어써 저장할 때·펼친 사진으로 원본을 바
 msgstr ""
 
 #: viewer/widgets/settings_dialog.py
-msgid "고르기"
-msgstr ""
-
-#: viewer/widgets/settings_dialog.py
 msgid "원본 백업 폴더"
 msgstr ""
 
@@ -13430,10 +13484,6 @@ msgid "Windows Hello 로 비밀번호 보관(서명할 때 지문·PIN 으로 �
 msgstr ""
 
 #: viewer/widgets/sign_dialogs.py
-msgid "빼기"
-msgstr ""
-
-#: viewer/widgets/sign_dialogs.py
 msgid "(서명 그림 없음 — 글자만 찍힙니다)"
 msgstr ""
 
@@ -13723,10 +13773,6 @@ msgstr ""
 
 #: viewer/widgets/sign_dialogs.py
 msgid "서명 그림 바꾸기"
-msgstr ""
-
-#: viewer/widgets/sign_dialogs.py
-msgid "이름을 넣으세요."
 msgstr ""
 
 #: viewer/widgets/sign_dialogs.py

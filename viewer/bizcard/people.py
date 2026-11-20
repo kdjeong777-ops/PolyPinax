@@ -627,31 +627,97 @@ def apply_import(store, persons, tag: str = "", src: str = "") -> int:
     """가져오기 — 연락처마다 그림 없는 명함(front `contact:<번호>`)을 더한다. 반환 = 더한 수.
     같은 사람이 이미 있어도 합치지 않는다 — 부르는 쪽이 곧바로 [중복 검토] 창을 띄운다(§5.24.8, 사용자 지시 261119).
     src = 'remember'·'google' — 칸마다 출처를 적어 둔다(중복 검토의 출처·손으로 고친 칸 가리기)."""
-    import uuid
-    from viewer.bizcard.vcard import CONTACT_PREFIX
     src_init(store)
     added = 0
     for p in persons:
-        front = CONTACT_PREFIX + uuid.uuid4().hex
-        now = time.time()
-        tags = [t for t in ("명함", tag) if t]
-        cur = store.con.execute(
-            "INSERT INTO cards(front, back, src_key, src_pdf, name, company, title, phones, emails, urls, address, en, "
-            "memo, tags, scanned, created, updated, dept) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            (front, "", "", "", p.get("name") or "", p.get("company") or "", p.get("title") or "",
-             json.dumps([list(x) for x in p.get("phones") or []], ensure_ascii=False),
-             json.dumps(list(p.get("emails") or []), ensure_ascii=False),
-             json.dumps(list(p.get("urls") or []), ensure_ascii=False), p.get("address") or "", "{}",
-             p.get("memo") or "", json.dumps(tags, ensure_ascii=False), time.strftime("%Y-%m-%d"), now, now,
-             p.get("dept") or ""))
-        nid = cur.lastrowid
-        row = card_by_id(store, nid)
-        store.con.execute("INSERT INTO cards_fts(rowid, body) VALUES(?,?)", (nid, store._body(row)))
+        nid = _insert_contact(store, p, [t for t in ("명함", tag) if t])
         if src:
             _set_srcs(store, nid, [k for k in _SCALARS if (p.get(k) or "").strip()], src)
         added += 1
     store.con.commit()
     return added
+
+
+def _insert_contact(store, p: dict, tags) -> int:
+    """그림 없는 명함 한 장(front `contact:<번호>`)을 넣고 찾기 색인까지 — 새 id. 커밋은 부르는 쪽이."""
+    import uuid
+    from viewer.bizcard.vcard import CONTACT_PREFIX
+    front = CONTACT_PREFIX + uuid.uuid4().hex
+    now = time.time()
+    cur = store.con.execute(
+        "INSERT INTO cards(front, back, src_key, src_pdf, name, company, title, phones, emails, urls, address, en, "
+        "memo, tags, scanned, created, updated, dept) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        (front, "", "", "", p.get("name") or "", p.get("company") or "", p.get("title") or "",
+         json.dumps([list(x) for x in p.get("phones") or []], ensure_ascii=False),
+         json.dumps(list(p.get("emails") or []), ensure_ascii=False),
+         json.dumps(list(p.get("urls") or []), ensure_ascii=False), p.get("address") or "", "{}",
+         p.get("memo") or "", json.dumps(tags, ensure_ascii=False), time.strftime("%Y-%m-%d"), now, now,
+         p.get("dept") or ""))
+    nid = cur.lastrowid
+    row = card_by_id(store, nid)
+    store.con.execute("INSERT INTO cards_fts(rowid, body) VALUES(?,?)", (nid, store._body(row)))
+    return nid
+
+
+# ── 새 명함 입력 (§5.24.1 '새 명함 입력', 261120-15) — 창(Qt)은 widgets/bizcard_new_dialog.py, 여기는 저장만(배경에서) ──
+MANUAL_TAG = "직접입력"
+
+
+def add_new_card(store, fields: dict, folder: str = "", front_img: str = "", back_img: str = "", photos=()) -> tuple:
+    """손으로 넣은 명함 한 장 — 반환 (새 id, 인물 사진 실패 수).
+    앞면 그림이 없으면 그림 없는 명함(`contact:`), 있으면 명함 관리 [적용]과 같은 길(`apply_cards`)로 `<folder>\\정리\\성명_회사명.jpg`.
+    fields = {name, company, dept, title, address, phones, emails, urls, memo}. 인물 사진은 `photo_front` 자리에 JPG(EXIF 뺌)."""
+    from viewer.bizcard import apply as AP
+    tags = list(dict.fromkeys(AP.tags_for({"name": fields.get("name") or "", "company": fields.get("company") or "",
+                                            "langs": []}) + [MANUAL_TAG]))
+    if front_img:
+        if not folder:
+            raise ValueError("no folder")
+        import uuid
+        from viewer.bizcard.importer import OUT_DIR
+        key = "manual:" + uuid.uuid4().hex
+        row = dict(fields, key=key, front=front_img, back=back_img or "", pdf="", keep_back=bool(back_img), langs=[],
+                   scanned=time.strftime("%Y-%m-%d"), en={})
+        AP.apply_cards([row], Path(folder) / OUT_DIR, db=store.path)
+        c = store.card_by_src(key)
+        if not c:
+            raise OSError("apply failed")
+        nid = c["id"]
+        update_card(store, nid, {"memo": fields.get("memo") or "", "dept": fields.get("dept") or "", "tags": tags})
+    else:
+        nid = _insert_contact(store, dict(fields, tags=tags), tags)
+        store.con.commit()
+    bad = 0
+    pf = photo_front(card_by_id(store, nid), folder) if photos else ""
+    for s in photos or ():
+        try:
+            if not pf:
+                raise ValueError("no folder")
+            save_person_photo(s, next_photo_path(pf))
+        except Exception:
+            bad += 1
+    return nid, bad
+
+
+def same_person_ids(store, card_id: int) -> list:
+    """같은 사람일 수 있는 다른 명함 — 휴대폰 번호나 메일 주소가 같은 것(§5.24.1 '새 명함 입력' 저장 뒤 물음)."""
+    c = card_by_id(store, card_id)
+    if not c:
+        return []
+    mob = set(_mobile_keys(c))
+    mails = {str(e[-1] if isinstance(e, (list, tuple)) else e).strip().lower() for e in c.get("emails") or [] if e}
+    mails.discard("")
+    if not mob and not mails:
+        return []
+    out = []
+    for r in store.con.execute("SELECT id FROM cards WHERE id<>?", (card_id,)).fetchall():
+        o = card_by_id(store, r[0])
+        if not o:
+            continue
+        om = {str(e[-1] if isinstance(e, (list, tuple)) else e).strip().lower() for e in o.get("emails") or [] if e}
+        if mob & set(_mobile_keys(o)) or mails & om:
+            out.append(o["id"])
+    return out
 
 
 # ── 중복 검토 (§5.24.8 D30) — 묶기·출처·차례·합친 값은 여기(Qt 없음), 파일 옮기기·적용은 창이 ──

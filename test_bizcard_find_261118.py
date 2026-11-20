@@ -1170,6 +1170,94 @@ try:
         "I26 목록 머리말 높이·위 끝이 세부내용 제목 띠와 같음",
         "%d/%s %d/%d" % (hh2.height(), hd2.height() if hd2 is not None else None, y_h, y_d))
 
+    print("\n=== I27. 새 명함 입력 — 명함찾기·명함 관리 단추, 그림 없는/그림 명함, 인물 사진, 같은 사람 물음 (261120-15) ===")
+    import viewer.widgets.bizcard_new_dialog as NDm
+    bnew = getattr(dlg, "btn_new_card", None)
+    order_ok = False
+    if bnew is not None:
+        lay = None
+        for i in range(dlg.layout().count()):
+            it = dlg.layout().itemAt(i)
+            if it.layout() is not None and it.layout().indexOf(dlg.btn_manage) >= 0:
+                lay = it.layout()
+        order_ok = lay is not None and lay.indexOf(bnew) == 0 and lay.indexOf(dlg.btn_manage) == 1
+    chk(order_ok, "I27 명함찾기 아래 줄 맨 앞에 [새 명함 입력]([명함 관리] 왼쪽)")
+    jpg(TMP / "new_front.jpg", "mistyrose")
+    jpg(TMP / "new_photo.jpg", "honeydew", size=(120, 160))
+    plan = []
+
+    def _fake_new_exec(self):
+        """입력 창 — 실제 키·마우스로 칸을 채우고 [저장]을 누른 뒤 배경 저장이 끝날 때까지."""
+        name, comp, cell, mail, front, photo = plan.pop(0)
+        QTest.mouseClick(self.eds["name"], Qt.MouseButton.LeftButton)
+        type_ko(self.eds["name"], name)
+        QTest.mouseClick(self.eds["company"], Qt.MouseButton.LeftButton)
+        type_ko(self.eds["company"], comp)
+        QTest.keyClicks(self.eds["cell"], cell)
+        QTest.keyClicks(self.eds["email"], mail)
+        if front:
+            self.set_side("front", front)
+        if photo:
+            self.add_photos([photo])
+        QTest.mouseClick(self.btn_save, Qt.MouseButton.LeftButton)
+        pump(lambda: self.new_id or not self.busy and self.result(), timeout=15)
+        return self.result()
+    asked3 = []
+    _o_q3, _o_exec3 = QMessageBox.question, NDm.NewCardDialog.exec
+    QMessageBox.question = staticmethod(lambda *a, **k: asked3.append(a[2] if len(a) > 2 else "") or QMessageBox.StandardButton.No)
+    NDm.NewCardDialog.exec = _fake_new_exec
+    dlg._bz_folder = str(F)
+    try:
+        # A — 그림 없이(같은 메일의 홍길동이 있음 → 중복 검토 물음)
+        plan.append(("새가짜", "가짜상사", "01000000099", "hong@example.com", "", str(TMP / "new_photo.jpg")))
+        if bnew is not None:
+            QTest.mouseClick(bnew, Qt.MouseButton.LeftButton)
+        nd = getattr(dlg, "new_dlg", None)
+        st = S.BizcardStore()
+        ca = P.card_by_id(st, nd.new_id) if nd is not None and nd.new_id else None
+        ph_a = P.person_photos(P.photo_front(ca, str(F))) if ca else []
+        chk(ca is not None and str(ca["front"]).startswith("contact:") and ca["name"] == "새가짜" and "직접입력" in (ca["tags"] or [])
+            and ca["phones"] and ca["phones"][0][0] == "cell" and ca["phones"][0][1] == "010-0000-0099"
+            and len(ph_a) == 1 and os.path.basename(ph_a[0]) == "새가짜_가짜상사.jpg"
+            and dlg._card is not None and dlg._card["id"] == ca["id"] and asked3 and "1" in asked3[-1],
+            "I27 그림 없이 넣으면 그림 없는 명함(#직접입력·번호 꼴)·인물 사진은 '인물\\성명_회사명'·목록에서 그 명함·같은 메일이면 중복 검토 물음",
+            "%s %s %s %s" % (ca and (ca["front"], ca["tags"], ca["phones"]), ph_a, dlg._card and dlg._card.get("name"), asked3))
+        # B — 앞면 그림을 붙이면 그림 명함(정리본 성명_회사명)
+        plan.append(("그림가짜", "나다상사", "01000000098", "pic@example.com", str(TMP / "new_front.jpg"), str(TMP / "new_photo.jpg")))
+        n_ask = len(asked3)
+        QTest.mouseClick(bnew, Qt.MouseButton.LeftButton)
+        nd = dlg.new_dlg
+        cb_ = P.card_by_id(st, nd.new_id) if nd.new_id else None
+        fr = str(cb_["front"]) if cb_ else ""
+        ph_b = P.person_photos(fr) if cb_ else []
+        chk(cb_ is not None and os.path.exists(fr) and os.path.basename(fr).lower() == "그림가짜_나다상사.jpg"
+            and os.path.dirname(fr).lower() == str(OUT).lower() and "직접입력" in (cb_["tags"] or [])
+            and os.path.exists(TMP / "new_front.jpg") and len(ph_b) == 1 and len(asked3) == n_ask,
+            "I27 앞면 그림을 붙이면 그림 명함(정리\\성명_회사명.jpg, 원본 그대로)·인물 사진·같은 사람 없으면 묻지 않음",
+            "%s %s %s" % (fr, ph_b, asked3[n_ask:]))
+        st.close()
+        # C — 명함 관리 창: [새 명함 읽기] 오른쪽에 [새 명함 입력], 누르면 같은 창
+        G2 = TMP / "manual_empty"
+        G2.mkdir(exist_ok=True)
+        from viewer.widgets import bizcard_import_dialog as BD2
+        idlg2 = BD2.BizcardImportDialog(str(G2), None, db=TMP / "local" / "bizcard_manual.db")
+        idlg2.show()
+        pump(timeout=0.3)
+        bm = getattr(idlg2, "btn_manual", None)
+        tl = idlg2.layout().itemAt(0).layout()
+        plan.append(("관리가짜", "", "01000000097", "", "", ""))
+        if bm is not None:
+            QTest.mouseClick(bm, Qt.MouseButton.LeftButton)
+        st2 = S.BizcardStore(TMP / "local" / "bizcard_manual.db")
+        cm_ = [r[0] for r in st2.con.execute("SELECT name FROM cards")]
+        st2.close()
+        chk(bm is not None and tl.indexOf(bm) == tl.indexOf(idlg2.btn_new) + 1 and cm_ == ["관리가짜"],
+            "I27 명함 관리 [새 명함 읽기] 오른쪽 [새 명함 입력] — 같은 창으로 넣음", str(cm_))
+        idlg2.close()
+    finally:
+        QMessageBox.question, NDm.NewCardDialog.exec = _o_q3, _o_exec3
+    pump(timeout=0.2)
+
     print("\n=== I23. 흐린 찾기 글 → 전체 목록 · 구분 기억 · 즐겨찾기 이름 굵게 · Gmail 보내기 (사용자 지시 261120) ===")
     import urllib.parse as _up
     import viewer.widgets.bizcard_find_dialog as BF

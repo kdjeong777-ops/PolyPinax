@@ -237,6 +237,10 @@ class BizcardImportDialog(QDialog):
         self.btn_new.setToolTip(tr("폴더를 다시 훑어 창을 연 뒤에 넣은 명함 그림만 표 끝에 더하고 읽습니다"))
         self.btn_new.clicked.connect(lambda _c=False: self.read_new())
         top.addWidget(self.btn_new)
+        self.btn_manual = QPushButton(tr("새 명함 입력"))   # [새 명함 읽기] 오른쪽(명함 SOT §5.24.1 '새 명함 입력', 261120-15)
+        self.btn_manual.setToolTip(tr("새 명함이나 새 인물 정보를 손으로 넣습니다 — 명함 그림·인물 사진도 함께"))
+        self.btn_manual.clicked.connect(lambda _c=False: self.new_manual())
+        top.addWidget(self.btn_manual)
         self._applied_keys = None
         self.ed_date = QLineEdit()
         self.ed_date.setPlaceholderText("YYYY-MM-DD")
@@ -1402,3 +1406,32 @@ class BizcardImportDialog(QDialog):
                     old = store.get_manual(p) if hasattr(store, "get_manual") else []
                     old = [t for t in old or [] if t not in LANG_TAGS or t in tags]   # 언어 태그는 하나(D25)
                     store.set(p, list(dict.fromkeys(list(old) + list(tags))))
+
+    def new_manual(self, exec_: bool = True):
+        """[새 명함 입력](명함 SOT §5.24.1 '새 명함 입력') — 명함찾기와 같은 창. 같은 사람일 수 있으면 알림만."""
+        from viewer.widgets.bizcard_new_dialog import NewCardDialog
+        dlg = NewCardDialog(self, db=self._db, folder=str(self._folder))
+        self.new_dlg = dlg                                   # 검사가 찾는다
+        if not exec_:
+            dlg.finished.connect(lambda _r: self._after_manual(dlg))
+            dlg.show()
+            return dlg
+        dlg.exec()
+        self._after_manual(dlg)
+        return dlg
+
+    def _after_manual(self, dlg):
+        if not getattr(dlg, "new_id", 0):
+            return
+        from viewer.bizcard import people as P
+        from viewer.bizcard.store import BizcardStore
+        st = BizcardStore(self._db, ui=True)
+        try:
+            c = P.card_by_id(st, dlg.new_id)
+        finally:
+            st.close()
+        if c and not str(c.get("front") or "").startswith("contact:"):
+            self._tag([(c["front"], c.get("back") or "", list(c.get("tags") or []))])   # 정리본 파일 태그도(§5.5)
+        if dlg.dupes:
+            QMessageBox.information(self, tr("새 명함 입력"),
+                                    tr("같은 휴대폰·메일의 명함이 {n}장 있습니다 — 명함찾기의 [중복 검토]에서 합칠 수 있습니다.").format(n=len(dlg.dupes)))

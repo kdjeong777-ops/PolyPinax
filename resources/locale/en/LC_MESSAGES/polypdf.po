@@ -8369,6 +8369,16 @@ msgid "같은 사람으로 보이는 명함(같은 번호·메일, 번호 오타
 msgstr "Group cards that look like the same person (same number or email, number typo, same name and company) and merge them by priority"
 
 #: viewer/widgets/bizcard_find_dialog.py
+#: viewer/widgets/bizcard_import_dialog.py viewer/widgets/bizcard_new_dialog.py
+msgid "새 명함 입력"
+msgstr "Enter New Card"
+
+#: viewer/widgets/bizcard_find_dialog.py
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "새 명함이나 새 인물 정보를 손으로 넣습니다 — 명함 그림·인물 사진도 함께"
+msgstr "Enter a new business card or a new person by hand — with the card images and portrait photos"
+
+#: viewer/widgets/bizcard_find_dialog.py
 msgid "고친 내용을 저장할까요?"
 msgstr "Save your changes?"
 
@@ -8648,6 +8658,11 @@ msgstr "Could not rename the file — check whether another program has it open.
 #, python-brace-format
 msgid "메일 없는 {n}명은 뺐습니다."
 msgstr "Left out {n} without an email address."
+
+#: viewer/widgets/bizcard_find_dialog.py
+#, python-brace-format
+msgid "같은 휴대폰·메일의 명함이 {n}장 있습니다 — 같은 사람일 수 있습니다. [중복 검토]를 열까요?"
+msgstr "{n} card(s) have the same mobile number or email — this may be the same person. Open [Review Duplicates]?"
 
 # | 그대로입니다."
 #: viewer/widgets/bizcard_find_dialog.py
@@ -8954,6 +8969,11 @@ msgstr ""
 
 #: viewer/widgets/bizcard_import_dialog.py
 #, python-brace-format
+msgid "같은 휴대폰·메일의 명함이 {n}장 있습니다 — 명함찾기의 [중복 검토]에서 합칠 수 있습니다."
+msgstr "{n} card(s) have the same mobile number or email — you can merge them with [Review Duplicates] in Find Business Card."
+
+#: viewer/widgets/bizcard_import_dialog.py
+#, python-brace-format
 msgid "명함 {n}장을 지웁니다 — 원본 파일까지 휴지통으로 보냅니다(원본 {f}개·정리본 {o}개). 인식 기록도 지웁니다."
 msgstr "Delete {n} cards? The original files will also be moved to the Recycle Bin ({f} original file(s), {o} output file(s)), and their recognition records deleted."
 
@@ -8992,6 +9012,44 @@ msgstr "Found {m} cards in {n} photos — checked photos are cropped into separa
 #, python-brace-format
 msgid "이미 한 장으로 들어간 명함 {k}장은 지웁니다(휴지통)."
 msgstr "{k} cards already added as a single card will be removed (to the Recycle Bin)."
+
+#: viewer/widgets/bizcard_new_dialog.py
+msgid "명함 그림"
+msgstr "Card images"
+
+#: viewer/widgets/bizcard_new_dialog.py viewer/widgets/sign_dialogs.py
+msgid "빼기"
+msgstr "Remove"
+
+#: viewer/widgets/bizcard_new_dialog.py viewer/widgets/settings_dialog.py
+msgid "고르기"
+msgstr "Choose"
+
+#: viewer/widgets/bizcard_new_dialog.py
+msgid "명함 폴더가 정해지지 않아 명함 그림·인물 사진은 넣을 수 없습니다(환경설정에서 정함)."
+msgstr "No business card folder is set, so card images and portrait photos cannot be added (set it in Preferences)."
+
+#: viewer/widgets/bizcard_new_dialog.py viewer/widgets/sign_dialogs.py
+msgid "이름을 넣으세요."
+msgstr "Enter a name."
+
+#: viewer/widgets/bizcard_new_dialog.py
+msgid "뒷면만 넣을 수는 없습니다 — 앞면 그림을 고르세요."
+msgstr "A back side alone cannot be added — choose a front image."
+
+#: viewer/widgets/bizcard_new_dialog.py
+msgid "앞면"
+msgstr "Front"
+
+#: viewer/widgets/bizcard_new_dialog.py
+#, python-brace-format
+msgid "명함을 넣지 못했습니다({err})."
+msgstr "Could not add the card ({err})."
+
+#: viewer/widgets/bizcard_new_dialog.py
+#, python-brace-format
+msgid "인물 사진 {n}개를 넣지 못했습니다."
+msgstr "Could not add {n} portrait photo(s)."
 
 #: viewer/widgets/bookmark_tree.py
 msgid "전자서명 있음 — 열면 본문 위 띠에 검증 결과가 보입니다."
@@ -13305,10 +13363,6 @@ msgid "PDF 를 처음 덮어써 저장할 때·펼친 사진으로 원본을 바
 msgstr "When a PDF is first overwritten by a save, or a photo is replaced by its straightened version, the untouched original is kept in this folder — restore it with right-click 'Restore original'."
 
 #: viewer/widgets/settings_dialog.py
-msgid "고르기"
-msgstr "Choose"
-
-#: viewer/widgets/settings_dialog.py
 msgid "원본 백업 폴더"
 msgstr "Original backup folder"
 
@@ -13778,10 +13832,6 @@ msgid "Windows Hello 로 비밀번호 보관(서명할 때 지문·PIN 으로 �
 msgstr "Store the password with Windows Hello (confirm with fingerprint or PIN when signing)"
 
 #: viewer/widgets/sign_dialogs.py
-msgid "빼기"
-msgstr "Remove"
-
-#: viewer/widgets/sign_dialogs.py
 msgid "(서명 그림 없음 — 글자만 찍힙니다)"
 msgstr "(no signature image — only text will appear)"
 
@@ -14072,10 +14122,6 @@ msgstr "Actual image width"
 #: viewer/widgets/sign_dialogs.py
 msgid "서명 그림 바꾸기"
 msgstr "Change Signature Image"
-
-#: viewer/widgets/sign_dialogs.py
-msgid "이름을 넣으세요."
-msgstr "Enter a name."
 
 #: viewer/widgets/sign_dialogs.py
 msgid "비밀번호를 넣으세요."

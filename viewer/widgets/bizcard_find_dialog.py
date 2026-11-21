@@ -810,6 +810,17 @@ class BizcardFindDialog(QDialog):
         self.cb_kind.setToolTip(tr("한글·영어 = 이름 글자, 명함 있음·없음 = 명함 그림(없음 = 주소록에서 들인 명함), "
                                    "사진 있음·없음 = 인물 사진"))
         self.cb_kind.currentIndexChanged.connect(lambda _i: self._on_kind())
+        from viewer.widgets.icons import themed_icon as _ti
+        self.btn_menu = QToolButton()                  # 맨 왼쪽 ≡ 메뉴 — 아래 단추와 같은 항목 + 종료(§5.24.1 '≡ 메뉴', 261120-37)
+        self.btn_menu.setIcon(_ti("menu", size=18))
+        self.btn_menu.setIconSize(QSize(18, 18))
+        self.btn_menu.setAutoRaise(True)
+        self.btn_menu.setToolTip(tr("메뉴"))
+        self.btn_menu.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self.main_menu = QMenu(self.btn_menu)
+        self.main_menu.aboutToShow.connect(self._fill_main_menu)
+        self.btn_menu.setMenu(self.main_menu)
+        top.addWidget(self.btn_menu)
         top.addWidget(self.cb_kind)
         self.ed_find = QLineEdit()
         from viewer.widgets.search_ghost import SearchGhost   # 261117-42(검색창 SOT §6.1): 찾은 글은 떠나면 흐리게
@@ -1149,15 +1160,12 @@ class BizcardFindDialog(QDialog):
         self.btn_dupe = QPushButton(tr("중복 검토"))        # §5.24.8 D30 — 번호·메일 등으로 같은 사람 묶어 합치기
         self.btn_dupe.setToolTip(tr("같은 사람으로 보이는 명함(같은 번호·메일, 번호 오타, 같은 이름·회사)을 묶어 우선순위대로 합칩니다"))
         self.btn_dupe.clicked.connect(lambda _c=False: self.open_dupes())
-        b_close = QPushButton(tr("닫기"))
-        b_close.clicked.connect(lambda _c=False: self.close())
         self.btn_new_card = QPushButton(tr("새 명함 입력"))  # 맨 앞(§5.24.1 '새 명함 입력', 261120-15)
         self.btn_new_card.setToolTip(tr("새 명함이나 새 인물 정보를 손으로 넣습니다 — 명함 그림·인물 사진도 함께"))
         self.btn_new_card.clicked.connect(lambda _c=False: self.new_card())
         for b in (self.btn_new_card, self.btn_manage, self.btn_dupe, self.btn_vcard, self.btn_open):   # [새 명함 입력] → [명함 관리] → [주소록] → [명함 보기](§5.24.1 '단추')
             bot.addWidget(b)
-        bot.addStretch(1)
-        bot.addWidget(b_close)
+        bot.addStretch(1)                              # [닫기] 단추 없음 — 제목 줄 X·Alt+F4·Esc·≡ 메뉴 '종료'(261120-38)
         v.addLayout(bot)
         for b in self.findChildren(QPushButton):      # Enter 가 [해시태그] 등을 누르지 않게 — 기본 단추 없음(사용자 보고 261119)
             b.setAutoDefault(False)
@@ -1212,6 +1220,27 @@ class BizcardFindDialog(QDialog):
         fn = getattr(self._mw, "_action_bizcard_import", None)
         if callable(fn):
             fn()
+
+    def _fill_main_menu(self):
+        """≡ 메뉴를 열 때마다 — 아래 단추 줄과 같은 항목·차례, 단추의 보임·켜짐을 그대로, 누르면 그 단추와 같은 길. 끝에 '종료'."""
+        m = self.main_menu
+        m.clear()
+        for b in (self.btn_new_card, self.btn_manage, self.btn_dupe, self.btn_vcard, self.btn_open):
+            if not b.isVisible() and not b.isVisibleTo(self):
+                continue
+            if b.menu() is not None:                   # [주소록] — 그 단추의 메뉴 항목 그대로
+                sub = m.addMenu(b.text())
+                for a in b.menu().actions():
+                    sub.addAction(a) if not a.isSeparator() else sub.addSeparator()
+                sub.setEnabled(b.isEnabled())
+                continue
+            act = m.addAction(b.text())
+            act.setEnabled(b.isEnabled())
+            act.triggered.connect(lambda _c=False, btn=b: btn.click())
+        m.addSeparator()
+        quit_act = m.addAction(tr("종료"))
+        quit_act.triggered.connect(lambda _c=False: self.close())   # 따로 실행이면 프로그램이 끝나고, 본 뷰어 안이면 창만 닫힘
+
     def open_gsync(self, exec_: bool = True):
         """[구글 주소록과 싱크](명함 SOT §5.29, 261120-36) — 미리보기 창. 반영 뒤 목록을 다시 채우고, 구글에서 지워져
         '명함도 지움' 을 고른 명함은 목록 지우기와 같은 휴지통 길(§5.20)로."""
@@ -1614,6 +1643,7 @@ class BizcardFindDialog(QDialog):
             if getattr(self, "btn_settings", None) is not None:
                 from viewer.widgets.icons import themed_icon
                 self.btn_settings.setIcon(themed_icon("gear", size=18))   # 테마 글자색 톱니(§5.24.9)
+                self.btn_menu.setIcon(themed_icon("menu", size=18))        # ≡ 메뉴(261120-37)
         self._match_head()
 
     def _match_head(self):

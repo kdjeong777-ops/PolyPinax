@@ -987,7 +987,7 @@ try:
     st.con.commit()
     st.close()
     cbk = getattr(dlg, "cb_kind", None)
-    chk(cbk is not None and dlg.layout().itemAt(0).layout().indexOf(cbk) == 0
+    chk(cbk is not None and dlg.layout().itemAt(0).layout().indexOf(cbk) == (1 if getattr(dlg, "btn_menu", None) is not None else 0)
         and [cbk.itemData(i) for i in range(cbk.count()) if cbk.itemData(i)] == ["all", "ko", "en", "card", "nocard", "photo", "nophoto"],
         "I21 찾기 칸 앞에 구분(전체·한글·영어·명함 있음·명함 없음)")
     got = {}
@@ -1632,8 +1632,51 @@ try:
     chk(kind2 == "en" and dlg._rows and all(not _re.search("[가-힣]", c.get("name") or "") for c in dlg._rows),
         "I23 찾기 칸 앞 구분은 창을 다시 열어도 그대로(명함 DB meta)", "%s %d" % (kind2, len(dlg._rows)))
     dlg.cb_kind.setCurrentIndex(0)
-    dlg.close()
+
+    # I33 ≡ 메뉴 — 맨 왼쪽, 아래 단추와 같은 항목·켜짐, 누르면 같은 길, 끝에 '종료' · [닫기] 없음 (261120-37·-38)
+    bmenu = getattr(dlg, "btn_menu", None)
+    top_l2 = dlg.layout().itemAt(0).layout()
+    pushes = [b.text() for b in dlg.findChildren(QPushButton) if b.window() is dlg]
+    ok_menu = False
+    if bmenu is not None:
+        st = S.BizcardStore()
+        cid_contact = st.con.execute("SELECT id FROM cards WHERE front LIKE 'contact:%' LIMIT 1").fetchone()[0]
+        st.close()
+        dlg.ed_find.clear()
+        dlg.refresh()
+        pump(timeout=0.2)
+        dlg.table.setCurrentCell(dlg.row_of_id(cid_contact), 0)   # 그림 없는 명함 — [명함 보기] 꺼짐
+        pump(timeout=0.2)
+        dlg.main_menu.aboutToShow.emit()                         # 메뉴를 여는 것과 같은 길(열 때마다 채움)
+        acts = [a for a in dlg.main_menu.actions() if not a.isSeparator()]
+        names = [a.text() for a in acts]
+        want_names = [b.text() for b in (dlg.btn_new_card, dlg.btn_manage, dlg.btn_dupe, dlg.btn_vcard, dlg.btn_open)
+                      if b.isVisibleTo(dlg)] + ["종료"]
+        en = {a.text(): a.isEnabled() for a in acts}
+        sub = next((a.menu() for a in acts if a.menu() is not None), None)
+        hits4 = []
+        _o_dupes = dlg.open_dupes
+        dlg.open_dupes = lambda *a, **k: hits4.append("dupe")
+        try:
+            next(a for a in acts if a.text() == "중복 검토").trigger()
+        finally:
+            dlg.open_dupes = _o_dupes
+        ok_menu = (top_l2.indexOf(bmenu) == 0 and not bmenu.icon().isNull() and names == want_names
+                   and en.get("명함 보기") is False and en.get("명함 보기") == dlg.btn_open.isEnabled()
+                   and sub is not None and [a.text() for a in sub.actions() if a.text()] == [a.text() for a in dlg.btn_vcard.menu().actions() if a.text()]
+                   and hits4 == ["dupe"])
+        print("I33", names, want_names, en, hits4)
+    chk(ok_menu and "닫기" not in pushes,
+        "I33 찾기 줄 맨 왼쪽 ≡ 메뉴 — 아래 단추와 같은 항목·차례·켜짐(명함 보기 꺼짐 그대로)·누르면 같은 길·주소록 하위 메뉴·끝에 '종료', [닫기] 단추 없음",
+        str(pushes))
+    if bmenu is not None:
+        quit_a = [a for a in dlg.main_menu.actions() if a.text() == "종료"]
+        quit_a[0].trigger() if quit_a else dlg.close()
+    else:
+        dlg.close()
     pump(timeout=0.2)
+    from PyQt6 import sip as _sip
+    chk(_sip.isdeleted(dlg) or not dlg.isVisible(), "I33 '종료' 는 창 닫기와 같은 길(창이 닫힘)")
 except Exception:
     import traceback
     traceback.print_exc()

@@ -18644,3 +18644,7 @@ msgstr "Connected — {email}"
 #, python-brace-format
 msgid "구글 계정을 연결하지 못했습니다({err})."
 msgstr "Could not connect the Google account ({err})."
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "메뉴"
+msgstr "Menu"

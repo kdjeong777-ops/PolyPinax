@@ -238,6 +238,15 @@ def _select_box(p, c):
     p.drawPolygon(arrow)
 
 
+def _menu(p, c):
+    """세 줄(≡, 메뉴) — 같은 길이 가로줄 셋(디자인 SOT §4.2, 261120-37)."""
+    pen = QPen(c, 1.6)
+    pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+    p.setPen(pen)
+    for y in (4.0, 8.0, 12.0):
+        p.drawLine(QPointF(2.5, y), QPointF(13.5, y))
+
+
 def _gear(p, c):
     """톱니바퀴(환경설정) — 이 여덟 개 바깥 원 + 가운데 빈 원(디자인 SOT §4.2, 261120-17)."""
     import math
@@ -267,7 +276,7 @@ _DRAW = {
     "shape_rect": _shape_rect, "shape_round": _shape_round, "shape_circle": _shape_circle,
     "crop": _crop, "sign": _sign, "image": _image, "line_straight": _line_straight,
     "view_tree": _view_tree, "view_single": _view_single, "hand": _hand, "select_box": _select_box,
-    "gear": _gear,
+    "gear": _gear, "menu": _menu,
 }
 
 

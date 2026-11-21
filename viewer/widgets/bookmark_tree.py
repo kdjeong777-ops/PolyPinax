@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import os
 from viewer.i18n import tr, tr_noop, korea_only_visible  # 261008: 화면 문구(다국어 SOT §6·§7)
+from viewer.pathutil import path_in as _path_in      # 261120-29(§4.9.4): 보기 기준 폴더 안인가
 from pathlib import Path
 from typing import Optional
 
@@ -630,6 +631,9 @@ class BookmarkTree(QWidget):
         # 260901-2: False=단일(평탄) / True=트리(폴더 그룹). **기본은 트리**(사용자 지정) —
         #   하위 폴더가 없으면 트리여도 평탄 목록과 같은 모양이라 기본값으로 안전하다.
         self._view_tree: bool = True
+        # 261120-29·-30(책갈피창·저장 SOT §4.9.4): 보기 기준 폴더 — 폴더 모드로 연 폴더. [📄 파일] 로 가도 기억(_view_base_kept)
+        self._view_base: Optional[Path] = None
+        self._view_base_kept: bool = False
         self._single_file: Optional[Path] = None    # 260822: 파일 모드로 연 단일 PDF
         self._current_file_getter = None            # 260822: 앱이 현재 본문 파일 경로 제공
         self._dirty: bool = False                   # 260606-4: 편집 변경 여부
@@ -1122,6 +1126,7 @@ class BookmarkTree(QWidget):
         """
         self._keep_rows()            # 261115-4(§4.7.24): 비우기 전에 지킬 줄
         self._root_dir = Path(folder)
+        self._view_base, self._view_base_kept = Path(folder), False   # 261120-29(§4.9.4)
         self._reload_fn = lambda f=Path(folder): self.load_folder(f)   # 260611-9: 취소 재로드
         self._cancel_scan()          # 260906-1: 이전 폴더 스캔 중단(결과 섞임 방지)
         self._cancel_fill()
@@ -1653,6 +1658,12 @@ class BookmarkTree(QWidget):
     def _is_file_mode(self) -> bool:
         return self._mode == "single"
 
+    def view_base(self):
+        """261120-29(§4.9.4): 보기 기준 폴더 — 창 제목이 `<기준> ▸ <하위 경로>` 로 가른다. 없으면 지금 목록의 폴더."""
+        if self._root_dir is None:                   # 목록을 비웠다(사진 모드 전환 등 — 남은 기준을 쓰지 않는다)
+            return None
+        return self._view_base or self._root_dir
+
     def _update_mode_button(self):
         """모드 버튼 라벨을 현재 모드에 맞게 — 파일 모드면 '폴더 모드로', 폴더면 '파일 모드로'."""
         if not hasattr(self, "btn_mode"):
@@ -1686,6 +1697,11 @@ class BookmarkTree(QWidget):
             #   그것도 없으면 파일 모드로 연 파일. (종전은 파일 모드로 연 파일이 먼저였다.)
             f = self._current_selected_file() or self._single_file
             folder = (f.parent if f else self._root_dir)
+            # 261120-30(§4.9.4, 사용자 지시): 폴더 모드에서 온 파일 모드면 **보기 기준 폴더**로 돌아간다 — 종전에는
+            #   그 파일의 폴더(하위 폴더)로 열려 기준이 거기 고정됐다
+            base = self._view_base
+            if self._view_base_kept and base is not None and Path(base).is_dir() and (f is None or _path_in(f, base)):
+                folder = base
             if not folder or not Path(folder).exists():
                 self._notice(tr("폴더를 찾을 수 없습니다."))
                 return
@@ -1699,7 +1715,7 @@ class BookmarkTree(QWidget):
             if not f or not f.exists():
                 self._notice(tr("파일 모드로 볼 파일을 먼저 선택하세요."))
                 return
-            self.load_single_pdf(f)
+            self.load_single_pdf(f, keep_base=True)     # 261120-30: 보기 기준 폴더를 기억
             self.viewModeChanged.emit(False, str(f))
 
     def _select_top_file(self, path):
@@ -1869,6 +1885,7 @@ class BookmarkTree(QWidget):
         self._cancel_fill()
         self._reset_probe_queue()
         self._root_dir = Path(files[0]).parent
+        self._view_base, self._view_base_kept = self._root_dir, False   # 261120-29(§4.9.4)
         self._single_file = Path(files[0])
         self._file_list = [Path(f) for f in files]
         self._mode = "single"
@@ -1902,14 +1919,17 @@ class BookmarkTree(QWidget):
             self.tree.clear()
             self._set_count("")
 
-    def load_single_pdf(self, pdf_path: str | Path) -> bool:
-        """v1.6.11 I1/I2: 단일 PDF 한 개만 트리에 표시 (내부 TOC lazy load)."""
+    def load_single_pdf(self, pdf_path: str | Path, keep_base: bool = False) -> bool:
+        """v1.6.11 I1/I2: 단일 PDF 한 개만 트리에 표시 (내부 TOC lazy load).
+        261120-30(§4.9.4): `keep_base` — 폴더 모드에서 [📄 파일] 로 온 것이면 보기 기준 폴더를 기억한다(그 안의 파일일 때만)."""
         p = Path(pdf_path)
         self._keep_rows()                # 261115-4(§4.7.24)
         self._root_dir = p.parent
+        keep = bool(keep_base) and self._view_base is not None and _path_in(p, self._view_base)
+        self._view_base, self._view_base_kept = (self._view_base, True) if keep else (p.parent, False)
         self._single_file = p            # 260822: 파일 모드 → 폴더 모드 전환 기준
         self._file_list = [p]            # 261008-1: 이전 여러 파일 목록이 남지 않게(§4.7.14)
-        self._reload_fn = lambda pp=p: self.load_single_pdf(pp)   # 260611-9: 취소 재로드
+        self._reload_fn = lambda pp=p, kb=keep: self.load_single_pdf(pp, keep_base=kb)   # 260611-9: 취소 재로드
         self._mode = "single"            # v1.6.19
         self._pdfs_flat = []
         # 260915-3: 폴더 목록을 채우던 중이면 먼저 멈춘다 — 안 멈추면 다음 채우기 틱이 지운 행에
@@ -1960,6 +1980,7 @@ class BookmarkTree(QWidget):
             return [str(f) for f in files]
         self._keep_rows()                # 261115-4(§4.7.24)
         self._root_dir = files[0].parent
+        self._view_base, self._view_base_kept = self._root_dir, False   # 261120-29(§4.9.4)
         self._single_file = files[0]
         self._file_list = list(files)
         self._reload_fn = lambda fs=tuple(files): self.load_pdf_files(fs)

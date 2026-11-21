@@ -134,8 +134,9 @@ try:
     out_d = docs / "sub" / "AB_sub.pdf"
     run_merge(out_d)
     title = mw.windowTitle()
-    chk(cur_name() == "AB_sub.pdf" and str(docs) in title and title.endswith("AB_sub.pdf") and after_calls == [],
-        "D 폴더 모드 하위 폴더 — 그 파일을 열고 제목은 '폴더 — 이름'", title + " " + str(after_calls))
+    # 261120-29(§4.9.4): 하위 폴더면 '<폴더> ▸ <하위>  —  이름'
+    chk(cur_name() == "AB_sub.pdf" and title.endswith("PolyPDF 인쇄 ▸ sub  —  AB_sub.pdf") and after_calls == [],
+        "D 폴더 모드 하위 폴더 — 그 파일을 열고 제목은 '폴더 ▸ sub  —  이름'", title + " " + str(after_calls))
     idx = [i for i, (k, n) in enumerate(order) if k == "index" and n == "AB_sub.pdf"]
     lod = [i for i, (k, n) in enumerate(order) if k == "load" and n == "AB_sub.pdf"]
     chk(len(idx) == 1 and lod and idx[0] < lod[0], "D 같은 길(색인 먼저·한 번)", str(order))

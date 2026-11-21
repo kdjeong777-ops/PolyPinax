@@ -40,6 +40,16 @@ def norm_key(p) -> str:
         return str(p)
 
 
+def path_in(p, base) -> bool:
+    """`p` 가 폴더 `base` 안(하위 포함)인가 — 문자열(`norm_key`)로만 견준다(261120-29, 책갈피창·저장 SOT §4.9.4).
+    `resolve` 를 쓰지 않는다 — Windows 에서 그 파일 핸들을 열어 큰 PDF 에서 1초 넘게 선 적이 있다(`rel_key`)."""
+    try:
+        b = norm_key(os.path.abspath(str(base))).rstrip("\\/")
+        return norm_key(os.path.abspath(str(p))).startswith(b + os.sep)
+    except Exception:
+        return False
+
+
 _REAL_DIRS: dict = {}
 
 

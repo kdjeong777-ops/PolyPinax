@@ -1399,30 +1399,59 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             self._bk_progress.pop(tree, None)
             self.status.showMessage(text, ms)
 
-    def _update_title(self):
-        """제목 — 2단이면 '좌측폴더 | 우측폴더'(우측 없으면 좌측만) + 현재 본문 파일명."""
+    TITLE_PATH_MAX = 80        # 261120-29(책갈피창·저장 SOT §4.9.4): '<기준> ▸ <하위>' 가 이보다 길면 기준 앞쪽을 '…\' 로
+
+    def _view_base_of(self, idx: int):
+        """261120-29(§4.9.4): 그 창 책갈피창의 **보기 기준 폴더** — 없으면 `_folder`/`_folder_right`."""
+        bt = self.bookmark_tree if idx == 0 else getattr(self, "bookmark_tree_right", None)
         try:
-            lf = getattr(self, "_folder", None)
+            b = bt.view_base() if bt is not None else None
+        except Exception:
+            b = None
+        return b or getattr(self, "_folder" if idx == 0 else "_folder_right", None)
+
+    @classmethod
+    def _title_base_sub(cls, base, rel: str) -> str:
+        """`<기준> ▸ <하위>` — 길면 기준의 마지막 두 칸만 남기고 앞을 `…\\`(사용자 결정, §4.9.4)."""
+        s = f"{base} ▸ {rel}"
+        if len(s) > cls.TITLE_PATH_MAX:
+            tail = [x for x in Path(str(base)).parts if x not in ("\\", "/")][-2:]
+            s = f"…{os.sep}{os.sep.join(tail)} ▸ {rel}"
+        return s
+
+    def _update_title(self):
+        """제목 — 2단이면 '좌측폴더 | 우측폴더'(우측 없으면 좌측만) + 현재 본문 파일명.
+        261120-29(§4.9.4): 폴더 자리는 책갈피창의 **보기 기준 폴더**, 본문 파일이 그 하위 폴더면 `<기준> ▸ <하위 경로>`."""
+        try:
+            lf = self._view_base_of(0)
+            split = bool(getattr(self, "_split_on", False))
+            rf = self._view_base_of(1) if split else None
             left = str(lf) if lf else ""
-            if getattr(self, "_split_on", False) and getattr(self, "_folder_right", None) \
-                    and (not lf or str(Path(self._folder_right)) != str(Path(lf))):
-                base = f"{left}  |  {self._folder_right}"
+            if rf and (not lf or str(Path(rf)) != str(Path(lf))):
+                base = f"{left}  |  {rf}"
             else:
                 base = left
             parts = [p for p in (base,) if p]
             # 260825: 현재 본문 파일명도 표시(다른 파일 선택 시 제목 갱신)
             try:
                 cur = self.main_view.current_file() if self.main_view else None
-                if cur and str(cur).lower().endswith(".pdf"):
+                if cur and (str(cur).lower().endswith(".pdf") or getattr(self, "_photo_mode", False)):
                     # 261117-52(책갈피창·저장 SOT §4.8.3): 그 폴더 밖이면 전체 경로 — 종전에는 이름만이라
                     #   Downloads 에 저장한 병합 파일이 'Documents… — 이름' 으로 보였다
-                    folders = [f for f in (lf, getattr(self, "_folder_right", None)
-                                           if getattr(self, "_split_on", False) else None) if f]
-                    from viewer.pathutil import norm_key      # 문자열만 견준다(resolve 는 파일 핸들을 연다 — rel_key)
-                    kc = norm_key(os.path.abspath(str(cur)))
-                    inside = any(kc.startswith(norm_key(os.path.abspath(str(f))).rstrip("\\/") + os.sep)
-                                 for f in folders)
-                    parts.append(Path(cur).name if inside else str(Path(cur)))
+                    # 261120-29(§4.9.4): 하위 폴더면 그 경로도 — 종전에는 '<기준> — 이름' 이라 어느 폴더인지 안 보였다
+                    from viewer.pathutil import path_in      # 문자열만 견준다(resolve 는 파일 핸들을 연다 — rel_key)
+                    folders = [f for f in (lf, rf) if f]
+                    hit = next((f for f in sorted(folders, key=lambda x: -len(str(x))) if path_in(cur, f)), None)
+                    if hit is None:
+                        parts.append(str(Path(cur)))
+                    else:
+                        rel = os.path.relpath(os.path.dirname(os.path.abspath(str(cur))), os.path.abspath(str(hit)))
+                        if rel not in (".", ""):
+                            if len(folders) == 1 or base == left:
+                                parts = [self._title_base_sub(hit, rel)]
+                            else:
+                                parts.append(f"▸ {rel}")
+                        parts.append(Path(cur).name)
             except Exception:
                 pass
             title = "  —  ".join(parts)

@@ -409,7 +409,12 @@ def apply(store, api, rows: list, folder: str = "", drive_folder: str = DRIVE_FO
             elif k == TO_CARD:
                 p = _fetch(api, r["rn"], by_rn)
                 v = person_values(p)
-                P.update_card(store, r["card_id"], {f: v[f] for f in r["fields"] if f in v}, commit=False)
+                ch = {f: v[f] for f in r["fields"] if f in v}
+                if "name" in ch or "company" in ch:           # 회사·이름이 바뀌면 자동 해시태그도(§5.5, 261120-53)
+                    old = P.card_by_id(store, r["card_id"])
+                    ch["tags"] = P.auto_retag(old.get("tags") or [], [old], ch.get("name", old.get("name")),
+                                              ch.get("company", old.get("company")))[0]
+                P.update_card(store, r["card_id"], ch, commit=False)
                 P._set_srcs(store, r["card_id"], [f for f in r["fields"] if f in P._SCALARS], SRC)
                 _link_put(store, r["card_id"], r["rn"], p.get("etag") or "")
             elif k == TO_GOOGLE:

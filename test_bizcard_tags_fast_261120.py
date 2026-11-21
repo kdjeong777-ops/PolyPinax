@@ -126,8 +126,10 @@ try:
         t0 = time.perf_counter()
         QTest.mouseClick(dlg.btn_tags, Qt.MouseButton.LeftButton)
         dt = seen.get("shown_at", t0) - t0
-        chk(calls["n"] == 0 and "가짜새태그" in (seen.get("known") or []), "B 미리 센 뒤 [해시태그] 는 메인에서 다시 세지 않음",
-            "calls=%d" % calls["n"])
+        kn = seen.get("known") or []
+        chk(calls["n"] == 0 and "가나다" in kn and "가짜새태그" not in kn,   # 기존 태그 = 지금 목록 명함 태그만(261120-52)
+            "B [해시태그] 는 메인에서 저장소 전체를 세지 않고, 기존 태그는 지금 목록 명함의 태그만(다른 파일 태그 빼고)",
+            "calls=%d %s" % (calls["n"], kn[:6]))
         chk(0 <= dt < 0.6, "D 1만 개 기록 — 누름 → 창 %.2f초 (< 0.6)" % dt)
         TS.known_tags_of = real_of
     other = TS.TagStore()                               # 다른 곳(본 뷰어)이 고쳐 씀

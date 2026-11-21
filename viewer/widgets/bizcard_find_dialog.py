@@ -52,6 +52,10 @@ FIELDS = (("name", tr_noop("이름")), ("company", tr_noop("회사")), ("dept", 
 MEMO_LABEL = tr_noop("메모")
 PHONE_KEYS = ("cell", "work", "fax")
 PHOTO_HANDLE = 9                    # 사진창 구분선 손잡이 높이(가운데 1px 선, §5.24.3 '구분선')
+SWIPE_PX = 40                       # 사진 쓸어 넘기기 — 이만큼 넘게 좌우로 끌면 다음·이전(§5.24.3 '명함', 261120-50)
+PHOTO_MIN_SHOW = 300                # 사진창 한 칸이 이보다 낮으면 그림이 있는 칸을 크게(§5.24.3 '크기 비율', 261120-51)
+PHOTO_FAVOR = 0.68                  # 그때 그림이 있는 칸의 몫
+PHOTO_SPLIT_KEY = "photo_split"     # 사람이 끈 비율(위 칸 몫) — 명함 DB meta
 PRELOAD_MS = 1500                  # 창이 뜬 뒤 이만큼 쉬면 [해시태그] 준비(모듈·전체 태그 목록 — §5.24.4 '빠르게')
 DROP_TINT, DROP_TINT_HOT = "0.04", "0.14"   # 놓을 자리 틀 바탕(강조색 투명도) — 창 위 / 그 자리 위(§5.24.3 '끌어 놓기')
 
@@ -516,6 +520,77 @@ class _LineSplitter(QSplitter):
         return _LineHandle(self.orientation(), self)
 
 
+class _KindCombo(QComboBox):
+    """찾기 칸 앞 구분 — 항목 앞 체크 칸으로 여러 개(§5.24.1 '구분', 261120-49). 목록에서 항목을 누르면 체크만 바꾸고 펼친 채,
+    콤보 글은 고른 것을 ' · ' 로. setCurrentIndex(키보드·종전 길)는 그 하나만 고른다. changed = 고른 것이 바뀜."""
+    changed = pyqtSignal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._keys = ["all"]
+        self.view().viewport().installEventFilter(self)
+        self.currentIndexChanged.connect(self._picked_one)
+
+    def add_kind(self, label, key):
+        self.addItem(label, key)
+        it = self.model().item(self.count() - 1)
+        if it is not None:
+            it.setFlags(it.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            it.setData(Qt.CheckState.Unchecked, Qt.ItemDataRole.CheckStateRole)
+
+    def keys(self) -> list:
+        return list(self._keys)
+
+    def set_keys(self, keys, emit=False):
+        self._keys = P.norm_kinds(keys)
+        for i in range(self.count()):
+            k = self.itemData(i)
+            if k:
+                self.setItemData(i, Qt.CheckState.Checked if k in self._keys else Qt.CheckState.Unchecked,
+                                 Qt.ItemDataRole.CheckStateRole)
+        self.blockSignals(True)
+        self.setCurrentIndex(max(0, self.findData(self._keys[0])))
+        self.blockSignals(False)
+        self.update()
+        if emit:
+            self.changed.emit()
+
+    def toggle(self, key):
+        if key == "all":
+            ks = ["all"]
+        else:
+            ks = [k for k in self._keys if k != "all"]
+            ks = [k for k in ks if k != key] if key in ks else ks + [key]
+        self.set_keys(ks, emit=True)
+
+    def _picked_one(self, i):
+        k = self.itemData(i)
+        if k:
+            self.set_keys([k], emit=True)
+
+    def eventFilter(self, obj, e):
+        if obj is self.view().viewport() and e.type() in (e.Type.MouseButtonRelease, e.Type.MouseButtonPress):
+            ix = self.view().indexAt(e.position().toPoint())
+            k = self.itemData(ix.row()) if ix.isValid() else None
+            if k:
+                if e.type() == e.Type.MouseButtonRelease:
+                    self.toggle(k)                     # 체크만 바꾸고 목록은 펼친 채(여러 개를 잇달아)
+                return True
+        return super().eventFilter(obj, e)
+
+    def text_of_keys(self) -> str:
+        return " · ".join(self.itemText(self.findData(k)) for k in self._keys if self.findData(k) >= 0)
+
+    def paintEvent(self, _e):
+        from PyQt6.QtWidgets import QStylePainter, QStyleOptionComboBox, QStyle
+        p = QStylePainter(self)
+        opt = QStyleOptionComboBox()
+        self.initStyleOption(opt)
+        opt.currentText = self.text_of_keys()
+        p.drawComplexControl(QStyle.ComplexControl.CC_ComboBox, opt)
+        p.drawControl(QStyle.ControlElement.CE_ComboBoxLabel, opt)
+
+
 class _MemoTypeWatch(QObject):
     """메모 칸에 글을 치기 시작하는 순간(글자 키·한글 입력) — 칸이 받기 전에 부른다(§5.9 '메모 날짜', 261120-27)."""
 
@@ -823,17 +898,17 @@ class BizcardFindDialog(QDialog):
         v = QVBoxLayout(self)
 
         top = QHBoxLayout()
-        self.cb_kind = QComboBox()                     # 찾기 칸 앞 구분(§5.24.1 '위 줄', 사용자 지시 261119)
+        self.cb_kind = _KindCombo()                    # 찾기 칸 앞 구분(§5.24.1 '위 줄', 사용자 지시 261119) — 체크로 여러 개(261120-49)
         kind_label = dict(zip(P.KINDS, (tr("전체"), tr("한글"), tr("영어"), tr("명함 있음"), tr("명함 없음"),
                                         tr("사진 있음"), tr("사진 없음"), tr("카톡 친구추가 방지"))))
         for gi, grp in enumerate(P.KIND_GROUPS):        # 언어 / 명함 / 사진 묶음 사이 구분선(261120-24)
             if gi:
                 self.cb_kind.insertSeparator(self.cb_kind.count())
             for key in grp:
-                self.cb_kind.addItem(kind_label[key], key)
+                self.cb_kind.add_kind(kind_label[key], key)
         self.cb_kind.setToolTip(tr("한글·영어 = 이름 글자, 명함 있음·없음 = 명함 그림(없음 = 주소록에서 들인 명함), "
-                                   "사진 있음·없음 = 인물 사진"))
-        self.cb_kind.currentIndexChanged.connect(lambda _i: self._on_kind())
+                                   "사진 있음·없음 = 인물 사진 — 체크로 여러 개(같은 묶음은 또는, 묶음끼리는 그리고)"))
+        self.cb_kind.changed.connect(self._on_kind)
         from viewer.widgets.icons import themed_icon as _ti
         self.btn_menu = QToolButton()                  # 맨 왼쪽 ≡ 메뉴 — 아래 단추와 같은 항목 + 종료(§5.24.1 '≡ 메뉴', 261120-37)
         self.btn_menu.setIcon(_ti("menu", size=18))
@@ -1112,6 +1187,7 @@ class BizcardFindDialog(QDialog):
         self.pv.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Ignored)
         self.pv.setToolTip(tr("인물 사진을 여기에 끌어 놓으면 이 명함의 인물 사진으로 넣습니다"))
         cv.addWidget(self.pv, 1)
+        self.pv.installEventFilter(self)                   # 좌우로 쓸기·휠로 앞↔뒷면(261120-50)
         self.dots = PageDots()                         # 쪽 점 표시 — 앞·뒷면(사용자 지시 261119, 종전 앞↔뒤 동그란 단추)
         self.dots.setToolTip(tr("명함 앞면 ↔ 뒷면"))
         self.dots.picked.connect(lambda i: self._flip(i == 1))
@@ -1123,10 +1199,11 @@ class BizcardFindDialog(QDialog):
         # 위 = 큰 화면, 아래 = 썸네일 한 줄(§5.24 사진창, 사용자 지시 261119)
         self.photo_view = QLabel()
         self.photo_view.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.photo_view.setMinimumSize(160, 120)
+        self.photo_view.setMinimumSize(160, 80)
         self.photo_view.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Ignored)
         self.photo_shown = ""
         pvl.addWidget(self.photo_view, 1)
+        self.photo_view.installEventFilter(self)           # 좌우로 쓸기·휠로 다음 인물 사진(261120-50)
         self.photos = _OrderList(external=self._drop_files, accepts=lambda e: e.mimeData().hasUrls())
         self.photos.setWrapping(False)                     # 한 줄 — 넘치면 가로 스크롤
         self.photos.setIconSize(QSize(PHOTO_ICON, PHOTO_ICON))
@@ -1156,6 +1233,8 @@ class BizcardFindDialog(QDialog):
         self.photo_split.setStretchFactor(0, 2)
         self.photo_split.setStretchFactor(1, 3)
         self.photo_split.splitterMoved.connect(lambda _p, _i: QTimer.singleShot(0, self._show_card))
+        self.photo_split.splitterMoved.connect(lambda _p, _i: self._photo_split_moved())   # 끈 비율 기억(261120-51)
+        self.photo_split.installEventFilter(self)            # 사진창 크기가 바뀌면 비율 다시(261120-51)
         self._detail_css = ""
         self._style_detail()                           # 사진창 구분선까지 한 번 더(세부 카드보다 늦게 만든다)
 
@@ -1305,7 +1384,7 @@ class BizcardFindDialog(QDialog):
         """카톡 친구추가 방지 표시(§5.29) — 구글 이름 앞 '#' 는 다음 [구글 주소록과 싱크] 미리보기에서 [반영]."""
         from viewer.bizcard import gsync as G
         n = G.kakao_set(self._store(), [c["id"] for c in cards if c], on)
-        if self.cb_kind.currentData() == "kakao":
+        if "kakao" in self.kinds():
             self.refresh()
         return n
 
@@ -1389,17 +1468,19 @@ class BizcardFindDialog(QDialog):
             cb.setChecked(k in on)
             cb.blockSignals(False)
         self._fav_fill_tabs(st.meta_get("fav_tab", None))
-        i = self.cb_kind.findData(st.meta_get("find_kind", "all"))   # 구분 기억(§5.24.1 '구분', 사용자 지시 261120)
-        self.cb_kind.blockSignals(True)
-        self.cb_kind.setCurrentIndex(max(0, i))
-        self.cb_kind.blockSignals(False)
+        self.cb_kind.set_keys(st.meta_get("find_kind", "all"))   # 구분 기억(§5.24.1 '구분', 사용자 지시 261120 — 여러 개면 목록, 261120-49)
 
     def _save_copy_fields(self):
         self._store().meta_set("copy_fields", [k for k in P.COPY_FIELDS if self.chk[k].isChecked()])
 
+    def kinds(self) -> list:
+        """고른 구분들(§5.24.1 '구분' — 체크로 여러 개, 261120-49)."""
+        return self.cb_kind.keys()
+
     def _on_kind(self):
-        """구분을 바꿈 — 기억하고(명함 DB meta) 찾기 결과로."""
-        self._store().meta_set("find_kind", self.cb_kind.currentData() or "all")
+        """구분을 바꿈 — 기억하고(명함 DB meta, 여러 개면 목록) 찾기 결과로."""
+        ks = self.kinds()
+        self._store().meta_set("find_kind", ks if len(ks) > 1 else ks[0])
         self._on_period()
 
     # ── 찾기 ──
@@ -1431,14 +1512,14 @@ class BizcardFindDialog(QDialog):
             since, until = self._range()
             q = "" if self._ghost_all else self.ed_find.text()   # 흐린 글을 다시 고름 = 전체(§5.24.1 '찾기 칸 흐린 글')
             rows = P.find(self._store(), q, since, until)   # 상한 없이 전부(§5.9 '결과')
-            kind = self.cb_kind.currentData()
-            if kind and kind != "all":
-                ph = P.photo_ids(rows, self._bizcard_folder()) if kind in ("photo", "nophoto") else None   # 사진 있음·없음(261120-24)
+            ks = self.kinds()
+            if ks != ["all"]:                           # 같은 묶음은 또는, 묶음끼리는 그리고(261120-49)
+                ph = P.photo_ids(rows, self._bizcard_folder()) if {"photo", "nophoto"} & set(ks) else None   # 사진 있음·없음(261120-24)
                 bl = None
-                if kind == "kakao":                     # 카톡 친구추가 방지(§5.29)
+                if "kakao" in ks:                       # 카톡 친구추가 방지(§5.29)
                     from viewer.bizcard import gsync as G
                     bl = G.blocked_ids(self._store())
-                rows = [c for c in rows if P.kind_ok(c, kind, ph, bl)]
+                rows = [c for c in rows if P.kinds_ok(c, ks, ph, bl)]
         self._rows = rows
         self._by_id = {c["id"]: c for c in self._rows}
         keep = self._card["id"] if self._card else None
@@ -1562,6 +1643,45 @@ class BizcardFindDialog(QDialog):
         else:
             self._recent_timer.stop()
 
+    # ── 쓸어 넘기기(§5.24.3 '명함', 261120-50) — 명함 앞·뒷면, 인물 사진 ──
+    def _swipe_event(self, obj, e) -> bool:
+        from PyQt6.QtCore import QEvent
+        t = e.type()
+        if t == QEvent.Type.MouseButtonPress and e.button() == Qt.MouseButton.LeftButton:
+            self._swipe_from = e.position()
+        elif t == QEvent.Type.MouseButtonRelease and e.button() == Qt.MouseButton.LeftButton:
+            p0, self._swipe_from = getattr(self, "_swipe_from", None), None
+            if p0 is not None:
+                dx, dy = e.position().x() - p0.x(), e.position().y() - p0.y()
+                if abs(dx) > SWIPE_PX and abs(dx) > abs(dy):
+                    self._swipe(obj is self.pv, 1 if dx < 0 else -1)   # 왼쪽으로 쓸면 다음
+                    return True
+        elif t == QEvent.Type.Wheel:
+            d = e.angleDelta().y() or e.angleDelta().x()
+            if d:
+                self._swipe(obj is self.pv, 1 if d < 0 else -1)        # 아래로 = 다음
+                return True
+        return False
+
+    def _swipe(self, card: bool, step: int):
+        """명함 그림이면 앞↔뒷면, 인물 사진이면 썸네일 줄의 다음·이전(끝에서 멈춤)."""
+        if card:
+            c = self._card
+            if not c or not c.get("back"):
+                return
+            back = self._side == "back"
+            if (step > 0) != back:
+                self._flip(not back)
+            return
+        n = self.photos.count()
+        if n < 2:
+            return
+        i = self.photos.currentRow()
+        i = 0 if i < 0 else i
+        j = min(n - 1, max(0, i + step))
+        if j != i:
+            self.photos.setCurrentRow(j)                     # currentItemChanged → _show_photo
+
     def _flip(self, on: bool):
         if self._loading:
             return
@@ -1629,6 +1749,39 @@ class BizcardFindDialog(QDialog):
         self._show_photo()
         if hasattr(self, "btn_photo_del"):
             self.btn_photo_del.setEnabled(bool(self._photo_front()) and self.photos.count() > 0)
+        self.photos.setVisible(self.photos.count() > 0)   # 사진이 없으면 빈 썸네일 줄을 숨겨 그림 칸에 자리를(261120-51)
+        self._auto_photo_split()
+
+    def _auto_photo_split(self):
+        """사진창 위(명함)·아래(인물 사진) 비율(§5.24.3 '크기 비율', 261120-51) — 사람이 끈 비율이 있으면 그것, 없으면 같은 높이,
+        한 칸이 PHOTO_MIN_SHOW 보다 낮아지면 그림이 있는 칸을 PHOTO_FAVOR 로."""
+        sp = getattr(self, "photo_split", None)
+        if sp is None or not hasattr(self, "photos"):
+            return
+        tot = sum(sp.sizes())
+        if tot <= 0:
+            return
+        try:
+            saved = self._store().meta_get(PHOTO_SPLIT_KEY, None)
+        except Exception:
+            saved = None
+        if isinstance(saved, (int, float)) and 0.05 < float(saved) < 0.95:
+            top = tot * float(saved)
+        else:
+            c = self._card
+            path = (c.get("back") if self._side == "back" else c.get("front")) if c else ""
+            has_card = bool(path) and os.path.exists(path)
+            has_photo = self.photos.count() > 0
+            top = tot / 2
+            if tot / 2 < PHOTO_MIN_SHOW and has_card != has_photo:
+                top = tot * (PHOTO_FAVOR if has_card else 1 - PHOTO_FAVOR)
+        sp.setSizes([int(top), int(tot - top)])
+
+    def _photo_split_moved(self):
+        """사람이 손잡이를 끎 — 그 비율(위 칸 몫)을 기억하고 그 뒤로는 자동 비율을 쓰지 않는다(261120-51)."""
+        sz = self.photo_split.sizes()
+        if sum(sz) > 0:
+            self._store().meta_set(PHOTO_SPLIT_KEY, round(sz[0] / sum(sz), 3))
 
     def photo_paths(self) -> list:
         return [self.photos.item(i).data(ROLE) for i in range(self.photos.count())]
@@ -1809,15 +1962,9 @@ class BizcardFindDialog(QDialog):
     def store_card_edit(self, c, new):
         """고친 값 new(`edited_fields`)를 명함 c 에 — 이름·회사가 바뀌면 정리본·뒷면·인물 사진 이름, 앱이 붙인 해시태그만 바꿈,
         손으로 고친 칸은 주소록 출처를 지움. [저장]·중복 검토 '명함 고치기'(§5.24.8)가 같은 길. 반환 = 바뀐 칸들(실패면 None)."""
-        from viewer.bizcard.apply import tags_for, LANG_TAGS
         st = self._store()
-        old_tags = list(c.get("tags") or [])
-        langs = [t for t in old_tags if t in LANG_TAGS]
-        old_auto = set(tags_for({"name": c.get("name") or "", "company": c.get("company") or "", "langs": langs,
-                                 "langs_ordered": False})) | set(langs)     # 앱이 붙인 것만 바꾼다(언어는 다시 하나로 — D25)
-        new_tags = list(dict.fromkeys(tags_for({"name": new["name"], "company": new["company"], "langs": langs,
-                                                "langs_ordered": False})
-                                      + [t for t in old_tags if t not in old_auto]))     # 사람이 붙인 해시태그는 그대로
+        # 앱이 붙인 것만 바꾼다(언어는 다시 하나로 — D25) — 회사명이 바뀌는 모든 길이 같은 `auto_retag`(261120-53)
+        new_tags, old_auto = P.auto_retag(list(c.get("tags") or []), [c], new["name"], new["company"])
         got = self.rename_card_files(c, new["name"], new["company"])
         if got is None:
             return None
@@ -1964,7 +2111,8 @@ class BizcardFindDialog(QDialog):
             from viewer.tag_store import TagStore
             store = TagStore()
         for p in paths:
-            cur = [t for t in (store.get_manual(p) or []) if t not in old_auto]
+            old_keys = {P._tagkey(t) for t in old_auto}          # 공백·대소문자만 다른 옛 자동 태그도(261120-53)
+            cur = [t for t in (store.get_manual(p) or []) if P._tagkey(t) not in old_keys]
             store.set(p, list(dict.fromkeys(cur + list(new_tags))))
 
     # ── 체크한 칸 복사 (§5.24, D21) ──
@@ -2363,6 +2511,7 @@ class BizcardFindDialog(QDialog):
         tm.addSeparator()
         _menu_act(tm, tr("새 할 일"), lambda: self.todo_new(cards=cards))
         _menu_act(m, tr("이메일 복사"), lambda: self.copy_emails(cards))
+        _menu_act(m, tr("해시태그 설정"), lambda: self.tags_for_cards(cards))   # 고른 명함들 — [해시태그] 창(261120-54)
         m.addSeparator()                               # 카톡 친구추가 방지 — 표시만, 구글에는 다음 싱크 때(§5.29)
         _menu_act(m, tr("카톡 친구추가 방지"), lambda: self.set_kakao(cards, True))
         _menu_act(m, tr("카톡 친구추가 방지 해제"), lambda: self.set_kakao(cards, False))
@@ -2410,6 +2559,7 @@ class BizcardFindDialog(QDialog):
                 _menu_act(sm, tr("탭 삭제"), lambda c=cid: self.tab_delete(c))
         m.addSeparator()                               # 이 탭만 엑셀·Word 로(§5.24.2 '할 일 내보내기', 261120-42)
         self._export_menu(m, gid, gid != RECENT and P.todo_info(st, gid) is not None)
+        _menu_act(m, tr("해시태그 설정"), lambda: self.tags_for_cards(self._tab_members(gid)))   # 그 탭 사람 모두(261120-54)
         self._tab_menu_obj = m                         # 검사용
         m.exec(self.fav_tabs.mapToGlobal(pos))
 
@@ -2584,6 +2734,12 @@ class BizcardFindDialog(QDialog):
 
     def eventFilter(self, obj, e):
         from PyQt6.QtCore import QEvent
+        if obj is getattr(self, "pv", None) or obj is getattr(self, "photo_view", None):
+            return self._swipe_event(obj, e)
+        if obj is getattr(self, "photo_split", None):
+            if e.type() == QEvent.Type.Resize and e.oldSize().height() != e.size().height():
+                QTimer.singleShot(0, self._auto_photo_split)
+            return False
         if obj is getattr(self, "ed_find", None):
             t = e.type()
             if t in (QEvent.Type.FocusIn, QEvent.Type.MouseButtonPress):
@@ -2743,6 +2899,7 @@ class BizcardFindDialog(QDialog):
         self._tab_menu_groups(cm, cards, exclude=gid)
         _menu_act(m, tr("새 즐겨찾기 탭으로"), lambda: self.fav_new_tab(cards=cards))
         _menu_act(m, tr("새 할 일로"), lambda: self.todo_new(cards=cards))
+        _menu_act(m, tr("해시태그 설정"), lambda: self.tags_for_cards(cards))   # 고른 사람들(261120-54)
         m.addSeparator()
         _menu_act(m, tr("최근에서 빼기") if gid == RECENT else tr("탭에서 빼기"), lambda: self.fav_remove_selected())
         self._fav_menu_obj = m                         # 검사용
@@ -3049,6 +3206,15 @@ class BizcardFindDialog(QDialog):
             pass
         self.known_preloaded = True                        # 검사용
 
+    def tags_for_cards(self, cards):
+        """목록·탭·사람 칸 메뉴 '해시태그 설정'(§5.24.4 '여는 길', 261120-54) — 그 명함들을 [해시태그] 창으로."""
+        cards = [c for c in cards or [] if c]
+        if not cards:
+            return None
+        if self._dirty and not self._ask_save():
+            return None
+        return self.tag_apply(cards)
+
     def edit_tags(self, text=None):
         """고른 명함들(없으면 지금 명함) — 함께 붙은 태그를 보여 주고, 더한 것은 모두에 붙이고 뗀 것은 모두에서 뗀다.
         text 를 주면 창 없이(검사). 반환 = 바꾼 명함 수 또는 None(취소)."""
@@ -3077,6 +3243,20 @@ class BizcardFindDialog(QDialog):
         self.refresh()
         return len(cards)
 
+    def _list_tags(self, real) -> list:
+        """지금 목록(구분·찾기 단어·기간을 건 결과, 탭 명단 보기면 그 탭 — 걸지 않았으면 명함 전체)의 명함 태그 — 명함 DB 태그 칸과
+        정리본 앞면 파일의 사람 태그(§5.24.4 '창', 261120-52). PDF 등 다른 파일 태그는 넣지 않는다."""
+        out = []
+        for c in self._rows or []:
+            out += list(c.get("tags") or [])
+            f = c.get("front")
+            if f and not V.is_contact(c):
+                try:
+                    out += list(real.get_manual(os.path.realpath(f)) or [])
+                except Exception:
+                    pass
+        return list(dict.fromkeys(t for t in out if str(t).strip()))
+
     def tag_apply(self, cards) -> int:
         """책갈피창 '해시태그 수정' 창(`TagApplyDialog`, 태그 SOT §8.7)에 명함들의 정리본 앞면을 썸네일로 넘긴다(그림 없는 명함은
         이름만). 창을 닫으면 명함마다 앞면에서 더하고 뗀 사람 태그를 명함 DB 태그 칸·뒷면 파일에 같게. 반환 = 바뀐 명함 수."""
@@ -3097,20 +3277,13 @@ class BizcardFindDialog(QDialog):
                 virt[f] = c
             fronts.append(f)
         before = {f: list(store.get_manual(f) or []) for f in fronts}
-        # 전체 태그 목록은 실제 저장소가 세어 둔 것(세대 캐시 — 미리 센 것이면 바로) + 그림 없는 명함의 태그 — 사본에서 다시 세지 않는다(261120-20)
-        try:
-            known = real.known_tags()
-            low = {t.lower() for t in known}
-            for f in virt:
-                known += [t for t in store.get(f) if t.lower() not in low and not low.add(t.lower())]
-            store.seed_known(known)
-        except Exception:
-            pass
+        # 기존 태그 = 지금 목록 명함의 태그(`_list_tags`, 261120-52) — 저장소 전체를 세지 않는다
         mw = self._mw
         prefs = getattr(mw, "_prefs", None) if mw is not None else None
         keep = mw.__dict__.setdefault("_thread_keep", []) if mw is not None else _KEEP
         state = prefs.get("tag_apply_window") if isinstance(prefs, dict) else None
-        dlg = TagApplyDialog(store, fronts, fronts, self, keep=keep, state=state)
+        dlg = TagApplyDialog(store, fronts, fronts, self, keep=keep, state=state, card_mode=True,
+                             known=self._list_tags(real))       # 기존 태그 = 지금 목록 명함의 태그, 문서 종류 없음(261120-52)
         for i in range(dlg.lst_files.count()):          # 가상 경로는 보이지 않게
             it = dlg.lst_files.item(i)
             if it.data(Qt.ItemDataRole.UserRole) in virt:

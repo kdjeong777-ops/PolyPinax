@@ -18761,3 +18761,11 @@ msgstr "Could not write the business card database ({err})."
 #: viewer/widgets/bizcard_find_dialog.py
 msgid "명함 환경설정 — 명함 폴더·전화번호·'최근' 제한·메일 보내기·메모·구글 주소록"
 msgstr "Business card settings — card folder, phone numbers, 'Recent' limit, sending mail, memo, Google Contacts"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "한글·영어 = 이름 글자, 명함 있음·없음 = 명함 그림(없음 = 주소록에서 들인 명함), 사진 있음·없음 = 인물 사진 — 체크로 여러 개(같은 묶음은 또는, 묶음끼리는 그리고)"
+msgstr "Korean/English = letters in the name, With/Without card = card image (without = imported from contacts), With/Without photo = portrait photo — check several (OR within a group, AND across groups)"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "해시태그 설정"
+msgstr "Set Hashtags"

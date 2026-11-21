@@ -112,6 +112,53 @@ def kind_ok(card: dict, kind: str, photos=None, blocked=None) -> bool:
     return True
 
 
+def norm_kinds(kinds) -> list:
+    """구분 여러 개(261120-49) — 글 하나(종전 meta)·목록 모두 받아 아는 값만, 비었거나 'all' 이 있으면 ['all']."""
+    if isinstance(kinds, str):
+        kinds = [kinds]
+    out = [k for k in dict.fromkeys(kinds or []) if k in KINDS]
+    return ["all"] if not out or "all" in out else out
+
+
+def kinds_ok(card: dict, kinds, photos=None, blocked=None) -> bool:
+    """구분 여러 개 — 같은 묶음(`KIND_GROUPS`) 안은 또는, 묶음끼리는 그리고(사용자 결정 261121, §5.24.1 '구분')."""
+    ks = norm_kinds(kinds)
+    if ks == ["all"]:
+        return True
+    for grp in KIND_GROUPS:
+        mine = [k for k in ks if k in grp]
+        if mine and not any(kind_ok(card, k, photos, blocked) for k in mine):
+            return False
+    return True
+
+
+def _tagkey(t) -> str:
+    return re.sub(r"\s+", "", str(t or "")).lstrip("#").lower()
+
+
+def auto_retag(tags, old_cards, name: str, company: str):
+    """앱이 붙인 해시태그(§5.5 — #명함·#회사·언어 하나)를 새 이름·회사로 다시 맞춘다(261120-53 — 회사명이 바뀌는 모든 길이 이것 하나).
+    old_cards = 그 값을 갖던 명함들(합치기면 여럿) — 그 회사들의 태그(법인 꼴을 뗀 것·원래 글, 공백·대소문자 무시)와 언어 태그를 걷는다.
+    반환 (새 태그 목록, 걷은 옛 자동 태그 집합 — 정리본 파일 태그 맞춤 `_retag` 용). 사람이 붙인 태그는 그대로."""
+    from viewer.bizcard.apply import tags_for, LANG_TAGS
+    from viewer.bizcard.recognize import strip_corp
+    tags = [t for t in (tags or []) if str(t).strip()]
+    langs = [t for t in tags if t in LANG_TAGS]
+    new_auto = tags_for({"name": name or "", "company": company or "", "langs": langs, "langs_ordered": False})
+    old_keys, old_forms = {_tagkey(t) for t in LANG_TAGS}, set()
+    for c in old_cards or []:
+        co = str(c.get("company") or "")
+        if co.strip():
+            old_forms |= {co.strip(), strip_corp(co)}
+    old_keys |= {_tagkey(f) for f in old_forms if f}
+    new_keys = {_tagkey(t) for t in new_auto}
+    old_auto = {t for t in tags if _tagkey(t) in old_keys and _tagkey(t) not in new_keys}
+    old_auto |= {f for f in old_forms if f and _tagkey(f) not in new_keys}   # 정리본 파일에만 남은 옛 꼴도 걷게
+    old_auto |= set(LANG_TAGS) - set(new_auto)
+    out = list(dict.fromkeys(list(new_auto) + [t for t in tags if t not in old_auto and _tagkey(t) not in new_keys]))
+    return out, old_auto
+
+
 def _like(s: str) -> str:
     return s.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
@@ -1272,7 +1319,8 @@ def merge_plan(cards, manual=None) -> dict:
                     seen.add(str(x).lower())
                     vals.append(x)
         fields[k] = vals
-    fields["tags"] = list(dict.fromkeys(t for c in cards for t in c.get("tags") or []))
+    fields["tags"] = auto_retag(list(dict.fromkeys(t for c in cards for t in c.get("tags") or [])), cards,
+                                fields.get("name") or "", fields.get("company") or "")[0]   # 남지 않는 회사의 옛 태그는 걷음(261120-53)
     keeper = rep if not is_contact(rep) else next((c for c in cards if not is_contact(c)), rep)
     photo_from = None
     if not is_contact(keeper) and not person_photos(keeper.get("front")):

@@ -307,6 +307,10 @@ class BizcardDupeDialog(QDialog):
         for k, v in (self.edits.get(gi) or {}).items():   # '적용 후' 에서 손으로 고친 값이 이긴다(§5.24.8 '고치기')
             p["fields"][k] = v
             p["frm"].pop(k, None)                          # 출처 없음 = 손으로 고친 칸(주소록이 덮지 않음, D24)
+        edited = self.edits.get(gi) or {}
+        if ("name" in edited or "company" in edited) and "tags" not in edited:   # 고친 이름·회사로 자동 태그도(261120-53)
+            p["fields"]["tags"] = P.auto_retag(p["fields"]["tags"], cards, p["fields"].get("name") or "",
+                                               p["fields"].get("company") or "")[0]
         return p
 
     def fill(self):
@@ -769,7 +773,9 @@ class BizcardDupeDialog(QDialog):
             nb = extra.get("back", keeper.get("back") or "")
             paths = [x for x in (nf, nb) if x and os.path.exists(x)]
             if paths:
-                self.fd._retag(paths, set(), p["fields"]["tags"])
+                old_auto = P.auto_retag(p["fields"]["tags"], list(byid.values()), p["fields"].get("name") or "",
+                                        p["fields"].get("company") or "")[1]   # 합친 명함들의 옛 회사 태그를 파일에서도 걷음(261120-53)
+                self.fd._retag(paths, old_auto, p["fields"]["tags"])
         log = self.log_path
 
         def write():                                          # 명함 DB 쓰기·되돌리기 기록 — 배경, 자기 연결로

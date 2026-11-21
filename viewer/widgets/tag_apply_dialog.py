@@ -183,7 +183,8 @@ class TagApplyDialog(QDialog):
 
     SORT_NAME, SORT_REG = "name", "reg"
 
-    def __init__(self, store, paths, selected=(), parent=None, show_candidates: bool = False, keep=None, state=None):
+    def __init__(self, store, paths, selected=(), parent=None, show_candidates: bool = False, keep=None, state=None,
+                 card_mode: bool = False, known=None):
         super().__init__(parent)
         self.setWindowTitle(tr("해시태그 수정"))           # 261113-9(태그 SOT §8.7): 종전 '해시태그 넣기'
         # 261111-17: 최대화 단추 + 크기·최대화·정렬을 기억(`state` — 부른 쪽이 설정 'tag_apply_window' 에)
@@ -203,6 +204,9 @@ class TagApplyDialog(QDialog):
         self._keep = keep if keep is not None else []
         self._mode = "avail"                    # 261111-20: 지금 쓰는 목록 — "avail"(붙일 수 있는 태그) | "tags"(붙은 태그)
         self._known = None                      # 저장소의 모든 태그(한 번 센다)
+        # 명함 꼴(명함 SOT §5.24.4, 261120-52): 기존 태그 = 부른 쪽이 준 목록(지금 명함 목록의 태그), 문서 종류·자동 속성·새 태그 후보·[문서 종류] 없음
+        self._card_mode = bool(card_mode)
+        self._known_fixed = list(known) if known is not None else None
         self._cand_filter = False
         self._dates = None                      # 261111-19: 경로(정규화) → 'YYYY-MM-DD' — 배경에서 읽는다
         from viewer.tag_store import load_candidates
@@ -257,6 +261,7 @@ class TagApplyDialog(QDialog):
         fm.addAction(tr("종류 없음")).triggered.connect(lambda _=False: self.set_format(None))
         self.btn_format.setMenu(fm)
         top.addWidget(self.btn_format)
+        self.btn_format.setVisible(not self._card_mode)
         top.addStretch(1)
         self.lbl_sel = QLabel()
         top.addWidget(self.lbl_sel)
@@ -685,6 +690,8 @@ class TagApplyDialog(QDialog):
     def _all_known(self) -> list:
         """저장소의 모든 태그(한 번 센다) — 날짜 꼴(사진 촬영일·PDF 날짜 속성)과 사진 기본 정보로만 쓰인 태그(지역·장비 — §5.7
         `meta`, 이 창이 다루지 않는다)는 뺀다."""
+        if self.__dict__.get("_known_fixed") is not None:
+            return self._known_fixed
         if self.__dict__.get("_known") is None:
             # 세는 것은 저장소가(`TagStore.known_tags` — 고친 세대가 같으면 다시 세지 않는다, 태그 SOT §8.7). 창을 열 때마다
             #   모든 기록을 돌던 것이 [해시태그] 창이 늦게 뜨던 원인(261120-20 — 1만 개 0.1~0.35초, 3만 개 0.5초)
@@ -737,12 +744,14 @@ class TagApplyDialog(QDialog):
         la.clear()
         sections = []
         # 261114-2 덧붙임 2(사용자 결정 '늘 보이게'): 문서 종류 7 + 자동 해시태그 속성 6 = 13 항목은 늘 보인다(붙어 있으면 ✓·◐)
-        sections.append((tr("문서 종류"), "fmt", [f for f in FORMAT_VOCAB if self._find_ok(f)]))
-        sections.append((tr("자동 해시태그 속성"), "attr", [a for a in PDF_ATTR_ITEMS if self._find_ok(a)]))
+        card = self.__dict__.get("_card_mode", False)
+        sections.append((tr("문서 종류"), "fmt", [] if card else [f for f in FORMAT_VOCAB if self._find_ok(f)]))
+        sections.append((tr("자동 해시태그 속성"), "attr", [] if card else [a for a in PDF_ATTR_ITEMS if self._find_ok(a)]))
         fl = {f.lower() for f in FORMAT_VOCAB} | {a.lower() for a in PDF_ATTR_ITEMS}
         known = [t for t in self._all_known() if t.lower() not in have and t.lower() not in fl and (self._find_ok(t))]
         sections.append((tr("기존 태그"), "tag", self._order(known)))
-        sections.append((tr("새 태그 후보"), "cand", [t for t, _h in self._cand_rows() if t.lower() not in have and (self._find_ok(t))]))
+        sections.append((tr("새 태그 후보"), "cand", [] if card else
+                         [t for t, _h in self._cand_rows() if t.lower() not in have and (self._find_ok(t))]))
         if self._show_cand_first:
             sections = [sections[3]] + sections[:3]
         import re as _re

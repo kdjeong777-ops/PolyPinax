@@ -18779,3 +18779,12 @@ msgstr "Matched mobile: {n}"
 #, python-brace-format
 msgid "전화번호 종류를 바로잡았습니다 — 명함 {n}장(010 은 휴대폰, 그 밖은 일반 전화, 옛 011·016~019 번호는 메모로). 바꾸기 전 명함 DB 는 같은 폴더 'bizcard.db.kinds_bak' 에 두었습니다."
 msgstr "Corrected phone number types — {n} cards (010 = mobile, others = phone, old 011/016–019 numbers moved to the memo). The card database before the change is kept as 'bizcard.db.kinds_bak' in the same folder."
+
+#: viewer/widgets/bizcard_dupe_dialog.py
+msgid "명함 그림 떼기"
+msgstr "Detach card image"
+
+#: viewer/widgets/bizcard_dupe_dialog.py
+#, python-brace-format
+msgid "'{n}' 에 붙은 명함 그림(정리본 앞·뒷면)을 휴지통으로 보내고 그림 없는 명함으로 둡니다 — 연락처·메모는 그대로, 원본 스캔은 남아 명함 관리에서 다시 읽을 수 있습니다."
+msgstr "Moves the card image attached to '{n}' (tidied front and back) to the Recycle Bin and keeps it as a card without an image — contacts and memo stay, and the original scan remains so it can be read again in Card Manager."

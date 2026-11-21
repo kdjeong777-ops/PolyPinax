@@ -139,14 +139,16 @@ try:
     chk(c is not None and c["name"] == "홍길동" and ("cell", "010-0000-9999") in [tuple(x) for x in c["phones"]]
         and ("work", "02-0000-0002") in [tuple(x) for x in c["phones"]], "C 명함 DB 가 고쳐짐(이름·번호, 다른 번호는 그대로)",
         repr(c and (c["name"], c["phones"])))
-    chk(dd.before.topLevelItemCount() == 1 and dd.chk == chk_before, "C 묶음·체크 그대로(다시 짜지 않음)")
-    ch = dd.before.topLevelItem(0).child(0)
-    chk(ch is not None and ch.text(0) == "홍길동" and "010-0000-9999" in ch.text(2), "C 그 줄이 새 값",
-        repr(ch and (ch.text(0), ch.text(2))))
-    chk((dd.edits.get(gi) or {}).get("title") == "부장", "C '적용 후' 에서 고친 값은 남음")
-    a_top = dd.after.topLevelItem(0)
-    vals = {a_top.child(i).text(0): a_top.child(i).text(1) for i in range(a_top.childCount())}
-    chk("010-0000-9999" in vals.get("전화", ""), "C 합친 결과에도 새 번호", repr(vals.get("전화")))
+    # 261120-56(사용자 결정 261121): 고친 뒤 다시 묶는다 — 이어 주던 휴대폰을 바꾼 명함은 빠지고, '적용 후' 고침은 새로
+    chk(dd.before.topLevelItemCount() == 0 and not dd.edits, "C 고친 뒤 다시 묶음 — 이어 주던 번호를 바꾼 명함은 빠짐(261120-56)",
+        repr((dd.before.topLevelItemCount(), dd.edits)))
+    st = S.BizcardStore(db)                               # D 를 위해 묶음을 되살림(이어 주던 휴대폰을 다시 넣음)
+    rep_cells = [tuple(x) for x in P.card_by_id(st, rep_id)["phones"] if x[0] == "cell"][:1]
+    P.update_card(st, cid, {"phones": [tuple(x) for x in P.card_by_id(st, cid)["phones"]] + rep_cells})
+    st.close()
+    dd.reload()
+    gi = 0
+    rep_id = dd.rep.get(0, rep_id)
 
     print("\n=== D. 취소 ===")
     def cancel_exec(self):

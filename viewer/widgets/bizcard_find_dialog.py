@@ -3101,6 +3101,33 @@ class BizcardFindDialog(QDialog):
         _menu_act(m, tr("지우기"), lambda: self.delete_photos())
         m.exec(self.photos.mapToGlobal(pos))
 
+    def detach_card_image(self, c) -> bool:
+        """명함 그림 떼기(§5.24.8 '그림 떼기') — 정리본 앞·뒷면을 휴지통(앱 한 길), 명함은 그림 없는 명함(`contact:…`)으로,
+        인물 사진은 그림 없는 명함 자리로 옮긴다. 원본 스캔·인식 기록 열쇠(src_key)는 떼어 명함 관리가 새 명함으로 다시 읽게."""
+        import uuid
+        from viewer.widgets.bizcard_import_dialog import trash_paths
+        outs = [P._real(x) for x in (c.get("front"), c.get("back")) if x and os.path.exists(P._real(x))]
+        old_pf = self._photo_front(c)
+        photos = P.person_photos(old_pf) if old_pf else []
+        failed = trash_paths(self, self._mw, outs) if outs else []
+        if failed:
+            return False
+        st = self._store()
+        P.update_card(st, c["id"], {"front": V.CONTACT_PREFIX + uuid.uuid4().hex, "back": "", "src_key": "", "src_pdf": ""})
+        new = P.card_by_id(st, c["id"])
+        new_pf = self._photo_front(new)
+        if new_pf:
+            for i, ph in enumerate(photos):                  # 인물 사진은 이 사람 것 — 그림 없는 명함 자리로(§5.24.3)
+                dst = P.people_dir(new_pf) / P.photo_name(new_pf, i, os.path.splitext(ph)[1])
+                if os.path.normcase(str(dst)) == os.path.normcase(ph) or dst.exists():
+                    continue                                 # 같은 이름이면 이미 제자리
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                self._rename(ph, str(dst), quiet=True)
+        if self._card and self._card.get("id") == c["id"]:
+            self._card = new
+        self.refresh()
+        return True
+
     # ── 목록에서 지우기 (§5.24 D18 — 명함 관리 [삭제] 와 같은 길) ──
     def delete_cards(self, cards=None, ask: bool = True) -> int:
         cards = cards if cards is not None else (self.selected_cards() or ([self._card] if self._card else []))

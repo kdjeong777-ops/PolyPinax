@@ -1137,6 +1137,8 @@ class BizcardFindDialog(QDialog):
         bm.addSeparator()
         _menu_act(bm, tr("구글 주소록용 vCard 로 내보내기"), lambda: self.export_vcard(style="google"))
         _menu_act(bm, tr("리멤버용 vCard 로 내보내기"), lambda: self.export_vcard(style="remember"))
+        bm.addSeparator()
+        _menu_act(bm, tr("구글 주소록과 싱크"), lambda: self.open_gsync())     # 261120-36(§5.29) — 구글 계정 연결은 명함 환경설정
         self.btn_vcard.setMenu(bm)
         from viewer.widgets.icons import drop_button
         drop_button(self.btn_vcard)
@@ -1210,6 +1212,39 @@ class BizcardFindDialog(QDialog):
         fn = getattr(self._mw, "_action_bizcard_import", None)
         if callable(fn):
             fn()
+    def open_gsync(self, exec_: bool = True):
+        """[구글 주소록과 싱크](명함 SOT §5.29, 261120-36) — 미리보기 창. 반영 뒤 목록을 다시 채우고, 구글에서 지워져
+        '명함도 지움' 을 고른 명함은 목록 지우기와 같은 휴지통 길(§5.20)로."""
+        from viewer.bizcard import gsync as G
+        from viewer.bizcard import gsync_auth as A
+        from viewer.widgets.bizcard_gsync_dialog import GSyncDialog
+        if self._dirty and not self._ask_save():
+            return None
+        st = self._store()
+        if not A.connected() or not A.client(st)[0]:
+            QMessageBox.information(self, tr("구글 주소록과 싱크"),
+                                    tr("먼저 명함 환경설정(톱니)의 '구글 주소록' 에서 구글 계정을 연결하세요."))
+            return None
+        drive = bool(st.meta_get(G.OPT_DRIVE, False)) and A.granted_drive()
+        dlg = GSyncDialog(self, db=self._db, folder=self._bizcard_folder(), photos=bool(st.meta_get(G.OPT_PHOTOS, False)),
+                          drive=drive, drive_folder=str(st.meta_get(G.OPT_FOLDER, "") or G.DRIVE_FOLDER_DEFAULT))
+        self.gsync_dlg = dlg                                 # 검사가 찾는다
+        if not exec_:
+            dlg.finished.connect(lambda _r: self._after_gsync(dlg))
+            dlg.show()
+            return dlg
+        dlg.exec()
+        self._after_gsync(dlg)
+        return dlg
+
+    def _after_gsync(self, dlg):
+        res = getattr(dlg, "result", None)
+        if not res:
+            return
+        gone = [c for c in (P.card_by_id(self._store(), i) for i in res.get("delete_cards") or []) if c]
+        if gone:
+            self.delete_cards(gone, ask=False)
+        self.refresh()
 
     def open_settings(self, exec_: bool = True):
         """톱니 — 명함 환경설정(§5.24.9). 닫으면 '최근' 탭·번호 꼴을 다시."""

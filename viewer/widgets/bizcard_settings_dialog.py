@@ -9,9 +9,9 @@ from __future__ import annotations
 import os
 
 from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QComboBox, QSpinBox,
-                             QGroupBox, QFileDialog, QDialogButtonBox, QRadioButton)
+                             QGroupBox, QFileDialog, QDialogButtonBox, QRadioButton, QMessageBox)
 
-from viewer.i18n import tr
+from viewer.i18n import tr, tr_noop
 from viewer.bizcard import people as P
 
 # '최근' 제한 고르기 — (모드, n) · n=0 이면 직접(옆 칸)
@@ -122,6 +122,8 @@ class BizcardSettingsDialog(QDialog):
         r4.addWidget(self.chk_memo_date)
         v.addWidget(g4)
 
+        self._gsync_ui(v, store)                         # 구글 주소록(§5.29, 261120-36)
+
         v.addStretch(1)
         bb = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         bb.button(QDialogButtonBox.StandardButton.Ok).setText(tr("확인"))
@@ -183,4 +185,132 @@ class BizcardSettingsDialog(QDialog):
             self._st.meta_set("gmail_account", self.ed_gmail.text().strip())
             mode, n = self.limit()
             P.set_recent_limit(self._st, mode, n)
+            self._gsync_save()                           # 261120-36
         self.accept()
+
+    # ── 구글 주소록(§5.29, 261120-36) — 기본 꺼짐, 클라이언트 ID 는 쓰는 사람이 자기 '개인 모드' 프로젝트에서 ──
+    def _gsync_ui(self, v, store):
+        from PyQt6.QtWidgets import QCheckBox, QFormLayout
+        from viewer.bizcard import gsync as G
+        from viewer.bizcard import gsync_auth as A
+        g = QGroupBox(tr("구글 주소록"))
+        f = QVBoxLayout(g)
+        self.lbl_gsync = QLabel("")
+        f.addWidget(self.lbl_gsync)
+        form = QFormLayout()
+        cid, sec = A.client(store) if store is not None else ("", "")
+        self.ed_gcid = QLineEdit(cid if cid != A.BUILT_CLIENT_ID else "")
+        self.ed_gcid.setPlaceholderText(tr("구글 클라우드 '개인 모드' 프로젝트의 데스크톱 앱 클라이언트 ID"))
+        self.ed_gsec = QLineEdit(sec if cid != A.BUILT_CLIENT_ID else "")
+        self.ed_gsec.setEchoMode(QLineEdit.EchoMode.Password)
+        form.addRow(tr("클라이언트 ID:"), self.ed_gcid)
+        form.addRow(tr("클라이언트 보안 비밀:"), self.ed_gsec)
+        f.addLayout(form)
+        row = QHBoxLayout()
+        self.btn_gconnect = QPushButton(tr("구글 계정 연결"))
+        self.btn_gconnect.clicked.connect(lambda _c=False: self.gsync_connect())
+        self.btn_gdisconnect = QPushButton(tr("연결 끊기"))
+        self.btn_gdisconnect.setToolTip(tr("구글에 연결 권한 철회를 요청하고, 이 PC 에 보관한 토큰과 짝 기록을 지웁니다"))
+        self.btn_gdisconnect.clicked.connect(lambda _c=False: self.gsync_disconnect())
+        b_help = QPushButton(tr("도움말"))
+        b_help.clicked.connect(lambda _c=False: QMessageBox.information(self, tr("구글 주소록"), tr(GSYNC_HELP)))
+        for b in (self.btn_gconnect, self.btn_gdisconnect, b_help):
+            row.addWidget(b)
+        row.addStretch(1)
+        f.addLayout(row)
+        meta = (lambda k, d: store.meta_get(k, d)) if store is not None else (lambda k, d: d)
+        self.chk_gphotos = QCheckBox(tr("인물 사진도 연락처 사진으로 주고받기"))
+        self.chk_gphotos.setChecked(bool(meta(G.OPT_PHOTOS, False)))
+        self.chk_gdrive = QCheckBox(tr("명함 그림을 구글 드라이브에 원본으로 올리고 연락처에 링크"))
+        self.chk_gdrive.setChecked(bool(meta(G.OPT_DRIVE, False)))
+        self.ed_gfolder = QLineEdit(str(meta(G.OPT_FOLDER, "") or G.DRIVE_FOLDER_DEFAULT))
+        rd = QHBoxLayout()
+        rd.addWidget(QLabel(tr("드라이브 폴더:")))
+        rd.addWidget(self.ed_gfolder, 1)
+        f.addWidget(self.chk_gphotos)
+        f.addWidget(self.chk_gdrive)
+        f.addLayout(rd)
+        note = QLabel(tr("켜면 명함의 글 칸(과 고른 사진)을 구글 People·Drive API 로만 주고받습니다. 반영 전에는 늘 미리보기를 거칩니다."))
+        note.setWordWrap(True)
+        f.addWidget(note)
+        v.addWidget(g)
+        self._gworker = None
+        self._gsync_status()
+
+    def _gsync_status(self):
+        from viewer.bizcard import gsync_auth as A
+        on = A.connected()
+        em = A.account_email()
+        self.lbl_gsync.setText(tr("연결됨 — {email}").format(email=em) if on and em else
+                               (tr("연결됨") if on else tr("연결 안 됨")))
+        self.btn_gdisconnect.setEnabled(on)
+
+    def gsync_connect(self, open_url=None) -> bool:
+        """[구글 계정 연결] — 칸 값을 저장하고 배경에서 브라우저 로그인을 기다린다."""
+        from viewer.bizcard import gsync_auth as A
+        from viewer.workers import run_in_thread
+        if self._gworker is not None or self._st is None:
+            return False
+        cid, sec = self.ed_gcid.text().strip(), self.ed_gsec.text().strip()
+        if not cid:
+            QMessageBox.information(self, tr("구글 주소록"), tr("클라이언트 ID 를 넣으세요 — [도움말] 에 만드는 차례가 있습니다."))
+            return False
+        if not A.set_client(self._st, cid, sec):
+            QMessageBox.information(self, tr("구글 주소록"), tr("이 PC 에서 비밀값을 잠글 수 없어 보안 비밀은 저장하지 않습니다(이번 연결에만 씁니다)."))
+        w = LoginWorkerRef(cid, sec, self.chk_gdrive.isChecked(), open_url)
+        self._gworker = w
+        self.btn_gconnect.setEnabled(False)
+        self.lbl_gsync.setText(tr("브라우저에서 구글 로그인을 마치세요…"))
+        w.done.connect(self._gsync_logged)
+        run_in_thread(w, _GKEEP)
+        return True
+
+    def _gsync_logged(self, email, err):
+        self._gworker = None
+        self.btn_gconnect.setEnabled(True)
+        self._gsync_status()
+        if err:
+            QMessageBox.warning(self, tr("구글 주소록"), tr("구글 계정을 연결하지 못했습니다({err}).").format(err=err))
+
+    def gsync_disconnect(self) -> bool:
+        from viewer.bizcard import gsync_auth as A
+        from viewer.bizcard import gsync as G
+        A.disconnect()
+        if self._st is not None:
+            G.unlink(self._st)
+        self._gsync_status()
+        return True
+
+    def _gsync_save(self):
+        from viewer.bizcard import gsync as G
+        from viewer.bizcard import gsync_auth as A
+        A.set_client(self._st, self.ed_gcid.text().strip(), self.ed_gsec.text().strip())
+        self._st.meta_set(G.OPT_PHOTOS, bool(self.chk_gphotos.isChecked()))
+        self._st.meta_set(G.OPT_DRIVE, bool(self.chk_gdrive.isChecked()))
+        self._st.meta_set(G.OPT_FOLDER, self.ed_gfolder.text().strip() or G.DRIVE_FOLDER_DEFAULT)
+
+    def closeEvent(self, ev):
+        if self._gworker is not None:
+            self._gworker.stop = True                    # 로그인 기다리기를 그만둔다(창을 닫으면)
+        super().closeEvent(ev)
+
+    def reject(self):
+        if getattr(self, "_gworker", None) is not None:
+            self._gworker.stop = True
+        super().reject()
+
+
+_GKEEP = []
+GSYNC_HELP = tr_noop("구글 주소록을 연결하려면 처음 한 번 구글 클라우드 콘솔(console.cloud.google.com)에서:\n"
+                     "1. 프로젝트를 하나 만들고 '개인 모드'(본인 계정만)로 둡니다.\n"
+                     "2. 'People API' 를 사용으로 켭니다(드라이브에 명함 그림을 올리려면 'Google Drive API' 도).\n"
+                     "3. OAuth 동의 화면에 앱 이름·연락 메일을 적습니다.\n"
+                     "4. 사용자 인증 정보 → OAuth 클라이언트 ID 만들기 → '데스크톱 앱' 을 고릅니다.\n"
+                     "5. 나온 클라이언트 ID·보안 비밀을 여기 붙여 넣고 [구글 계정 연결] 을 누릅니다.\n"
+                     "로그인은 구글 화면에서 하고, 이 앱은 구글 비밀번호를 보지 않습니다.")
+
+
+def LoginWorkerRef(*a):
+    from viewer.widgets.bizcard_gsync_dialog import LoginWorker
+    return LoginWorker(*a)
+

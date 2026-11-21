@@ -1,0 +1,353 @@
+# -*- coding: utf-8 -*-
+"""구글 주소록 싱크 — 짝 맞추기·계획·반영 (명함 SOT §5.29, 261120-36).
+
+`plan(store, people, opts)` 는 네트워크 없이 계획만(구글 목록은 부르는 쪽이 받아 넘긴다) — 미리보기 창이 보이고 사람이 고른 것만
+`apply(...)` 가 반영한다. 둘 다 배경 일꾼에서 부른다(응답성 SOT §4). 명함 값은 구글로만 오가고 로그·오류 글에 싣지 않는다(§2.1).
+"""
+from __future__ import annotations
+
+import hashlib
+import json
+import re
+import time
+from datetime import datetime
+
+from viewer.bizcard import people as P
+from viewer.bizcard import phone as PH
+
+SRC = "google"                                  # contact_src 출처·태그
+TAG = "구글"
+OPT_PHOTOS, OPT_DRIVE, OPT_FOLDER = "gsync_photos", "gsync_drive", "gsync_drive_folder"   # 명함 DB meta
+DRIVE_FOLDER_DEFAULT = "PolyCardex 명함"
+DEFAULT_PHOTO = "default"                       # 구글 사진의 기본 실루엣 표시(photos[].default)
+
+# 계획 줄 갈래
+NEW_CARD, NEW_GOOGLE, TO_CARD, TO_GOOGLE, GONE_GOOGLE, GONE_CARD, PHOTO_UP, PHOTO_DOWN, DRIVE_UP = (
+    "new_card", "new_google", "to_card", "to_google", "gone_google", "gone_card", "photo_up", "photo_down", "drive_up")
+KINDS = (NEW_CARD, NEW_GOOGLE, TO_CARD, TO_GOOGLE, GONE_GOOGLE, GONE_CARD, PHOTO_UP, PHOTO_DOWN, DRIVE_UP)
+DEFAULT_ON = {k: k not in (GONE_GOOGLE, GONE_CARD) for k in KINDS}    # 지워짐은 기본 '남김'(§5.29 '지운 것')
+
+_G2C = {"mobile": "cell", "workFax": "fax", "homeFax": "fax", "otherFax": "fax"}
+_C2G = {"cell": "mobile", "fax": "workFax", "work": "work"}
+
+
+def init(store) -> None:
+    store.con.execute("CREATE TABLE IF NOT EXISTS google_link(card_id INTEGER PRIMARY KEY, resource_name TEXT UNIQUE, "
+                      "etag TEXT, synced REAL, photo_sig TEXT DEFAULT '', drive TEXT DEFAULT '')")
+    store.con.commit()
+
+
+def links(store) -> dict:
+    init(store)
+    return {r[0]: {"rn": r[1], "etag": r[2], "synced": r[3] or 0.0, "photo_sig": r[4] or "", "drive": json.loads(r[5] or "{}")}
+            for r in store.con.execute("SELECT card_id, resource_name, etag, synced, photo_sig, drive FROM google_link")}
+
+
+def _link_put(store, cid: int, rn: str, etag: str, **kw) -> None:
+    old = links(store).get(cid) or {}
+    store.con.execute("INSERT INTO google_link(card_id, resource_name, etag, synced, photo_sig, drive) VALUES(?,?,?,?,?,?) "
+                      "ON CONFLICT(card_id) DO UPDATE SET resource_name=excluded.resource_name, etag=excluded.etag, "
+                      "synced=excluded.synced, photo_sig=excluded.photo_sig, drive=excluded.drive",
+                      (cid, rn, etag or old.get("etag") or "", kw.get("synced", time.time()), kw.get("photo_sig", old.get("photo_sig", "")),
+                       json.dumps(kw.get("drive", old.get("drive", {})))))
+
+
+def unlink(store, cid=None) -> None:
+    init(store)
+    if cid is None:
+        store.con.execute("DELETE FROM google_link")
+    else:
+        store.con.execute("DELETE FROM google_link WHERE card_id=?", (cid,))
+    store.con.commit()
+
+
+# ── 바꾸기: 구글 사람 ↔ 명함 값 ──
+def _ts(s: str) -> float:
+    try:
+        return datetime.fromisoformat(str(s).replace("Z", "+00:00")).timestamp()
+    except Exception:
+        return 0.0
+
+
+def person_time(p: dict) -> float:
+    return max([_ts(x.get("updateTime", "")) for x in (p.get("metadata") or {}).get("sources") or []] or [0.0])
+
+
+def person_values(p: dict) -> dict:
+    nm = (p.get("names") or [{}])[0]
+    name = nm.get("unstructuredName") or nm.get("displayName") or (
+        (nm.get("familyName") or "") + (nm.get("givenName") or "") if re.search(r"[가-힣]", (nm.get("familyName") or "") + (nm.get("givenName") or ""))
+        else " ".join(x for x in (nm.get("givenName"), nm.get("familyName")) if x))
+    org = (p.get("organizations") or [{}])[0]
+    phones = []
+    for ph in p.get("phoneNumbers") or []:
+        v = ph.get("value") or ""
+        if v:
+            phones.append((_G2C.get(ph.get("type") or "", "work"), PH.normalize(v)))
+    return {"name": name or "", "company": org.get("name") or "", "dept": org.get("department") or "",
+            "title": org.get("title") or "", "phones": phones,
+            "emails": [e.get("value") for e in p.get("emailAddresses") or [] if e.get("value")],
+            "address": ((p.get("addresses") or [{}])[0].get("formattedValue") or ""),
+            "urls": [u.get("value") for u in p.get("urls") or [] if u.get("value")],
+            "memo": ((p.get("biographies") or [{}])[0].get("value") or "")}
+
+
+def card_person(c: dict, etag: str = "") -> dict:
+    """명함 → 구글 사람(우리가 고치는 칸만)."""
+    p = {"names": [{"unstructuredName": c.get("name") or ""}],
+         "organizations": [{"name": c.get("company") or "", "department": c.get("dept") or "", "title": c.get("title") or ""}],
+         "phoneNumbers": [{"value": n, "type": _C2G.get(k, "work")} for k, n in c.get("phones") or [] if n],
+         "emailAddresses": [{"value": e} for e in c.get("emails") or [] if e],
+         "addresses": [{"formattedValue": c.get("address") or ""}] if c.get("address") else [],
+         "urls": [{"value": u} for u in c.get("urls") or [] if u],
+         "biographies": [{"value": c.get("memo") or "", "contentType": "TEXT_PLAIN"}] if c.get("memo") else []}
+    if etag:
+        p["etag"] = etag
+    return p
+
+
+def _nz(s) -> str:
+    return re.sub(r"\s+", "", str(s or "")).lower()
+
+
+def _norm(v: dict) -> dict:
+    return {"name": _nz(v.get("name")), "company": _nz(v.get("company")), "dept": _nz(v.get("dept")),
+            "title": _nz(v.get("title")), "address": _nz(v.get("address")), "memo": (v.get("memo") or "").strip(),
+            "phones": sorted({(k, PH.digits(n)) for k, n in v.get("phones") or [] if PH.digits(n)}),
+            "emails": sorted({_nz(e) for e in v.get("emails") or [] if e}),
+            "urls": sorted({(u or "").strip() for u in v.get("urls") or [] if u})}
+
+
+def diff_fields(card: dict, pv: dict) -> list:
+    a, b = _norm(card), _norm(pv)
+    return [k for k in a if a[k] != b[k]]
+
+
+# ── 짝 맞추기 ──
+def _name_co(v: dict) -> str:
+    from viewer.bizcard.recognize import strip_corp
+    n = _nz(v.get("name"))
+    return (n + "|" + _nz(strip_corp(v.get("company") or ""))) if n else ""
+
+
+def match(cards: list, people: list) -> dict:
+    """짝 없는 명함·사람 사이 — 메일 → 휴대폰 → 이름+회사 차례, 한 사람에 짝 하나. 반환 {card_id: resourceName}."""
+    out, used = {}, set()
+    pv = [(p["resourceName"], person_values(p)) for p in people]
+    for step in ("email", "cell", "name"):
+        for c in cards:
+            if c["id"] in out:
+                continue
+            for rn, v in pv:
+                if rn in used:
+                    continue
+                if step == "email":
+                    ok = bool({_nz(e) for e in c.get("emails") or [] if e} & {_nz(e) for e in v["emails"]})
+                elif step == "cell":
+                    cc = {PH.digits(n)[-8:] for k, n in c.get("phones") or [] if k == "cell" and len(PH.digits(n)) >= 8}
+                    gc = {PH.digits(n)[-8:] for k, n in v["phones"] if k == "cell" and len(PH.digits(n)) >= 8}
+                    ok = bool(cc & gc)
+                else:
+                    ok = bool(_name_co(c)) and _name_co(c) == _name_co(v)
+                if ok:
+                    out[c["id"]] = rn
+                    used.add(rn)
+                    break
+    return out
+
+
+# ── 사진 ──
+def g_photo(p: dict) -> str:
+    """구글 연락처 사진 주소 — 기본 실루엣이면 ''."""
+    for ph in p.get("photos") or []:
+        if not ph.get(DEFAULT_PHOTO) and ph.get("url"):
+            return ph["url"]
+    return ""
+
+
+def _sig(path: str) -> str:
+    try:
+        with open(path, "rb") as f:
+            return hashlib.sha1(f.read()).hexdigest()[:16]
+    except OSError:
+        return ""
+
+
+def first_photo(card: dict, folder: str) -> str:
+    pf = P.photo_front(card, folder)
+    ps = P.person_photos(pf) if pf else []
+    return ps[0] if ps else ""
+
+
+# ── 계획 ──
+def all_cards(store) -> list:
+    return [store._row(r) for r in store.con.execute("SELECT * FROM cards ORDER BY id")]
+
+
+def plan(store, people: list, folder: str = "", photos: bool = False, drive: bool = False) -> list:
+    """계획 줄 [{kind, card_id, rn, name, fields, ...}] — 네트워크 없이. 반영 전에는 아무것도 바꾸지 않는다."""
+    init(store)
+    lk = links(store)
+    cards = all_cards(store)
+    by_id = {c["id"]: c for c in cards}
+    by_rn = {p["resourceName"]: p for p in people}
+    rn_linked = {v["rn"] for v in lk.values()}
+    rows = []
+    pairs = []
+    for cid, l in lk.items():
+        c, p = by_id.get(cid), by_rn.get(l["rn"])
+        if c is None and p is not None:
+            rows.append({"kind": GONE_CARD, "card_id": cid, "rn": l["rn"], "name": person_values(p)["name"]})
+        elif p is None and c is not None:
+            rows.append({"kind": GONE_GOOGLE, "card_id": cid, "rn": l["rn"], "name": c.get("name") or ""})
+        elif c is not None:
+            pairs.append((c, p, l))
+    free_cards = [c for c in cards if c["id"] not in lk]
+    free_people = [p for p in people if p["resourceName"] not in rn_linked]
+    m = match(free_cards, free_people)
+    for c in free_cards:
+        if c["id"] in m:
+            pairs.append((c, by_rn[m[c["id"]]], {"rn": m[c["id"]], "synced": 0.0, "photo_sig": "", "drive": {}, "new": True}))
+        else:
+            rows.append({"kind": NEW_GOOGLE, "card_id": c["id"], "rn": "", "name": c.get("name") or ""})
+    for p in free_people:
+        if p["resourceName"] not in m.values():
+            rows.append({"kind": NEW_CARD, "card_id": 0, "rn": p["resourceName"], "name": person_values(p)["name"]})
+    for c, p, l in pairs:
+        pv = person_values(p)
+        d = diff_fields(c, pv)
+        pt, ct, syn = person_time(p), float(c.get("updated") or 0), float(l.get("synced") or 0)
+        if d:
+            g_new, c_new = pt > syn, ct > syn
+            to_card = (g_new and not c_new) or (g_new == c_new and pt > ct)    # 한쪽만 바뀌었으면 그쪽, 둘 다면 나중 것
+            rows.append({"kind": TO_CARD if to_card else TO_GOOGLE, "card_id": c["id"], "rn": p["resourceName"],
+                         "name": c.get("name") or pv["name"], "fields": d, "etag": p.get("etag") or "", "link": bool(l.get("new"))})
+        elif l.get("new"):                                   # 처음 짝 — 값이 같으면 짝만 적는다
+            rows.append({"kind": "link", "card_id": c["id"], "rn": p["resourceName"], "name": c.get("name") or "",
+                         "etag": p.get("etag") or ""})
+        if photos:
+            mine = first_photo(c, folder)
+            gp = g_photo(p)
+            if mine and not gp:
+                rows.append({"kind": PHOTO_UP, "card_id": c["id"], "rn": p["resourceName"], "name": c.get("name") or "",
+                             "path": mine})
+            elif gp and not mine:
+                rows.append({"kind": PHOTO_DOWN, "card_id": c["id"], "rn": p["resourceName"], "name": c.get("name") or "",
+                             "url": gp})
+        if drive and not str(c.get("front") or "").startswith("contact:"):
+            have = l.get("drive") or {}
+            for side in ("front", "back"):
+                path = c.get(side) or ""
+                if path and _sig(path) and have.get(side, {}).get("sig") != _sig(path):
+                    rows.append({"kind": DRIVE_UP, "card_id": c["id"], "rn": p["resourceName"], "name": c.get("name") or "",
+                                 "side": side, "path": path})
+    order = {k: i for i, k in enumerate(KINDS + ("link",))}
+    rows.sort(key=lambda r: (order.get(r["kind"], 99), r.get("name") or ""))
+    return rows
+
+
+def counts(rows: list) -> dict:
+    out = {}
+    for r in rows:
+        out[r["kind"]] = out.get(r["kind"], 0) + 1
+    return out
+
+
+# ── 반영 ──
+def apply(store, api, rows: list, folder: str = "", drive_folder: str = DRIVE_FOLDER_DEFAULT, progress=None,
+          people=None) -> dict:
+    """고른 줄만 반영(배경). 반환 {'done': n, 'failed': n, 'delete_cards': [id]} — 명함 지우기는 부르는 쪽이 휴지통 길로(§5.20)."""
+    init(store)
+    P.src_init(store)
+    done = failed = 0
+    delete_cards = []
+    by_rn = {p["resourceName"]: p for p in people or []}     # 계획 때 받은 목록(없으면 처음 필요할 때 한 번 받는다)
+    folder_id = ""
+    n = len(rows)
+    for i, r in enumerate(rows):
+        k = r["kind"]
+        try:
+            if k == NEW_CARD:
+                p = r.get("person") or by_rn.get(r["rn"])
+                if p is None:
+                    p = _fetch(api, r["rn"], by_rn)
+                v = person_values(p)
+                cid = P._insert_contact(store, v, ["명함", TAG])
+                P._set_srcs(store, cid, [x for x in P._SCALARS if (v.get(x) or "").strip()], SRC)
+                _link_put(store, cid, r["rn"], p.get("etag") or "")
+            elif k == NEW_GOOGLE:
+                c = P.card_by_id(store, r["card_id"])
+                p = api.create(card_person(c))
+                _link_put(store, c["id"], p["resourceName"], p.get("etag") or "")
+            elif k == TO_CARD:
+                p = _fetch(api, r["rn"], by_rn)
+                v = person_values(p)
+                P.update_card(store, r["card_id"], {f: v[f] for f in r["fields"] if f in v}, commit=False)
+                P._set_srcs(store, r["card_id"], [f for f in r["fields"] if f in P._SCALARS], SRC)
+                _link_put(store, r["card_id"], r["rn"], p.get("etag") or "")
+            elif k == TO_GOOGLE:
+                c = P.card_by_id(store, r["card_id"])
+                p = api.update(r["rn"], card_person(c, r.get("etag") or ""))
+                _link_put(store, c["id"], r["rn"], p.get("etag") or "")
+            elif k == "link":
+                _link_put(store, r["card_id"], r["rn"], r.get("etag") or "")
+            elif k == GONE_GOOGLE:
+                delete_cards.append(r["card_id"])
+                store.con.execute("DELETE FROM google_link WHERE card_id=?", (r["card_id"],))
+            elif k == GONE_CARD:
+                api.delete(r["rn"])
+                store.con.execute("DELETE FROM google_link WHERE card_id=?", (r["card_id"],))
+            elif k == PHOTO_UP:
+                with open(r["path"], "rb") as f:
+                    api.update_photo(r["rn"], f.read())
+                _link_put(store, r["card_id"], r["rn"], "", photo_sig=_sig(r["path"]))
+            elif k == PHOTO_DOWN:
+                c = P.card_by_id(store, r["card_id"])
+                pf = P.photo_front(c, folder)
+                if not pf:
+                    raise ValueError("no folder")
+                import os
+                import tempfile
+                data = api.get_bytes(r["url"])
+                fd, tmp = tempfile.mkstemp(suffix=".jpg")
+                with os.fdopen(fd, "wb") as f:
+                    f.write(data)
+                try:
+                    dst = P.next_photo_path(pf)
+                    P.save_person_photo(tmp, dst)
+                finally:
+                    os.unlink(tmp)
+                _link_put(store, r["card_id"], r["rn"], "", photo_sig=_sig(str(dst)))
+            elif k == DRIVE_UP:
+                if not folder_id:
+                    folder_id = api.ensure_folder(drive_folder or DRIVE_FOLDER_DEFAULT)
+                lk = links(store).get(r["card_id"]) or {}
+                dr = dict(lk.get("drive") or {})
+                import os
+                fid = api.upload(r["path"], os.path.basename(r["path"]), folder_id, (dr.get(r["side"]) or {}).get("id", ""))
+                dr[r["side"]] = {"id": fid, "sig": _sig(r["path"])}
+                from viewer.bizcard.gsync_api import drive_link
+                c = P.card_by_id(store, r["card_id"])
+                link = drive_link(fid)
+                if link not in (c.get("urls") or []):                 # 연락처 누리집 칸에 링크(§5.29 '드라이브')
+                    urls = list(c.get("urls") or []) + [link]
+                    P.update_card(store, c["id"], {"urls": urls}, commit=False)
+                    c = P.card_by_id(store, c["id"])
+                    p = _fetch(api, r["rn"], by_rn)
+                    p2 = api.update(r["rn"], card_person(c, p.get("etag") or ""))
+                    by_rn[r["rn"]] = p2
+                _link_put(store, r["card_id"], r["rn"], "", drive=dr)
+            done += 1
+        except Exception:                                     # 값·토큰은 싣지 않는다 — 개수만
+            failed += 1
+        store.con.commit()
+        if progress is not None:
+            progress(i + 1, n)
+    return {"done": done, "failed": failed, "delete_cards": delete_cards}
+
+
+def _fetch(api, rn: str, cache: dict) -> dict:
+    if rn not in cache:
+        for p in api.list_people():
+            cache[p["resourceName"]] = p
+    return cache[rn]

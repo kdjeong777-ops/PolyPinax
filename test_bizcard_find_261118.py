@@ -684,8 +684,9 @@ try:
             and sorted(c["name"] for c in P.fav_members(st, g_col)) == ["김철수", "홍길동"]
             and QApplication.clipboard().text() == "hong@example.com",
             "I15 표 오른쪽 메뉴 — 즐겨찾기 탭에 넣기 ▸·할 일에 넣기 ▸·이메일 복사·삭제", "%s %r" % (top, QApplication.clipboard().text()))
-        chk(P.emails_text([{"emails": ["a@x.com", "b@x.com"]}, {"emails": ["A@X.com"]}, {"emails": []}]) == "a@x.com, b@x.com",
-            "I15 이메일 복사 = 쉼표로 이음, 같은 주소 한 번, 메일 없는 명함 건너뜀")
+        chk(P.emails_text([{"emails": ["a@x.com", "b@x.com"]}, {"emails": ["A@X.com"]}, {"emails": ["c@x.com"]}, {"emails": []}])
+            == "a@x.com, c@x.com",
+            "I15 이메일 복사 = 쉼표로 이음, 사람마다 첫 메일(261120-32), 같은 주소 한 번, 메일 없는 명함 건너뜀")
         # 사람 칸에서 골라 다른 탭에 끌어 놓으면 복사(지금 탭에서는 그대로)
         dlg.fav_tabs.setCurrentIndex(tabs.index("동료"))
         pump(timeout=0.1)
@@ -987,7 +988,7 @@ try:
     st.close()
     cbk = getattr(dlg, "cb_kind", None)
     chk(cbk is not None and dlg.layout().itemAt(0).layout().indexOf(cbk) == 0
-        and [cbk.itemData(i) for i in range(cbk.count())] == ["all", "ko", "en", "card", "nocard"],
+        and [cbk.itemData(i) for i in range(cbk.count()) if cbk.itemData(i)] == ["all", "ko", "en", "card", "nocard", "photo", "nophoto"],
         "I21 찾기 칸 앞에 구분(전체·한글·영어·명함 있음·명함 없음)")
     got = {}
     if cbk is not None:
@@ -1260,6 +1261,222 @@ try:
         QMessageBox.question, NDm.NewCardDialog.exec = _o_q3, _o_exec3
     pump(timeout=0.2)
 
+    print("\n=== I28. 톱니 명함 환경설정 · '최근' 항목 제한 · 모두 삭제 (261120-17·-18·-19) ===")
+    from viewer import settings_store as SS, bg_write as BW
+    bset = getattr(dlg, "btn_settings", None)
+    top_l = dlg.layout().itemAt(0).layout()
+    chk(bset is not None and top_l.indexOf(bset) == top_l.count() - 1 and not bset.icon().isNull(),
+        "I28 찾기 줄 오른쪽 끝에 톱니 아이콘 단추")
+    st = S.BizcardStore()
+    ids5 = [r[0] for r in st.con.execute("SELECT id FROM cards ORDER BY id LIMIT 5")]
+    st.con.execute("DELETE FROM recent")
+    st.con.commit()
+    for k, cid in enumerate(ids5):
+        P.recent_add(st, cid, "2026-01-%02d 10:00:00" % (k + 1))
+    n_before = st.con.execute("SELECT COUNT(*) FROM recent").fetchone()[0]
+    import viewer.widgets.bizcard_settings_dialog as SDm
+    _o_sexec = SDm.BizcardSettingsDialog.exec
+    seen_s = {}
+
+    def _fake_sexec(self):
+        """설정 창 — 실제 키로 '개수 직접' 을 고르고 2 를 친 뒤 [확인]."""
+        seen_s["folder"] = self.ed_folder.text()
+        self.cmb_limit.setFocus()
+        for _k in range(6):
+            if self.cmb_limit.currentData() == ("count", 0):
+                break
+            QTest.keyClick(self.cmb_limit, Qt.Key.Key_Down)
+        self.spin_limit.selectAll()
+        QTest.keyClicks(self.spin_limit, "2")
+        from PyQt6.QtWidgets import QDialogButtonBox as _BB
+        ok_b = self.findChild(_BB).button(_BB.StandardButton.Ok)
+        QTest.mouseClick(ok_b, Qt.MouseButton.LeftButton)
+        return self.result()
+    SDm.BizcardSettingsDialog.exec = _fake_sexec
+    try:
+        if bset is not None:
+            QTest.mouseClick(bset, Qt.MouseButton.LeftButton)
+    finally:
+        SDm.BizcardSettingsDialog.exec = _o_sexec
+    left = [r[0] for r in st.con.execute("SELECT card_id FROM recent ORDER BY seen DESC")]
+    lim = P.recent_limit(st) if hasattr(P, "recent_limit") else None
+    chk(n_before == 5 and lim == {"mode": "count", "n": 2} and left == ids5[-2:][::-1] and seen_s.get("folder") == str(F),
+        "I28 명함 환경설정 '최근' 제한 개수 2 — 최근에 본 2개만 남고 나머지 기록은 지움(창은 지금 명함 폴더를 보임)",
+        "%s %s %s %s" % (n_before, lim, left, seen_s))
+    ok_days = False
+    if hasattr(P, "set_recent_limit"):
+        st.con.execute("DELETE FROM recent")
+        P.set_recent_limit(st, "days", 7)
+        for k, cid in enumerate(ids5[:3]):
+            P.recent_add(st, cid, (datetime.date.today() - datetime.timedelta(days=(0, 6, 9)[k])).isoformat() + " 09:00:00")
+        ok_days = sorted(r[0] for r in st.con.execute("SELECT card_id FROM recent")) == sorted(ids5[:2])
+    chk(ok_days, "I28 기간 제한 1주 — 7일 넘은 기록만 지움(6일 전은 남음)")
+    ok_fresh = False                                        # 즐겨찾기 표(fav_init) 전의 새 DB — 멈추지 않음(번호 형식 세션이 찾음)
+    try:
+        st_new = S.BizcardStore(TMP / "fresh_recent.db")
+        ok_fresh = P.set_recent_limit(st_new, "count", 3) == 0 and P.recent_clear(st_new) == 0
+        st_new.close()
+    except Exception as e:
+        print("fresh", repr(e))
+    chk(ok_fresh, "I28 '최근' 표가 아직 없는 새 명함 DB 에서도 제한·모두 삭제가 멈추지 않음")
+    # 모두 삭제 — 확인 창 '아니요' 면 그대로, '예' 면 비움(명함은 그대로)
+    n_cards = st.con.execute("SELECT COUNT(*) FROM cards").fetchone()[0]
+    st.close()
+    dlg.fav_tabs.setCurrentIndex(0)                      # '최근'
+    pump(timeout=0.2)
+    shown4, ans = [], [QMessageBox.StandardButton.No]
+    _o_exec4, _o_q4 = QMenu.exec, QMessageBox.question
+    QMenu.exec = lambda self, *a, **k: shown4.append(self)
+    QMessageBox.question = staticmethod(lambda *a, **k: ans[0])
+    try:
+        dlg._fav_tab_menu(dlg.fav_tabs.tabRect(0).center())
+        acts = [a for a in shown4[-1].actions() if a.text() == "모두 삭제"] if shown4 else []
+        if acts:
+            acts[0].trigger()
+        st = S.BizcardStore()
+        n_no = st.con.execute("SELECT COUNT(*) FROM recent").fetchone()[0]
+        st.close()
+        ans[0] = QMessageBox.StandardButton.Yes
+        if acts:
+            acts[0].trigger()
+    finally:
+        QMenu.exec, QMessageBox.question = _o_exec4, _o_q4
+    st = S.BizcardStore()
+    n_yes = st.con.execute("SELECT COUNT(*) FROM recent").fetchone()[0]
+    n_cards2 = st.con.execute("SELECT COUNT(*) FROM cards").fetchone()[0]
+    st.close()
+    chk(acts and n_no == 2 and n_yes == 0 and n_cards2 == n_cards and dlg.fav.count() == 0,
+        "I28 '최근' 탭 메뉴 '모두 삭제' — 확인 창 '아니요' 면 그대로, '예' 면 기록만 모두 지움", "%s %d %d" % (bool(acts), n_no, n_yes))
+    # 설정 파일 두 값 — 명함 프로그램(따로 뜬 창)이 쓴 값을 본 뷰어 저장이 덮지 않음, 본 뷰어가 바꾼 값은 본 뷰어 것
+    ok_ss = False
+    if hasattr(SS, "set_picture_prefs"):
+        mw._shared_pic_base = SS.shared_picture(mw._prefs)
+        SS.set_picture_prefs({"phone_country": ""})          # 명함 창이 바꿈(본 뷰어는 그대로)
+        BW.flush()
+        mw._save_settings_now()
+        BW.flush()
+        after = (SS.peek_pref("picture") or {}).get("phone_country")
+        mw._prefs.setdefault("picture", {})["phone_country"] = "KR"   # 이번엔 본 뷰어가 바꿈
+        mw._save_settings_now()
+        BW.flush()
+        after2 = (SS.peek_pref("picture") or {}).get("phone_country")
+        ok_ss = after == "" and after2 == "KR" and mw._prefs["picture"]["phone_country"] == "KR"
+    chk(ok_ss, "I28 명함 창이 설정 파일에 쓴 번호 국가를 본 뷰어 저장이 되돌리지 않음·본 뷰어가 바꾸면 본 뷰어 값")
+
+    # I29 구분 콤보 — 사진 있음·없음, 언어/명함/사진 묶음 사이 구분선(사용자 지시 261120-24)
+    cbk2 = dlg.cb_kind
+    seps = [i for i in range(cbk2.count()) if cbk2.itemData(i) is None and not cbk2.itemText(i)]
+    datas = [cbk2.itemData(i) for i in range(cbk2.count())]
+    dlg.ed_find.clear()
+    got2 = {}
+    for k in ("all", "photo", "nophoto"):
+        if cbk2.findData(k) >= 0:
+            cbk2.setCurrentIndex(cbk2.findData(k))
+            pump(timeout=0.1)
+        got2[k] = {c["id"] for c in dlg._rows}
+    st = S.BizcardStore()
+    want_ph = {c["id"] for c in P.find(st, "") if P.person_photos(P.photo_front(c, str(F)))}
+    st.close()
+    chk(len(seps) == 3 and "photo" in datas and datas.index("ko") > seps[0] and datas.index("card") > seps[1]
+        and datas.index("photo") > seps[2]
+        and got2["photo"] and got2["photo"] == (want_ph & got2["all"]) and got2["photo"] | got2["nophoto"] == got2["all"]
+        and not (got2["photo"] & got2["nophoto"]),
+        "I29 구분 콤보 '사진 있음·없음'(인물 사진) — 언어/명함/사진 묶음 사이 구분선 셋",
+        "%s %d %d %d" % (seps, len(got2["photo"]), len(want_ph), len(got2["all"])))
+    cbk2.setCurrentIndex(0)
+    pump(timeout=0.1)
+
+    # I32 세부내용 추가 칸 — 둘째 메일부터·같은 종류 둘째 전화부터·둘째 누리집부터 줄을 보이고 고침, 칸 영역 스크롤 (261120-35)
+    st = S.BizcardStore()
+    st.con.execute("INSERT INTO cards(front, name, company, phones, emails, urls, scanned, tags, en) VALUES(?,?,?,?,?,?,?,?,?)",
+                   ("contact:extra1", "추가가짜", "가짜상사", '[["cell", "010-0000-0071"], ["cell", "010-0000-0072"]]',
+                    '["x1@example.com", "x2@example.com", "x3@example.com"]', '["https://example.com", "https://example.org"]',
+                    "2021-04-01", "[]", "{}"))
+    st.con.commit()
+    xid = st.con.execute("SELECT id FROM cards WHERE front='contact:extra1'").fetchone()[0]
+    st.close()
+    dlg.ed_find.clear()
+    dlg.refresh()
+    pump(timeout=0.2)
+    dlg.table.setCurrentCell(dlg.row_of_id(xid), 0)
+    pump(timeout=0.2)
+    ex = getattr(dlg, "extra_eds", None) or []
+    labs = []
+    fx = getattr(dlg, "form_extra", None)
+    if fx is not None:
+        from PyQt6.QtWidgets import QFormLayout as _QFL
+        labs = [fx.itemAt(r, _QFL.ItemRole.LabelRole).widget().text() for r in range(fx.rowCount())]
+    vals0 = [e.text() for _g, _k, e in ex]
+    ok_rows = labs == ["메일 2", "메일 3", "휴대폰 2", "누리집 2"] and vals0 == ["x2@example.com", "x3@example.com", "010-0000-0072", "https://example.org"]
+    if ok_rows:
+        e2 = ex[0][2]                                       # 메일 2 를 고치고, 메일 3 은 비워 지움
+        QTest.mouseClick(e2, Qt.MouseButton.LeftButton)
+        e2.selectAll()
+        QTest.keyClicks(e2, "x2new@example.com")
+        QTest.mouseClick(ex[1][2], Qt.MouseButton.LeftButton)
+        ex[1][2].selectAll()
+        QTest.keyClick(ex[1][2], Qt.Key.Key_Delete)
+        QTest.mouseClick(dlg.btn_save, Qt.MouseButton.LeftButton)
+        pump(timeout=0.3)
+    st = S.BizcardStore()
+    cx = P.card_by_id(st, xid)
+    st.close()
+    chk(ok_rows and cx["emails"] == ["x1@example.com", "x2new@example.com"] and [tuple(p) for p in cx["phones"]]
+        == [("cell", "010-0000-0071"), ("cell", "010-0000-0072")] and cx["urls"] == ["https://example.com", "https://example.org"],
+        "I32 추가 줄 '메일 2·메일 3·휴대폰 2·누리집 2' — 고치면 그 값, 비우면 지움, 다른 값은 그대로",
+        "%s %s %s" % (labs, vals0, cx and (cx["emails"], cx["phones"], cx["urls"])))
+    sc = getattr(dlg, "fields_scroll", None)
+    full_h = sc.height() if sc is not None else 0
+    old_size = dlg.size()
+    dlg.resize(old_size.width(), 420)
+    pump(timeout=0.3)
+    scr_max = sc.verticalScrollBar().maximum() if sc is not None else 0
+    dlg.resize(old_size)
+    pump(timeout=0.3)
+    chk(sc is not None and sc.isAncestorOf(dlg.eds["name"]) and not sc.isAncestorOf(dlg.ed_memo) and scr_max > 0
+        and full_h >= sc.widget().sizeHint().height() - 2,
+        "I32 메모 위 칸 영역은 스크롤 — 넉넉하면 다 보이고, 창이 낮으면 스크롤", "%s %d %d" % (sc is not None, scr_max, full_h))
+
+    # I30 메일 보내기 — 기본 메일 앱(mailto)·네이버(주소 복사 + 메일 화면) (사용자 결정 261120-23)
+    import viewer.widgets.bizcard_find_dialog as BF3
+    st = S.BizcardStore()
+    hong3 = next(c for c in P.find(st, "홍길동"))
+    g3 = P.fav_add_group(st, "메일앱시험")
+    P.fav_add(st, g3, [hong3["id"]])
+    st.meta_set("mail_field", "bcc")                      # 받는 칸은 명함 환경설정에서 고른 것(261120-33)
+    st.close()
+    dlg._fav_fill_tabs(g3)
+    pump(timeout=0.2)
+    gi3 = [dlg.fav_tabs.tabData(i) for i in range(dlg.fav_tabs.count())].index(g3)
+    dlg.fav_tabs.setCurrentIndex(gi3)
+    pump(timeout=0.2)
+    opened3, shown5, info5 = [], [], []
+    _o5 = (QMenu.exec, QMessageBox.information, getattr(BF3, "_open_url", None))
+    QMenu.exec = lambda self, *a, **k: shown5.append(self)
+    QMessageBox.information = staticmethod(lambda *a, **k: info5.append(a[2] if len(a) > 2 else "") or QMessageBox.StandardButton.Ok)
+    BF3._open_url = lambda u: opened3.append(u) or True
+    try:
+        dlg._fav_tab_menu(dlg.fav_tabs.tabRect(gi3).center())
+        m5 = shown5[-1] if shown5 else None
+        tops = [a.text() for a in m5.actions() if a.text()] if m5 else []
+        dm5 = next((a for a in m5.actions() if a.text() == "기본 메일 앱으로 보내기"), None) if m5 else None
+        if dm5 is not None:
+            dm5.trigger()
+        nv = next((a for a in m5.actions() if a.text() == "네이버 메일 보내기"), None) if m5 else None
+        if nv is not None:
+            nv.trigger()
+    finally:
+        QMenu.exec, QMessageBox.information = _o5[0], _o5[1]
+        if _o5[2] is not None:
+            BF3._open_url = _o5[2]
+    chk(dm5 is not None and nv is not None and opened3[:1] == ["mailto:?bcc=hong@example.com"]
+        and opened3[1:] == [getattr(P, "NAVER_MAIL", "?")] and QApplication.clipboard().text() == "hong@example.com"
+        and info5 and "붙여" in info5[-1],
+        "I30 탭 메뉴 '기본 메일 앱으로 보내기 ▸ 숨은 참조' = mailto:?bcc=, '네이버 메일로 보내기' = 주소 복사 + 네이버 메일 화면·붙여 넣기 안내",
+        "%s %s %r" % (tops, opened3, QApplication.clipboard().text()))
+    chk(P.mailto_urls(["a@example.com", "b@example.com"], "to") == ["mailto:a@example.com,b@example.com"]
+        if hasattr(P, "mailto_urls") else False, "I30 mailto 주소 — 받는 사람은 mailto:a,b")
+
     print("\n=== I23. 흐린 찾기 글 → 전체 목록 · 구분 기억 · 즐겨찾기 이름 굵게 · Gmail 보내기 (사용자 지시 261120) ===")
     import urllib.parse as _up
     import viewer.widgets.bizcard_find_dialog as BF
@@ -1335,16 +1552,29 @@ try:
     def _q(u):
         return _up.parse_qs(_up.urlsplit(u).query)
     try:
-        dlg._fav_tab_menu(dlg.fav_tabs.tabRect(gi).center())
-        _act(shown[-1], "Gmail 보내기", "숨은 참조").trigger()
-        pump(timeout=0.1)
+        st = S.BizcardStore()                             # 처음 보내는 것처럼 — 받는 칸·계정 기억 지움(I28 의 [확인]이 정해 둠)
+        st.con.execute("DELETE FROM meta WHERE k IN ('mail_field', 'gmail_account')")
+        st.con.commit()
+        st.close()
+        picked = []
+        _o_item = QInputDialog.getItem
+        QInputDialog.getItem = staticmethod(lambda *a, **k: picked.append(a[3] if len(a) > 3 else k.get("items")) or ("숨은 참조", True))
+        try:
+            dlg._fav_tab_menu(dlg.fav_tabs.tabRect(gi).center())
+            tabm = [a.text() for a in shown[-1].actions() if a.text()]
+            _act(shown[-1], "Gmail 보내기").trigger()
+            pump(timeout=0.1)
+        finally:
+            QInputDialog.getItem = _o_item
         want = {"hong@example.com"} | {"fake%02d@example.com" % i for i in range(150)}
         got_bcc = [a for u in opened for a in ",".join(_q(u).get("bcc", [])).split(",") if a]
+        ig = tabm.index("Gmail 보내기") if "Gmail 보내기" in tabm else -9
         chk(len(opened) >= 2 and all(len(u) <= BF.P.GMAIL_URL_MAX for u in opened) and set(got_bcc) == want
             and len(got_bcc) == len(want) and not any("to" in _q(u) for u in opened)
-            and all(u.startswith("https://mail.google.com/mail/?") and _q(u).get("view") == ["cm"] for u in opened),
-            "I23 탭 메뉴 'Gmail 보내기 ▸ 숨은 참조' — 그 탭 사람 모두의 메일을 숨은 참조로, 주소가 길면 여러 쓰기 창(각 2000자 이하)",
-            "%d %s" % (len(opened), [len(u) for u in opened]))
+            and all(u.startswith("https://mail.google.com/mail/?") and _q(u).get("view") == ["cm"] for u in opened)
+            and len(picked) == 1 and tabm[ig + 1:ig + 3] == ["네이버 메일 보내기", "기본 메일 앱으로 보내기"],
+            "I31 탭 메뉴 'Gmail 보내기' 바로 실행 — 받는 칸을 고른 적 없으면 한 번 묻고(숨은 참조), 네이버는 Gmail 바로 아래·길면 여러 창",
+            "%d %s %s %s" % (len(opened), [len(u) for u in opened], picked, tabm))
         chk(asked == [""] and all(_q(u).get("authuser") == ["me@example.com"] for u in opened) and ques
             and any("1" in s for s in info2),
             "I23 보낼 계정을 처음 한 번 묻고 authuser 로 붙임·여러 창이면 먼저 확인·메일 없는 1명은 뺐다고 알림",
@@ -1356,19 +1586,31 @@ try:
                 dlg.fav.item(i).setSelected(True)
         dlg._fav_menu(dlg.fav.visualItemRect(dlg.fav.selectedItems()[0]).center())
         fm2 = [a.text() for a in shown[-1].actions() if a.text()]
-        _act(shown[-1], "Gmail 보내기", "받는 사람").trigger()
-        pump(timeout=0.1)
-        chk(fm2[:3] == ["내용 복사", "이메일 복사", "Gmail 보내기"] and len(opened) == 1
-            and _q(opened[0]).get("to") == ["hong@example.com"] and "bcc" not in _q(opened[0]) and asked == [""] and not info2,
-            "I23 사람 메뉴 'Gmail 보내기 ▸ 받는 사람' — 고른 사람만, 계정은 다시 묻지 않음", "%s %s %s" % (fm2, opened, asked))
+        picked.clear()
+        QInputDialog.getItem = staticmethod(lambda *a, **k: picked.append(1) or ("받는 사람", True))
+        try:
+            _act(shown[-1], "Gmail 보내기").trigger()
+            pump(timeout=0.1)
+        finally:
+            QInputDialog.getItem = _o_item
+        chk(fm2[:3] == ["내용 복사", "이메일 복사", "Gmail 보내기"] and len(opened) == 1 and not picked
+            and _q(opened[0]).get("bcc") == ["hong@example.com"] and "to" not in _q(opened[0]) and asked == [""] and not info2,
+            "I31 사람 메뉴 'Gmail 보내기' — 고른 사람만, 받는 칸·계정은 기억한 것(다시 묻지 않음)", "%s %s %s %s" % (fm2, opened, asked, picked))
         opened.clear()
-        dlg._fav_menu(dlg.fav.visualItemRect(dlg.fav.selectedItems()[0]).center())
-        _act(shown[-1], "Gmail 보내기", "보낼 계정 바꾸기").trigger()
-        chk(asked == ["", "me@example.com"] and not opened, "I23 '보낼 계정 바꾸기' 는 지난 값을 채워 다시 묻고 창은 열지 않음", str(asked))
         st = S.BizcardStore()
         acct = st.meta_get("gmail_account", None)
+        fld = st.meta_get("mail_field", None)
         st.close()
-        chk(acct == "me@example.com", "I23 보낼 계정은 명함 DB meta 에 기억", repr(acct))
+        chk(acct == "me@example.com" and fld == "bcc", "I23 보낼 계정·받는 칸은 명함 DB meta 에 기억", "%r %r" % (acct, fld))
+        import viewer.widgets.bizcard_settings_dialog as SDm2
+        sd2 = SDm2.BizcardSettingsDialog(dlg, host=None, store=dlg._store())
+        chk(sd2.rb_bcc.isChecked() and sd2.ed_gmail.text() == "me@example.com",
+            "I31 명함 환경설정에 받는 칸(옵션 단추)·Gmail 보낼 계정이 기억한 값으로")
+        sd2.close()
+        two = [{"emails": ["first@example.com", "second@example.com"]}, {"emails": []}]
+        chk(P.email_list(two) == (["first@example.com"], 1) and P.emails_text(two) == "first@example.com"
+            and P.email_list(two, first_only=False)[0] == ["first@example.com", "second@example.com"],
+            "I31 보내기·이메일 복사는 사람마다 첫 메일 하나")
         chk(P.gmail_urls(["a@example.com"], "to", "") == ["https://mail.google.com/mail/?view=cm&fs=1&to=a@example.com"]
             and P.gmail_urls([], "bcc", "") == [] and P.email_list([{"emails": ["a@x.com"]}, {"emails": []}, {"emails": ["A@X.com"]}]) == (["a@x.com"], 1),
             "I23 Gmail 주소 만들기(계정 비우면 authuser 없음)·주소 모으기(메일 없는 사람 수)")

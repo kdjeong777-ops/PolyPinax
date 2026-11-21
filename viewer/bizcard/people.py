@@ -63,13 +63,41 @@ def find(store, text: str = "", since: str = "", until: str = "", limit=None) ->
     return out
 
 
-KINDS = ("all", "ko", "en", "card", "nocard")     # 찾기 칸 앞 구분(명함 SOT §5.24.1, 사용자 지시 261119)
+KINDS = ("all", "ko", "en", "card", "nocard", "photo", "nophoto")   # 찾기 칸 앞 구분(명함 SOT §5.24.1, 사용자 지시 261119·261120-24)
+KIND_GROUPS = (("all",), ("ko", "en"), ("card", "nocard"), ("photo", "nophoto"))   # 콤보에서 묶음 사이 구분선(언어/명함/사진)
+
+
+def photo_ids(cards, folder="") -> set:
+    """인물 사진이 있는 명함 id — '인물' 폴더는 폴더마다 한 번만 읽는다(명함마다 파일을 찾지 않게, §5.24.1 '구분')."""
+    listing, out = {}, set()
+    for c in cards:
+        pf = photo_front(c, folder)
+        if not pf:
+            continue
+        d = people_dir(pf)
+        if d not in listing:
+            names = set()
+            try:
+                for n in os.listdir(d):
+                    st, ext = os.path.splitext(n)
+                    if ext.lower() in R.IMG_EXTS:
+                        names.add(re.sub(r" \(\d+\)$", "", st).lower())
+            except OSError:
+                pass
+            listing[d] = names
+        if Path(pf).stem.lower() in listing[d]:
+            out.add(c["id"])
+    return out
 _HANGUL = re.compile(r"[가-힣ㄱ-ㆎ]")
 _LATIN = re.compile(r"[A-Za-z]")
 
 
-def kind_ok(card: dict, kind: str) -> bool:
-    """구분 — 'ko' = 이름에 한글, 'en' = 이름이 영어(로마자, 한글 없음), 'card' = 명함 그림 있음, 'nocard' = 그림 없는 주소록 명함."""
+def kind_ok(card: dict, kind: str, photos=None) -> bool:
+    """구분 — 'ko' = 이름에 한글, 'en' = 이름이 영어(로마자, 한글 없음), 'card' = 명함 그림 있음, 'nocard' = 그림 없는 주소록 명함,
+    'photo'·'nophoto' = 인물 사진 있음·없음(photos = `photo_ids` 결과)."""
+    if kind in ("photo", "nophoto"):
+        has = card.get("id") in (photos or set())
+        return has if kind == "photo" else not has
     if kind in ("ko", "en"):
         name = str(card.get("name") or "")
         if _HANGUL.search(name):
@@ -633,7 +661,63 @@ def recent_add(store, card_id: int, when: str = "") -> None:
     when = when or datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     store.con.execute("INSERT INTO recent(card_id, seen) VALUES(?, ?) ON CONFLICT(card_id) DO UPDATE SET seen=excluded.seen",
                       (card_id, when))
+    recent_prune(store, commit=False)              # 항목 제한(§5.24.2 '최근 탭', 261120-18)
     store.con.commit()
+
+
+# 항목 제한 — 명함 DB meta `recent_limit` = {mode: count|days, n}. 넘는 기록은 지운다(명함은 그대로)
+RECENT_LIMIT_KEY = "recent_limit"
+RECENT_LIMIT_DEFAULT = {"mode": "count", "n": 20}
+
+
+def recent_limit(store) -> dict:
+    v = store.meta_get(RECENT_LIMIT_KEY, None)
+    if isinstance(v, dict) and v.get("mode") in ("count", "days"):
+        try:
+            n = int(v.get("n"))
+        except (TypeError, ValueError):
+            n = 0
+        if n > 0:
+            return {"mode": v["mode"], "n": n}
+    return dict(RECENT_LIMIT_DEFAULT)
+
+
+def set_recent_limit(store, mode: str, n: int) -> int:
+    """제한을 정하고 곧바로 넘는 기록을 지운다 — 지운 수."""
+    store.meta_set(RECENT_LIMIT_KEY, {"mode": mode if mode in ("count", "days") else "count", "n": max(1, int(n))})
+    return recent_prune(store)
+
+
+def _has_recent(store) -> bool:
+    return store.con.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='recent'").fetchone() is not None
+
+
+def recent_prune(store, today=None, commit: bool = True) -> int:
+    """제한을 넘는 '최근' 기록을 지운다 — 개수면 최근에 본 n 개만, 기간이면 오늘부터 n 일 안(오늘 포함)만. 지운 수."""
+    import datetime
+    if not _has_recent(store):                      # 즐겨찾기 표(fav_init) 전의 새 DB — 지울 것이 없다
+        return 0
+    lim = recent_limit(store)
+    if lim["mode"] == "days":
+        today = today or datetime.date.today()
+        since = (today - datetime.timedelta(days=lim["n"] - 1)).isoformat()
+        cur = store.con.execute("DELETE FROM recent WHERE substr(seen, 1, 10) < ?", (since,))
+    else:
+        cur = store.con.execute(
+            "DELETE FROM recent WHERE rowid NOT IN (SELECT rowid FROM recent ORDER BY seen DESC, rowid DESC LIMIT ?)",
+            (lim["n"],))
+    if commit:
+        store.con.commit()
+    return cur.rowcount if cur.rowcount and cur.rowcount > 0 else 0
+
+
+def recent_clear(store) -> int:
+    """'최근' 기록을 모두 지운다(명함은 그대로, §5.24.2 '모두 삭제', 261120-19) — 지운 수."""
+    if not _has_recent(store):
+        return 0
+    cur = store.con.execute("DELETE FROM recent")
+    store.con.commit()
+    return cur.rowcount if cur.rowcount and cur.rowcount > 0 else 0
 
 
 def recent_list(store, since: str = "", until: str = "") -> list:
@@ -655,8 +739,9 @@ def recent_remove(store, card_ids) -> None:
 
 
 # ── 이메일 복사 (§5.24.1) — 받는 사람 칸에 붙여 쓰기 ──
-def email_list(cards) -> tuple:
-    """고른 명함들의 메일 주소(여럿이면 모두, 같은 주소 한 번) + 메일 없는 명함 수 (명함 SOT §5.24.1 '이메일 복사')."""
+def email_list(cards, first_only: bool = True) -> tuple:
+    """고른 명함들의 메일 주소(같은 주소 한 번) + 메일 없는 명함 수 (명함 SOT §5.24.1 '이메일 복사').
+    first_only = 사람마다 첫 메일 하나만(261120-32, 사용자 결정 '보내기·복사 모두'), False 면 여럿이면 모두."""
     out, seen, missing = [], set(), 0
     for c in cards:
         got = False
@@ -668,6 +753,8 @@ def email_list(cards) -> tuple:
             if e.lower() not in seen:
                 seen.add(e.lower())
                 out.append(e)
+            if first_only:
+                break
         if not got:
             missing += 1
     return out, missing
@@ -675,6 +762,9 @@ def email_list(cards) -> tuple:
 
 def emails_text(cards) -> str:
     return ", ".join(email_list(cards)[0])
+
+
+MAIL_FIELD_KEY = "mail_field"        # 메일 보내기 받는 칸 'to'·'bcc' — 명함 환경설정에서 고르고 기억(§5.24.9, 261120-33)
 
 
 # ── Gmail 보내기 (명함 SOT §5.24.1 'Gmail 보내기', 사용자 결정 261120) — 브라우저 쓰기 창 주소만, 네트워크 없음(§2.1) ──
@@ -687,7 +777,21 @@ def gmail_urls(emails, field: str = "to", account: str = "", limit: int = GMAIL_
     account(보낼 구글 계정)가 있으면 authuser 로. 주소가 하나도 없으면 []."""
     from urllib.parse import quote
     base = GMAIL_COMPOSE + ("&authuser=" + quote(account.strip(), safe="@") if (account or "").strip() else "")
-    head = "%s&%s=" % (base, field)
+    return _chunk_urls("%s&%s=" % (base, field), emails, limit)
+
+
+# 기본 메일 앱(mailto, RFC 6068) — PC 에 정한 메일 프로그램이 연다(§5.24.1 '메일 보내기', 261120-23)
+NAVER_MAIL = "https://mail.naver.com/"      # 네이버는 받는 사람을 채운 쓰기 창 주소를 공개하지 않는다 — 주소 복사 + 메일 화면만
+
+
+def mailto_urls(emails, field: str = "to", limit: int = GMAIL_URL_MAX) -> list:
+    """mailto 주소들 — 받는 사람은 `mailto:a,b`, 숨은 참조는 `mailto:?bcc=a,b`. 길면 차례대로 나눈다."""
+    return _chunk_urls("mailto:" if field == "to" else "mailto:?bcc=", emails, limit)
+
+
+def _chunk_urls(head: str, emails, limit: int) -> list:
+    """head 뒤에 주소를 쉼표로 잇되 한 주소가 limit 를 넘지 않게 나눈다(빈 목록 = [])."""
+    from urllib.parse import quote
     urls, cur = [], ""
     for e in emails:
         q = quote(e, safe="@")

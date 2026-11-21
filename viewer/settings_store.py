@@ -506,7 +506,49 @@ def save(data: dict, name: str = "settings.json") -> None:
     bg_write.submit(p, text, fsync=True)
 
 
-ERROR_LOG_NAME = "error.log"        # main.ERROR_LOG_NAME 과 같은 파일(마스터 §14.7.3 안전망)
+# ── 명함 창과 본 뷰어가 함께 바꾸는 값 (명함 SOT §5.24.9, 261120-17) ──
+#   명함 프로그램(따로 뜬 프로세스)이 이 값만 설정 파일에 쓰고, 본 뷰어는 저장할 때 자기가 바꾸지 않은 이 값을 파일 쪽으로 따른다.
+SHARED_PICTURE_KEYS = ("bizcard_folder", "phone_country")
+
+
+def shared_picture(prefs: dict) -> dict:
+    """prefs 의 picture 묶음에서 공유 값만(기준값으로 기억해 둔다)."""
+    pic = (prefs or {}).get("picture") if isinstance(prefs, dict) else None
+    pic = pic if isinstance(pic, dict) else {}
+    return {k: pic.get(k) for k in SHARED_PICTURE_KEYS}
+
+
+def set_picture_prefs(values: dict, name: str = "settings.json") -> None:
+    """설정 파일의 picture 묶음에서 공유 값만 바꾼다(다른 값은 파일 그대로) — 명함 환경설정 창."""
+    data = load(name)
+    pr = data.get("preferences")
+    if not isinstance(pr, dict):
+        pr = data["preferences"] = {}
+    pic = pr.get("picture")
+    if not isinstance(pic, dict):
+        pic = pr["picture"] = {}
+    for k, v in values.items():
+        if k in SHARED_PICTURE_KEYS:
+            pic[k] = v
+    save(data, name)
+
+
+def merge_shared_picture(prefs: dict, base: dict, name: str = "settings.json") -> dict:
+    """본 뷰어가 저장하기 직전 — 공유 값마다, 메모리 값이 기준과 같고(이 프로세스는 바꾸지 않음) 파일 값이 기준과 다르면
+    (명함 창이 바꿈) 파일 값을 메모리 prefs 에 넣는다. 새 기준값을 돌려준다."""
+    disk = peek_pref("picture", name)
+    disk = disk if isinstance(disk, dict) else {}
+    pic = prefs.get("picture")
+    if not isinstance(pic, dict):
+        pic = prefs["picture"] = {}
+    base = base or {}
+    for k in SHARED_PICTURE_KEYS:
+        if k in disk and disk.get(k) != base.get(k) and pic.get(k) == base.get(k):
+            pic[k] = disk.get(k)
+    return shared_picture(prefs)
+
+
+ERROR_LOG_NAME = "error.log"       # main.ERROR_LOG_NAME 과 같은 파일(마스터 §14.7.3 안전망)
 ERROR_LOG_MAX = 1_000_000           # main.ERROR_LOG_MAX 와 같은 규칙 — 넘으면 비우고 새로
 
 

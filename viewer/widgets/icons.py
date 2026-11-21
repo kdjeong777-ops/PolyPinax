@@ -238,6 +238,26 @@ def _select_box(p, c):
     p.drawPolygon(arrow)
 
 
+def _gear(p, c):
+    """톱니바퀴(환경설정) — 이 여덟 개 바깥 원 + 가운데 빈 원(디자인 SOT §4.2, 261120-17)."""
+    import math
+    cx, cy, r_out, r_in, n = 8.0, 8.0, 7.0, 5.1, 8
+    pts = []
+    for k in range(n):
+        a0 = 2 * math.pi * k / n
+        for da, r in ((-0.20, r_in), (-0.13, r_out), (0.13, r_out), (0.20, r_in)):
+            a = a0 + da
+            pts.append(QPointF(cx + r * math.cos(a), cy + r * math.sin(a)))
+    path = QPainterPath()
+    path.addPolygon(QPolygonF(pts))
+    path.closeSubpath()
+    hole = QPainterPath()
+    hole.addEllipse(QPointF(cx, cy), 2.3, 2.3)
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(c)
+    p.drawPath(path.subtracted(hole))
+
+
 _DRAW = {
     "search": _search, "globe": _globe, "close": _close,
     "chevron_up": _chevron_up, "chevron_down": _chevron_down,
@@ -247,6 +267,7 @@ _DRAW = {
     "shape_rect": _shape_rect, "shape_round": _shape_round, "shape_circle": _shape_circle,
     "crop": _crop, "sign": _sign, "image": _image, "line_straight": _line_straight,
     "view_tree": _view_tree, "view_single": _view_single, "hand": _hand, "select_box": _select_box,
+    "gear": _gear,
 }
 
 

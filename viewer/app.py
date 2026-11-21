@@ -10316,6 +10316,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
 
         # 환경설정 적용 (v1.6.2: history 관련 키 제거)
         self._prefs = dict(data.get("preferences", {}))
+        self._shared_pic_base = settings_store.shared_picture(self._prefs)   # 명함 창과 함께 바꾸는 값의 기준(명함 SOT §5.24.9)
         # 261008(다국어 SOT §4): 언어가 없으면 한 번 정해 설정에 넣는다(이후엔 설정이 기준).
         #   설정 파일이 이미 있으면 ko — 이 기능 전 설치본은 모두 한국어였다.
         if not self._prefs.get("language"):
@@ -11247,6 +11248,11 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
 
     def _build_settings_payload(self) -> dict:
         """settings.json 저장 페이로드 (closeEvent / _save_settings_now 공용)."""
+        try:                                           # 명함 창이 바꾼 명함 폴더·번호 국가를 옛 기억으로 덮지 않게(명함 SOT §5.24.9)
+            self._shared_pic_base = settings_store.merge_shared_picture(
+                self._prefs, getattr(self, "_shared_pic_base", None), self.SETTINGS_FILE)
+        except Exception:
+            pass
         return {
             "schema_version": settings_store.CURRENT_SCHEMA,
             "render_dpi": self.main_view._base_dpi,

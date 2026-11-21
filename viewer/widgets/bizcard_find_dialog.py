@@ -18,7 +18,7 @@ from PyQt6.QtGui import QPixmap, QIcon, QImage, QImageReader, QPainter, QPainter
 from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QComboBox, QTableView,
     QAbstractItemView, QHeaderView, QSplitter, QWidget, QFormLayout, QPlainTextEdit, QPushButton,
     QListWidget, QListWidgetItem, QListView, QMessageBox, QFileDialog, QSizePolicy, QCheckBox, QTabBar, QToolButton,
-    QMenu, QInputDialog, QApplication, QDateEdit, QDialogButtonBox, QWidgetAction)
+    QMenu, QInputDialog, QApplication, QDateEdit, QDialogButtonBox, QWidgetAction, QScrollArea, QFrame)
 
 from viewer.i18n import tr, tr_noop
 from viewer import clipboard_util
@@ -62,7 +62,7 @@ def _list_phone(c) -> str:
     return PH.normalize(next((n for k, n in ph if k == "cell"), "") or next((n for k, n in ph if k != "fax"), ""))
 
 
-def edited_fields(c, g: dict, memo: str) -> dict:
+def edited_fields(c, g: dict, memo: str, extras=None) -> dict:
     """세부 칸 글 g(칸 → 글)·메모 → 명함 c 에 넣을 값 — 전화는 종류마다 첫 번호만 바꾸고 나머지는 둔다, 번호는 적을 꼴(§5.11).
     명함찾기 [저장]·중복 검토 '명함 고치기'(§5.24.8)가 같이 쓴다."""
     g = {k: (v or "").strip() for k, v in g.items()}
@@ -76,9 +76,15 @@ def edited_fields(c, g: dict, memo: str) -> dict:
         first = next((i for i, (k, _n) in enumerate(old_ph) if k == kind), None)
         if first is not None:
             used.add(first)
-    phones += [p for i, p in enumerate(old_ph) if i not in used]
-    emails = ([g["email"]] if g.get("email") else []) + list((c.get("emails") or [])[1:])
-    urls = ([g["url"]] if g.get("url") else []) + list((c.get("urls") or [])[1:])
+    if extras is None:                                 # 중복 검토 '명함 고치기' — 숨은 둘째 값부터는 그대로
+        phones += [p for i, p in enumerate(old_ph) if i not in used]
+        emails = ([g["email"]] if g.get("email") else []) + list((c.get("emails") or [])[1:])
+        urls = ([g["url"]] if g.get("url") else []) + list((c.get("urls") or [])[1:])
+    else:                                              # 명함찾기 — 추가 칸 값으로(261120-35), 다른 종류 전화는 그대로
+        phones += [tuple(p) for p in extras.get("phones") or []]
+        phones += [p for i, p in enumerate(old_ph) if i not in used and p[0] not in PHONE_KEYS]
+        emails = ([g["email"]] if g.get("email") else []) + list(extras.get("emails") or [])
+        urls = ([g["url"]] if g.get("url") else []) + list(extras.get("urls") or [])
     name = g.get("name", "")
     name = R.clean_name_ko(name) if R._HANGUL.search(name) and not R._LATIN.search(name) else name
     return {"name": name, "company": R.strip_corp(g.get("company", "")), "dept": g.get("dept", ""),
@@ -754,6 +760,18 @@ class _OrderList(QListWidget):
         super().keyPressEvent(e)
 
 
+class _FitScroll(QScrollArea):
+    """세부 칸 영역(§5.24.1 '추가 칸', 261120-35) — 바라는 높이 = 안의 칸 높이(늘 다 보이게), 창이 낮으면 줄고 스크롤."""
+
+    def sizeHint(self):
+        w = self.widget()
+        h = (w.sizeHint().height() if w is not None else 0) + 2 * self.frameWidth()
+        return QSize(super().sizeHint().width(), h)
+
+    def minimumSizeHint(self):
+        return QSize(super().minimumSizeHint().width(), 3 * self.fontMetrics().height())
+
+
 class BizcardFindDialog(QDialog):
     def __init__(self, parent=None, db=None, host=None):
         """host = 본 뷰어 대신 일을 하는 객체(별도 명함 프로그램 — `standalone.Host`, §5.27 '경계'). 없으면 parent(MainWindow)."""
@@ -782,9 +800,15 @@ class BizcardFindDialog(QDialog):
 
         top = QHBoxLayout()
         self.cb_kind = QComboBox()                     # 찾기 칸 앞 구분(§5.24.1 '위 줄', 사용자 지시 261119)
-        for key, label in zip(P.KINDS, (tr("전체"), tr("한글"), tr("영어"), tr("명함 있음"), tr("명함 없음"))):
-            self.cb_kind.addItem(label, key)
-        self.cb_kind.setToolTip(tr("한글·영어 = 이름 글자, 명함 있음·없음 = 명함 그림(없음 = 주소록에서 들인 명함)"))
+        kind_label = dict(zip(P.KINDS, (tr("전체"), tr("한글"), tr("영어"), tr("명함 있음"), tr("명함 없음"),
+                                        tr("사진 있음"), tr("사진 없음"))))
+        for gi, grp in enumerate(P.KIND_GROUPS):        # 언어 / 명함 / 사진 묶음 사이 구분선(261120-24)
+            if gi:
+                self.cb_kind.insertSeparator(self.cb_kind.count())
+            for key in grp:
+                self.cb_kind.addItem(kind_label[key], key)
+        self.cb_kind.setToolTip(tr("한글·영어 = 이름 글자, 명함 있음·없음 = 명함 그림(없음 = 주소록에서 들인 명함), "
+                                   "사진 있음·없음 = 인물 사진"))
         self.cb_kind.currentIndexChanged.connect(lambda _i: self._on_kind())
         top.addWidget(self.cb_kind)
         self.ed_find = QLineEdit()
@@ -816,6 +840,14 @@ class BizcardFindDialog(QDialog):
         top.addWidget(self.ed_to)
         self.lbl_count = QLabel("")
         top.addWidget(self.lbl_count)
+        from viewer.widgets.icons import themed_icon
+        self.btn_settings = QToolButton()               # 찾기 줄 오른쪽 끝 톱니 = 명함 환경설정(§5.24.9, 261120-17)
+        self.btn_settings.setIcon(themed_icon("gear", size=18))
+        self.btn_settings.setIconSize(QSize(18, 18))
+        self.btn_settings.setAutoRaise(True)
+        self.btn_settings.setToolTip(tr("명함 환경설정 — 명함 폴더·전화번호 기본 국가·'최근' 항목 제한"))
+        self.btn_settings.clicked.connect(lambda _c=False: self.open_settings())
+        top.addWidget(self.btn_settings)
         v.addLayout(top)
         self._find_timer = QTimer(self)
         self._find_timer.setSingleShot(True)
@@ -971,7 +1003,24 @@ class BizcardFindDialog(QDialog):
             cb.toggled.connect(lambda _on: self._save_copy_fields())
             form.addRow(cb, ed)
             self.eds[k], self.chk[k] = ed, cb
-        rv.addLayout(form)
+        # 메모 위 칸 영역 — 추가 메일·전화·누리집 줄까지, 넘치면 스크롤(§5.24.1 '추가 칸', 261120-35)
+        fields_w = QWidget()
+        fields_w.setObjectName("bizDetailFields")
+        fl = QVBoxLayout(fields_w)
+        fl.setContentsMargins(0, 0, 0, 0)
+        fl.addLayout(form)
+        self.form_extra = QFormLayout()
+        fl.addLayout(self.form_extra)
+        self.extra_eds = []                            # [(갈래 email|phone|url, 전화 종류, 칸)]
+        self.fields_scroll = _FitScroll()
+        self.fields_scroll.setWidget(fields_w)
+        self.fields_scroll.setWidgetResizable(True)
+        self.fields_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self.fields_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.fields_scroll.setStyleSheet("QScrollArea, QWidget#bizDetailFields{background:transparent;}")
+        self.fields_scroll.viewport().setAutoFillBackground(False)
+        self.fields_scroll.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)   # 내용 높이까지만, 남는 높이는 메모
+        rv.addWidget(self.fields_scroll)
         self.chk["memo"] = QCheckBox(tr(MEMO_LABEL))
         self.chk["memo"].toggled.connect(lambda _on: self._save_copy_fields())
         rv.addWidget(self.chk["memo"])
@@ -1162,6 +1211,33 @@ class BizcardFindDialog(QDialog):
         if callable(fn):
             fn()
 
+    def open_settings(self, exec_: bool = True):
+        """톱니 — 명함 환경설정(§5.24.9). 닫으면 '최근' 탭·번호 꼴을 다시."""
+        from viewer.widgets.bizcard_settings_dialog import BizcardSettingsDialog
+        dlg = BizcardSettingsDialog(self, host=self._mw, store=self._store())
+        self.settings_dlg = dlg                              # 검사가 찾는다
+        if not exec_:
+            dlg.show()
+            return dlg
+        if dlg.exec():
+            self._bz_folder = None                           # 명함 폴더를 바꿨을 수 있다(인물 사진 자리)
+            if self._fav_gid() == RECENT:
+                self._fav_fill()
+        return dlg
+
+    def recent_clear(self, ask: bool = True) -> int:
+        """'최근' 탭 메뉴 '모두 삭제'(§5.24.2, 261120-19) — 확인 창 뒤 기록을 모두 지운다(명함은 그대로)."""
+        if ask and QMessageBox.question(
+                self, tr("모두 삭제"), tr("'최근' 기록을 모두 지웁니다 — 되돌릴 수 없습니다(명함은 그대로)."),
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
+            return 0
+        n = P.recent_clear(self._store())
+        if self._fav_gid() == RECENT:
+            self._fav_fill()
+            self._sync_table(RECENT)
+        return n
+
     def open_dupes(self, exec_: bool = True):
         """[중복 검토](§5.24.8) — 고치던 칸은 먼저 저장을 묻고, 창을 닫으면 목록·즐겨찾기를 다시."""
         if self._dirty and not self._ask_save():
@@ -1199,6 +1275,7 @@ class BizcardFindDialog(QDialog):
             P.fix_lang_tags(st, self._tagstore())         # 종전 '#한글·#영어 둘 다' → 하나(D25, 한 번만)
         except Exception:
             pass
+        P.recent_prune(st)                                # '최근' 항목 제한(§5.24.2, 261120-18)
         on = set(st.meta_get("copy_fields", list(P.COPY_DEFAULT)) or [])
         for k, cb in self.chk.items():
             cb.blockSignals(True)
@@ -1249,7 +1326,8 @@ class BizcardFindDialog(QDialog):
             rows = P.find(self._store(), q, since, until)   # 상한 없이 전부(§5.9 '결과')
             kind = self.cb_kind.currentData()
             if kind and kind != "all":
-                rows = [c for c in rows if P.kind_ok(c, kind)]
+                ph = P.photo_ids(rows, self._bizcard_folder()) if kind in ("photo", "nophoto") else None   # 사진 있음·없음(261120-24)
+                rows = [c for c in rows if P.kind_ok(c, kind, ph)]
         self._rows = rows
         self._by_id = {c["id"]: c for c in self._rows}
         keep = self._card["id"] if self._card else None
@@ -1352,6 +1430,7 @@ class BizcardFindDialog(QDialog):
             for k, ed in self.eds.items():
                 ed.setText(vals[k])
                 ed.setEnabled(card is not None)
+            self._fill_extra_rows(card)                    # 추가 메일·전화·누리집 줄(261120-35)
             self.ed_memo.setPlainText((card or {}).get("memo") or "")
             self.ed_memo.setEnabled(card is not None)
             if card and V.is_contact(card):
@@ -1497,6 +1576,9 @@ class BizcardFindDialog(QDialog):
             self.fav.setStyleSheet("QListWidget{border:1px solid %(border)s;}" % c)   # 즐겨찾기 칸 테두리도 같은 테
             if getattr(self, "photo_split", None) is not None and self.photo_split.count() > 1:
                 self.photo_split.handle(1).update()     # 사진창 구분선(손잡이가 그림 — 테마가 바뀌면 다시, §5.24.3)
+            if getattr(self, "btn_settings", None) is not None:
+                from viewer.widgets.icons import themed_icon
+                self.btn_settings.setIcon(themed_icon("gear", size=18))   # 테마 글자색 톱니(§5.24.9)
         self._match_head()
 
     def _match_head(self):
@@ -1565,7 +1647,50 @@ class BizcardFindDialog(QDialog):
 
     # ── 저장 ──
     def _edited(self) -> dict:
-        return edited_fields(self._card, {k: ed.text() for k, ed in self.eds.items()}, self.ed_memo.toPlainText())
+        return edited_fields(self._card, {k: ed.text() for k, ed in self.eds.items()}, self.ed_memo.toPlainText(),
+                             extras=self._extra_values())
+
+    # ── 추가 칸(§5.24.1 '추가 칸', 261120-35) — 두 번째 메일부터·같은 종류 둘째 전화부터·둘째 누리집부터 ──
+    def _fill_extra_rows(self, card):
+        while self.form_extra.rowCount():
+            self.form_extra.removeRow(0)
+        self.extra_eds = []
+        if not card:
+            return
+        labels = dict(FIELDS)
+
+        def add(group, kind, label_key, n, value):
+            ed = QLineEdit(str(value or ""))
+            ed.textEdited.connect(lambda _t: self._set_dirty(True))
+            if group == "phone":
+                PH.attach(ed)
+            lab = QLabel("%s %d" % (tr(labels[label_key]), n))
+            lab.setContentsMargins(22, 0, 0, 0)        # 체크 칸 자리만큼 들여 위 칸 이름과 줄을 맞춘다
+            self.form_extra.addRow(lab, ed)
+            self.extra_eds.append((group, kind, ed))
+        for i, e in enumerate((card.get("emails") or [])[1:]):
+            add("email", "", "email", i + 2, e[-1] if isinstance(e, (list, tuple)) else e)
+        for kind in PHONE_KEYS:
+            nums = [n for k, n in (tuple(x) for x in card.get("phones") or []) if k == kind]
+            for i, n in enumerate(nums[1:]):
+                add("phone", kind, kind, i + 2, PH.normalize(n))
+        for i, u in enumerate((card.get("urls") or [])[1:]):
+            add("url", "", "url", i + 2, u)
+        self.fields_scroll.updateGeometry()            # 줄이 늘면 칸 영역도 내용 높이까지(남는 높이는 메모)
+
+    def _extra_values(self) -> dict:
+        out = {"emails": [], "phones": [], "urls": []}
+        for group, kind, ed in self.extra_eds:
+            t = ed.text().strip()
+            if not t:
+                continue                               # 비운 줄 = 그 값을 지움
+            if group == "email":
+                out["emails"].append(t)
+            elif group == "url":
+                out["urls"].append(t)
+            else:
+                out["phones"].append((kind, PH.normalize(t)))
+        return out
 
     def store_card_edit(self, c, new):
         """고친 값 new(`edited_fields`)를 명함 c 에 — 이름·회사가 바뀌면 정리본·뒷면·인물 사진 이름, 앱이 붙인 해시태그만 바꿈,
@@ -1990,12 +2115,69 @@ class BizcardFindDialog(QDialog):
 
     # ── Gmail 보내기 (§5.24.1 'Gmail 보내기', 사용자 결정 261120) ──
     def _gmail_menu(self, m, cards):
-        """'Gmail 보내기 ▸ 받는 사람 · 숨은 참조 · 보낼 계정 바꾸기' — 탭 메뉴·사람 메뉴가 같이 쓴다."""
-        gm = m.addMenu(tr("Gmail 보내기"))
-        _menu_act(gm, tr("받는 사람"), lambda: self.gmail_send(cards, "to"))
-        _menu_act(gm, tr("숨은 참조"), lambda: self.gmail_send(cards, "bcc"))
-        gm.addSeparator()
-        _menu_act(gm, tr("보낼 계정 바꾸기"), lambda: self.gmail_account(ask=True))
+        """메일 보내기 세 줄 — 누르면 바로(받는 칸·보낼 계정은 명함 환경설정, 고른 적 없으면 한 번 묻기 — §5.24.1, 261120-33).
+        차례: Gmail 보내기 → 네이버 메일 보내기(Gmail 바로 아래) → 기본 메일 앱으로 보내기. 탭 메뉴·사람 메뉴가 같이 쓴다."""
+        _menu_act(m, tr("Gmail 보내기"), lambda: self.gmail_send(cards))
+        _menu_act(m, tr("네이버 메일 보내기"), lambda: self.mail_naver(cards))   # 주소 복사 + 메일 화면(받는 사람을 채울 수 없음)
+        _menu_act(m, tr("기본 메일 앱으로 보내기"), lambda: self.mail_default(cards))   # mailto(261120-23)
+
+    def mail_field(self, ask: bool = False):
+        """받는 칸('to'·'bcc') — 명함 환경설정에서 고른 것(meta). 고른 적이 없거나 ask 면 한 번 묻고 기억. 물음을 닫으면 None."""
+        st = self._store()
+        cur = st.meta_get(P.MAIL_FIELD_KEY, None)
+        if cur in ("to", "bcc") and not ask:
+            return cur
+        items = [tr("받는 사람"), tr("숨은 참조")]
+        txt, ok = QInputDialog.getItem(self, tr("메일 보내기"), tr("메일 주소를 넣을 칸 — 명함 환경설정에서 바꿀 수 있습니다:"),
+                                       items, 1 if cur == "bcc" else 0, False)
+        if not ok:
+            return None
+        field = "bcc" if txt == items[1] else "to"
+        st.meta_set(P.MAIL_FIELD_KEY, field)
+        return field
+
+    def _mail_targets(self, cards, title):
+        """보낼 주소들 — 없으면 알리고 None, 메일 없는 사람 수와 함께."""
+        emails, missing = P.email_list(cards)
+        if not emails:
+            QMessageBox.information(self, title, tr("메일 주소가 있는 사람이 없습니다."))
+            return None, 0
+        return emails, missing
+
+    def mail_default(self, cards, field: str = None) -> int:
+        """기본 메일 앱(mailto)의 쓰기 창 — 받는 칸은 명함 환경설정, 길면 여러 창(§5.24.1 '다른 메일로 보내기', 261120-23·-33). 연 창 수."""
+        title = tr("기본 메일 앱으로 보내기")
+        emails, missing = self._mail_targets(cards, title)
+        if not emails:
+            return 0
+        field = field or self.mail_field()
+        if field is None:
+            return 0
+        urls = P.mailto_urls(emails, field)
+        if len(urls) > 1 and QMessageBox.question(
+                self, title,
+                tr("주소가 {n}개라 쓰기 창 {w}개로 나눠 엽니다.").format(n=len(emails), w=len(urls))) != QMessageBox.StandardButton.Yes:
+            return 0
+        for u in urls:
+            _open_url(u)
+        if missing:
+            QMessageBox.information(self, title, tr("메일 없는 {n}명은 뺐습니다.").format(n=missing))
+        return len(urls)
+
+    def mail_naver(self, cards) -> str:
+        """네이버 메일 — 받는 사람을 채운 쓰기 창 주소가 공개돼 있지 않아 주소를 클립보드에 넣고 메일 화면만 연다(261120-23)."""
+        title = tr("네이버 메일 보내기")
+        emails, missing = self._mail_targets(cards, title)
+        if not emails:
+            return ""
+        t = ", ".join(emails)
+        clipboard_util.set_text(t)
+        _open_url(P.NAVER_MAIL)
+        msg = tr("메일 주소 {n}개를 복사했습니다 — 네이버 메일에서 [메일 쓰기]를 누르고 받는 사람 칸에 붙여 넣으세요.").format(n=len(emails))
+        if missing:
+            msg += "\n" + tr("메일 없는 {n}명은 뺐습니다.").format(n=missing)
+        QMessageBox.information(self, title, msg)
+        return t
 
     def gmail_account(self, ask: bool = False):
         """보낼 구글 계정 — 처음 한 번(또는 ask) 묻고 명함 DB meta 에 기억. 빈 값 = 브라우저 기본 계정. 물음을 닫으면 None."""
@@ -2012,11 +2194,14 @@ class BizcardFindDialog(QDialog):
         st.meta_set("gmail_account", text)
         return text
 
-    def gmail_send(self, cards, field: str = "to") -> int:
-        """고른 사람들의 메일 주소를 Gmail 쓰기 창(브라우저)의 field 칸에 — 길면 여러 창. 연 창 수."""
+    def gmail_send(self, cards, field: str = None) -> int:
+        """고른 사람들의 메일 주소(사람마다 첫 메일)를 Gmail 쓰기 창(브라우저)의 받는 칸에 — 길면 여러 창. 연 창 수."""
         emails, missing = P.email_list(cards)
         if not emails:
             QMessageBox.information(self, tr("Gmail 보내기"), tr("메일 주소가 있는 사람이 없습니다."))
+            return 0
+        field = field or self.mail_field()
+        if field is None:
             return 0
         acct = self.gmail_account()
         if acct is None:
@@ -2081,6 +2266,8 @@ class BizcardFindDialog(QDialog):
         if gid == RECENT:
             _menu_act(m, tr("이메일 복사"), lambda: self.copy_emails(self._tab_members(RECENT)))
             self._gmail_menu(m, self._tab_members(RECENT))
+            m.addSeparator()
+            _menu_act(m, tr("모두 삭제"), lambda: self.recent_clear())   # §5.24.2 '최근 탭'(261120-19)
         else:
             if P.todo_info(st, gid) is not None:
                 _menu_act(m, tr("할 일 고치기"), lambda: self.todo_edit(gid))

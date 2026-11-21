@@ -200,12 +200,21 @@ try:
         "E vCard 내보내기(구글·리멤버) — 옛 값도 그 꼴", repr(out2))
     from viewer.widgets import settings_dialog as SD
     sdlg = SD.SettingsDialog({}, None) if hasattr(SD, "SettingsDialog") else None
-    cmb = getattr(sdlg, "cmb_phone_country", None)
-    chk(cmb is not None and cmb.currentData() == "KR", "E 환경설정 '전화번호 기본 국가' 칸 — 처음 값 한국")
+    # 261120-28: 본 뷰어 환경설정에는 명함 폴더만 — '전화번호 기본 국가' 는 명함 환경설정(톱니) 창에만(명함 SOT §5.24.9)
+    chk(sdlg is not None and getattr(sdlg, "cmb_phone_country", None) is None
+        and "phone_country" not in (sdlg.result_prefs().get("picture") or {}),
+        "E 본 뷰어 환경설정에는 '전화번호 기본 국가' 칸이 없음(값을 건드리지 않음)")
+    from viewer.widgets import bizcard_settings_dialog as BSD
+    bsd = BSD.BizcardSettingsDialog(None, host=None, store=None)
+    cmb = getattr(bsd, "cmb_country", None)
+    chk(cmb is not None and cmb.currentData() == "KR", "E 명함 환경설정 '전화번호 기본 국가' — 처음 값 한국")
     if cmb is not None:
+        from viewer import settings_store as SS, bg_write as BW
         cmb.setCurrentIndex(cmb.findData(""))
-        chk(sdlg.result_prefs().get("picture", {}).get("phone_country") == "", "E 고른 값이 picture.phone_country 로",
-            repr(sdlg.result_prefs().get("picture")))
+        bsd.apply()
+        BW.flush()
+        chk((SS.peek_pref("picture") or {}).get("phone_country") == "", "E 고른 값이 설정 파일 picture.phone_country 로",
+            repr(SS.peek_pref("picture")))
 except Exception:
     import traceback
     traceback.print_exc()

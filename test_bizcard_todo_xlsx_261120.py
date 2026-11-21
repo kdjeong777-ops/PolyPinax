@@ -111,7 +111,9 @@ try:
             repr(live_people))
         merged = [str(r) for r in ws.merged_cells.ranges]
         chk("D%d:D%d" % (i_live + 1, i_live + 2) in merged, "C 할 일 칸은 명단 줄에 걸쳐 합침", repr(merged[:6]))
-        chk(rows[i_live][1] == "계속" and rows[i_live][4] == "첫 줄\n둘째 줄", "C 종료일 없으면 '계속', 내용 줄바꿈 그대로")
+        t0 = datetime.date.today().isoformat()
+        chk(rows[i_live][1] == "계속" and rows[i_live][4] == "☐ %s 첫 줄\n☐ %s 둘째 줄" % (t0, t0),
+            "C 종료일 없으면 '계속', 내용 = 할 일 줄들(☐ 날짜 글, 줄바꿈 — 261120-39)", repr(rows[i_live][4]))
         chk(rows[i_live][9] == "010-0000-0001" and rows[i_live][10] == "hong@example.com" and rows[i_live][8] == "부장",
             "C 휴대폰은 적을 꼴, 메일·직함", repr(rows[i_live][8:]))
         i_past = next(i for i, r in enumerate(rows) if r[3] == "가짜 지남")

@@ -312,17 +312,22 @@ def fav_init(store, default_name: str) -> None:
     store.con.commit()
 
 
-# ── 할 일 기록 (§5.24.10 '기록', 261120-34) — 할 일 탭마다 여러 기록, 고치면 새 기록(옛 기록 그대로) ──
+# ── 할 일 기록 (§5.24.10 '기록'·'줄', 261120-34·-39) — 할 일 탭마다 여러 기록, 기록 = 줄 목록·해시태그, 고치면 새 기록 ──
+NOTE_COLS = (("items", "TEXT DEFAULT ''"),)          # 줄 목록 [{done, due, text}] JSON(261120-39) — 옛 기록은 비어 있음
+
+
 def notes_table(store) -> None:
     store.con.execute("CREATE TABLE IF NOT EXISTS todo_notes(id INTEGER PRIMARY KEY, group_id INTEGER, made TEXT, body TEXT, "
                       "done INTEGER DEFAULT 0, n_start TEXT DEFAULT '', n_end TEXT DEFAULT '', tags TEXT DEFAULT '[]', "
                       "ts REAL DEFAULT 0)")
+    have = {r[1] for r in store.con.execute("PRAGMA table_info(todo_notes)")}
+    for col, typ in NOTE_COLS:
+        if col not in have:
+            store.con.execute("ALTER TABLE todo_notes ADD COLUMN %s %s" % (col, typ))
 
 
 def notes_init(store) -> None:
-    store.con.execute("CREATE TABLE IF NOT EXISTS todo_notes(id INTEGER PRIMARY KEY, group_id INTEGER, made TEXT, body TEXT, "
-                      "done INTEGER DEFAULT 0, n_start TEXT DEFAULT '', n_end TEXT DEFAULT '', tags TEXT DEFAULT '[]', "
-                      "ts REAL DEFAULT 0)")
+    notes_table(store)
     rows = store.con.execute("SELECT g.id, g.t_memo, g.t_start, g.t_end FROM fav_groups g WHERE g.todo=1 "
                              "AND IFNULL(g.t_memo, '') != '' AND NOT EXISTS (SELECT 1 FROM todo_notes n WHERE n.group_id = g.id)"
                              ).fetchall()
@@ -331,16 +336,47 @@ def notes_init(store) -> None:
                           (r["id"], r["t_start"] or "", r["t_memo"], r["t_start"] or "", r["t_end"] or "", 0))
 
 
+ITEM_MARK = {True: "☑", False: "☐"}
+_ITEM_RE = re.compile(r"^\s*([☐☑])\s*(\d{4}-\d{2}-\d{2})\s*(.*)$")
+
+
+def items_text(items) -> str:
+    """줄 목록 → 글(탭 '내용'·엑셀·할 일 고치기 창) — 줄마다 '☐ 2026-11-21 글'."""
+    return "\n".join("%s %s %s" % (ITEM_MARK[bool(i.get("done"))], i.get("due") or "", i.get("text") or "")
+                     for i in items or [] if (i.get("text") or "").strip())
+
+
+def items_from_text(text: str, default_due: str, done: bool = False) -> list:
+    """글 → 줄 목록 — '☐/☑ 날짜 글' 꼴이면 그대로 읽고, 아니면 한 줄이 한 항목(체크 done·날짜 default_due). 빈 줄 버림."""
+    out = []
+    for line in (text or "").splitlines():
+        if not line.strip():
+            continue
+        m = _ITEM_RE.match(line)
+        if m:
+            out.append({"done": m.group(1) == "☑", "due": m.group(2), "text": m.group(3).strip()})
+        else:
+            out.append({"done": bool(done), "due": default_due, "text": line.strip()})
+    return out
+
+
 def todo_notes(store, gid: int) -> list:
-    """그 할 일의 기록 — 최신이 처음. [{id, made, body, done, start, end, tags}]."""
+    """그 할 일의 기록 — 최신이 처음. [{id, made, body, items, tags}]. 줄 목록이 없는 옛 기록(-34 꼴)은 내용의 줄마다 한 항목
+    (체크 = 옛 '했음', 날짜 = 옛 끝 날짜·없으면 시작·수정일 — §5.24.10 '옛 할 일')."""
+    notes_table(store)
     out = []
     for r in store.con.execute("SELECT * FROM todo_notes WHERE group_id=? ORDER BY ts DESC, id DESC", (gid,)).fetchall():
         try:
             tags = json.loads(r["tags"] or "[]")
         except ValueError:
             tags = []
-        out.append({"id": r["id"], "made": r["made"] or "", "body": r["body"] or "", "done": bool(r["done"]),
-                    "start": r["n_start"] or "", "end": r["n_end"] or "", "tags": list(tags)})
+        try:
+            items = json.loads(r["items"]) if r["items"] else None
+        except ValueError:
+            items = None
+        if items is None:
+            items = items_from_text(r["body"] or "", r["n_end"] or r["n_start"] or r["made"] or "", bool(r["done"]))
+        out.append({"id": r["id"], "made": r["made"] or "", "body": r["body"] or "", "items": items, "tags": list(tags)})
     return out
 
 
@@ -351,10 +387,16 @@ def _sync_memo(store, gid: int) -> None:
 
 
 def note_add(store, gid: int, note: dict, today: str) -> int:
-    """새 기록(맨 앞) — 고친 기록은 그대로 둔다. note = {body, done, start, end, tags}. 반환 = 새 id."""
+    """새 기록(맨 앞) — 고친 기록은 그대로 둔다. note = {items, tags}(또는 옛 꼴 body). 내용 글은 줄 목록에서. 반환 = 새 id."""
+    notes_table(store)
+    items = note.get("items")
+    if items is None:
+        items = items_from_text(note.get("body") or "", today)
+    items = [{"done": bool(i.get("done")), "due": i.get("due") or today, "text": (i.get("text") or "").strip()}
+             for i in items if (i.get("text") or "").strip()]
     nid = store.con.execute(
-        "INSERT INTO todo_notes(group_id, made, body, done, n_start, n_end, tags, ts) VALUES(?,?,?,?,?,?,?,?)",
-        (gid, today, note.get("body") or "", 1 if note.get("done") else 0, note.get("start") or "", note.get("end") or "",
+        "INSERT INTO todo_notes(group_id, made, body, items, tags, ts) VALUES(?,?,?,?,?,?)",
+        (gid, today, items_text(items), json.dumps(items, ensure_ascii=False),
          json.dumps(list(note.get("tags") or []), ensure_ascii=False), time.time())).lastrowid
     _sync_memo(store, gid)
     store.con.commit()
@@ -482,13 +524,13 @@ def memo_with_log(memo: str, today: str, labels: list, word: str) -> str:
 TODO_STATES = ("live", "soon", "past", "closed")   # 기간 안 · 시작 전 · 기간 지남 · 마감(D28)
 
 
-def _latest_tags(store, gid: int) -> list:
-    """최신 할 일 기록의 해시태그(§5.24.10) — 기록 표가 없는 옛 DB 면 []."""
+def _latest_note(store, gid: int):
+    """최신 할 일 기록(§5.24.10) — 없거나 기록 표를 못 읽으면 None."""
     try:
         notes = todo_notes(store, gid)
     except sqlite3.OperationalError:
-        return []
-    return list(notes[0]["tags"]) if notes else []
+        return None
+    return notes[0] if notes else None
 
 
 def todo_rows(store, today: str) -> list:
@@ -505,9 +547,10 @@ def todo_rows(store, today: str) -> list:
             state = "past"
         else:
             state = "live"
-        out.append({"title": r["name"] or "", "memo": r["t_memo"] or "", "start": r["t_start"] or "",
-                    "end": r["t_end"] or "", "state": state, "members": fav_members(store, r["id"]),
-                    "tags": _latest_tags(store, r["id"])})
+        last = _latest_note(store, r["id"])            # '내용'·태그 = 최신 기록의 줄 글·태그(§5.24.10 — 옛 기록도 줄로 읽음)
+        out.append({"title": r["name"] or "", "memo": items_text(last["items"]) if last else (r["t_memo"] or ""),
+                    "start": r["t_start"] or "", "end": r["t_end"] or "", "state": state,
+                    "members": fav_members(store, r["id"]), "tags": list(last["tags"]) if last else []})
     out.sort(key=lambda d: (d["start"], d["end"] or "9999-99-99", d["title"].lower()))
     return out
 
@@ -570,7 +613,8 @@ def todo_update(store, gid: int, info: dict) -> None:
     if old is not None and (info.get("memo") or "") != (old.get("memo") or ""):
         import datetime
         last = (todo_notes(store, gid) or [{}])[0]
-        note_add(store, gid, dict(last, body=info.get("memo") or ""), datetime.date.today().isoformat())
+        today = datetime.date.today().isoformat()
+        note_add(store, gid, {"items": items_from_text(info.get("memo") or "", today), "tags": last.get("tags") or []}, today)
 
 
 def fav_add_group(store, name: str) -> int:

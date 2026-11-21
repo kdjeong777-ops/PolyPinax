@@ -13406,6 +13406,10 @@ msgid "#해시태그 — 빈칸으로 나눔(이 기록에만)"
 msgstr ""
 
 #: viewer/widgets/bizcard_todo_panel.py
+msgid "눌러서 새 줄 — ☐ 체크·기한 날짜(처음 오늘)·글"
+msgstr ""
+
+#: viewer/widgets/bizcard_todo_panel.py
 msgid "했음"
 msgstr ""
 

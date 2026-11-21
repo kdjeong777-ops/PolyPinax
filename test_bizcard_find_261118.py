@@ -586,8 +586,8 @@ try:
         chk(ti >= 0 and "자료 준비" in tip and today_s in tip and sorted(c["name"] for c in P.fav_members(dlg._store(), gid)) == ["김철수", "홍길동"],
             "I14 새 할 일 → 작업 제목 탭에 고른 사람들, 탭 위 글에 내용·기간", "%s %r" % (tabs, tip))
         hm = P.card_by_id(dlg._store(), hong["id"])["memo"]
-        chk(old_memo and hm == "[%s ~ 계속] 현장 점검\n자료 준비\n\n%s" % (today_s, old_memo),
-            "I14 할 일에 든 사람 메모 맨 위에 기간·제목·내용, 종전 메모는 그 아래", repr(hm[:60]))
+        chk(old_memo and hm == "[%s ~ 계속] 현장 점검\n☐ %s 자료 준비\n\n%s" % (today_s, today_s, old_memo),
+            "I14 할 일에 든 사람 메모 맨 위에 기간·제목·내용(줄 꼴 — 261120-39), 종전 메모는 그 아래", repr(hm[:60]))
     else:
         chk(False, "I14 할 일 창")
     st = dlg._store()

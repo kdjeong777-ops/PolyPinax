@@ -1063,12 +1063,13 @@ MOBILE_PREFIX = ("010", "011", "016", "017", "018", "019")
 
 
 def _mobile_keys(card) -> list:
-    """휴대폰 번호만(종류가 휴대폰이거나 01x 로 시작) — 회사 대표 번호·팩스는 여럿이 같이 쓴다(사용자 보고 261119)."""
+    """휴대폰 번호만 — 회사 대표 번호·팩스는 여럿이 같이 쓴다(사용자 보고 261119). 국내 번호(0 으로 시작 — +82 도 0 꼴로)는
+    **01x 꼴만**(종류 칸이 '휴대폰'으로 잘못 든 02·031·070·050x 는 뺀다, 261120-48 덧고침), 외국 번호는 종류 '휴대폰'을 믿는다."""
     out = []
     for x in card.get("phones") or []:
         kind, num = (x[0], x[-1]) if isinstance(x, (list, tuple)) and len(x) >= 2 else ("", x)
         k = _phone_key(num)
-        if k and kind != "fax" and (kind == "cell" or k.startswith(MOBILE_PREFIX)):
+        if k and kind != "fax" and (k.startswith(MOBILE_PREFIX) or (kind == "cell" and not k.startswith("0"))):
             out.append(k)
     return out
 

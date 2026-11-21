@@ -18,7 +18,9 @@ KIND_LABELS = {G.NEW_CARD: tr_noop("구글에서 가져옴(새 명함)"), G.NEW_
                G.TO_CARD: tr_noop("명함을 구글 값으로 고침"), G.TO_GOOGLE: tr_noop("구글을 명함 값으로 고침"),
                G.GONE_GOOGLE: tr_noop("구글에서 지워짐 — 명함도 지울까요"), G.GONE_CARD: tr_noop("명함에서 지워짐 — 구글도 지울까요"),
                G.PHOTO_UP: tr_noop("인물 사진을 연락처 사진으로"), G.PHOTO_DOWN: tr_noop("연락처 사진을 인물 사진으로"),
-               G.DRIVE_UP: tr_noop("명함 그림을 드라이브에"), "link": tr_noop("같은 사람으로 짝지음(값 같음)")}
+               G.DRIVE_UP: tr_noop("명함 그림을 드라이브에"), "link": tr_noop("같은 사람으로 짝지음(값 같음)"),
+               G.KAKAO_UP: tr_noop("카톡 친구추가 방지 바꿈(구글 이름 앞 #)"),
+               G.KAKAO_DOWN: tr_noop("카톡 친구추가 방지 표시를 구글 이름대로")}
 
 
 def _api(store):

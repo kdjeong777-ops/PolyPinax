@@ -63,8 +63,8 @@ def find(store, text: str = "", since: str = "", until: str = "", limit=None) ->
     return out
 
 
-KINDS = ("all", "ko", "en", "card", "nocard", "photo", "nophoto")   # 찾기 칸 앞 구분(명함 SOT §5.24.1, 사용자 지시 261119·261120-24)
-KIND_GROUPS = (("all",), ("ko", "en"), ("card", "nocard"), ("photo", "nophoto"))   # 콤보에서 묶음 사이 구분선(언어/명함/사진)
+KINDS = ("all", "ko", "en", "card", "nocard", "photo", "nophoto", "kakao")   # kakao = 카톡 친구추가 방지(§5.29, 261121)   # 찾기 칸 앞 구분(명함 SOT §5.24.1, 사용자 지시 261119·261120-24)
+KIND_GROUPS = (("all",), ("ko", "en"), ("card", "nocard"), ("photo", "nophoto"), ("kakao",))   # 콤보에서 묶음 사이 구분선(언어/명함/사진)
 
 
 def photo_ids(cards, folder="") -> set:
@@ -92,9 +92,11 @@ _HANGUL = re.compile(r"[가-힣ㄱ-ㆎ]")
 _LATIN = re.compile(r"[A-Za-z]")
 
 
-def kind_ok(card: dict, kind: str, photos=None) -> bool:
+def kind_ok(card: dict, kind: str, photos=None, blocked=None) -> bool:
     """구분 — 'ko' = 이름에 한글, 'en' = 이름이 영어(로마자, 한글 없음), 'card' = 명함 그림 있음, 'nocard' = 그림 없는 주소록 명함,
     'photo'·'nophoto' = 인물 사진 있음·없음(photos = `photo_ids` 결과)."""
+    if kind == "kakao":                               # 카톡 친구추가 방지 표시(blocked = gsync.blocked_ids)
+        return card.get("id") in (blocked or set())
     if kind in ("photo", "nophoto"):
         has = card.get("id") in (photos or set())
         return has if kind == "photo" else not has

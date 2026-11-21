@@ -993,7 +993,7 @@ try:
     st.close()
     cbk = getattr(dlg, "cb_kind", None)
     chk(cbk is not None and dlg.layout().itemAt(0).layout().indexOf(cbk) == (1 if getattr(dlg, "btn_menu", None) is not None else 0)
-        and [cbk.itemData(i) for i in range(cbk.count()) if cbk.itemData(i)] == ["all", "ko", "en", "card", "nocard", "photo", "nophoto"],
+        and [cbk.itemData(i) for i in range(cbk.count()) if cbk.itemData(i)] == ["all", "ko", "en", "card", "nocard", "photo", "nophoto", "kakao"],   # kakao = 카톡 친구추가 방지(§5.29, 261121)
         "I21 찾기 칸 앞에 구분(전체·한글·영어·명함 있음·명함 없음)")
     got = {}
     if cbk is not None:
@@ -1382,7 +1382,8 @@ try:
     st = S.BizcardStore()
     want_ph = {c["id"] for c in P.find(st, "") if P.person_photos(P.photo_front(c, str(F)))}
     st.close()
-    chk(len(seps) == 3 and "photo" in datas and datas.index("ko") > seps[0] and datas.index("card") > seps[1]
+    chk(len(seps) == 4 and "photo" in datas and datas.index("kakao") > seps[3]   # 넷째 구분선 뒤 '카톡 친구추가 방지'(261121)
+        and "photo" in datas and datas.index("ko") > seps[0] and datas.index("card") > seps[1]
         and datas.index("photo") > seps[2]
         and got2["photo"] and got2["photo"] == (want_ph & got2["all"]) and got2["photo"] | got2["nophoto"] == got2["all"]
         and not (got2["photo"] & got2["nophoto"]),

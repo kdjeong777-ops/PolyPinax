@@ -246,7 +246,8 @@ try:
     chk(newc and "구글" in newc[0]["tags"] and str(newc[0]["front"]).startswith("contact:")
         and P.field_srcs(st, newc[0]["id"]).get("name") == "google" if hasattr(P, "field_srcs") else bool(newc),
         "D 구글에만 있던 사람은 그림 없는 명함(#구글, 출처 google)")
-    chk(any(p["names"][0].get("unstructuredName") == "명함만" for p in SV["people"].values()), "D 명함에만 있던 사람은 구글에 새 연락처")
+    chk(any(p["names"][0].get("unstructuredName") == "#명함만" for p in SV["people"].values()),
+        "D 명함에만 있던 사람은 구글에 새 연락처(기본 친구추가 방지 — 이름 앞 '#')")
     chk(SV["auth_hdr"], "D 모든 요청에 Bearer 접근 토큰")
     rows2 = G.plan(st, api.list_people(), str(FOLDER))
     chk(not rows2, "D 다시 계획하면 바꿀 것 없음", str([(r["kind"], r.get("fields")) for r in rows2]))
@@ -310,6 +311,43 @@ try:
     print("=== G. 429·연결 끊기 ===")
     SV["fail429"] = 2
     chk(len(api.list_people()) == len(SV["people"]), "G 429 는 기다렸다 다시")
+
+    # ── K ── 카톡 친구추가 방지(이름 앞 '#', §5.29)
+    print("=== K. 카톡 친구추가 방지 ===")
+    rn1 = G.links(st)[c1]["rn"]
+    old1 = SV["people"][rn1]["names"][0]["unstructuredName"]
+    c6 = P._insert_contact(st, {"name": "새가짜", "emails": ["six@example.com"]}, ["명함"])
+    st.con.commit()
+    SV["people"]["people/k2"] = person("people/k2", "#구글샵", emails=["shop@example.com"])
+    people = api.list_people()
+    rows6 = G.plan(st, people, str(FOLDER))
+    r6 = [r for r in rows6 if r["card_id"] == c6]
+    chk(r6 and r6[0]["kind"] == G.NEW_GOOGLE and r6[0]["kakao"] is True, "K 새로 보내는 명함은 기본 친구추가 방지", str(r6))
+    G.apply(st, api, rows6, str(FOLDER), people=people)
+    rn6 = G.links(st)[c6]["rn"]
+    kshop = [c for c in G.all_cards(st) if c["name"] == "구글샵"]
+    chk(SV["people"][rn6]["names"][0]["unstructuredName"] == "#새가짜" and P.card_by_id(st, c6)["name"] == "새가짜"
+        and c6 in G.blocked_ids(st), "K 구글 이름 앞 '#', 명함 이름은 그대로·표시 켜짐", SV["people"][rn6]["names"][0]["unstructuredName"])
+    chk(kshop and kshop[0]["id"] in G.blocked_ids(st), "K 구글에서 '#' 이름을 받아 오면 '#' 떼고 표시 켜짐")
+    chk(SV["people"][rn1]["names"][0]["unstructuredName"] == old1 and c1 not in G.blocked_ids(st),
+        "K 이미 구글에 있는 연락처('#' 없음)는 그대로")
+    chk(not G.plan(st, api.list_people(), str(FOLDER)), "K 다시 계획하면 바꿀 것 없음('#' 는 이름 차이로 보지 않음)")
+    G.kakao_set(st, [c6], False)
+    G.kakao_set(st, [c1], True)
+    people = api.list_people()
+    rows7 = G.plan(st, people, str(FOLDER))
+    chk(sorted((r["kind"], r["card_id"], r["kakao"]) for r in rows7) == sorted([(G.KAKAO_UP, c6, False), (G.KAKAO_UP, c1, True)]),
+        "K 해제·설정은 다음 싱크에 '구글로' 갈래", str([(r["kind"], r["card_id"]) for r in rows7]))
+    G.apply(st, api, rows7, str(FOLDER), people=people)
+    chk(SV["people"][rn6]["names"][0]["unstructuredName"] == "새가짜" and SV["people"][rn1]["names"][0]["unstructuredName"] == "#" + old1,
+        "K [반영] 하면 구글 이름 앞 '#' 를 떼고 붙임")
+    SV["people"][rn6]["names"] = [{"unstructuredName": "#새가짜"}]          # 휴대폰에서 직접 '#' 를 붙임(나중)
+    SV["people"][rn6]["metadata"] = {"sources": [{"type": "CONTACT", "updateTime": NOW()}]}
+    time.sleep(0.01)
+    rows8 = G.plan(st, api.list_people(), str(FOLDER))
+    chk([(r["kind"], r["kakao"]) for r in rows8] == [(G.KAKAO_DOWN, True)], "K 구글에서 직접 바꾼 '#' 는 표시로 받음", str(rows8))
+    G.apply(st, api, rows8, str(FOLDER))
+    chk(c6 in G.blocked_ids(st) and not G.plan(st, api.list_people(), str(FOLDER)), "K 받은 뒤 바꿀 것 없음")
 finally:
     st.close()
 
@@ -344,6 +382,34 @@ QTest.mouseClick(gd.btn_apply, Qt.MouseButton.LeftButton)
 chk(pump(lambda: gd.result is not None, timeout=20), "H [반영]")
 n_after = st2.con.execute("SELECT COUNT(*) FROM cards").fetchone()[0]
 chk(n_after == n_before + 1, "H [반영] 뒤 새 명함", "%d → %d" % (n_before, n_after))
+chk(sd.chk_gkakao.isChecked(), "H 명함 환경설정 '새로 보낼 때 카톡 친구추가 방지' 는 처음 켜짐")
+# 명함찾기 — 구분 콤보 '카톡 친구추가 방지' 와 목록 오른쪽 메뉴
+from viewer.widgets.bizcard_find_dialog import BizcardFindDialog
+from PyQt6.QtWidgets import QMenu
+fd = BizcardFindDialog(None)
+fd.show()
+pump(timeout=0.5)
+ki = fd.cb_kind.findData("kakao")
+fd.cb_kind.setCurrentIndex(ki)
+pump(timeout=0.5)
+ids = {fd.card_at(r)["id"] if hasattr(fd, "card_at") else fd._rows[r]["id"] for r in range(len(fd._rows))}
+chk(ki >= 0 and ids and ids == G.blocked_ids(st2) & ids and ids == G.blocked_ids(st2),
+    "H 구분 콤보 '카톡 친구추가 방지' 는 표시가 켜진 명함만", str((ki, len(ids), len(G.blocked_ids(st2)))))
+_oexec = QMenu.exec
+QMenu.exec = lambda self, *a, **k: None
+fd.table.selectRow(0)
+pump(timeout=0.2)
+sel = fd.selected_cards() or []
+first = sel[0]["id"] if sel else None
+fd._table_menu(fd.table.visualRect(fd.table.model().index(0, 1)).center())
+QMenu.exec = _oexec
+acts = {a.text(): a for a in fd._table_menu_obj.actions()} if getattr(fd, "_table_menu_obj", None) else {}
+if "카톡 친구추가 방지 해제" in acts:
+    acts["카톡 친구추가 방지 해제"].trigger()
+pump(timeout=0.5)
+chk("카톡 친구추가 방지" in acts and first is not None and first not in G.blocked_ids(st2)
+    and all(c["id"] != first for c in fd._rows), "H 목록 오른쪽 메뉴 '카톡 친구추가 방지 해제' → 표시 꺼지고 거른 목록에서 빠짐", str(list(acts)))
+fd.close()
 QTest.mouseClick(sd.btn_gdisconnect, Qt.MouseButton.LeftButton)
 chk(SV["revoked"] == ["RT_SECRET_1"] and not A.token_path().exists() and not A.connected() and not G.links(st2),
     "H [연결 끊기]는 구글에 철회 요청·토큰 파일·짝 기록 지움", str(SV["revoked"]))

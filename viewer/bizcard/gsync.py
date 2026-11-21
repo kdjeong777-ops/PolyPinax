@@ -24,7 +24,10 @@ DEFAULT_PHOTO = "default"                       # 구글 사진의 기본 실루
 # 계획 줄 갈래
 NEW_CARD, NEW_GOOGLE, TO_CARD, TO_GOOGLE, GONE_GOOGLE, GONE_CARD, PHOTO_UP, PHOTO_DOWN, DRIVE_UP = (
     "new_card", "new_google", "to_card", "to_google", "gone_google", "gone_card", "photo_up", "photo_down", "drive_up")
-KINDS = (NEW_CARD, NEW_GOOGLE, TO_CARD, TO_GOOGLE, GONE_GOOGLE, GONE_CARD, PHOTO_UP, PHOTO_DOWN, DRIVE_UP)
+KAKAO_UP, KAKAO_DOWN = "kakao_up", "kakao_down"     # 카톡 친구추가 방지(구글 이름 앞 '#') 바꿈 → 구글 · 구글 이름대로 표시 맞춤
+KINDS = (NEW_CARD, NEW_GOOGLE, TO_CARD, TO_GOOGLE, GONE_GOOGLE, GONE_CARD, PHOTO_UP, PHOTO_DOWN, DRIVE_UP, KAKAO_UP, KAKAO_DOWN)
+OPT_KAKAO_NEW = "gsync_kakao_new"               # meta — 구글에 새로 보낼 때 친구추가 방지(처음 켬)
+KAKAO_MARK = "#"
 DEFAULT_ON = {k: k not in (GONE_GOOGLE, GONE_CARD) for k in KINDS}    # 지워짐은 기본 '남김'(§5.29 '지운 것')
 
 _G2C = {"mobile": "cell", "workFax": "fax", "homeFax": "fax", "otherFax": "fax"}
@@ -32,24 +35,60 @@ _C2G = {"cell": "mobile", "fax": "workFax", "work": "work"}
 
 
 def init(store) -> None:
+    store.con.execute("CREATE TABLE IF NOT EXISTS kakao_block(card_id INTEGER PRIMARY KEY, block INTEGER, set_at REAL)")
+    store.con.execute("CREATE TRIGGER IF NOT EXISTS kakao_block_del AFTER DELETE ON cards "
+                      "BEGIN DELETE FROM kakao_block WHERE card_id = OLD.id; END")
     store.con.execute("CREATE TABLE IF NOT EXISTS google_link(card_id INTEGER PRIMARY KEY, resource_name TEXT UNIQUE, "
                       "etag TEXT, synced REAL, photo_sig TEXT DEFAULT '', drive TEXT DEFAULT '')")
+    if "front" not in {r[1] for r in store.con.execute("PRAGMA table_info(google_link)")}:
+        store.con.execute("ALTER TABLE google_link ADD COLUMN front TEXT DEFAULT ''")   # 짝지은 명함의 열쇠 — 같은 id 를 다시 받은 새 명함과 가름
     store.con.commit()
 
 
 def links(store) -> dict:
     init(store)
-    return {r[0]: {"rn": r[1], "etag": r[2], "synced": r[3] or 0.0, "photo_sig": r[4] or "", "drive": json.loads(r[5] or "{}")}
-            for r in store.con.execute("SELECT card_id, resource_name, etag, synced, photo_sig, drive FROM google_link")}
+    return {r[0]: {"rn": r[1], "etag": r[2], "synced": r[3] or 0.0, "photo_sig": r[4] or "", "drive": json.loads(r[5] or "{}"),
+                   "front": r[6] or ""}
+            for r in store.con.execute("SELECT card_id, resource_name, etag, synced, photo_sig, drive, front FROM google_link")}
 
 
 def _link_put(store, cid: int, rn: str, etag: str, **kw) -> None:
     old = links(store).get(cid) or {}
-    store.con.execute("INSERT INTO google_link(card_id, resource_name, etag, synced, photo_sig, drive) VALUES(?,?,?,?,?,?) "
+    row = store.con.execute("SELECT front FROM cards WHERE id=?", (cid,)).fetchone()
+    store.con.execute("INSERT INTO google_link(card_id, resource_name, etag, synced, photo_sig, drive, front) VALUES(?,?,?,?,?,?,?) "
                       "ON CONFLICT(card_id) DO UPDATE SET resource_name=excluded.resource_name, etag=excluded.etag, "
-                      "synced=excluded.synced, photo_sig=excluded.photo_sig, drive=excluded.drive",
+                      "synced=excluded.synced, photo_sig=excluded.photo_sig, drive=excluded.drive, front=excluded.front",
                       (cid, rn, etag or old.get("etag") or "", kw.get("synced", time.time()), kw.get("photo_sig", old.get("photo_sig", "")),
-                       json.dumps(kw.get("drive", old.get("drive", {})))))
+                       json.dumps(kw.get("drive", old.get("drive", {}))), (row[0] if row else "") or ""))
+
+
+# ── 카톡 친구추가 방지(§5.29 '카톡 친구추가 방지') — 명함 이름에는 '#' 를 두지 않고 사람마다 표시만 ──
+def kakao_rows(store) -> dict:
+    init(store)
+    return {r[0]: (bool(r[1]), r[2] or 0.0) for r in store.con.execute("SELECT card_id, block, set_at FROM kakao_block")}
+
+
+def blocked_ids(store) -> set:
+    return {cid for cid, (b, _t) in kakao_rows(store).items() if b}
+
+
+def kakao_set(store, card_ids, on: bool, set_at=None) -> int:
+    """표시 바꾸기 — set_at 이 지난 싱크보다 나중이면 다음 싱크가 구글 이름에 반영(§5.29). 사람이 바꾼 것은 지금 시각."""
+    init(store)
+    t = time.time() if set_at is None else set_at
+    store.con.executemany("INSERT INTO kakao_block(card_id, block, set_at) VALUES(?,?,?) ON CONFLICT(card_id) "
+                          "DO UPDATE SET block=excluded.block, set_at=excluded.set_at", [(int(c), int(bool(on)), t) for c in card_ids])
+    store.con.commit()
+    return len(list(card_ids))
+
+
+def kakao_new_default(store) -> bool:
+    v = store.meta_get(OPT_KAKAO_NEW, None)
+    return True if v is None else bool(v)
+
+
+def bare_name(n: str) -> str:
+    return str(n or "").lstrip().lstrip(KAKAO_MARK).lstrip()
 
 
 def unlink(store, cid=None) -> None:
@@ -84,7 +123,9 @@ def person_values(p: dict) -> dict:
         v = ph.get("value") or ""
         if v:
             phones.append((_G2C.get(ph.get("type") or "", "work"), PH.normalize(v)))
-    return {"name": name or "", "company": org.get("name") or "", "dept": org.get("department") or "",
+    kakao = str(name or "").lstrip().startswith(KAKAO_MARK)
+    name = bare_name(name)
+    return {"name": name or "", "kakao": kakao, "company": org.get("name") or "", "dept": org.get("department") or "",
             "title": org.get("title") or "", "phones": phones,
             "emails": [e.get("value") for e in p.get("emailAddresses") or [] if e.get("value")],
             "address": ((p.get("addresses") or [{}])[0].get("formattedValue") or ""),
@@ -92,9 +133,10 @@ def person_values(p: dict) -> dict:
             "memo": ((p.get("biographies") or [{}])[0].get("value") or "")}
 
 
-def card_person(c: dict, etag: str = "") -> dict:
-    """명함 → 구글 사람(우리가 고치는 칸만)."""
-    p = {"names": [{"unstructuredName": c.get("name") or ""}],
+def card_person(c: dict, etag: str = "", kakao: bool = False) -> dict:
+    """명함 → 구글 사람(우리가 고치는 칸만). kakao = 이름 앞 '#'(카톡 친구추가 방지)."""
+    nm = bare_name(c.get("name") or "")
+    p = {"names": [{"unstructuredName": (KAKAO_MARK + nm) if (kakao and nm) else nm}],
          "organizations": [{"name": c.get("company") or "", "department": c.get("dept") or "", "title": c.get("title") or ""}],
          "phoneNumbers": [{"value": n, "type": _C2G.get(k, "work")} for k, n in c.get("phones") or [] if n],
          "emailAddresses": [{"value": e} for e in c.get("emails") or [] if e],
@@ -111,7 +153,7 @@ def _nz(s) -> str:
 
 
 def _norm(v: dict) -> dict:
-    return {"name": _nz(v.get("name")), "company": _nz(v.get("company")), "dept": _nz(v.get("dept")),
+    return {"name": _nz(bare_name(v.get("name"))), "company": _nz(v.get("company")), "dept": _nz(v.get("dept")),
             "title": _nz(v.get("title")), "address": _nz(v.get("address")), "memo": (v.get("memo") or "").strip(),
             "phones": sorted({(k, PH.digits(n)) for k, n in v.get("phones") or [] if PH.digits(n)}),
             "emails": sorted({_nz(e) for e in v.get("emails") or [] if e}),
@@ -188,14 +230,20 @@ def plan(store, people: list, folder: str = "", photos: bool = False, drive: boo
     """계획 줄 [{kind, card_id, rn, name, fields, ...}] — 네트워크 없이. 반영 전에는 아무것도 바꾸지 않는다."""
     init(store)
     lk = links(store)
+    kb = kakao_rows(store)
+    new_k = kakao_new_default(store)
     cards = all_cards(store)
     by_id = {c["id"]: c for c in cards}
     by_rn = {p["resourceName"]: p for p in people}
     rn_linked = {v["rn"] for v in lk.values()}
     rows = []
     pairs = []
-    for cid, l in lk.items():
+    for cid, l in list(lk.items()):
         c, p = by_id.get(cid), by_rn.get(l["rn"])
+        if c is not None and l.get("front") and l["front"] != (c.get("front") or ""):
+            c = None                                       # 짝지은 명함은 지워졌고 같은 id 를 새 명함이 받음 — 새 명함은 짝 없는 쪽으로
+            lk.pop(cid)
+            lk[-cid] = l
         if c is None and p is not None:
             rows.append({"kind": GONE_CARD, "card_id": cid, "rn": l["rn"], "name": person_values(p)["name"]})
         elif p is None and c is not None:
@@ -209,7 +257,8 @@ def plan(store, people: list, folder: str = "", photos: bool = False, drive: boo
         if c["id"] in m:
             pairs.append((c, by_rn[m[c["id"]]], {"rn": m[c["id"]], "synced": 0.0, "photo_sig": "", "drive": {}, "new": True}))
         else:
-            rows.append({"kind": NEW_GOOGLE, "card_id": c["id"], "rn": "", "name": c.get("name") or ""})
+            rows.append({"kind": NEW_GOOGLE, "card_id": c["id"], "rn": "", "name": c.get("name") or "",
+                         "kakao": kb[c["id"]][0] if c["id"] in kb else new_k})     # 새로 보낼 때는 기본 친구추가 방지
     for p in free_people:
         if p["resourceName"] not in m.values():
             rows.append({"kind": NEW_CARD, "card_id": 0, "rn": p["resourceName"], "name": person_values(p)["name"]})
@@ -217,11 +266,22 @@ def plan(store, people: list, folder: str = "", photos: bool = False, drive: boo
         pv = person_values(p)
         d = diff_fields(c, pv)
         pt, ct, syn = person_time(p), float(c.get("updated") or 0), float(l.get("synced") or 0)
+        g_k = pv["kakao"]
+        row = kb.get(c["id"])
+        c_k = g_k if row is None else row[0]                 # 표시가 없으면 구글 이름대로(이미 있는 연락처는 그대로)
+        if row is None and g_k:
+            rows.append({"kind": KAKAO_DOWN, "card_id": c["id"], "rn": p["resourceName"], "name": c.get("name") or "", "kakao": True})
+        elif row is not None and row[0] != g_k:
+            up = row[1] > syn                                  # 표시를 바꾼 뒤면 구글로, 아니면 구글 이름대로
+            rows.append({"kind": KAKAO_UP if up else KAKAO_DOWN, "card_id": c["id"], "rn": p["resourceName"],
+                         "name": c.get("name") or "", "kakao": row[0] if up else g_k, "etag": p.get("etag") or ""})
+            c_k = row[0] if up else g_k
         if d:
             g_new, c_new = pt > syn, ct > syn
             to_card = (g_new and not c_new) or (g_new == c_new and pt > ct)    # 한쪽만 바뀌었으면 그쪽, 둘 다면 나중 것
             rows.append({"kind": TO_CARD if to_card else TO_GOOGLE, "card_id": c["id"], "rn": p["resourceName"],
-                         "name": c.get("name") or pv["name"], "fields": d, "etag": p.get("etag") or "", "link": bool(l.get("new"))})
+                         "name": c.get("name") or pv["name"], "fields": d, "etag": p.get("etag") or "", "link": bool(l.get("new")),
+                         "kakao": c_k})
         elif l.get("new"):                                   # 처음 짝 — 값이 같으면 짝만 적는다
             rows.append({"kind": "link", "card_id": c["id"], "rn": p["resourceName"], "name": c.get("name") or "",
                          "etag": p.get("etag") or ""})
@@ -273,11 +333,13 @@ def apply(store, api, rows: list, folder: str = "", drive_folder: str = DRIVE_FO
                     p = _fetch(api, r["rn"], by_rn)
                 v = person_values(p)
                 cid = P._insert_contact(store, v, ["명함", TAG])
+                kakao_set(store, [cid], v.get("kakao", False), set_at=0.0)
                 P._set_srcs(store, cid, [x for x in P._SCALARS if (v.get(x) or "").strip()], SRC)
                 _link_put(store, cid, r["rn"], p.get("etag") or "")
             elif k == NEW_GOOGLE:
                 c = P.card_by_id(store, r["card_id"])
-                p = api.create(card_person(c))
+                p = api.create(card_person(c, kakao=bool(r.get("kakao"))))
+                kakao_set(store, [c["id"]], bool(r.get("kakao")), set_at=0.0)
                 _link_put(store, c["id"], p["resourceName"], p.get("etag") or "")
             elif k == TO_CARD:
                 p = _fetch(api, r["rn"], by_rn)
@@ -287,8 +349,17 @@ def apply(store, api, rows: list, folder: str = "", drive_folder: str = DRIVE_FO
                 _link_put(store, r["card_id"], r["rn"], p.get("etag") or "")
             elif k == TO_GOOGLE:
                 c = P.card_by_id(store, r["card_id"])
-                p = api.update(r["rn"], card_person(c, r.get("etag") or ""))
+                p = api.update(r["rn"], card_person(c, r.get("etag") or "", kakao=bool(r.get("kakao"))))
                 _link_put(store, c["id"], r["rn"], p.get("etag") or "")
+            elif k == KAKAO_UP:
+                c = P.card_by_id(store, r["card_id"])
+                p = _fetch(api, r["rn"], by_rn)
+                p2 = api.update(r["rn"], card_person(c, p.get("etag") or "", kakao=bool(r.get("kakao"))))
+                by_rn[r["rn"]] = p2
+                kakao_set(store, [c["id"]], bool(r.get("kakao")), set_at=0.0)
+                _link_put(store, c["id"], r["rn"], p2.get("etag") or "")
+            elif k == KAKAO_DOWN:
+                kakao_set(store, [r["card_id"]], bool(r.get("kakao")), set_at=0.0)
             elif k == "link":
                 _link_put(store, r["card_id"], r["rn"], r.get("etag") or "")
             elif k == GONE_GOOGLE:
@@ -334,7 +405,7 @@ def apply(store, api, rows: list, folder: str = "", drive_folder: str = DRIVE_FO
                     P.update_card(store, c["id"], {"urls": urls}, commit=False)
                     c = P.card_by_id(store, c["id"])
                     p = _fetch(api, r["rn"], by_rn)
-                    p2 = api.update(r["rn"], card_person(c, p.get("etag") or ""))
+                    p2 = api.update(r["rn"], card_person(c, p.get("etag") or "", kakao=c["id"] in blocked_ids(store)))
                     by_rn[r["rn"]] = p2
                 _link_put(store, r["card_id"], r["rn"], "", drive=dr)
             done += 1

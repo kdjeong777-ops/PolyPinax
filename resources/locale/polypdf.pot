@@ -17008,3 +17008,27 @@ msgstr ""
 #: viewer/widgets/bizcard_find_dialog.py
 msgid "주요 항목 수정"
 msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "카톡 친구추가 방지"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "카톡 친구추가 방지 해제"
+msgstr ""
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+msgid "카톡 친구추가 방지 바꿈(구글 이름 앞 #)"
+msgstr ""
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+msgid "카톡 친구추가 방지 표시를 구글 이름대로"
+msgstr ""
+
+#: viewer/widgets/bizcard_settings_dialog.py
+msgid "구글에 새로 보낼 때 카톡 친구추가 방지(이름 앞 #)"
+msgstr ""
+
+#: viewer/widgets/bizcard_settings_dialog.py
+msgid "휴대폰이 구글 주소록을 받아도 카카오톡이 자동 친구로 넣지 않게 — 이미 구글에 있는 연락처는 그대로"
+msgstr ""

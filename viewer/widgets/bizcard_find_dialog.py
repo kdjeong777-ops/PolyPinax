@@ -825,7 +825,7 @@ class BizcardFindDialog(QDialog):
         top = QHBoxLayout()
         self.cb_kind = QComboBox()                     # 찾기 칸 앞 구분(§5.24.1 '위 줄', 사용자 지시 261119)
         kind_label = dict(zip(P.KINDS, (tr("전체"), tr("한글"), tr("영어"), tr("명함 있음"), tr("명함 없음"),
-                                        tr("사진 있음"), tr("사진 없음"))))
+                                        tr("사진 있음"), tr("사진 없음"), tr("카톡 친구추가 방지"))))
         for gi, grp in enumerate(P.KIND_GROUPS):        # 언어 / 명함 / 사진 묶음 사이 구분선(261120-24)
             if gi:
                 self.cb_kind.insertSeparator(self.cb_kind.count())
@@ -1292,6 +1292,14 @@ class BizcardFindDialog(QDialog):
         self._after_gsync(dlg)
         return dlg
 
+    def set_kakao(self, cards, on: bool) -> int:
+        """카톡 친구추가 방지 표시(§5.29) — 구글 이름 앞 '#' 는 다음 [구글 주소록과 싱크] 미리보기에서 [반영]."""
+        from viewer.bizcard import gsync as G
+        n = G.kakao_set(self._store(), [c["id"] for c in cards if c], on)
+        if self.cb_kind.currentData() == "kakao":
+            self.refresh()
+        return n
+
     def _after_gsync(self, dlg):
         res = getattr(dlg, "result", None)
         if not res:
@@ -1417,7 +1425,11 @@ class BizcardFindDialog(QDialog):
             kind = self.cb_kind.currentData()
             if kind and kind != "all":
                 ph = P.photo_ids(rows, self._bizcard_folder()) if kind in ("photo", "nophoto") else None   # 사진 있음·없음(261120-24)
-                rows = [c for c in rows if P.kind_ok(c, kind, ph)]
+                bl = None
+                if kind == "kakao":                     # 카톡 친구추가 방지(§5.29)
+                    from viewer.bizcard import gsync as G
+                    bl = G.blocked_ids(self._store())
+                rows = [c for c in rows if P.kind_ok(c, kind, ph, bl)]
         self._rows = rows
         self._by_id = {c["id"]: c for c in self._rows}
         keep = self._card["id"] if self._card else None
@@ -2340,6 +2352,9 @@ class BizcardFindDialog(QDialog):
         tm.addSeparator()
         _menu_act(tm, tr("새 할 일"), lambda: self.todo_new(cards=cards))
         _menu_act(m, tr("이메일 복사"), lambda: self.copy_emails(cards))
+        m.addSeparator()                               # 카톡 친구추가 방지 — 표시만, 구글에는 다음 싱크 때(§5.29)
+        _menu_act(m, tr("카톡 친구추가 방지"), lambda: self.set_kakao(cards, True))
+        _menu_act(m, tr("카톡 친구추가 방지 해제"), lambda: self.set_kakao(cards, False))
         m.addSeparator()
         _menu_act(m, tr("삭제"), lambda: self.delete_cards())
         self._table_menu_obj = m                       # 검사용

@@ -227,6 +227,10 @@ class BizcardSettingsDialog(QDialog):
         rd = QHBoxLayout()
         rd.addWidget(QLabel(tr("드라이브 폴더:")))
         rd.addWidget(self.ed_gfolder, 1)
+        self.chk_gkakao = QCheckBox(tr("구글에 새로 보낼 때 카톡 친구추가 방지(이름 앞 #)"))
+        self.chk_gkakao.setToolTip(tr("휴대폰이 구글 주소록을 받아도 카카오톡이 자동 친구로 넣지 않게 — 이미 구글에 있는 연락처는 그대로"))
+        self.chk_gkakao.setChecked(G.kakao_new_default(store) if store is not None else True)
+        f.addWidget(self.chk_gkakao)
         f.addWidget(self.chk_gphotos)
         f.addWidget(self.chk_gdrive)
         f.addLayout(rd)
@@ -286,6 +290,7 @@ class BizcardSettingsDialog(QDialog):
         from viewer.bizcard import gsync_auth as A
         A.set_client(self._st, self.ed_gcid.text().strip(), self.ed_gsec.text().strip())
         self._st.meta_set(G.OPT_PHOTOS, bool(self.chk_gphotos.isChecked()))
+        self._st.meta_set(G.OPT_KAKAO_NEW, bool(self.chk_gkakao.isChecked()))
         self._st.meta_set(G.OPT_DRIVE, bool(self.chk_gdrive.isChecked()))
         self._st.meta_set(G.OPT_FOLDER, self.ed_gfolder.text().strip() or G.DRIVE_FOLDER_DEFAULT)
 

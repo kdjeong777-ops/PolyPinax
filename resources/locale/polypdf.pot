@@ -16788,6 +16788,22 @@ msgid "넘는 기록은 지웁니다(명함은 그대로)."
 msgstr ""
 
 #: viewer/widgets/bizcard_settings_dialog.py
+msgid "칸을 고치면 메모 맨 위에 날짜와 고친 칸 이름을 적기"
+msgstr ""
+
+#: viewer/widgets/bizcard_settings_dialog.py
+msgid "예: [2026-11-21 수정] 휴대폰·메일 — 옛 값은 적지 않습니다"
+msgstr ""
+
+#: viewer/widgets/bizcard_settings_dialog.py
+msgid "메모를 쓰기 시작하면 맨 앞에 오늘 날짜"
+msgstr ""
+
+#: viewer/widgets/bizcard_settings_dialog.py
+msgid "메모가 비었거나 맨 앞에서 쓸 때 — 넣은 날짜는 지워도 됩니다"
+msgstr ""
+
+#: viewer/widgets/bizcard_settings_dialog.py
 msgid "받는 칸:"
 msgstr ""
 

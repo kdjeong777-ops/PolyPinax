@@ -108,6 +108,20 @@ class BizcardSettingsDialog(QDialog):
         self.cmb_limit.currentIndexChanged.connect(lambda _i: self._limit_ui())
         self._limit_ui()
 
+        # 메모(§5.9 '메모 기록'·'메모 날짜', 261120-26·-27) — 명함 DB meta(이 PC), 처음은 둘 다 켬
+        from PyQt6.QtWidgets import QCheckBox
+        g4 = QGroupBox(tr("메모"))
+        r4 = QVBoxLayout(g4)
+        self.chk_memo_log = QCheckBox(tr("칸을 고치면 메모 맨 위에 날짜와 고친 칸 이름을 적기"))
+        self.chk_memo_log.setToolTip(tr("예: [2026-11-21 수정] 휴대폰·메일 — 옛 값은 적지 않습니다"))
+        self.chk_memo_date = QCheckBox(tr("메모를 쓰기 시작하면 맨 앞에 오늘 날짜"))
+        self.chk_memo_date.setToolTip(tr("메모가 비었거나 맨 앞에서 쓸 때 — 넣은 날짜는 지워도 됩니다"))
+        self.chk_memo_log.setChecked(P.memo_opt(store, P.MEMO_LOG_KEY))
+        self.chk_memo_date.setChecked(P.memo_opt(store, P.MEMO_DATE_KEY))
+        r4.addWidget(self.chk_memo_log)
+        r4.addWidget(self.chk_memo_date)
+        v.addWidget(g4)
+
         v.addStretch(1)
         bb = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         bb.button(QDialogButtonBox.StandardButton.Ok).setText(tr("확인"))
@@ -163,6 +177,8 @@ class BizcardSettingsDialog(QDialog):
         from viewer.bizcard import phone as PH
         PH.reload()
         if self._st is not None:
+            P.set_memo_opt(self._st, P.MEMO_LOG_KEY, self.chk_memo_log.isChecked())     # 261120-26
+            P.set_memo_opt(self._st, P.MEMO_DATE_KEY, self.chk_memo_date.isChecked())   # 261120-27
             self._st.meta_set(P.MAIL_FIELD_KEY, "bcc" if self.rb_bcc.isChecked() else "to")   # 261120-33
             self._st.meta_set("gmail_account", self.ed_gmail.text().strip())
             mode, n = self.limit()

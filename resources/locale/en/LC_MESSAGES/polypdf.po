@@ -18439,6 +18439,22 @@ msgid "넘는 기록은 지웁니다(명함은 그대로)."
 msgstr "Older entries are removed (the cards stay)."
 
 #: viewer/widgets/bizcard_settings_dialog.py
+msgid "칸을 고치면 메모 맨 위에 날짜와 고친 칸 이름을 적기"
+msgstr "When a field is changed, note the date and the changed fields at the top of the memo"
+
+#: viewer/widgets/bizcard_settings_dialog.py
+msgid "예: [2026-11-21 수정] 휴대폰·메일 — 옛 값은 적지 않습니다"
+msgstr "e.g. [2026-11-21 edited] Mobile·Email — old values are not recorded"
+
+#: viewer/widgets/bizcard_settings_dialog.py
+msgid "메모를 쓰기 시작하면 맨 앞에 오늘 날짜"
+msgstr "Put today's date first when starting to write a memo"
+
+#: viewer/widgets/bizcard_settings_dialog.py
+msgid "메모가 비었거나 맨 앞에서 쓸 때 — 넣은 날짜는 지워도 됩니다"
+msgstr "When the memo is empty or you type at the very start — you can delete the inserted date"
+
+#: viewer/widgets/bizcard_settings_dialog.py
 msgid "받는 칸:"
 msgstr "Address field:"
 

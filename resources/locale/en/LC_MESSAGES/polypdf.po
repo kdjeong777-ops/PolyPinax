@@ -18664,3 +18664,11 @@ msgstr "Could not connect the Google account ({err})."
 #: viewer/widgets/bizcard_find_dialog.py
 msgid "메뉴"
 msgstr "Menu"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "탭 이름"
+msgstr "Tab name"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "주요 항목 수정"
+msgstr "Edit Details"

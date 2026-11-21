@@ -17000,3 +17000,11 @@ msgstr ""
 #: viewer/widgets/bizcard_find_dialog.py
 msgid "메뉴"
 msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "탭 이름"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "주요 항목 수정"
+msgstr ""

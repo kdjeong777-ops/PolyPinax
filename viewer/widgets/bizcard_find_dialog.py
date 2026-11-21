@@ -14,7 +14,7 @@ from pathlib import Path
 
 from PyQt6.QtCore import (Qt, QTimer, QSize, QObject, QRectF, QPointF, QDate, pyqtSignal, QAbstractTableModel,
     QModelIndex)
-from PyQt6.QtGui import QPixmap, QIcon, QImage, QImageReader, QPainter, QPainterPath, QColor, QFont, QKeySequence, QShortcut
+from PyQt6.QtGui import QPixmap, QIcon, QImage, QImageReader, QPainter, QPainterPath, QColor, QFont, QKeySequence, QShortcut, QPalette
 from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QComboBox, QTableView,
     QAbstractItemView, QHeaderView, QSplitter, QWidget, QFormLayout, QPlainTextEdit, QPushButton,
     QListWidget, QListWidgetItem, QListView, QMessageBox, QFileDialog, QSizePolicy, QCheckBox, QTabBar, QToolButton,
@@ -287,35 +287,40 @@ class _CardTable(QTableView):
 
 
 class TodoDialog(QDialog):
-    """할 일(D26) — 작업 제목·내용·시작일(기본 오늘)·종료일(체크하지 않으면 계속)."""
+    """할 일(D26) — 작업 제목·내용·시작일(기본 오늘)·종료일(체크하지 않으면 계속).
+    `memo=False` 면 내용 칸 없이, `dates=False` 면 기간 칸 없이 — 탭 메뉴 '주요 항목 수정'(261120-41: 즐겨찾기 = 제목만,
+    할 일 = 제목·기한). 없는 칸은 None 이고 `info()` 에 그 키가 없다."""
 
-    def __init__(self, parent=None, info=None, title=""):
+    def __init__(self, parent=None, info=None, title="", memo: bool = True, dates: bool = True):
         super().__init__(parent)
         info = info or {}
         self.setWindowTitle(title or tr("할 일"))
         f = QFormLayout(self)
         self.ed_title = QLineEdit(info.get("title", ""))
         self.ed_title.setPlaceholderText(tr("작업 제목 — 즐겨찾기 탭 이름이 됩니다"))
-        f.addRow(tr("작업 제목"), self.ed_title)
-        self.ed_memo = QPlainTextEdit(info.get("memo", ""))
-        self.ed_memo.setFixedHeight(90)
-        f.addRow(tr("내용"), self.ed_memo)
-        self.d_start = QDateEdit(QDate.fromString(info.get("start") or _today(), "yyyy-MM-dd"))
-        self.d_start.setCalendarPopup(True)
-        self.d_start.setDisplayFormat("yyyy-MM-dd")
-        f.addRow(tr("시작일"), self.d_start)
-        erow = QHBoxLayout()
-        self.chk_end = QCheckBox(tr("종료일"))
-        self.chk_end.setToolTip(tr("체크하지 않으면 시작일부터 계속"))
-        self.d_end = QDateEdit(QDate.fromString(info.get("end") or info.get("start") or _today(), "yyyy-MM-dd"))
-        self.d_end.setCalendarPopup(True)
-        self.d_end.setDisplayFormat("yyyy-MM-dd")
-        self.chk_end.toggled.connect(self.d_end.setEnabled)
-        self.chk_end.setChecked(bool(info.get("end")))
-        self.d_end.setEnabled(bool(info.get("end")))
-        erow.addWidget(self.chk_end)
-        erow.addWidget(self.d_end, 1)
-        f.addRow(erow)
+        f.addRow(tr("작업 제목") if dates else tr("탭 이름"), self.ed_title)
+        self.ed_memo = self.d_start = self.d_end = self.chk_end = None
+        if memo:
+            self.ed_memo = QPlainTextEdit(info.get("memo", ""))
+            self.ed_memo.setFixedHeight(90)
+            f.addRow(tr("내용"), self.ed_memo)
+        if dates:
+            self.d_start = QDateEdit(QDate.fromString(info.get("start") or _today(), "yyyy-MM-dd"))
+            self.d_start.setCalendarPopup(True)
+            self.d_start.setDisplayFormat("yyyy-MM-dd")
+            f.addRow(tr("시작일"), self.d_start)
+            erow = QHBoxLayout()
+            self.chk_end = QCheckBox(tr("종료일"))
+            self.chk_end.setToolTip(tr("체크하지 않으면 시작일부터 계속"))
+            self.d_end = QDateEdit(QDate.fromString(info.get("end") or info.get("start") or _today(), "yyyy-MM-dd"))
+            self.d_end.setCalendarPopup(True)
+            self.d_end.setDisplayFormat("yyyy-MM-dd")
+            self.chk_end.toggled.connect(self.d_end.setEnabled)
+            self.chk_end.setChecked(bool(info.get("end")))
+            self.d_end.setEnabled(bool(info.get("end")))
+            erow.addWidget(self.chk_end)
+            erow.addWidget(self.d_end, 1)
+            f.addRow(erow)
         bb = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         bb.accepted.connect(self._ok)
         bb.rejected.connect(self.reject)
@@ -326,15 +331,19 @@ class TodoDialog(QDialog):
         if not self.ed_title.text().strip():
             self.ed_title.setFocus()
             return
-        if self.chk_end.isChecked() and self.d_end.date() < self.d_start.date():
+        if self.chk_end is not None and self.chk_end.isChecked() and self.d_end.date() < self.d_start.date():
             QMessageBox.information(self, tr("할 일"), tr("종료일이 시작일보다 앞입니다."))
             return
         self.accept()
 
     def info(self) -> dict:
-        return {"title": self.ed_title.text().strip(), "memo": self.ed_memo.toPlainText().strip(),
-                "start": self.d_start.date().toString("yyyy-MM-dd"),
-                "end": self.d_end.date().toString("yyyy-MM-dd") if self.chk_end.isChecked() else ""}
+        out = {"title": self.ed_title.text().strip()}
+        if self.ed_memo is not None:
+            out["memo"] = self.ed_memo.toPlainText().strip()
+        if self.d_start is not None:
+            out["start"] = self.d_start.date().toString("yyyy-MM-dd")
+            out["end"] = self.d_end.date().toString("yyyy-MM-dd") if self.chk_end.isChecked() else ""
+        return out
 
 
 def _read(path: str, w: int, h: int) -> QImage:
@@ -572,34 +581,49 @@ def _menu_act(m: QMenu, text: str, fn):
     return a
 
 
-def _menu_act_help(m: QMenu, text: str, fn, help_text: str, parent=None):
-    """오른쪽에 [?] 가 붙은 메뉴 항목 — 글을 누르면 실행, [?] 를 누르면 설명만(실행하지 않는다, §5.24.2 '탭 메뉴')."""
-    w = QWidget(m)
-    h = QHBoxLayout(w)
-    h.setContentsMargins(4, 0, 4, 0)
-    h.setSpacing(2)
-    b = QToolButton(w)
-    b.setText(text)
-    b.setAutoRaise(True)
-    b.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
-    b.setStyleSheet("QToolButton{text-align:left; padding:3px 18px;}")
-    q = QToolButton(w)
-    q.setText("?")
-    q.setAutoRaise(True)
-    q.setToolTip(help_text)
-    h.addWidget(b, 1)
-    h.addWidget(q)
+class _HelpMenu(QMenu):
+    """[?] 가 붙은 항목이 있는 메뉴(디자인 SOT §2.7 '메뉴 항목의 설명 [?]', 261120-41) — 항목은 보통 `QAction`(글 자리·강조 띠가
+    다른 항목과 같다), `?` 는 이 메뉴가 그 줄 오른쪽 끝에 그린다. `?` 자리를 누르면 설명만(실행하지 않음), 다른 자리·Enter 는 실행,
+    마우스를 두면 같은 설명(툴팁). 종전 `QWidgetAction`(단추 둘)은 글이 들여 써져 다른 항목과 줄이 맞지 않았다."""
+    HELP_W = 26                     # 줄 오른쪽 끝 `?` 칸 폭(px) — 이 칸을 누르면 설명
 
-    def run():
-        m.close()
-        fn()
-    b.clicked.connect(lambda _c=False: run())
-    q.clicked.connect(lambda _c=False: QMessageBox.information(parent or m, text, help_text))
-    act = QWidgetAction(m)
-    act.setDefaultWidget(w)
-    act.setText(text)
-    m.addAction(act)
-    return act
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._help = {}
+        self.setToolTipsVisible(True)
+
+    def add_help(self, text: str, fn, help_text: str):
+        a = _menu_act(self, text, fn)
+        a.setToolTip(help_text)
+        self._help[a] = help_text
+        return a
+
+    def help_of(self, a) -> str:
+        return self._help.get(a, "")
+
+    def _help_rect(self, a):
+        g = self.actionGeometry(a)
+        return g.adjusted(g.width() - self.HELP_W, 0, 0, 0)
+
+    def paintEvent(self, ev):
+        super().paintEvent(ev)
+        if not self._help:
+            return
+        p = QPainter(self)
+        for a in self._help:
+            if a.isVisible():
+                p.setPen(self.palette().color(QPalette.ColorRole.Text if a.isEnabled() else QPalette.ColorRole.PlaceholderText))
+                p.drawText(self._help_rect(a), int(Qt.AlignmentFlag.AlignCenter), "?")
+        p.end()
+
+    def mouseReleaseEvent(self, ev):
+        a = self.actionAt(ev.position().toPoint())
+        if a in self._help and self._help_rect(a).contains(ev.position().toPoint()):
+            text, help_text = a.text(), self._help[a]
+            self.close()
+            QMessageBox.information(self.parentWidget(), text, help_text)
+            return
+        super().mouseReleaseEvent(ev)
 
 
 def _tab_icon(kind: str, pal) -> QIcon:
@@ -903,7 +927,8 @@ class BizcardFindDialog(QDialog):
         self.fav_tabs.setDrawBase(False)
         self.fav_tabs.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.fav_tabs.customContextMenuRequested.connect(self._fav_tab_menu)
-        self.fav_tabs.tabBarDoubleClicked.connect(lambda i: self.fav_rename_tab(i))
+        self.fav_tabs.tabBarDoubleClicked.connect(          # 두 번 누르기 = 탭 메뉴 '주요 항목 수정'(261120-41)
+            lambda i: self.item_edit(self.fav_tabs.tabData(i)) if i >= 0 and self.fav_tabs.tabData(i) != RECENT else None)
         self.fav_tabs.tabMoved.connect(self._tab_moved)
         self.fav_tabs.currentChanged.connect(lambda _i: self._fav_tab_changed())
         tabs_row.addWidget(self.fav_tabs)
@@ -2321,34 +2346,28 @@ class BizcardFindDialog(QDialog):
         m.exec(self.table.viewport().mapToGlobal(pos))
 
     def _fav_tab_menu(self, pos):
-        """탭 메뉴(§5.24.2) — 할 일 고치기·이름 바꾸기·이메일 복사·탭 마감 [?]·탭 삭제 [?]·마감한 탭 ▸."""
+        """탭 메뉴(§5.24.2, 261120-41) — 메일 네 줄 한 묶음 → 주요 항목 수정·탭 마감 [?]·탭 삭제 [?] → 마감한 탭 ▸ → 내보내기."""
         i = self.fav_tabs.tabAt(pos)
         if i < 0:
             return
         st = self._store()
         gid = self.fav_tabs.tabData(i)
-        m = QMenu(self)
-        m.setToolTipsVisible(True)
+        m = _HelpMenu(self)
+        _menu_act(m, tr("이메일 복사"), lambda: self.copy_emails(self._tab_members(gid)))
+        self._gmail_menu(m, self._tab_members(gid))
+        m.addSeparator()
         if gid == RECENT:
-            _menu_act(m, tr("이메일 복사"), lambda: self.copy_emails(self._tab_members(RECENT)))
-            self._gmail_menu(m, self._tab_members(RECENT))
-            m.addSeparator()
             _menu_act(m, tr("모두 삭제"), lambda: self.recent_clear())   # §5.24.2 '최근 탭'(261120-19)
         else:
-            if P.todo_info(st, gid) is not None:
-                _menu_act(m, tr("할 일 고치기"), lambda: self.todo_edit(gid))
-            _menu_act(m, tr("이름 바꾸기"), lambda: self.fav_rename_tab(i))
-            _menu_act(m, tr("이메일 복사"), lambda: self.copy_emails(self._tab_members(gid)))
-            self._gmail_menu(m, self._tab_members(gid))
-            m.addSeparator()
+            _menu_act(m, tr("주요 항목 수정"), lambda: self.item_edit(gid))   # 이름 바꾸기·할 일 고치기 대신(261120-41)
             if self._is_closed(gid):
                 _menu_act(m, tr("다시 열기"), lambda: self.tab_reopen(gid))
             else:
-                _menu_act_help(m, tr("탭 마감"), lambda: self.tab_close(gid), tr(
-                    "탭 줄에서 보이지 않게 합니다. 지우지 않으므로 탭 메뉴 '마감한 탭'에서 언제든 다시 보거나 다시 열 수 있습니다."), self)
-            _menu_act_help(m, tr("탭 삭제"), lambda: self.tab_delete(gid), tr(
+                m.add_help(tr("탭 마감"), lambda: self.tab_close(gid), tr(
+                    "탭 줄에서 보이지 않게 합니다. 지우지 않으므로 탭 메뉴 '마감한 탭'에서 언제든 다시 보거나 다시 열 수 있습니다."))
+            m.add_help(tr("탭 삭제"), lambda: self.tab_delete(gid), tr(
                 "탭과 그 사람 칸을 완전히 지웁니다. 할 일로 사람 메모에 적은 글도 함께 지웁니다(직접 고친 글은 그대로). "
-                "명함은 지우지 않습니다."), self)
+                "명함은 지우지 않습니다."))
         closed = P.closed_tabs(st, _today())
         if closed:
             m.addSeparator()
@@ -2361,8 +2380,7 @@ class BizcardFindDialog(QDialog):
                 _menu_act(sm, tr("보기"), lambda c=cid: self.tab_peek(c))
                 if self._is_closed(cid):
                     _menu_act(sm, tr("다시 열기"), lambda c=cid: self.tab_reopen(c))
-                if todo:
-                    _menu_act(sm, tr("할 일 고치기"), lambda c=cid: self.todo_edit(c))
+                _menu_act(sm, tr("주요 항목 수정"), lambda c=cid: self.item_edit(c))
                 _menu_act(sm, tr("탭 삭제"), lambda c=cid: self.tab_delete(c))
         if st.con.execute("SELECT 1 FROM fav_groups WHERE todo=1 LIMIT 1").fetchone():   # 할 일이 있을 때만(§5.24.2 '할 일 엑셀')
             m.addSeparator()
@@ -2464,6 +2482,40 @@ class BizcardFindDialog(QDialog):
         self._fav_fill_tabs(self._fav_gid())
         if getattr(self, "todo_panel", None) is not None and self.todo_panel.gid == gid:
             self._todo_show(gid)                         # 제목·기간·내용(새 기록)을 할 일 칸에도(§5.24.10)
+        return True
+
+    def _item_dialog(self, gid):
+        """탭 메뉴 '주요 항목 수정' 창(261120-41) — 할 일 탭 = 제목·시작일·종료일, 즐겨찾기 탭 = 제목만. 내용 칸은 없다(할 일 칸에서 고침)."""
+        st = self._store()
+        cur = P.todo_info(st, gid)
+        if cur is not None:
+            return TodoDialog(self, cur, title=tr("주요 항목 수정"), memo=False)
+        row = st.con.execute("SELECT name FROM fav_groups WHERE id=?", (gid,)).fetchone()
+        if row is None:
+            return None
+        return TodoDialog(self, {"title": row[0]}, title=tr("주요 항목 수정"), memo=False, dates=False)
+
+    def item_edit(self, gid, info=None) -> bool:
+        """주요 항목 수정(§5.24.2 '탭 메뉴', 261120-41) — 탭 이름을 바꾸는 길도 이것 하나(탭 두 번 누르기 포함).
+        할 일이면 제목·기간만 바꾸고 내용·기록은 그대로(`todo_update` 에 지금 내용을 넘김). info 를 주면 창 없이(검사)."""
+        if gid is None or gid == RECENT:
+            return False
+        st = self._store()
+        cur = P.todo_info(st, gid)
+        if info is None:
+            dlg = self._item_dialog(gid)
+            if dlg is None or dlg.exec() != QDialog.DialogCode.Accepted:
+                return False
+            info = dlg.info()
+        title = (info.get("title") or "").strip()
+        if not title:
+            return False
+        if cur is not None:
+            return self.todo_edit(gid, info={"title": title, "memo": cur.get("memo") or "",
+                                             "start": info.get("start", cur.get("start") or ""),
+                                             "end": info.get("end", cur.get("end") or "")})
+        P.fav_rename_group(st, gid, title)
+        self._fav_fill_tabs(self._fav_gid())
         return True
 
     def todo_delete(self, gid, ask: bool = True) -> bool:

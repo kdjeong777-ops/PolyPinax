@@ -708,17 +708,22 @@ try:
         dlg.fav_tabs.setCurrentIndex(ti)
         dlg._fav_tab_menu(dlg.fav_tabs.tabRect(ti).center())
         m = shown[-1]
-        wacts = {a.text(): a for a in m.actions() if isinstance(a, QWidgetAction)}
+        helps = {a.text() for a in m.actions() if getattr(m, "help_of", lambda _a: "")(a)}   # [?] 달린 항목(261120-41 — 보통 항목 + 메뉴가 그린 ?)
         info = []
         _orig_info = QMessageBox.information
         QMessageBox.information = staticmethod(lambda *a, **k: info.append(a[1:3]) or QMessageBox.StandardButton.Ok)
         try:
-            q = [b for b in wacts["탭 삭제"].defaultWidget().findChildren(QToolButton) if b.text() == "?"] if "탭 삭제" in wacts else []
-            if q:
-                QTest.mouseClick(q[0], Qt.MouseButton.LeftButton)
+            m.popup(dlg.mapToGlobal(dlg.rect().center()))
+            pump(timeout=0.2)
+            a_del = next((a for a in m.actions() if a.text() == "탭 삭제"), None)
+            if a_del is not None and "탭 삭제" in helps:
+                gq = m.actionGeometry(a_del)
+                QTest.mouseClick(m, Qt.MouseButton.LeftButton, pos=QPoint(gq.right() - 8, gq.center().y()))
+                pump(timeout=0.1)
+            m.hide()
         finally:
             QMessageBox.information = _orig_info
-        chk(set(wacts) == {"탭 마감", "탭 삭제"} and q and info and "메모" in info[-1][1] and P.todo_info(st, g_t) is not None,
+        chk(helps == {"탭 마감", "탭 삭제"} and info and "메모" in info[-1][1] and P.todo_info(st, g_t) is not None,
             "I15 탭 메뉴의 '탭 마감'·'탭 삭제' 오른쪽 [?] — 누르면 설명만(실행하지 않음)", str(info))
         act(m, "이메일 복사").trigger()
         chk(QApplication.clipboard().text() == "hong@example.com", "I15 탭 메뉴 '이메일 복사' = 그 탭 사람 모두")
@@ -1669,6 +1674,123 @@ try:
     chk(ok_menu and "닫기" not in pushes,
         "I33 찾기 줄 맨 왼쪽 ≡ 메뉴 — 아래 단추와 같은 항목·차례·켜짐(명함 보기 꺼짐 그대로)·누르면 같은 길·주소록 하위 메뉴·끝에 '종료', [닫기] 단추 없음",
         str(pushes))
+
+    # I35 탭 메뉴 — 이름 바꾸기·할 일 고치기 없음, 메일 한 묶음 → 주요 항목 수정·탭 마감·탭 삭제, 마감·삭제 글 자리 = 다른 항목 (261120-41)
+    from PyQt6.QtCore import QPoint as _QP5
+    from PyQt6.QtTest import QTest as _QT5
+    from PyQt6.QtGui import QPalette
+    st5 = S.BizcardStore()
+    g_f5 = dlg.fav_new_tab("항목탭")
+    g_t5 = dlg.todo_new(info={"title": "기한일", "memo": "", "start": "2026-11-01", "end": ""}, cards=[])
+    memo_before = (P.todo_info(st5, g_t5) or {}).get("memo")
+    notes_before = len(P.todo_notes(st5, g_t5) or [])
+    shown6 = []
+    _o_exec6 = QMenu.exec
+    QMenu.exec = lambda self, *a, **k: shown6.append(self)
+    try:
+        def _menu_for(g):
+            i = [dlg.fav_tabs.tabData(k) for k in range(dlg.fav_tabs.count())].index(g)
+            dlg.fav_tabs.setCurrentIndex(i)
+            pump(timeout=0.1)
+            dlg._fav_tab_menu(dlg.fav_tabs.tabRect(i).center())
+            return shown6[-1], i
+        m5, i5 = _menu_for(g_f5)
+        seq = ["|" if a.isSeparator() else a.text() for a in m5.actions()]
+        want_head = ["이메일 복사", "Gmail 보내기", "네이버 메일 보내기", "기본 메일 앱으로 보내기", "|", "주요 항목 수정", "탭 마감", "탭 삭제"]
+        no_old = not any(t in ("이름 바꾸기", "할 일 고치기") for t in seq)
+        # 글 자리 — 보이게 띄워 그린 그림에서 줄마다 첫 글자 열(배경과 다른 첫 점)
+        m5.popup(dlg.mapToGlobal(dlg.rect().topLeft()) + _QP5(40, 40))
+        pump(timeout=0.3)
+        img = m5.grab().toImage()
+
+        def _ink_x(a):
+            g = m5.actionGeometry(a)
+            y0, y1 = g.top() + 3, g.bottom() - 3
+            bg = img.pixelColor(g.left() + 2, g.center().y()).name()
+            for x in range(g.left() + 2, g.right() - 30):
+                if any(img.pixelColor(x, y).name() != bg for y in range(y0, y1)):
+                    return x
+            return -1
+        byname = {a.text(): a for a in m5.actions() if a.text()}
+        xs = {k: _ink_x(byname[k]) for k in ("이메일 복사", "주요 항목 수정", "탭 마감", "탭 삭제") if k in byname}
+        ran = []                                          # 글 자리를 누르면 실행(? 자리만 설명)
+        _o_tc = dlg.tab_close
+        dlg.tab_close = lambda g, *a, **k: ran.append(g)
+        try:
+            if "탭 마감" in byname:
+                gm = m5.actionGeometry(byname["탭 마감"])
+                _QT5.mouseClick(m5, Qt.MouseButton.LeftButton, pos=_QP5(gm.left() + 30, gm.center().y()))
+                pump(timeout=0.1)
+        finally:
+            dlg.tab_close = _o_tc
+        m5.hide()
+        aligned = aligned_ok = ran == [g_f5]
+        # 다크·라이트 — `?` 는 테마 글자색(배경과 다른 밝기)
+        q_ok = []
+        for th in ("dark", "light"):
+            mw.apply_theme(th)
+            pump(timeout=0.2)
+            mq, _iq = _menu_for(g_f5)
+            mq.popup(dlg.mapToGlobal(dlg.rect().topLeft()) + _QP5(40, 40))
+            pump(timeout=0.2)
+            iq = mq.grab().toImage()
+            if os.environ.get("BIZCARD_DUMP"):
+                iq.save(os.path.join(os.environ["BIZCARD_DUMP"], "tabmenu_%s.png" % th))
+            aq = next((a for a in mq.actions() if a.text() == "탭 삭제"), None)
+            hr = mq._help_rect(aq) if aq is not None and hasattr(mq, "_help_rect") else None
+            txt_c = mq.palette().color(QPalette.ColorRole.Text)
+            hit = False
+            if hr is not None:
+                for x in range(hr.left(), hr.right()):
+                    for y in range(hr.top(), hr.bottom()):
+                        c = iq.pixelColor(x, y)
+                        if abs(c.lightness() - txt_c.lightness()) < 40:
+                            hit = True
+                            break
+                    if hit:
+                        break
+            q_ok.append(hit)
+            mq.hide()
+        aligned_ok = aligned_ok and q_ok == [True, True]
+        aligned = aligned_ok and len(xs) == 4 and max(xs.values()) - min(xs.values()) <= 2
+        # 주요 항목 수정 — 즐겨찾기 탭 = 제목만, 할 일 탭 = 제목·기한(내용 칸 없음)
+        dlg_f = dlg._item_dialog(g_f5) if hasattr(dlg, "_item_dialog") else None
+        dlg_t = dlg._item_dialog(g_t5) if hasattr(dlg, "_item_dialog") else None
+        shape = None
+        if dlg_f is not None and dlg_t is not None:
+            shape = (dlg_f.ed_memo is None and dlg_f.d_start is None and dlg_t.ed_memo is None
+                     and dlg_t.d_start is not None and dlg_t.ed_title.text() == "기한일")
+            dlg_f.deleteLater()
+            dlg_t.deleteLater()
+        r1 = dlg.item_edit(g_f5, info={"title": "항목탭2"}) if hasattr(dlg, "item_edit") else False
+        r2 = dlg.item_edit(g_t5, info={"title": "기한일2", "start": "2026-11-02", "end": "2026-12-31"}) if hasattr(dlg, "item_edit") else False
+        ti5 = P.todo_info(st5, g_t5) or {}
+        renamed = (r1 and dlg.fav_tabs.tabText(i5) == "항목탭2" and r2 and ti5.get("title") == "기한일2"
+                   and ti5.get("start") == "2026-11-02" and ti5.get("end") == "2026-12-31"
+                   and ti5.get("memo") == memo_before and len(P.todo_notes(st5, g_t5) or []) == notes_before)
+        # 탭 두 번 누르기 = 주요 항목 수정
+        dbl = []
+        _o_ie = getattr(dlg, "item_edit", None)
+        dlg.item_edit = lambda g, *a, **k: dbl.append(g)
+        try:
+            dlg.fav_tabs.tabBarDoubleClicked.emit(i5)
+        finally:
+            if _o_ie is not None:
+                dlg.item_edit = _o_ie
+            else:
+                del dlg.item_edit
+        print("I35", seq, xs, shape, renamed, dbl)
+    finally:
+        QMenu.exec = _o_exec6
+    chk(seq[:len(want_head)] == want_head and no_old,
+        "I35 탭 메뉴 — 이름 바꾸기·할 일 고치기 없음, 메일 네 줄 한 묶음 → 구분선 → 주요 항목 수정·탭 마감·탭 삭제", str(seq))
+    chk(aligned, "I35 탭 마감·탭 삭제 글 자리 = 다른 항목(들여 쓰지 않음), 글 자리를 누르면 실행", str(xs))
+    chk(shape is True and renamed and dbl == [g_f5],
+        "I35 주요 항목 수정 — 즐겨찾기 = 제목만(탭 이름), 할 일 = 제목·기한(내용 칸 없음·내용 그대로), 탭 두 번 누르기도 같은 길",
+        "%s %s %s" % (shape, renamed, dbl))
+    dlg.tab_delete(g_f5, ask=False)
+    dlg.tab_delete(g_t5, ask=False)
+    st5.close()
 
     # I34 ≡ 단추에 메뉴 화살표(오른쪽 아래 작은 v) 없음 — 같은 그림의 맨 단추와 픽셀이 같다, 누르면 메뉴 (261120-40, 사용자 지시)
     same_px, opened = [], False

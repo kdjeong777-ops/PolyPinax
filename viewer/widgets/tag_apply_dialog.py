@@ -426,6 +426,9 @@ class TagApplyDialog(QDialog):
         self.ed_find.textChanged.connect(self._on_find)
         self.ed_find.textChanged.connect(self._refresh_pair)
         self.ed_find.returnPressed.connect(self._find_add)
+        for _b in self.findChildren(QPushButton):          # Enter 가 기본 단추(맨 앞 [↶])를 함께 누르지 않게 — 찾기 칸 Enter = 붙이기(261120-63)
+            _b.setAutoDefault(False)
+            _b.setDefault(False)
         self.cmb_sort.currentIndexChanged.connect(self._on_sort)
         # 261111-20: 두 목록은 한쪽만 활성 · 두 번 누르기·끌어 놓기로 옮긴다(261114-2 덧붙임)
         self.lst_tags.itemSelectionChanged.connect(lambda: self._on_list_pick("tags"))
@@ -748,7 +751,14 @@ class TagApplyDialog(QDialog):
         sections.append((tr("문서 종류"), "fmt", [] if card else [f for f in FORMAT_VOCAB if self._find_ok(f)]))
         sections.append((tr("자동 해시태그 속성"), "attr", [] if card else [a for a in PDF_ATTR_ITEMS if self._find_ok(a)]))
         fl = {f.lower() for f in FORMAT_VOCAB} | {a.lower() for a in PDF_ATTR_ITEMS}
-        known = [t for t in self._all_known() if t.lower() not in have and t.lower() not in fl and (self._find_ok(t))]
+        # 261120-63(태그 SOT §8.7 '일부에만 붙은 태그를 모두에'): 일부에만 붙은 태그는 왼쪽에도(◐ n/m) — 모두에 붙은 것만 오른쪽에만
+        full = {t.lower() for t, n in counts.items() if m and n >= m}
+        pool, seen_k = [], set()
+        for t in list(self._all_known()) + [t for t in counts if t.lower() not in full]:
+            if t.lower() not in seen_k:
+                seen_k.add(t.lower())
+                pool.append(t)
+        known = [t for t in pool if t.lower() not in full and t.lower() not in fl and (self._find_ok(t))]
         sections.append((tr("기존 태그"), "tag", self._order(known)))
         sections.append((tr("새 태그 후보"), "cand", [] if card else
                          [t for t, _h in self._cand_rows() if t.lower() not in have and (self._find_ok(t))]))
@@ -776,6 +786,8 @@ class TagApplyDialog(QDialog):
                         txt += "  ✓"
                     elif n_on:
                         txt += "  ◐"
+                if kind == "tag" and m and 0 < lowc.get(t.lower(), 0) < m:   # 일부에만 붙은 태그(261120-63)
+                    txt += "  ◐ %d/%d" % (lowc[t.lower()], m)
                 if kind == "cand":
                     txt += tr("  ({n}건)").format(n=cand_n.get(t, 0))
                 it = QListWidgetItem(txt)
@@ -783,6 +795,8 @@ class TagApplyDialog(QDialog):
                 it.setData(KIND_ROLE, kind)
                 if kind == "fmt":
                     it.setToolTip(tr("문서 종류 — 붙이면 고른 PDF 의 종류가 이것 하나로 바뀝니다"))
+                elif kind == "tag" and m and 0 < lowc.get(t.lower(), 0) < m:
+                    it.setToolTip(tr("일부 파일에만 붙어 있습니다 — 고르고 [적용] 하면 나머지에도 붙입니다"))
                 elif kind == "attr":
                     it.setToolTip(tr("날짜는 고른 파일마다 그 파일 날짜로, 한글·영어와 스캔문서·텍스트문서는 짝 중 하나만 붙습니다")
                                   if t in ("날짜", "한글", "영어", "스캔문서", "텍스트문서") else tr("자동 해시태그 속성"))
@@ -820,11 +834,33 @@ class TagApplyDialog(QDialog):
         self.btn_apply.setEnabled(self.btn_to.isEnabled())
         self.btn_clear.setEnabled(self.btn_from.isEnabled())
         self.btn_dismiss.setEnabled(bool(self._picked_cands()))
-        q = self._find_text()
-        known = {t.lower() for t in self._all_known()}
+        hit = self._find_known()
+        b = self.btn_find_add
+        if hit:                                          # 이미 있는 태그 — 대상 파일 모두에 붙이기(261120-63, 태그 SOT §8.7)
+            files = self.target_paths()
+            n = sum(1 for p in files if hit.lower() in {t.lower() for t in self.shown_tags(p)})
+            b.setText(tr("모두에 붙이기"))
+            b.setEnabled(bool(files) and n < len(files))
+            b.setToolTip(tr("이미 모두에 붙어 있음") if files and n >= len(files)
+                         else tr("이 태그를 대상 파일 모두에 붙입니다(Enter) — 되돌리기 한 걸음"))
+        else:
+            b.setText(tr("추가"))
+            b.setEnabled(bool(self._find_text()) and has_files)
+            b.setToolTip(tr("찾는 글자를 새 태그로 고른 파일에 붙입니다(목록에 없을 때)"))
+
+    def _find_known(self) -> str:
+        """찾기 칸 글자가 이미 있는 태그면 그 태그(있는 표기) — `normalize_tags` 기준, 대소문자·공백 무시. 없으면 ''."""
+        from viewer.tag_store import normalize_tags
+        ts = normalize_tags([self.ed_find.text()])
+        if not ts:
+            return ""
+        q = ts[0].lower()
+        names = list(self._all_known())
         for lw in (self.lst_tags, self.lst_avail):
-            known |= {(lw.item(i).data(Qt.ItemDataRole.UserRole) or "").lower() for i in range(lw.count())}
-        self.btn_find_add.setEnabled(bool(q) and q not in known and has_files)
+            names += [lw.item(i).data(Qt.ItemDataRole.UserRole) or "" for i in range(lw.count())]
+        for p in self.target_paths():
+            names += list(self.shown_tags(p))
+        return next((t for t in names if t and t.lower() == q), "")
 
     def _on_find(self, *_a):
         self._fill_lists()
@@ -834,16 +870,18 @@ class TagApplyDialog(QDialog):
         self._fill_lists()
 
     def _find_add(self):
-        """찾는 글자를 새 태그로 고른 파일에 곧바로 붙인다(목록에 없을 때 — 261114-2 덧붙임, 종전 '태그 추가' 묶음)."""
+        """찾는 글자를 고른(대상) 파일 모두에 곧바로 붙인다 — 없는 이름이면 새 태그(261114-2 덧붙임), 이미 있는 태그면 그 표기로
+        일부에만 붙은 것을 나머지에도(261120-63). Enter 도 같다. 되돌리기 한 걸음(`apply_tags`)."""
         if not self.btn_find_add.isEnabled():
             return
         from viewer.tag_store import normalize_tags
         ts = normalize_tags([self.ed_find.text()])
         if not ts:
             return
+        tag = self._find_known() or ts[0]
         self.ed_find.clear()
         self._known = None
-        self.apply_tags(True, tags=[ts[0]])
+        self.apply_tags(True, tags=[tag])
 
     def _dismiss(self):
         from viewer.tag_store import save_candidates

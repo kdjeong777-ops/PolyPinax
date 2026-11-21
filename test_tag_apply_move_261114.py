@@ -99,7 +99,8 @@ try:
         "A 문서 종류 7개·자동 해시태그 속성 6개는 늘 보인다(261114-2 덧붙임 2)·기존 태그 묶음", str(heads) + str(list(av)))
     chk(av.get("발표자료", "").endswith("✓") and av.get("스캔문서", "").endswith("◐") and not av.get("제품설명서", "").endswith(("✓", "◐")),
         "A 13 항목 — 고른 파일 모두에 있으면 ✓, 일부만이면 ◐", str({k: av.get(k) for k in ("발표자료", "스캔문서", "제품설명서")}))
-    chk("포장" in av and "균열" not in av, "A 기존 태그는 고른 파일에 있으면 오른쪽에만, 다른 파일의 태그는 왼쪽에", str(list(av)))
+    chk("포장" in av and ("균열" not in av or "◐" in av["균열"]),
+        "A 기존 태그 — 고른 파일 모두에 있으면 오른쪽에만, 일부에만이면 왼쪽에도 ◐(261120-63), 다른 파일의 태그는 왼쪽에", str(list(av)))
 
     # B
     at = rows(lt)

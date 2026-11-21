@@ -57,7 +57,8 @@ try:
     chk(names() == ["보고서"] and avail("cand") == ["보수"], "C 검색 — 두 목록 모두 담은 태그만(후보도)", f"{names()} {avail('cand')}")
     chk(dlg.btn_find_add.isEnabled(), "C 같은 이름이 없으면 [추가] 켜짐")
     dlg.ed_find.setText("보고서")
-    chk(not dlg.btn_find_add.isEnabled(), "C 같은 이름이 있으면 [추가] 꺼짐")
+    chk(dlg.btn_find_add.text() == "모두에 붙이기" and (not dlg.btn_find_add.isEnabled()) == ("이미 모두에 붙어 있음" in dlg.btn_find_add.toolTip()),
+        "C 같은 이름이 있으면 [추가] 대신 '모두에 붙이기'(모두에 있으면 꺼짐, 261120-63)", repr((dlg.btn_find_add.text(), dlg.btn_find_add.isEnabled())))
     dlg.ed_find.setText("새것"); dlg._find_add()
     chk("새것" in names() and "새것" in st.get_manual(P) and "새것" in st.get_manual(Q),
         "C 찾는 글자로 바로 고른 파일에 붙인다(261114-2 덧붙임)", str(names()))

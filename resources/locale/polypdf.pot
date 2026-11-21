@@ -17160,3 +17160,19 @@ msgstr ""
 #: viewer/widgets/bizcard_gsync_dialog.py
 msgid "구글에서 지운 값 — 명함에서도 지울까요(안 고르면 구글로 다시)"
 msgstr ""
+
+#: viewer/widgets/tag_apply_dialog.py
+msgid "모두에 붙이기"
+msgstr ""
+
+#: viewer/widgets/tag_apply_dialog.py
+msgid "이미 모두에 붙어 있음"
+msgstr ""
+
+#: viewer/widgets/tag_apply_dialog.py
+msgid "이 태그를 대상 파일 모두에 붙입니다(Enter) — 되돌리기 한 걸음"
+msgstr ""
+
+#: viewer/widgets/tag_apply_dialog.py
+msgid "일부 파일에만 붙어 있습니다 — 고르고 [적용] 하면 나머지에도 붙입니다"
+msgstr ""

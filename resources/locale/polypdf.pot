@@ -17156,3 +17156,7 @@ msgstr ""
 #: viewer/widgets/bizcard_settings_dialog.py
 msgid "구글 라벨로 올릴 해시태그:"
 msgstr ""
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+msgid "구글에서 지운 값 — 명함에서도 지울까요(안 고르면 구글로 다시)"
+msgstr ""

@@ -22,6 +22,7 @@ KIND_LABELS = {G.NEW_CARD: tr_noop("구글에서 가져옴(새 명함)"), G.NEW_
                G.DRIVE_UP: tr_noop("명함 그림을 드라이브에"), "link": tr_noop("같은 사람으로 짝지음(값 같음)"),
                G.KAKAO_UP: tr_noop("카톡 친구추가 방지 바꿈(구글 이름 앞 #)"),
                G.KAKAO_DOWN: tr_noop("카톡 친구추가 방지 표시를 구글 이름대로"),
+               G.GONE_VALUE: tr_noop("구글에서 지운 값 — 명함에서도 지울까요(안 고르면 구글로 다시)"),
                G.LABELS: tr_noop("라벨·해시태그 맞춤"), G.LABEL_GONE: tr_noop("고른 목록에서 뺀 구글 라벨 — 지울까요(연락처는 그대로)")}
 FIELD_LABELS = {"name": tr_noop("이름"), "company": tr_noop("회사"), "dept": tr_noop("부서"), "title": tr_noop("직함"),
                 "phones": tr_noop("전화"), "emails": tr_noop("메일"), "address": tr_noop("주소"), "urls": tr_noop("누리집"),
@@ -229,8 +230,26 @@ class GSyncDialog(QDialog):
                     out.append(self.rows[it.data(0, Qt.ItemDataRole.UserRole)])
         return out
 
+    def to_apply(self) -> list:
+        """[반영] 에 넘길 줄 — 체크한 것 + 체크하지 않은 지워짐은 짝만 풀기, 체크하지 않은 '구글에서 지운 값' 은 명함 값을 구글로 다시
+        (§5.29 '지운 것'·'구글에서 지운 값', 261120-62). 갈래 차례대로(명함 고침이 구글로 다시보다 먼저)."""
+        out = []
+        for i in range(self.tree.topLevelItemCount()):
+            top = self.tree.topLevelItem(i)
+            for j in range(top.childCount()):
+                it = top.child(j)
+                r = self.rows[it.data(0, Qt.ItemDataRole.UserRole)]
+                if it.checkState(0) == Qt.CheckState.Checked:
+                    out.append(r)
+                elif r["kind"] in G.UNLINK_IF_KEPT:
+                    out.append(dict(r, kind="unlink"))
+                elif r["kind"] == G.GONE_VALUE:
+                    out.append(dict(r, kind=G.TO_GOOGLE))
+        order = {k: n for n, k in enumerate(G.KINDS + ("link", "unlink"))}
+        return sorted(out, key=lambda r: order.get(r["kind"], 99))
+
     def apply(self) -> bool:
-        rows = self.chosen()
+        rows = self.to_apply()
         if self.busy or not rows:
             return False
         from viewer.workers import run_in_thread

@@ -26,15 +26,17 @@ NEW_CARD, NEW_GOOGLE, TO_CARD, TO_GOOGLE, GONE_GOOGLE, GONE_CARD, PHOTO_UP, PHOT
     "new_card", "new_google", "to_card", "to_google", "gone_google", "gone_card", "photo_up", "photo_down", "drive_up")
 KAKAO_UP, KAKAO_DOWN = "kakao_up", "kakao_down"     # 카톡 친구추가 방지(구글 이름 앞 '#') 바꿈 → 구글 · 구글 이름대로 표시 맞춤
 MERGED_GOOGLE = "merged_google"                 # 명함 합치기로 남지 못한 짝의 구글 연락처 — 지울까요(§5.29 '명함 합치기와 짝', 261120-46)
+GONE_VALUE = "gone_value"                       # 구글에서만 빠진 칸 값 — 명함에서도 지울까요(처음 꺼짐, 안 고르면 구글로 다시, 261120-62)
 LABELS, LABEL_GONE = "labels", "label_gone"     # 고른 해시태그 ↔ 구글 라벨 맞춤 · 고른 목록에서 뺀 라벨 — 지울까요(§5.29 '라벨', 261120-61)
-KINDS = (NEW_CARD, NEW_GOOGLE, TO_CARD, TO_GOOGLE, GONE_GOOGLE, GONE_CARD, MERGED_GOOGLE, PHOTO_UP, PHOTO_DOWN, DRIVE_UP,
+KINDS = (NEW_CARD, NEW_GOOGLE, TO_CARD, GONE_VALUE, TO_GOOGLE, GONE_GOOGLE, GONE_CARD, MERGED_GOOGLE, PHOTO_UP, PHOTO_DOWN, DRIVE_UP,
          KAKAO_UP, KAKAO_DOWN, LABELS, LABEL_GONE)
 OPT_LABELS = "gsync_label_tags"                  # meta — 구글 라벨로 올릴 해시태그(명함 환경설정)
 OPT_LABELS_OFF = "gsync_label_off"               # meta — 환경설정에서 끈 것(구글 라벨이어도 다시 넣지 않음)
 META_LABEL_GROUPS = "gsync_label_groups"         # meta — 앱이 쓴 라벨 {이름: contactGroups/…}
 OPT_KAKAO_NEW = "gsync_kakao_new"               # meta — 구글에 새로 보낼 때 친구추가 방지(처음 켬)
 KAKAO_MARK = "#"
-DEFAULT_ON = {k: k not in (GONE_GOOGLE, GONE_CARD, LABEL_GONE) for k in KINDS}    # 지워짐은 기본 '남김'(§5.29 '지운 것'), 합쳐져 남음은 켬(사용자 결정 261121)
+DEFAULT_ON = {k: k not in (GONE_GOOGLE, GONE_CARD, LABEL_GONE, GONE_VALUE) for k in KINDS}
+UNLINK_IF_KEPT = (GONE_GOOGLE, GONE_CARD, MERGED_GOOGLE)   # 체크하지 않으면(남김) 짝만 풀림(§5.29 '지운 것', 261120-62)    # 지워짐은 기본 '남김'(§5.29 '지운 것'), 합쳐져 남음은 켬(사용자 결정 261121)
 GOOGLE_WRITES = (NEW_GOOGLE, TO_GOOGLE, GONE_CARD, MERGED_GOOGLE, KAKAO_UP, PHOTO_UP, DRIVE_UP, LABELS, LABEL_GONE)   # 구글 쪽을 바꾸는 갈래 — 미리보기의 백업 권함
 
 
@@ -202,6 +204,19 @@ def _norm(v: dict) -> dict:
             "phones": sorted({(k, PH.digits(n)) for k, n in v.get("phones") or [] if PH.digits(n)}),
             "emails": sorted({_nz(e) for e in v.get("emails") or [] if e}),
             "urls": sorted({(u or "").strip() for u in v.get("urls") or [] if u})}
+
+
+def lost_fields(card: dict, pv: dict, fields) -> list:
+    """구글 쪽에서만 빠진 칸 — 글 칸은 명함에 있는데 구글이 빔, 전화·메일·누리집은 구글이 빠지기만 함(§5.29 '구글에서 지운 값')."""
+    a, b = _norm(card), _norm(pv)
+    out = []
+    for f in fields:
+        if isinstance(a[f], list):
+            if set(b[f]) < set(a[f]):
+                out.append(f)
+        elif a[f] and not b[f]:
+            out.append(f)
+    return out
 
 
 def diff_fields(card: dict, pv: dict) -> list:
@@ -409,10 +424,17 @@ def plan(store, people: list, folder: str = "", photos: bool = False, drive: boo
         if d:
             g_new, c_new = pt > syn, ct > syn
             to_card = not card_first and ((g_new and not c_new) or (g_new == c_new and pt > ct))   # 한쪽만 바뀌었으면 그쪽, 둘 다면 나중 것
-            rows.append({"kind": TO_CARD if to_card else TO_GOOGLE, "card_id": c["id"], "rn": p["resourceName"],
-                         "name": c.get("name") or pv["name"], "fields": d, "etag": p.get("etag") or "", "link": bool(l.get("new")),
-                         "kakao": c_k,
-                         "changes": [(f,) + ((show(c, f), show(pv, f)) if to_card else (show(pv, f), show(c, f))) for f in d]})
+            lost = lost_fields(c, pv, d) if to_card and not l.get("new") else []   # 구글에서만 빠진 값은 따로 묻는다(261120-62)
+            keep = [f for f in d if f not in lost]
+            if keep:
+                rows.append({"kind": TO_CARD if to_card else TO_GOOGLE, "card_id": c["id"], "rn": p["resourceName"],
+                             "name": c.get("name") or pv["name"], "fields": keep, "etag": p.get("etag") or "", "link": bool(l.get("new")),
+                             "kakao": c_k,
+                             "changes": [(f,) + ((show(c, f), show(pv, f)) if to_card else (show(pv, f), show(c, f))) for f in keep]})
+            if lost:
+                rows.append({"kind": GONE_VALUE, "card_id": c["id"], "rn": p["resourceName"], "name": c.get("name") or pv["name"],
+                             "fields": lost, "etag": p.get("etag") or "", "kakao": c_k,
+                             "changes": [(f, show(c, f), show(pv, f)) for f in lost]})
         elif l.get("new"):                                   # 처음 짝 — 값이 같으면 짝만 적는다
             rows.append({"kind": "link", "card_id": c["id"], "rn": p["resourceName"], "name": c.get("name") or "",
                          "etag": p.get("etag") or "", "labels": [ch[k] for k in set(_keys(c.get("tags"))) & set(_keys(person_labels(p, gmap)))]})
@@ -516,7 +538,9 @@ def apply(store, api, rows: list, folder: str = "", drive_folder: str = DRIVE_FO
                 for name in r.get("labels") or []:               # 새 연락처도 고른 해시태그의 라벨을(§5.29 '라벨')
                     api.modify_members(group_of(name), add=[p["resourceName"]])
                 _link_put(store, c["id"], p["resourceName"], p.get("etag") or "", labels=list(r.get("labels") or []))
-            elif k == TO_CARD:
+            elif k == "unlink":                                  # '남김' — 짝만 풀림(다음 싱크에 다시 제안, 261120-62)
+                store.con.execute("DELETE FROM google_link WHERE card_id=?", (r["card_id"],))
+            elif k in (TO_CARD, GONE_VALUE):
                 p = _fetch(api, r["rn"], by_rn)
                 v = person_values(p)
                 ch = {f: v[f] for f in r["fields"] if f in v}

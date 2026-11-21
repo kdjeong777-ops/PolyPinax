@@ -8467,6 +8467,10 @@ msgid "할 일"
 msgstr "To-do"
 
 #: viewer/widgets/bizcard_find_dialog.py
+msgid "명단"
+msgstr "List"
+
+#: viewer/widgets/bizcard_find_dialog.py
 msgid "할 일 엑셀로 내보내기"
 msgstr "Export To-dos to Excel"
 
@@ -8507,6 +8511,14 @@ msgstr "Last year"
 #: viewer/widgets/bizcard_import_dialog.py
 msgid "스캔일"
 msgstr "Scan Date"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "고른 탭을 엑셀로 내보내기"
+msgstr "Export selected tab to Excel"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "고른 탭을 Word 로 내보내기"
+msgstr "Export selected tab to Word"
 
 #: viewer/widgets/bizcard_find_dialog.py
 msgid "1주"
@@ -8575,6 +8587,14 @@ msgstr "Permanently deletes the tab and its people. Text this to-do wrote into p
 #: viewer/widgets/bizcard_find_dialog.py
 msgid "마감한 탭"
 msgstr "Closed Tabs"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "이 탭에는 내보낼 내용이 없습니다."
+msgstr "This tab has nothing to export."
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "파일을 쓰지 못했습니다 — 다른 프로그램이 열고 있는지 확인하세요."
+msgstr "Could not write the file — check whether another program has it open."
 
 #: viewer/widgets/bizcard_find_dialog.py
 msgid "할 일이 없습니다."
@@ -8684,6 +8704,18 @@ msgstr "Reopen"
 #: viewer/widgets/bizcard_find_dialog.py
 msgid "탭 줄에서 보이지 않게 합니다. 지우지 않으므로 탭 메뉴 '마감한 탭'에서 언제든 다시 보거나 다시 열 수 있습니다."
 msgstr "Hides the tab from the tab bar. It is not deleted, so you can view or reopen it anytime from 'Closed Tabs' in the tab menu."
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "엑셀"
+msgstr "Excel"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "Word"
+msgstr "Word"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "내보냈습니다."
+msgstr "Exported."
 
 #: viewer/widgets/bizcard_find_dialog.py
 msgid "그림 없는 주소록 명함 — 명함 DB 태그 칸에만"
@@ -18680,6 +18712,14 @@ msgstr "Block KakaoTalk auto-friend"
 #: viewer/widgets/bizcard_find_dialog.py
 msgid "카톡 친구추가 방지 해제"
 msgstr "Unblock KakaoTalk auto-friend"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "할 일 내보내기"
+msgstr "Export To-dos"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "명단 내보내기"
+msgstr "Export List"
 
 #: viewer/widgets/bizcard_gsync_dialog.py
 msgid "카톡 친구추가 방지 바꿈(구글 이름 앞 #)"

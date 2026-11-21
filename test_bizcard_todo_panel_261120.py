@@ -190,14 +190,15 @@ try:
     chk(notes and [i["text"] for i in notes[0]["items"]] == ["창에서 고친 내용"] and notes[0]["tags"] == ["report", "submit"],
         "D 할 일 고치기 창에서 내용을 바꾸면 새 기록(글 → 줄, 태그 이어받음)", repr(notes[:1]))
     out = TMP / "할일.xlsx"
-    dlg.export_todos(str(out))
-    pump(lambda: getattr(dlg, "last_todo_export", None) is not None, timeout=20)
+    dlg.last_tab_export = None
+    dlg.export_tab(g_old, "xlsx", str(out))              # 탭 하나 내보내기(261120-42)
+    pump(lambda: getattr(dlg, "last_tab_export", None) is not None, timeout=20)
     from openpyxl import load_workbook
-    ws = load_workbook(str(out)).active
+    ws = load_workbook(str(out))["할 일"]
     rows = [[(c.value or "") for c in r] for r in ws.iter_rows()]
-    r_old = next((r for r in rows[1:] if r[3] == "가짜 옛 할 일"), None)
-    chk(r_old is not None and r_old[4].startswith("☑ %s 가짜 끝낸 일" % D(3)) or False,
-        "D 엑셀 '내용' 칸 = 최신 기록의 줄(☑/☐ 날짜 글)", repr(r_old))
+    r_old = next((r for r in rows if "가짜 끝낸 일" in r), None)
+    chk(r_old is not None and r_old[1:4] == ["☑", D(3), "가짜 끝낸 일"],
+        "D 내보낸 할 일 표 = 옛 기록도 줄(완료 ☑·기한 = 옛 끝 날짜·글)", repr(r_old))
     dlg.close()
 except Exception:
     import traceback

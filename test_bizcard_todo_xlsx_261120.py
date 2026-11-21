@@ -1,10 +1,12 @@
 # -*- coding: utf-8 -*-
-"""할 일 엑셀로 내보내기 (명함 SOT §5.24.2 '할 일 엑셀', 261120-21) — 가짜 명함·가짜 할 일만(명함 SOT §2.1).
+"""할 일 내보내기 — 고른 탭 하나를 엑셀·Word 로 (명함 SOT §5.24.2 '할 일 내보내기', 261120-42 — 종전 261120-21 '모든 할 일 엑셀'을 바꿈).
+가짜 명함·가짜 할 일만(명함 SOT §2.1). 오프스크린, 실제 설정·데이터 폴더를 쓰지 않는다(검사 작성 SOT §14.7.2). 파일은 임시 폴더에만.
 
-오프스크린, 실제 설정·데이터 폴더를 쓰지 않는다(검사 작성 SOT §14.7.2). 파일은 임시 폴더에만.
-A. 탭 메뉴에 '할 일 엑셀로 내보내기'(할 일이 있을 때만) — 실제 메뉴 항목을 눌러(저장 자리 묻기는 임시 경로로) 배경에서 씀
-B. 모든 할 일(마감·기간 밖 포함)이 기간 차례, 상태 칸, 머리말
-C. 명단 한 사람이 한 줄, 할 일 칸은 명단 줄에 걸쳐 합침, 휴대폰은 적을 꼴, 명단 없는 할 일도 한 줄, 종료일 없으면 '계속'
+A. 탭 줄 `+` 바로 오른쪽에 엑셀·워드 아이콘 단추(아이콘 있음)
+B. 탭 메뉴 — 할 일 탭은 '할 일 내보내기 ▸ 엑셀·Word', 보통 탭은 '명단 내보내기 ▸', 종전 '할 일 엑셀로 내보내기'(모든 할 일)는 없음
+C. 할 일 탭을 엑셀 단추로(실제 클릭) — 그 탭만, 시트 '할 일'(제목·기간·상태·해시태그·할 일 표 최신 기록 먼저·수정일 칸 합침)·'명단'(휴대폰 꼴)
+D. 같은 탭을 메뉴 'Word' 로 — 제목·머리 줄·할 일 표·명단 표, 한글 글꼴 eastAsia
+E. 보통 탭은 명단만(엑셀 시트 하나·Word 표 하나), 다른 탭 할 일은 안 들어감
 """
 import os, sys, tempfile, time, datetime
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -15,6 +17,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from PyQt6.QtCore import QStandardPaths, QCoreApplication, Qt
 QStandardPaths.setTestModeEnabled(True)             # 검사 작성 SOT §14.7.2
 from PyQt6.QtWidgets import QApplication, QMenu, QFileDialog, QMessageBox
+from PyQt6.QtTest import QTest
 from pathlib import Path
 
 app = QApplication.instance() or QApplication(sys.argv[:1])
@@ -51,6 +54,15 @@ def finish():
     os._exit(1 if fails else 0)
 
 
+def wait_export(dlg):
+    dlg.last_tab_export = None
+    return pump(lambda: getattr(dlg, "last_tab_export", None) is not None, timeout=20)
+
+
+def menu_texts(m):
+    return [a.text() for a in m.actions()] if m else []
+
+
 try:
     from viewer.bizcard import people as P, store as S
     db = TMP / "local" / "bizcard.db"
@@ -64,16 +76,20 @@ try:
     P.fav_init(st, "즐겨찾기")
     today = datetime.date.today()
     d = lambda n: (today + datetime.timedelta(days=n)).isoformat()
-    g_live = P.todo_add(st, {"title": "가짜 진행", "memo": "첫 줄\n둘째 줄", "start": d(-3), "end": ""}, ids, "…")
-    g_soon = P.todo_add(st, {"title": "가짜 예정", "memo": "", "start": d(10), "end": d(20)}, [ids[0]], "…")
-    g_past = P.todo_add(st, {"title": "가짜 지남", "memo": "", "start": d(-30), "end": d(-20)}, [], "…")
-    g_closed = P.todo_add(st, {"title": "가짜 마감", "memo": "", "start": d(-5), "end": d(5)}, [ids[1]], "…")
-    P.fav_close(st, g_closed)
+    g_todo = P.todo_add(st, {"title": "가짜 진행", "memo": "", "start": d(-3), "end": ""}, ids, "…")
+    P.note_add(st, g_todo, {"items": [{"done": True, "due": d(-2), "text": "옛 줄"}], "tags": []}, d(-2))
+    time.sleep(0.01)
+    P.note_add(st, g_todo, {"items": [{"done": True, "due": d(-1), "text": "첫 줄"},
+                                      {"done": False, "due": d(2), "text": "둘째 줄"}], "tags": ["가짜태그"]}, d(0))
+    g_other = P.todo_add(st, {"title": "가짜 다른 일", "memo": "다른 내용", "start": d(1), "end": d(5)}, [ids[1]], "…")
+    g_fav = P.fav_add_group(st, "가짜 모임")
+    P.fav_add(st, g_fav, [ids[1]], ongoing="…")
     st.close()
-    out = TMP / "out" / "할일.xlsx"
-    QFileDialog.getSaveFileName = staticmethod(lambda *a, **k: (str(out), ""))
+    out = {}
+    QFileDialog.getSaveFileName = staticmethod(lambda _p, _t, start, filt="", *a, **k: (str(out["next"]), ""))
     QMessageBox.exec = lambda self: 0
     QMessageBox.information = staticmethod(lambda *a, **k: QMessageBox.StandardButton.Ok)
+    QMessageBox.warning = staticmethod(lambda *a, **k: QMessageBox.StandardButton.Ok)
     menus = []
     QMenu.exec = lambda self, *a, **k: menus.append(self) or None
 
@@ -82,42 +98,114 @@ try:
     dlg.show()
     pump(lambda: dlg.table.rowCount() >= 2)
     tb = dlg.fav_tabs
-    pos = tb.tabRect(0).center()
-    dlg._fav_tab_menu(pos)
+
+    def tab_of(gid):
+        return next(i for i in range(tb.count()) if tb.tabData(i) == gid)
+
+    print("=== A. 탭 줄 아이콘 단추 ===")
+    bx, bw = getattr(dlg, "btn_export", {}).get("xlsx"), getattr(dlg, "btn_export", {}).get("docx")
+    chk(bx is not None and bw is not None and not bx.icon().isNull() and not bw.icon().isNull(), "A 엑셀·워드 아이콘 단추")
+    if bx is not None:
+        pump(None)
+        gx = lambda w: w.mapTo(dlg, w.rect().topLeft()).x()
+        plus_r = gx(dlg.btn_fav_tab) + dlg.btn_fav_tab.width()
+        chk(plus_r <= gx(bx) < gx(bw) and gx(bx) - plus_r < 12 and bx.isVisible(),
+            "A + 바로 오른쪽에 엑셀, 그 오른쪽에 워드", "+끝 %d 엑셀 %d 워드 %d" % (plus_r, gx(bx), gx(bw)))
+
+    print("\n=== B. 탭 메뉴 ===")
+    dlg._fav_tab_menu(tb.tabRect(tab_of(g_todo)).center())
     m = menus[-1] if menus else None
-    act = next((a for a in (m.actions() if m else []) if a.text() == "할 일 엑셀로 내보내기"), None)
-    chk(act is not None, "A 탭 메뉴에 '할 일 엑셀로 내보내기'", repr([a.text() for a in (m.actions() if m else [])]))
+    texts = menu_texts(m)
+    sub = next((a.menu() for a in (m.actions() if m else []) if a.text() == "할 일 내보내기"), None)
+    chk(sub is not None and menu_texts(sub) == ["엑셀", "Word"], "B 할 일 탭 메뉴 '할 일 내보내기 ▸ 엑셀·Word'", repr(texts))
+    chk("할 일 엑셀로 내보내기" not in texts, "B 종전 '할 일 엑셀로 내보내기'(모든 할 일)는 없음")
+    dlg._fav_tab_menu(tb.tabRect(tab_of(g_fav)).center())
+    m2 = menus[-1]
+    chk(any(a.text() == "명단 내보내기" and a.menu() is not None for a in m2.actions()), "B 보통 탭은 '명단 내보내기 ▸'",
+        repr(menu_texts(m2)))
+
+    print("\n=== C. 할 일 탭 → 엑셀(아이콘 단추 클릭) ===")
+    tb.setCurrentIndex(tab_of(g_todo))
+    pump(None)
+    out["next"] = TMP / "out" / "할일.xlsx"
+    if bx is not None:
+        QTest.mouseClick(bx, Qt.MouseButton.LeftButton)
+    chk(wait_export(dlg) and dlg.last_tab_export[0], "C 배경에서 다 씀")
+    x1 = out["next"]
+    chk(x1.exists() and not Path(str(x1) + ".part").exists(), "C 고른 자리에 .xlsx (임시 파일 안 남음)")
+    from openpyxl import load_workbook
+    wb = load_workbook(str(x1)) if x1.exists() else None
+    if wb is not None:
+        chk(wb.sheetnames == ["할 일", "명단"], "C 시트 '할 일'·'명단'", repr(wb.sheetnames))
+        ws = wb["할 일"]
+        rows = [[(c.value if c.value is not None else "") for c in r] for r in ws.iter_rows()]
+        flat = "\n".join("|".join(str(v) for v in r) for r in rows)
+        chk(rows[0][0] == "가짜 진행" and ws.cell(1, 1).font.bold, "C 첫 줄 제목(굵게)", repr(rows[0]))
+        chk(["기간", "%s ~ 계속" % d(-3)] == rows[1][:2] and rows[2][:2] == ["상태", "진행"] and rows[3][:2] == ["해시태그", "#가짜태그"],
+            "C 기간(끝 없으면 '계속')·상태·해시태그(최신 기록)", repr(rows[1:4]))
+        hi = next(i for i, r in enumerate(rows) if r[:4] == ["수정일", "완료", "기한", "내용"])
+        body = [r[:4] for r in rows[hi + 1:]]
+        chk(body == [[d(0), "☑", d(-1), "첫 줄"], ["", "☐", d(2), "둘째 줄"], [d(-2), "☑", d(-2), "옛 줄"]],
+            "C 할 일 표 — 최신 기록 먼저, 지난 기록 아래(수정일·완료·기한·내용)", repr(body))
+        merged = [str(r) for r in ws.merged_cells.ranges]
+        chk("A%d:A%d" % (hi + 2, hi + 3) in merged, "C 한 기록의 수정일 칸은 그 줄들에 걸쳐 합침", repr(merged))
+        chk(ws.freeze_panes == "A%d" % (hi + 2) and ws.cell(hi + 1, 1).font.bold, "C 할 일 표 머리말 굵게·고정")
+        chk("다른 내용" not in flat and "가짜 다른 일" not in flat, "C 그 탭만 — 다른 할 일은 안 들어감")
+        wp = wb["명단"]
+        prow = [[(c.value if c.value is not None else "") for c in r] for r in wp.iter_rows()]
+        chk(prow[0] == ["이름", "회사", "직함", "휴대폰", "메일"], "C 명단 머리말", repr(prow[0]))
+        chk(prow[1:] == [["홍길동", "가나다", "부장", "010-0000-0001", "hong@example.com"],
+                         ["김철수", "라마바", "", "010-0000-0002", ""]], "C 명단 줄(휴대폰은 적을 꼴, 명단 차례)", repr(prow[1:]))
+
+    print("\n=== D. 같은 탭 → 메뉴 'Word' ===")
+    out["next"] = TMP / "out" / "할일.docx"
+    dlg._fav_tab_menu(tb.tabRect(tab_of(g_todo)).center())
+    sub = next((a.menu() for a in menus[-1].actions() if a.text() == "할 일 내보내기"), None)
+    act = next((a for a in (sub.actions() if sub else []) if a.text() == "Word"), None)
+    dlg.last_tab_export = None
     if act is not None:
         act.trigger()
-    chk(pump(lambda: getattr(dlg, "last_todo_export", None) is not None, timeout=20), "A 배경에서 다 씀")
-    chk(out.exists() and not Path(str(out) + ".part").exists(), "A 고른 자리에 .xlsx (임시 파일 안 남음)")
+    chk(pump(lambda: getattr(dlg, "last_tab_export", None) is not None, timeout=20) and dlg.last_tab_export[0],
+        "D 메뉴 'Word' 로 배경에서 다 씀")
+    w1 = out["next"]
+    if w1.exists():
+        from docx import Document
+        doc = Document(str(w1))
+        paras = [p.text for p in doc.paragraphs if p.text.strip()]
+        chk(paras[:4] == ["가짜 진행", "기간: %s ~ 계속" % d(-3), "상태: 진행", "해시태그: #가짜태그"],
+            "D 제목·기간·상태·해시태그 줄", repr(paras[:4]))
+        tabs = [[[c.text for c in r.cells] for r in t.rows] for t in doc.tables]
+        chk(len(tabs) == 2 and tabs[0] == [["수정일", "완료", "기한", "내용"], [d(0), "☑", d(-1), "첫 줄"],
+                                            ["", "☐", d(2), "둘째 줄"], [d(-2), "☑", d(-2), "옛 줄"]],
+            "D 할 일 표(최신 기록 먼저)", repr(tabs[:1]))
+        chk(len(tabs) == 2 and tabs[1][1] == ["홍길동", "가나다", "부장", "010-0000-0001", "hong@example.com"], "D 명단 표",
+            repr(tabs[1:]))
+        from docx.oxml.ns import qn
+        rf = doc.paragraphs[0].runs[0]._element.rPr.find(qn("w:rFonts"))
+        chk(rf is not None and rf.get(qn("w:eastAsia")) == "맑은 고딕", "D 한글 글꼴 eastAsia 도 맑은 고딕")
+    else:
+        chk(False, "D .docx 가 생김")
 
-    from openpyxl import load_workbook
-    wb = load_workbook(str(out)) if out.exists() else None
-    ws = wb.active if wb else None
-    if ws is not None:
-        rows = [[(c.value if c.value is not None else "") for c in r] for r in ws.iter_rows()]
-        print("=== B. 차례·상태 ===")
-        chk(rows[0] == ["시작일", "종료일", "상태", "제목", "내용", "해시태그", "이름", "회사", "직함", "휴대폰", "메일"], "B 머리말", repr(rows[0]))
-        titles = [r[3] for r in rows[1:] if r[3]]
-        chk(titles == ["가짜 지남", "가짜 마감", "가짜 진행", "가짜 예정"],"B 모든 할 일이 기간(시작일) 차례 — 마감·기간 밖 포함", repr(titles))
-        state = {r[3]: r[2] for r in rows[1:] if r[3]}
-        chk(state == {"가짜 지남": "기간 지남", "가짜 진행": "진행", "가짜 마감": "마감", "가짜 예정": "예정"}, "B 상태 칸", repr(state))
-        chk(ws.freeze_panes == "A2" and ws.cell(1, 1).font.bold, "B 머리말 굵게·고정")
-        print("\n=== C. 명단 줄·합친 칸 ===")
-        i_live = next(i for i, r in enumerate(rows) if r[3] == "가짜 진행")
-        live_people = [rows[i_live][6], rows[i_live + 1][6]]
-        chk(live_people == ["홍길동", "김철수"] and rows[i_live + 1][3] == "", "C 명단 한 사람이 한 줄(할 일 칸은 첫 줄에만)",
-            repr(live_people))
-        merged = [str(r) for r in ws.merged_cells.ranges]
-        chk("D%d:D%d" % (i_live + 1, i_live + 2) in merged, "C 할 일 칸은 명단 줄에 걸쳐 합침", repr(merged[:6]))
-        t0 = datetime.date.today().isoformat()
-        chk(rows[i_live][1] == "계속" and rows[i_live][4] == "☐ %s 첫 줄\n☐ %s 둘째 줄" % (t0, t0),
-            "C 종료일 없으면 '계속', 내용 = 할 일 줄들(☐ 날짜 글, 줄바꿈 — 261120-39)", repr(rows[i_live][4]))
-        chk(rows[i_live][9] == "010-0000-0001" and rows[i_live][10] == "hong@example.com" and rows[i_live][8] == "부장",
-            "C 휴대폰은 적을 꼴, 메일·직함", repr(rows[i_live][8:]))
-        i_past = next(i for i, r in enumerate(rows) if r[3] == "가짜 지남")
-        chk(rows[i_past][6] == "" and (i_past + 1 >= len(rows) or rows[i_past + 1][3] != ""), "C 명단 없는 할 일도 한 줄")
+    print("\n=== E. 보통 탭은 명단만 ===")
+    tb.setCurrentIndex(tab_of(g_fav))
+    pump(None)
+    out["next"] = TMP / "out" / "모임.xlsx"
+    if bx is not None:
+        QTest.mouseClick(bx, Qt.MouseButton.LeftButton)
+    wait_export(dlg)
+    wb2 = load_workbook(str(out["next"])) if out["next"].exists() else None
+    chk(wb2 is not None and wb2.sheetnames == ["명단"] and wb2["명단"].max_row == 2
+        and wb2["명단"].cell(2, 1).value == "김철수", "E 엑셀은 '명단' 시트 하나(그 탭 사람만)")
+    out["next"] = TMP / "out" / "모임.docx"
+    if bw is not None:
+        QTest.mouseClick(bw, Qt.MouseButton.LeftButton)
+    wait_export(dlg)
+    if out["next"].exists():
+        from docx import Document
+        doc2 = Document(str(out["next"]))
+        chk(len(doc2.tables) == 1 and doc2.paragraphs[0].text == "가짜 모임", "E Word 는 탭 이름 + 명단 표 하나")
+    else:
+        chk(False, "E .docx 가 생김")
     dlg.close()
 except Exception:
     import traceback

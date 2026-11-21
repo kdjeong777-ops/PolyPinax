@@ -771,7 +771,10 @@ FILE_KIND_COLOR = {"PDF": {False: "#d93025", True: "#ef5350"}, "JPG": ACCENT["pl
                    "PNG": OK_GREEN, "HEIC": {False: "#7b3fb3", True: "#b388e8"},
                    "GIF": {False: "#d9822b", True: "#f0a050"}, "TIF": FILE_GRAY, "BMP": FILE_GRAY,
                    "WEBP": {False: "#00838f", True: "#4dd0e1"},
-                   "ZIP": {False: "#8d6e63", True: "#bcaaa4"}}     # 261104-4(사진 보기 SOT 4.24): 사진이 든 zip
+                   "ZIP": {False: "#8d6e63", True: "#bcaaa4"},     # 261104-4(사진 보기 SOT 4.24): 사진이 든 zip
+                   "XLSX": {False: "#1d6f42", True: "#4caf7d"},    # 261120-42(명함 SOT §5.24.2 '할 일 내보내기' 단추) — EXT_KIND 에는 없다
+                   "DOCX": {False: "#2b579a", True: "#6e9be0"}}
+FILE_KIND_TEXT = {"XLSX": "X", "DOCX": "W"}     # 그리는 글자가 형식 이름과 다른 것 — 엑셀·워드는 한 글자
 EXT_KIND = {".pdf": "PDF", ".jpg": "JPG", ".jpeg": "JPG", ".png": "PNG", ".heic": "HEIC", ".heif": "HEIC",
             ".gif": "GIF", ".tif": "TIF", ".tiff": "TIF", ".bmp": "BMP", ".webp": "WEBP", ".zip": "ZIP"}   # 같은 형식의 다른 확장자는 한 아이콘
 FILE_KIND_LINE = {False: "#9aa3ad", True: "#6b737c"}     # 종이 테두리
@@ -829,7 +832,8 @@ def _file_kind(p, kind: str, dark: bool):
                              QPointF(r.right(), r.top() + k)]))
     # 글자는 10배 좌표에서 정수 픽셀 크기로 그린다 — 점(pt) 크기는 그림판 DPI(dpr)에 따라 폭이 달라졌다
     (big, fb), (small, fs) = _cap_font(FILE_KIND_HEAD_CAP * 10), _cap_font(FILE_KIND_TAIL_CAP * 10)
-    head, tail = kind[0], kind[1:]
+    text = FILE_KIND_TEXT.get(kind, kind)
+    head, tail = text[0], text[1:]
     wh, wt = fb.horizontalAdvance(head), fs.horizontalAdvance(tail)
     avail = (r.width() - 0.8) * 10
     sx = min(1.0, avail / (wh + wt))             # 넓은 W·네 글자는 가로로만 좁힌다(높이는 그대로)

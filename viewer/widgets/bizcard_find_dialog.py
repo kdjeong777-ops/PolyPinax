@@ -535,19 +535,19 @@ class _MemoTypeWatch(QObject):
         return False
 
 
-class _TodoXlsxWorker(QObject):
-    """할 일 엑셀 만들기·쓰기(배경, 261120-21) — done(성공, 실패 까닭 종류). ★ 명함 값은 신호·로그에 싣지 않는다(§2.1)."""
+class _TabExportWorker(QObject):
+    """탭 하나 엑셀·Word 쓰기(배경, 261120-42) — done(성공, 실패 까닭 종류). ★ 명함 값은 신호·로그에 싣지 않는다(§2.1)."""
     done = pyqtSignal(bool, str)
     finished = pyqtSignal()
 
-    def __init__(self, path, rows, heads, sheet, ongoing):
+    def __init__(self, kind, path, data, labels):
         super().__init__()
-        self._a = (path, rows, heads, sheet, ongoing)
+        self._kind, self._a = kind, (path, data, labels)
 
     def run(self):
         try:
-            from viewer.bizcard.todo_xlsx import write_todos
-            write_todos(*self._a)
+            from viewer.bizcard.todo_export import WRITERS
+            WRITERS[self._kind](*self._a)
             self.done.emit(True, "")
         except Exception as e:
             self.done.emit(False, type(e).__name__)
@@ -939,6 +939,15 @@ class BizcardFindDialog(QDialog):
         self.btn_fav_tab.clicked.connect(lambda _c=False: self.plus_menu())
         self.btn_fav_tab.dropped.connect(lambda src: self.plus_menu(self._drag_cards(src)))
         tabs_row.addWidget(self.btn_fav_tab)
+        self.btn_export = {}                               # 고른 탭 엑셀·Word 로(§5.24.2 '할 일 내보내기', 261120-42)
+        for kind, tip in (("xlsx", tr("고른 탭을 엑셀로 내보내기")), ("docx", tr("고른 탭을 Word 로 내보내기"))):
+            b = QToolButton()
+            b.setAutoRaise(True)
+            b.setToolTip(tip)
+            b.clicked.connect(lambda _c=False, k=kind: self.export_tab(kind=k))
+            self.btn_export[kind] = b
+            tabs_row.addWidget(b)
+        self._export_icons()
         tabs_row.addStretch(1)
         self.cb_recent = QComboBox()                       # '최근' 탭 기간(D27)
         for key, label in (("1w", tr("1주")), ("1m", tr("1개월")), ("3m", tr("3개월")), ("custom", tr("지정"))):
@@ -1682,6 +1691,8 @@ class BizcardFindDialog(QDialog):
                 from viewer.widgets.icons import themed_icon
                 self.btn_settings.setIcon(themed_icon("gear", size=18))   # 테마 글자색 톱니(§5.24.9)
                 self.btn_menu.setIcon(themed_icon("menu", size=18))        # ≡ 메뉴(261120-37)
+            if getattr(self, "btn_export", None):
+                self._export_icons()                    # 엑셀·워드 단추 색(261120-42)
         self._match_head()
 
     def _match_head(self):
@@ -2397,55 +2408,80 @@ class BizcardFindDialog(QDialog):
                     _menu_act(sm, tr("다시 열기"), lambda c=cid: self.tab_reopen(c))
                 _menu_act(sm, tr("주요 항목 수정"), lambda c=cid: self.item_edit(c))
                 _menu_act(sm, tr("탭 삭제"), lambda c=cid: self.tab_delete(c))
-        if st.con.execute("SELECT 1 FROM fav_groups WHERE todo=1 LIMIT 1").fetchone():   # 할 일이 있을 때만(§5.24.2 '할 일 엑셀')
-            m.addSeparator()
-            _menu_act(m, tr("할 일 엑셀로 내보내기"), lambda: self.export_todos())
+        m.addSeparator()                               # 이 탭만 엑셀·Word 로(§5.24.2 '할 일 내보내기', 261120-42)
+        self._export_menu(m, gid, gid != RECENT and P.todo_info(st, gid) is not None)
         self._tab_menu_obj = m                         # 검사용
         m.exec(self.fav_tabs.mapToGlobal(pos))
 
-    # ── 할 일 엑셀로 내보내기 (§5.24.2 '할 일 엑셀', 261120-21) ──
-    def export_todos(self, path=None):
-        """모든 할 일(마감·기간 밖 포함)을 기간 차례로 .xlsx 에 — 할 일마다 제목·내용·기간·상태와 명단(이름·회사·직함·휴대폰·메일).
-        파일 만들기·쓰기는 배경(응답성 SOT §6). path 를 주면 묻지 않고(검사). 반환 = 맡긴 할 일 수(없으면 0, 취소면 None)."""
-        st = self._store()
-        rows = P.todo_rows(st, _today())
-        if not rows:
-            QMessageBox.information(self, tr("할 일 엑셀로 내보내기"), tr("할 일이 없습니다."))
-            return 0
+    # ── 할 일 내보내기 — 탭 하나를 엑셀·Word 로 (§5.24.2 '할 일 내보내기', 261120-42) ──
+    def _export_icons(self):
+        from viewer.widgets.icons import file_kind_icon
+        pal = self.palette()
+        dark = pal.color(pal.ColorRole.Window).lightness() < 128
+        for kind, b in self.btn_export.items():
+            b.setIcon(file_kind_icon(kind.upper(), dark=dark, size=16))
+
+    def _export_menu(self, m, gid, todo):
+        sm = m.addMenu(tr("할 일 내보내기") if todo else tr("명단 내보내기"))
+        _menu_act(sm, tr("엑셀"), lambda: self.export_tab(gid, "xlsx")).setIcon(self.btn_export["xlsx"].icon())
+        _menu_act(sm, tr("Word"), lambda: self.export_tab(gid, "docx")).setIcon(self.btn_export["docx"].icon())
+        return sm
+
+    def _export_data(self, gid):
+        if gid == RECENT:
+            return {"name": tr("최근"), "todo": False, "members": self._tab_members(RECENT)}
+        data = P.tab_export(self._store(), gid, _today())
+        if data and data["todo"]:
+            data["state_label"] = {"live": tr("진행"), "soon": tr("예정"), "past": tr("기간 지남"),
+                                   "closed": tr("마감")}.get(data["state"], "")
+        return data
+
+    def export_tab(self, gid=None, kind="xlsx", path=None):
+        """탭 하나(기본 = 고른 탭)를 엑셀(.xlsx)·Word(.docx)로 — 할 일 탭은 제목·기간·상태·해시태그·할 일 표(최신 기록 → 지난 기록)·
+        명단 표, 보통 탭은 명단 표만. 자료 모으기는 메인, 쓰기는 배경(응답성 SOT §6). path 를 주면 묻지 않고(검사).
+        반환 = 맡겼으면 True, 내보낼 탭이 없으면 False, 취소면 None."""
+        if gid is None:
+            gid = self._fav_gid()
+        data = self._export_data(gid) if gid is not None else None
+        title = tr("할 일 내보내기") if data and data["todo"] else tr("명단 내보내기")
+        if not data or not (data["members"] or data.get("notes")):
+            QMessageBox.information(self, title, tr("이 탭에는 내보낼 내용이 없습니다."))
+            return False
         quiet = path is not None
         if path is None:
-            start = Path.home() / "Documents" / ("%s_%s.xlsx" % (tr("할 일"), _today()))
+            import re
+            safe = re.sub(r'[\\/:*?"<>|]+', "_", data["name"]).strip() or tr("할 일")
+            start = Path.home() / "Documents" / ("%s_%s.%s" % (safe, _today(), kind))
             if not start.parent.is_dir():
                 start = Path.home() / start.name
-            path, _f = QFileDialog.getSaveFileName(self, tr("할 일 엑셀로 내보내기"), str(start), "Excel (*.xlsx)")
+            filt = "Excel (*.xlsx)" if kind == "xlsx" else "Word (*.docx)"
+            path, _f = QFileDialog.getSaveFileName(self, title, str(start), filt)
             if not path:
                 return None
-            if not path.lower().endswith(".xlsx"):
-                path += ".xlsx"
-        labels = {"live": tr("진행"), "soon": tr("예정"), "past": tr("기간 지남"), "closed": tr("마감")}
-        for t in rows:
-            t["state_label"] = labels.get(t["state"], "")
-        heads = [tr("시작일"), tr("종료일"), tr("상태"), tr("제목"), tr("내용"), tr("해시태그"),
-                 tr("이름"), tr("회사"), tr("직함"), tr("휴대폰"), tr("메일")]
+            if not path.lower().endswith("." + kind):
+                path += "." + kind
+        labels = {"period": tr("기간"), "state": tr("상태"), "tags": tr("해시태그"), "ongoing": tr("계속"),
+                  "sheet_todo": tr("할 일"), "sheet_people": tr("명단"), "made": tr("수정일"), "done": tr("완료"),
+                  "due": tr("기한"), "text": tr("내용"), "name": tr("이름"), "company": tr("회사"), "p_title": tr("직함"),
+                  "cell": tr("휴대폰"), "email": tr("메일")}
         from viewer.workers import run_in_thread
-        w = _TodoXlsxWorker(path, rows, heads, tr("할 일"), tr("계속"))
-        w.done.connect(lambda ok, msg, p=path, n=len(rows), q=quiet: self._todos_written(ok, msg, p, n, q))
+        w = _TabExportWorker(kind, path, data, labels)
+        w.done.connect(lambda ok, msg, p=path, t=title, q=quiet: self._tab_written(ok, p, t, q))
         keep = getattr(self._mw, "_thread_keep", None)
-        self.todo_export_busy = True
+        self.tab_export_busy = True
         run_in_thread(w, keep if isinstance(keep, list) else _KEEP)
-        self._todo_worker = w
-        return len(rows)
+        self._export_worker = w
+        return True
 
-    def _todos_written(self, ok, msg, path, n, quiet):
-        self.todo_export_busy = False
-        self.last_todo_export = (ok, path)               # 검사용
+    def _tab_written(self, ok, path, title, quiet):
+        self.tab_export_busy = False
+        self.last_tab_export = (ok, path)               # 검사용
         if quiet:
             return
         if not ok:
-            QMessageBox.warning(self, tr("할 일 엑셀로 내보내기"), tr("엑셀 파일을 쓰지 못했습니다 — 다른 프로그램이 열고 있는지 확인하세요."))
+            QMessageBox.warning(self, title, tr("파일을 쓰지 못했습니다 — 다른 프로그램이 열고 있는지 확인하세요."))
             return
-        b = QMessageBox(QMessageBox.Icon.Information, tr("할 일 엑셀로 내보내기"),
-                        tr("할 일 {n}개를 엑셀로 썼습니다.").format(n=n) + "\n" + str(path), parent=self)
+        b = QMessageBox(QMessageBox.Icon.Information, title, tr("내보냈습니다.") + "\n" + str(path), parent=self)
         b_open = b.addButton(tr("폴더 열기"), QMessageBox.ButtonRole.ActionRole)
         b.addButton(tr("닫기"), QMessageBox.ButtonRole.RejectRole)
         b.exec()

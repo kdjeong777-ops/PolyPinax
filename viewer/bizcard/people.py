@@ -535,25 +535,35 @@ def _latest_note(store, gid: int):
     return notes[0] if notes else None
 
 
-def todo_rows(store, today: str) -> list:
-    """모든 할 일(마감·기간 밖 포함) — 기간 차례(시작일, 같으면 종료일 — 계속은 뒤, 같으면 제목)로
-    [{title, memo, start, end, state, members[명함 행]}] (§5.24.2 '할 일 엑셀', 261120-21)."""
-    rows = store.con.execute("SELECT * FROM fav_groups WHERE todo=1").fetchall()
-    out = []
-    for r in rows:
-        if r["closed"]:
-            state = "closed"
-        elif (r["t_start"] or "") > today:
-            state = "soon"
-        elif r["t_end"] and today > r["t_end"]:
-            state = "past"
-        else:
-            state = "live"
-        last = _latest_note(store, r["id"])            # '내용'·태그 = 최신 기록의 줄 글·태그(§5.24.10 — 옛 기록도 줄로 읽음)
-        out.append({"title": r["name"] or "", "memo": items_text(last["items"]) if last else (r["t_memo"] or ""),
-                    "start": r["t_start"] or "", "end": r["t_end"] or "", "state": state,
-                    "members": fav_members(store, r["id"]), "tags": list(last["tags"]) if last else []})
-    out.sort(key=lambda d: (d["start"], d["end"] or "9999-99-99", d["title"].lower()))
+def _todo_state(r, today: str) -> str:
+    if r["closed"]:
+        return "closed"
+    if (r["t_start"] or "") > today:
+        return "soon"
+    if r["t_end"] and today > r["t_end"]:
+        return "past"
+    return "live"
+
+
+def tab_export(store, gid: int, today: str):
+    """탭 하나 내보낼 자료(§5.24.2 '할 일 내보내기', 261120-42) — {name, todo, members[명함 행]} + 할 일 탭이면
+    {start, end, state, tags(최신 기록), notes[{made, items}] 최신 먼저}. 없는 탭은 None."""
+    r = store.con.execute("SELECT * FROM fav_groups WHERE id=?", (gid,)).fetchone()
+    if r is None:
+        return None
+    out = {"name": r["name"] or "", "todo": bool(r["todo"]), "members": fav_members(store, gid)}
+    if not r["todo"]:
+        return out
+    try:
+        notes = todo_notes(store, gid)
+    except sqlite3.OperationalError:
+        notes = []
+    if not notes and (r["t_memo"] or "").strip():      # 기록 표가 생기기 전 옛 할 일 — 내용을 한 기록으로
+        notes = [{"made": r["t_start"] or "", "items": items_from_text(r["t_memo"], r["t_end"] or r["t_start"] or today),
+                  "tags": []}]
+    out.update({"start": r["t_start"] or "", "end": r["t_end"] or "", "state": _todo_state(r, today),
+                "tags": list(notes[0]["tags"]) if notes else [],
+                "notes": [{"made": n["made"], "items": list(n["items"])} for n in notes]})
     return out
 
 

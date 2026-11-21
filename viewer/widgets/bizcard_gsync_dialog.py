@@ -17,10 +17,18 @@ _KEEP = []
 KIND_LABELS = {G.NEW_CARD: tr_noop("구글에서 가져옴(새 명함)"), G.NEW_GOOGLE: tr_noop("구글로 보냄(새 연락처)"),
                G.TO_CARD: tr_noop("명함을 구글 값으로 고침"), G.TO_GOOGLE: tr_noop("구글을 명함 값으로 고침"),
                G.GONE_GOOGLE: tr_noop("구글에서 지워짐 — 명함도 지울까요"), G.GONE_CARD: tr_noop("명함에서 지워짐 — 구글도 지울까요"),
+               G.MERGED_GOOGLE: tr_noop("명함 합치기로 남은 구글 연락처 — 구글에서 지울까요"),
                G.PHOTO_UP: tr_noop("인물 사진을 연락처 사진으로"), G.PHOTO_DOWN: tr_noop("연락처 사진을 인물 사진으로"),
                G.DRIVE_UP: tr_noop("명함 그림을 드라이브에"), "link": tr_noop("같은 사람으로 짝지음(값 같음)"),
                G.KAKAO_UP: tr_noop("카톡 친구추가 방지 바꿈(구글 이름 앞 #)"),
                G.KAKAO_DOWN: tr_noop("카톡 친구추가 방지 표시를 구글 이름대로")}
+FIELD_LABELS = {"name": tr_noop("이름"), "company": tr_noop("회사"), "dept": tr_noop("부서"), "title": tr_noop("직함"),
+                "phones": tr_noop("전화"), "emails": tr_noop("메일"), "address": tr_noop("주소"), "urls": tr_noop("누리집"),
+                "memo": tr_noop("메모")}
+
+
+def _field(f: str) -> str:
+    return tr(FIELD_LABELS[f]) if f in FIELD_LABELS else f
 
 
 def _api(store):
@@ -166,20 +174,26 @@ class GSyncDialog(QDialog):
                 continue
             top = QTreeWidgetItem([tr(KIND_LABELS[kind]) + "  (%d)" % len(items)])
             top.setFlags(top.flags() | Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsAutoTristate)
-            on = Qt.CheckState.Checked if (G.DEFAULT_ON.get(kind, True)) else Qt.CheckState.Unchecked
             for r in items:
                 txt = r.get("name") or tr("(이름 없음)")
                 if r.get("fields"):
-                    txt += "  — " + ", ".join(r["fields"])
+                    txt += "  — " + ", ".join(_field(f) for f in r["fields"])
+                if r.get("maybe_dup"):
+                    txt += "  — " + tr("구글에 이미 있을 수 있음")
                 it = QTreeWidgetItem([txt])
                 it.setFlags(it.flags() | Qt.ItemFlag.ItemIsUserCheckable)
-                it.setCheckState(0, on)
+                it.setCheckState(0, Qt.CheckState.Checked if G.row_default(r) else Qt.CheckState.Unchecked)
                 it.setData(0, Qt.ItemDataRole.UserRole, rows.index(r))
+                for f, old, new in r.get("changes") or []:          # 칸마다 옛 값 → 새 값(§5.29 '미리보기', 261120-46)
+                    it.addChild(QTreeWidgetItem(["%s: %s → %s" % (_field(f), old or tr("(없음)"), new or tr("(없음)"))]))
                 top.addChild(it)
             self.tree.addTopLevelItem(top)
         total = sum(cnt.values())
-        self.lbl.setText(tr("바뀔 것 {n}건 — 줄을 골라 [반영] 을 누르면 바뀝니다(지워진 것은 처음에 '남김').").format(n=total)
-                         if total else tr("구글 주소록과 명함이 같습니다 — 바꿀 것이 없습니다."))
+        msg = (tr("바뀔 것 {n}건 — 줄을 골라 [반영] 을 누르면 바뀝니다(지워진 것은 처음에 '남김').").format(n=total)
+               if total else tr("구글 주소록과 명함이 같습니다 — 바꿀 것이 없습니다."))
+        if any(r["kind"] in G.GOOGLE_WRITES for r in rows):
+            msg += "\n" + tr("구글 주소록이 바뀝니다 — [반영] 전에 contacts.google.com → 내보내기로 백업해 두기를 권합니다.")
+        self.lbl.setText(msg)
         self.btn_apply.setEnabled(bool(total))
 
     def chosen(self) -> list:

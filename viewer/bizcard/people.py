@@ -957,8 +957,8 @@ def apply_import(store, persons, tag: str = "", src: str = "") -> int:
     added = 0
     for p in persons:
         nid = _insert_contact(store, p, [t for t in ("명함", tag) if t])
-        if src:
-            _set_srcs(store, nid, [k for k in _SCALARS if (p.get(k) or "").strip()], src)
+        if src:   # 전화 칸 출처도 — 이름 등을 손으로 고쳐도(그 칸 출처만 지움) 어느 주소록에서 왔는지 남는다(구글 싱크 §5.29 '새 사람', 261120-46)
+            _set_srcs(store, nid, [k for k in _SCALARS if (p.get(k) or "").strip()] + (["phones"] if p.get("phones") else []), src)
         added += 1
     store.con.commit()
     return added
@@ -1267,10 +1267,11 @@ def merge_plan(cards, manual=None) -> dict:
 
 
 def merge_db(store, plan, extra: dict = None) -> None:
-    """합친 값을 남길 행에, 지울 행의 즐겨찾기·할 일·최근 칸은 남길 행으로, 주소록 출처는 칸마다 값을 준 명함의 것.
+    """합친 값을 남길 행에, 지울 행의 즐겨찾기·할 일·최근 칸·구글 짝·카톡 표시는 남길 행으로, 주소록 출처는 칸마다 값을 준 명함의 것.
     extra = 창이 정한 front·back(이름을 바꾼 뒤). 그 뒤 지울 행을 지운다(파일은 창이 먼저 옮김)."""
     kid = plan["keeper"]
     srcs = {cid: field_srcs(store, cid) for cid in set(plan["frm"].values())}
+    ph_src = next((s for s in (field_srcs(store, c).get("phones") for c in [kid] + list(plan["drop"])) if s), "")   # 전화는 모두 합침 — 첫 출처
     update_card(store, kid, dict(plan["fields"], **(extra or {})), commit=False)
     for cid in plan["drop"]:
         for sql in ("INSERT OR IGNORE INTO fav_members(group_id, card_id, pos, memo_entry) "
@@ -1284,9 +1285,12 @@ def merge_db(store, plan, extra: dict = None) -> None:
     try:
         store.con.execute("DELETE FROM contact_src WHERE card_id=?", (kid,))
         store.con.executemany("INSERT INTO contact_src(card_id, field, src) VALUES(?,?,?)",
-                              [(kid, f, srcs[c][f]) for f, c in plan["frm"].items() if srcs.get(c, {}).get(f)])
+                              [(kid, f, srcs[c][f]) for f, c in plan["frm"].items() if srcs.get(c, {}).get(f)]
+                              + ([(kid, "phones", ph_src)] if ph_src else []))
     except sqlite3.OperationalError:
         pass
+    from viewer.bizcard import gsync                        # 구글 짝·카톡 표시는 남는 명함으로(§5.29 '명함 합치기와 짝', 261120-46)
+    gsync.merge_links(store, kid, plan["drop"])
     store.con.commit()
     for cid in plan["drop"]:
         r = store.con.execute("SELECT src_key FROM cards WHERE id=?", (cid,)).fetchone()

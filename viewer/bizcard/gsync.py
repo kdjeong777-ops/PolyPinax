@@ -25,10 +25,18 @@ DEFAULT_PHOTO = "default"                       # 구글 사진의 기본 실루
 NEW_CARD, NEW_GOOGLE, TO_CARD, TO_GOOGLE, GONE_GOOGLE, GONE_CARD, PHOTO_UP, PHOTO_DOWN, DRIVE_UP = (
     "new_card", "new_google", "to_card", "to_google", "gone_google", "gone_card", "photo_up", "photo_down", "drive_up")
 KAKAO_UP, KAKAO_DOWN = "kakao_up", "kakao_down"     # 카톡 친구추가 방지(구글 이름 앞 '#') 바꿈 → 구글 · 구글 이름대로 표시 맞춤
-KINDS = (NEW_CARD, NEW_GOOGLE, TO_CARD, TO_GOOGLE, GONE_GOOGLE, GONE_CARD, PHOTO_UP, PHOTO_DOWN, DRIVE_UP, KAKAO_UP, KAKAO_DOWN)
+MERGED_GOOGLE = "merged_google"                 # 명함 합치기로 남지 못한 짝의 구글 연락처 — 지울까요(§5.29 '명함 합치기와 짝', 261120-46)
+KINDS = (NEW_CARD, NEW_GOOGLE, TO_CARD, TO_GOOGLE, GONE_GOOGLE, GONE_CARD, MERGED_GOOGLE, PHOTO_UP, PHOTO_DOWN, DRIVE_UP,
+         KAKAO_UP, KAKAO_DOWN)
 OPT_KAKAO_NEW = "gsync_kakao_new"               # meta — 구글에 새로 보낼 때 친구추가 방지(처음 켬)
 KAKAO_MARK = "#"
-DEFAULT_ON = {k: k not in (GONE_GOOGLE, GONE_CARD) for k in KINDS}    # 지워짐은 기본 '남김'(§5.29 '지운 것')
+DEFAULT_ON = {k: k not in (GONE_GOOGLE, GONE_CARD) for k in KINDS}    # 지워짐은 기본 '남김'(§5.29 '지운 것'), 합쳐져 남음은 켬(사용자 결정 261121)
+GOOGLE_WRITES = (NEW_GOOGLE, TO_GOOGLE, GONE_CARD, MERGED_GOOGLE, KAKAO_UP, PHOTO_UP, DRIVE_UP)   # 구글 쪽을 바꾸는 갈래 — 미리보기의 백업 권함
+
+
+def row_default(r: dict) -> bool:
+    """미리보기 처음 체크 — 출처가 구글인 명함의 '구글로 보냄' 은 끔(구글에 이미 있을 수 있음, 사용자 결정 261121)."""
+    return False if r.get("maybe_dup") else DEFAULT_ON.get(r["kind"], True)
 
 _G2C = {"mobile": "cell", "workFax": "fax", "homeFax": "fax", "otherFax": "fax"}
 _C2G = {"cell": "mobile", "fax": "workFax", "work": "work"}
@@ -42,14 +50,19 @@ def init(store) -> None:
                       "etag TEXT, synced REAL, photo_sig TEXT DEFAULT '', drive TEXT DEFAULT '')")
     if "front" not in {r[1] for r in store.con.execute("PRAGMA table_info(google_link)")}:
         store.con.execute("ALTER TABLE google_link ADD COLUMN front TEXT DEFAULT ''")   # 짝지은 명함의 열쇠 — 같은 id 를 다시 받은 새 명함과 가름
+    if "merged" not in {r[1] for r in store.con.execute("PRAGMA table_info(google_link)")}:
+        store.con.execute("ALTER TABLE google_link ADD COLUMN merged INTEGER DEFAULT 0")   # 합치기로 남지 못한 짝 — 남은 명함 id
+    # 명함 파일 이름이 바뀌면(이름 바꾸기·옮기기·합치기) 짝의 열쇠도 따라감 — 어느 길이든 한 곳(261120-46)
+    store.con.execute("CREATE TRIGGER IF NOT EXISTS google_link_front AFTER UPDATE OF front ON cards WHEN OLD.front IS NOT NEW.front "
+                      "BEGIN UPDATE google_link SET front = NEW.front WHERE card_id = NEW.id AND front = OLD.front; END")
     store.con.commit()
 
 
 def links(store) -> dict:
     init(store)
     return {r[0]: {"rn": r[1], "etag": r[2], "synced": r[3] or 0.0, "photo_sig": r[4] or "", "drive": json.loads(r[5] or "{}"),
-                   "front": r[6] or ""}
-            for r in store.con.execute("SELECT card_id, resource_name, etag, synced, photo_sig, drive, front FROM google_link")}
+                   "front": r[6] or "", "merged": r[7] or 0}
+            for r in store.con.execute("SELECT card_id, resource_name, etag, synced, photo_sig, drive, front, merged FROM google_link")}
 
 
 def _link_put(store, cid: int, rn: str, etag: str, **kw) -> None:
@@ -89,6 +102,29 @@ def kakao_new_default(store) -> bool:
 
 def bare_name(n: str) -> str:
     return str(n or "").lstrip().lstrip(KAKAO_MARK).lstrip()
+
+
+def merge_links(store, keeper: int, drops) -> None:
+    """명함 합치기(`people.merge_db`) — 지워질 명함의 구글 짝·카톡 표시를 남는 명함으로(§5.29 '명함 합치기와 짝', 261120-46).
+    남는 명함에 짝이 있으면 그것을, 없으면 drops 차례(대표 먼저)로 첫 짝을 옮긴다. 남지 못한 짝은 merged = keeper —
+    다음 싱크에 '합쳐져 남은 구글 연락처' 로 보인다. 커밋은 부르는 쪽이."""
+    init(store)
+    lk, kb = links(store), kakao_rows(store)
+    drops = [d for d in drops if d != keeper]
+    moved = None
+    if keeper not in lk:
+        moved = next((d for d in drops if d in lk), None)
+        if moved is not None:
+            store.con.execute("UPDATE google_link SET card_id=?, merged=0 WHERE card_id=?", (keeper, moved))
+    for d in drops:
+        if d in lk and d != moved:
+            store.con.execute("UPDATE google_link SET merged=? WHERE card_id=?", (keeper, d))
+    store.con.execute("UPDATE google_link SET front=(SELECT front FROM cards WHERE id=?) WHERE card_id=?", (keeper, keeper))
+    if keeper not in kb:
+        k_src = moved if moved in kb else next((d for d in drops if d in kb), None)
+        if k_src is not None:
+            b, t = kb[k_src]
+            store.con.execute("INSERT INTO kakao_block(card_id, block, set_at) VALUES(?,?,?)", (keeper, int(b), t))
 
 
 def unlink(store, cid=None) -> None:
@@ -172,10 +208,28 @@ def _name_co(v: dict) -> str:
     return (n + "|" + _nz(strip_corp(v.get("company") or ""))) if n else ""
 
 
+_MOBILE = ("010", "011", "016", "017", "018", "019")
+
+
+def _cell_keys(phones) -> set:
+    """휴대폰 열쇠(끝 8자리) — 종류가 휴대폰이거나, 종류와 상관없이 국내 휴대폰 꼴(+82 10… · 010…)이면.
+    구글 연락처·구글 vCard 는 종류 없는 번호를 '전화' 로 들인다(261120-46). 팩스는 빼고."""
+    out = set()
+    for k, n in phones or []:
+        d = PH.digits(n)
+        if d.startswith("82"):
+            d = "0" + d[2:].lstrip("0")
+        if len(d) >= 8 and k != "fax" and (k == "cell" or (d[:3] in _MOBILE and len(d) in (10, 11))):
+            out.add(d[-8:])
+    return out
+
+
 def match(cards: list, people: list) -> dict:
     """짝 없는 명함·사람 사이 — 메일 → 휴대폰 → 이름+회사 차례, 한 사람에 짝 하나. 반환 {card_id: resourceName}."""
     out, used = {}, set()
     pv = [(p["resourceName"], person_values(p)) for p in people]
+    gcell = {rn: _cell_keys(v["phones"]) for rn, v in pv}
+    ccell = {c["id"]: _cell_keys(c.get("phones")) for c in cards}
     for step in ("email", "cell", "name"):
         for c in cards:
             if c["id"] in out:
@@ -186,9 +240,7 @@ def match(cards: list, people: list) -> dict:
                 if step == "email":
                     ok = bool({_nz(e) for e in c.get("emails") or [] if e} & {_nz(e) for e in v["emails"]})
                 elif step == "cell":
-                    cc = {PH.digits(n)[-8:] for k, n in c.get("phones") or [] if k == "cell" and len(PH.digits(n)) >= 8}
-                    gc = {PH.digits(n)[-8:] for k, n in v["phones"] if k == "cell" and len(PH.digits(n)) >= 8}
-                    ok = bool(cc & gc)
+                    ok = bool(ccell[c["id"]] & gcell[rn])
                 else:
                     ok = bool(_name_co(c)) and _name_co(c) == _name_co(v)
                 if ok:
@@ -196,6 +248,25 @@ def match(cards: list, people: list) -> dict:
                     used.add(rn)
                     break
     return out
+
+
+def _google_src_ids(store) -> set:
+    """출처가 구글인 칸이 있는 명함(구글 주소록 vCard 로 가져온 것 — `contact_src`, §5.24 D24)."""
+    try:
+        return {r[0] for r in store.con.execute("SELECT DISTINCT card_id FROM contact_src WHERE src=?", (SRC,))}
+    except Exception:
+        return set()
+
+
+def show(v: dict, f: str) -> str:
+    """미리보기 '옛 값 → 새 값' 의 한 칸 글(화면에만 — 로그에 싣지 않는다, §2.1 의 3)."""
+    x = v.get(f)
+    if f == "phones":
+        x = ", ".join(n for _k, n in x or [] if n)
+    elif isinstance(x, (list, tuple)):
+        x = ", ".join(str(i) for i in x if i)
+    x = " / ".join(t.strip() for t in str(x or "").splitlines() if t.strip())
+    return x if len(x) <= 80 else x[:79] + "…"
 
 
 # ── 사진 ──
@@ -245,12 +316,14 @@ def plan(store, people: list, folder: str = "", photos: bool = False, drive: boo
             lk.pop(cid)
             lk[-cid] = l
         if c is None and p is not None:
-            rows.append({"kind": GONE_CARD, "card_id": cid, "rn": l["rn"], "name": person_values(p)["name"]})
+            rows.append({"kind": MERGED_GOOGLE if l.get("merged") else GONE_CARD, "card_id": cid, "rn": l["rn"],
+                         "name": person_values(p)["name"]})
         elif p is None and c is not None:
             rows.append({"kind": GONE_GOOGLE, "card_id": cid, "rn": l["rn"], "name": c.get("name") or ""})
         elif c is not None:
             pairs.append((c, p, l))
     free_cards = [c for c in cards if c["id"] not in lk]
+    from_google = _google_src_ids(store)
     free_people = [p for p in people if p["resourceName"] not in rn_linked]
     m = match(free_cards, free_people)
     for c in free_cards:
@@ -258,7 +331,8 @@ def plan(store, people: list, folder: str = "", photos: bool = False, drive: boo
             pairs.append((c, by_rn[m[c["id"]]], {"rn": m[c["id"]], "synced": 0.0, "photo_sig": "", "drive": {}, "new": True}))
         else:
             rows.append({"kind": NEW_GOOGLE, "card_id": c["id"], "rn": "", "name": c.get("name") or "",
-                         "kakao": kb[c["id"]][0] if c["id"] in kb else new_k})     # 새로 보낼 때는 기본 친구추가 방지
+                         "kakao": kb[c["id"]][0] if c["id"] in kb else new_k,     # 새로 보낼 때는 기본 친구추가 방지
+                         "maybe_dup": c["id"] in from_google})                     # 구글 vCard 로 가져온 명함 — 구글에 이미 있을 수 있음
     for p in free_people:
         if p["resourceName"] not in m.values():
             rows.append({"kind": NEW_CARD, "card_id": 0, "rn": p["resourceName"], "name": person_values(p)["name"]})
@@ -281,7 +355,8 @@ def plan(store, people: list, folder: str = "", photos: bool = False, drive: boo
             to_card = (g_new and not c_new) or (g_new == c_new and pt > ct)    # 한쪽만 바뀌었으면 그쪽, 둘 다면 나중 것
             rows.append({"kind": TO_CARD if to_card else TO_GOOGLE, "card_id": c["id"], "rn": p["resourceName"],
                          "name": c.get("name") or pv["name"], "fields": d, "etag": p.get("etag") or "", "link": bool(l.get("new")),
-                         "kakao": c_k})
+                         "kakao": c_k,
+                         "changes": [(f,) + ((show(c, f), show(pv, f)) if to_card else (show(pv, f), show(c, f))) for f in d]})
         elif l.get("new"):                                   # 처음 짝 — 값이 같으면 짝만 적는다
             rows.append({"kind": "link", "card_id": c["id"], "rn": p["resourceName"], "name": c.get("name") or "",
                          "etag": p.get("etag") or ""})
@@ -365,7 +440,7 @@ def apply(store, api, rows: list, folder: str = "", drive_folder: str = DRIVE_FO
             elif k == GONE_GOOGLE:
                 delete_cards.append(r["card_id"])
                 store.con.execute("DELETE FROM google_link WHERE card_id=?", (r["card_id"],))
-            elif k == GONE_CARD:
+            elif k in (GONE_CARD, MERGED_GOOGLE):
                 api.delete(r["rn"])
                 store.con.execute("DELETE FROM google_link WHERE card_id=?", (r["card_id"],))
             elif k == PHOTO_UP:

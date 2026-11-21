@@ -18736,3 +18736,19 @@ msgstr "Block KakaoTalk auto-friend for contacts newly sent to Google (# before 
 #: viewer/widgets/bizcard_settings_dialog.py
 msgid "휴대폰이 구글 주소록을 받아도 카카오톡이 자동 친구로 넣지 않게 — 이미 구글에 있는 연락처는 그대로"
 msgstr "So KakaoTalk does not auto-add them as friends when your phone syncs Google Contacts — contacts already in Google are left as they are"
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+msgid "명함 합치기로 남은 구글 연락처 — 구글에서 지울까요"
+msgstr "Google contacts left over after merging cards — delete them from Google?"
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+msgid "구글 주소록이 바뀝니다 — [반영] 전에 contacts.google.com → 내보내기로 백업해 두기를 권합니다."
+msgstr "Your Google Contacts will change — we recommend backing them up first via contacts.google.com → Export before [Apply]."
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+msgid "구글에 이미 있을 수 있음"
+msgstr "may already be in Google"
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+msgid "(없음)"
+msgstr "(none)"

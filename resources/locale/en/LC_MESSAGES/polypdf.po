@@ -18553,21 +18553,27 @@ msgstr "{n} changes — choose rows and press [Apply] (deletions start as 'keep'
 msgid "{ok}건 반영, {bad}건은 하지 못했습니다(다음 싱크에서 다시 보입니다)."
 msgstr "{ok} applied, {bad} failed (they will show again on the next sync)."
 
+# | 명함 그림을 올리려면 'Google Drive API' 도).\n" "3. OAuth 동의 화면에 앱 이름·연락 메일을
+# 적습니다.\n"
+# | "4. 사용자 인증 정보 → OAuth 클라이언트 ID 만들기 → '데스크톱 앱' 을 고릅니다.\n" "5. 나온 클라이언트
+# ID·보안
+# | 비밀을 여기 붙여 넣고 [구글 계정 연결] 을 누릅니다.\n" "로그인은 구글 화면에서 하고, 이 앱은 구글 비밀번호를 보지
+# 않습니다."
 #: viewer/widgets/bizcard_settings_dialog.py
 msgid ""
 "구글 주소록을 연결하려면 처음 한 번 구글 클라우드 콘솔(console.cloud.google.com)에서:\n"
-"1. 프로젝트를 하나 만들고 '개인 모드'(본인 계정만)로 둡니다.\n"
-"2. 'People API' 를 사용으로 켭니다(드라이브에 명함 그림을 올리려면 'Google Drive API' 도).\n"
-"3. OAuth 동의 화면에 앱 이름·연락 메일을 적습니다.\n"
-"4. 사용자 인증 정보 → OAuth 클라이언트 ID 만들기 → '데스크톱 앱' 을 고릅니다.\n"
+"1. 위쪽 프로젝트 고르기 → [새 프로젝트] 로 프로젝트를 하나 만듭니다.\n"
+"2. 왼쪽 메뉴 'API 및 서비스 → 라이브러리' 에서 'People API' 를 검색해 [사용] 을 누릅니다(처음 보이는 '사용 설정된 API' 목록에는 켜기 전이라 없습니다). 명함 그림을 드라이브에 올리려면 'Google Drive API' 도 같은 방법으로.\n"
+"3. 'Google 인증 플랫폼'(예전 이름 'OAuth 동의 화면')에서 앱 이름·지원 메일을 적고, 대상은 본인만 쓰는 '개인 모드' 를 고릅니다(없으면 '외부' 로 두고 테스트 사용자에 본인 메일을 넣습니다 — 이때는 7일마다 다시 로그인).\n"
+"4. '클라이언트'(또는 '사용자 인증 정보 → OAuth 클라이언트 ID 만들기') 에서 애플리케이션 유형 '데스크톱 앱' 으로 만듭니다.\n"
 "5. 나온 클라이언트 ID·보안 비밀을 여기 붙여 넣고 [구글 계정 연결] 을 누릅니다.\n"
 "로그인은 구글 화면에서 하고, 이 앱은 구글 비밀번호를 보지 않습니다."
 msgstr ""
 "To connect Google Contacts, once in the Google Cloud console (console.cloud.google.com):\n"
-"1. Create a project and keep it in 'personal mode' (your account only).\n"
-"2. Enable the 'People API' (and the 'Google Drive API' to upload card images to Drive).\n"
-"3. Fill in the app name and contact email on the OAuth consent screen.\n"
-"4. Credentials → Create OAuth client ID → choose 'Desktop app'.\n"
+"1. Use the project picker at the top → [New project] to create a project.\n"
+"2. In the left menu 'APIs & Services → Library', search for 'People API' and press [Enable] (it is not in the first 'Enabled APIs' list until you enable it). To upload card images to Drive, enable 'Google Drive API' the same way.\n"
+"3. In 'Google Auth Platform' (formerly 'OAuth consent screen'), enter the app name and support email, and choose 'personal mode' (your account only) as the audience (if it is not offered, choose 'External' and add your own email as a test user — then you must sign in again every 7 days).\n"
+"4. Under 'Clients' (or 'Credentials → Create OAuth client ID'), create one with application type 'Desktop app'.\n"
 "5. Paste the client ID and secret here and press [Connect Google account].\n"
 "You sign in on Google's page; this app never sees your Google password."
 

@@ -18752,3 +18752,12 @@ msgstr "may already be in Google"
 #: viewer/widgets/bizcard_gsync_dialog.py
 msgid "(없음)"
 msgstr "(none)"
+
+#: viewer/widgets/bizcard_dupe_dialog.py
+#, python-brace-format
+msgid "명함 DB 를 쓰지 못했습니다({err})."
+msgstr "Could not write the business card database ({err})."
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "명함 환경설정 — 명함 폴더·전화번호·'최근' 제한·메일 보내기·메모·구글 주소록"
+msgstr "Business card settings — card folder, phone numbers, 'Recent' limit, sending mail, memo, Google Contacts"

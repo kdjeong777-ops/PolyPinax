@@ -14,7 +14,7 @@ if os.path.isdir(r"C:\Windows\Fonts"):
     os.environ.setdefault("QT_QPA_FONTDIR", r"C:\Windows\Fonts")
 sys.stdout.reconfigure(encoding="utf-8")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from PyQt6.QtCore import QStandardPaths, QCoreApplication, Qt, QPoint
+from PyQt6.QtCore import QStandardPaths, QCoreApplication, Qt, QPoint, QTimer
 QStandardPaths.setTestModeEnabled(True)             # 검사 작성 SOT §14.7.2
 from PyQt6.QtWidgets import QApplication, QMessageBox
 from PyQt6.QtTest import QTest
@@ -260,7 +260,25 @@ try:
     db_before = S.BizcardStore()
     n_before = db_before.count()
     db_before.close()
+    order = []                                 # D0 기다리는 지역 루프 없음 — 타이머는 apply 가 돌아온 뒤에 돈다(§5.24.8 '응답성', 261120-45)
+    QTimer.singleShot(0, lambda: order.append("timer"))
+    ticks = [time.perf_counter()]              # 메인 정지 — 20ms 박자 사이 가장 긴 틈(응답성 SOT §2 기준 1초)
+    beat = QTimer()
+    beat.setInterval(20)
+    beat.timeout.connect(lambda: ticks.append(time.perf_counter()))
+    beat.start()
+    t_call = time.perf_counter()
     got = dd.apply(ask=False)
+    t_call = time.perf_counter() - t_call
+    order.append("returned")
+    busy_now = bool(getattr(dd, "working", False)) and not dd.isEnabled()
+    pump(lambda: not getattr(dd, "working", False) and "timer" in order, timeout=15)
+    beat.stop()
+    gap = max(b2 - b1 for b1, b2 in zip(ticks, ticks[1:])) if len(ticks) > 1 else 99
+    print("D0 apply 호출 %.3fs · 메인 최장 틈 %.3fs · 박자 %d" % (t_call, gap, len(ticks)))
+    chk(order == ["returned", "timer"] and busy_now and dd.isEnabled(),
+        "D0 합치기 적용은 배경 DB 일을 신호로 잇는다 — 안에서 이벤트를 돌리지 않음·그동안 창 꺼짐·끝나면 켜짐", str((order, busy_now)))
+    chk(gap < 1.0, "D0 합치기 적용 동안 메인 최장 정지 < 1초", "%.3f" % gap)
     st = S.BizcardStore()
     a = P.card_by_id(st, a_id)
     chk(got == 4 and st.count() == n_before - 4 and P.card_by_id(st, x_id) is None and P.card_by_id(st, c_id) is None,
@@ -286,7 +304,12 @@ try:
 
     print("\n=== E. 되돌리기·우선순위 ===")
     ok = dd.undo(ask=False)
-    pump(timeout=0.5)
+    QTest.keyClick(dd, Qt.Key.Key_Escape)      # 배경 DB 일 중 Esc·닫기 — 창은 남고, 끝난 뒤 신호가 그 창에서 처리된다(261120-45)
+    dd.close()
+    still = dd.isVisible() and bool(getattr(dd, "working", False))
+    pump(lambda: not getattr(dd, "working", False), timeout=15)
+    pump(timeout=0.2)
+    chk(still and dd.isVisible() and dd.isEnabled(), "E0 되돌리기 배경 일 중 Esc·닫기는 무시, 끝나면 창이 켜짐", str(still))
     st = S.BizcardStore()
     chk(ok and st.count() == n_before and P.card_by_id(st, x_id) is not None and P.card_by_id(st, c_id) is not None
         and (P.card_by_id(st, a_id) or {}).get("title") in ("", None), "E 되돌리기 — DB 를 합치기 전으로", str(st.count()))
@@ -368,7 +391,8 @@ try:
     chk(d4 is not None and d4.btn_undo.isEnabled(), "G 나눈 뒤 [마지막 합치기 되돌리기] 켜짐(합치기와 같은 길)")
     if d4 is not None:
         d4.undo(ask=False)
-        pump(timeout=0.5)
+        pump(lambda: not getattr(d4, "working", False), timeout=15)
+        pump(timeout=0.2)
         st = S.BizcardStore()
         chk(P.card_by_id(st, g_old["id"]) is not None and os.path.exists(g_out) and (FG / "g_1.jpg").exists()
             and not (FG / "g_1 명함 01.jpg").exists(), "G 되돌리기 — 예전 명함·정리본·원본 제자리, 잘라낸 것은 휴지통",

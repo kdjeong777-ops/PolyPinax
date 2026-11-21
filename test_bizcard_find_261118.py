@@ -848,6 +848,7 @@ try:
         dd_ = getattr(dlg, "dupe_dlg", None)
         if dd_ is not None and dd_.isVisible():
             merged.append(dd_.apply(ask=False))
+            pump(lambda: not getattr(dd_, "working", False), timeout=15)   # 배경 DB 일이 끝나야 닫힌다(§5.24.8 '응답성')
             dd_.close()
             dlg.after_dupes()
             dlg.raise_(); dlg.activateWindow()   # 모달 없이 띄운 창을 닫은 뒤 — 오프스크린은 활성 창이 돌아오지 않는다

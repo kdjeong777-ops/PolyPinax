@@ -113,6 +113,24 @@ class _ImgWorker(QObject):
         self.finished.emit()
 
 
+class _FnWorker(QObject):
+    """함수 하나를 배경에서 — done(결과, 예외). 중복 검토의 DB 백업·쓰기·되돌리기(§5.24.8 '응답성')."""
+    done = pyqtSignal(object, object)
+    finished = pyqtSignal()
+
+    def __init__(self, fn):
+        super().__init__()
+        self._fn = fn
+
+    def run(self):
+        try:
+            r, err = self._fn(), None
+        except Exception as e:                  # noqa: BLE001 — 메인에서 알린다
+            r, err = None, e
+        self.done.emit(r, err)
+        self.finished.emit()
+
+
 def _copy_db(src, dst) -> None:
     """SQLite 온라인 백업 src → dst(자기 연결 — 배경 스레드에서 부른다)."""
     a = dbutil.connect(src, dbutil.BUSY_MS_BG, row_factory=False)
@@ -148,6 +166,7 @@ class BizcardDupeDialog(QDialog):
         self.groups, self.rep, self.chk, self.gchk = [], {}, {}, {}
         self.edits = {}                                  # {묶음: {칸: 값}} — '적용 후' 에서 고친 값
         self._busy = False
+        self.working, self._bg_then = False, None        # 배경 DB 일(`_bg`) 중 — 창은 꺼져 있고 닫히지 않는다
         v = QVBoxLayout(self)
         top = QHBoxLayout()
         top.addWidget(QLabel(tr("병합 우선순위(끌어 순서 바꾸기):")))
@@ -633,16 +652,17 @@ class BizcardDupeDialog(QDialog):
             st.meta_set(M.SEEN_KEY, seen)
         if not dlg.jobs:
             return
+        if self.working:
+            return
+        self._drop_old_hold()                           # 되돌리기는 마지막 하나 — 합치기와 같은 길(§5.24.8 '되돌리기')
+        dbp, bak = st.path, self.bak
+        jobs = [(p, q, self._multi_targets[p][1]) for p, q in dlg.jobs]
+        self._bg(lambda: _copy_db(dbp, bak), lambda _r: self._multi_split_start(jobs))   # 예전 명함을 지우기 전 DB 백업
+
+    def _multi_split_start(self, jobs):
         from viewer.bizcard.importer import SplitWorker
         from viewer.workers import run_in_thread
-        self._drop_old_hold()                            # 되돌리기는 마지막 하나 — 합치기와 같은 길(§5.24.8 '되돌리기')
-        dbp, bak = st.path, self.bak
-        self.setEnabled(False)
-        try:
-            self._bg(lambda: _copy_db(dbp, bak))         # 예전 명함을 지우기 전 DB 백업
-        finally:
-            self.setEnabled(True)
-        jobs = [(p, q, self._multi_targets[p][1]) for p, q in dlg.jobs]
+        self._bg_end()
         w = SplitWorker(jobs)
         self._split_worker = w
         w.done.connect(self._multi_split_done)
@@ -702,17 +722,16 @@ class BizcardDupeDialog(QDialog):
                 tr("묶음 {n}개를 합칩니다 — 대표가 아닌 명함 {d}장은 지웁니다(그림 파일은 '병합 보관' 폴더로). [마지막 합치기 되돌리기] 로 되돌릴 수 있습니다.").format(
                     n=len(plans), d=n_d)) != QMessageBox.StandardButton.Yes:
             return 0
+        if self.working:
+            return 0
         st = self.fd._store()
         self._drop_old_hold()
-        self.setEnabled(False)
-        try:
-            return self._apply(st, plans, ask)
-        finally:
-            self.setEnabled(True)
-
-    def _apply(self, st, plans, ask) -> int:
         dbp, bak = st.path, self.bak
-        self._bg(lambda: _copy_db(dbp, bak))                  # 적용 전 DB 백업(되돌리기) — 배경(응답성 SOT)
+        self._bg(lambda: _copy_db(dbp, bak), lambda _r: self._apply(st, plans, ask))   # 적용 전 DB 백업(되돌리기)
+        return len(plans)                                     # 끝은 배경 쓰기 뒤 `_applied` — 그동안 `working`
+
+    def _apply(self, st, plans, ask) -> None:
+        dbp = st.path
         moves, failed, jobs = [], 0, []
         for gi, p in plans:
             byid = {c["id"]: c for c in self.groups[gi]["cards"]}
@@ -763,12 +782,14 @@ class BizcardDupeDialog(QDialog):
                 s2.close()
             with open(log, "w", encoding="utf-8") as fp:
                 json.dump({"moves": moves}, fp, ensure_ascii=False)
-        self._bg(write)
         self.last_failed = failed
+        self._bg(write, lambda _r: self._applied(failed, ask))
+
+    def _applied(self, failed, ask):
+        self._bg_end()
         if failed and ask:
             QMessageBox.warning(self, tr("중복 검토"), tr("파일 {n}개를 옮기지 못했습니다 — 다른 프로그램이 열고 있는지 확인하세요.").format(n=failed))
         self.reload()
-        return len(plans)
 
     def _drop_old_hold(self):
         """앞 합치기의 '병합 보관' 파일은 휴지통으로, 앞 백업·기록은 지운다(되돌리기는 하나만)."""
@@ -788,7 +809,7 @@ class BizcardDupeDialog(QDialog):
                 pass
 
     def undo(self, ask: bool = True) -> bool:
-        if not (self.log_path.exists() and self.bak.exists()):
+        if self.working or not (self.log_path.exists() and self.bak.exists()):
             return False
         if ask and QMessageBox.question(self, tr("중복 검토"), tr("마지막 합치기를 되돌립니다 — 옮긴 파일을 제자리로, 명함 DB 를 합치기 전으로.")) \
                 != QMessageBox.StandardButton.Yes:
@@ -818,36 +839,46 @@ class BizcardDupeDialog(QDialog):
                     f.unlink()
                 except OSError:
                     pass
+        self._bg(restore, lambda _r: (self._bg_end(), self.reload()))
+        return True                                       # 끝은 배경 복사 뒤 — 그동안 `working`
+
+    def _bg(self, fn, then):
+        """배경 스레드에서 fn, 끝나면 메인에서 then(결과) — 신호로 잇고 지역 루프로 기다리지 않는다(응답성 SOT §6 금지 목록).
+        그동안 `working` 이고 창은 꺼져 있으며 닫히지 않는다. then 이 `_bg_end` 를 부른다. 실패하면 알리고 창을 켠다."""
+        from viewer.workers import run_in_thread
+        self.working, self._bg_then = True, then
         self.setEnabled(False)
-        try:
-            self._bg(restore)
-        finally:
-            self.setEnabled(True)
-        self.reload()
-        return True
+        w = _FnWorker(fn)
+        w.done.connect(self._bg_done)
+        keep = getattr(self.fd._mw, "_thread_keep", None) if self.fd._mw is not None else None
+        run_in_thread(w, keep if isinstance(keep, list) else _KEEP)
 
-    def _bg(self, fn):
-        """배경 스레드에서 fn — 끝날 때까지 `QEventLoop` 로 기다려 창이 멈추지 않게(응답성 SOT §6, 병합 `_merge_pdfs` 와 같은 꼴).
-        그동안 창은 꺼 둔다(부르는 쪽). 예외는 그대로 올린다."""
-        import threading
-        from PyQt6.QtCore import QEventLoop, QTimer
-        box = {}
-
-        def run():
+    def _bg_done(self, r, err):
+        then, self._bg_then = self._bg_then, None
+        if err is not None:
+            self._bg_end()
+            QMessageBox.warning(self, tr("중복 검토"), tr("명함 DB 를 쓰지 못했습니다({err}).").format(err=type(err).__name__))
+            self.reload()
+            return
+        if then is not None:
             try:
-                box["r"] = fn()
-            except Exception as e:              # noqa: BLE001 — 메인에서 다시 올린다
-                box["e"] = e
-        t = threading.Thread(target=run, daemon=True, name="bizcard-dupe")
-        loop = QEventLoop()
-        tick = QTimer()
-        tick.setInterval(20)
-        tick.timeout.connect(lambda: t.is_alive() or loop.quit())
-        t.start()
-        tick.start()
-        loop.exec()
-        tick.stop()
-        t.join()
-        if "e" in box:
-            raise box["e"]
-        return box.get("r")
+                then(r)
+            except Exception as e:              # noqa: BLE001 — 뒤이은 일(파일 옮기기 등)이 실패해도 창이 꺼진 채 남지 않게
+                self._bg_end()
+                QMessageBox.warning(self, tr("중복 검토"), tr("명함 DB 를 쓰지 못했습니다({err}).").format(err=type(e).__name__))
+                self.reload()
+
+    def _bg_end(self):
+        self.working = False
+        self.setEnabled(True)
+
+    def reject(self):
+        if self.working:                                  # 배경 DB 일이 끝나기 전엔 닫지 않는다(Esc 포함)
+            return
+        super().reject()
+
+    def closeEvent(self, e):
+        if self.working:
+            e.ignore()
+            return
+        super().closeEvent(e)

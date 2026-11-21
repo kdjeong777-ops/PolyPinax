@@ -18,6 +18,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+from viewer.bizcard.gsync_api import HTTP_TIMEOUT     # 요청 시간 상한은 한 곳(gsync_api)
+
 # 서버 주소 — 검사는 이 PC 안의 가짜 서버로 바꿔 끼운다(§5.29 '서버 주소')
 AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
@@ -29,7 +31,6 @@ SCOPE_ID = ("openid", "email")                                  # 연결한 계�
 BUILT_CLIENT_ID = ""            # 검증받은 ID 를 빌드에 넣는 자리(§5.29 '클라이언트 ID' — 지금은 비어 있음)
 BUILT_CLIENT_SECRET = ""
 LOGIN_TIMEOUT = 300             # 로그인을 이 초 안에 마치지 않으면 그만둔다
-HTTP_TIMEOUT = 30
 TOKEN_FILE = "bizcard_google.json"
 
 META_ID, META_SECRET = "gsync_client_id", "gsync_client_secret"   # 명함 DB meta — 비밀은 DPAPI 로 잠가

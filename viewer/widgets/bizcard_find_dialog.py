@@ -881,7 +881,7 @@ class BizcardFindDialog(QDialog):
         self.btn_settings.setIcon(themed_icon("gear", size=18))
         self.btn_settings.setIconSize(QSize(18, 18))
         self.btn_settings.setAutoRaise(True)
-        self.btn_settings.setToolTip(tr("명함 환경설정 — 명함 폴더·전화번호 기본 국가·'최근' 항목 제한"))
+        self.btn_settings.setToolTip(tr("명함 환경설정 — 명함 폴더·전화번호·'최근' 제한·메일 보내기·메모·구글 주소록"))
         self.btn_settings.clicked.connect(lambda _c=False: self.open_settings())
         top.addWidget(self.btn_settings)
         v.addLayout(top)

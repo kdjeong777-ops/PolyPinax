@@ -128,7 +128,7 @@ def boxed(pm: QPixmap, box: QSize) -> QPixmap:
 
 
 class PhotoThumbWorker(QObject):
-    """썸네일 그림을 배경에서 만든다(응답성 SOT §4.4 감사표 한 행)."""
+    """썸네일 그림을 배경에서 만든다(사진 보기 SOT §6.6 의무 표 한 행)."""
     done = pyqtSignal(int, str, QImage, int, int, str, object)   # 세대, 경로, 썸네일, 보이는 폭·높이(못 읽으면 0), 날짜, 바이트
     finished = pyqtSignal()
 

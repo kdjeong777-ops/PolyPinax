@@ -32,7 +32,7 @@ _LOAD_MEMO: dict = {}
 
 
 def _path() -> str:
-    """261115-12(응답성 SOT §4.7 ⑤): 본문을 그릴 때마다(`sign_draft_layer.reposition`) 불린다 — 폴더 만들기(`mkdir`)를
+    """261115-12(응답성 SOT §4.7 ⑤·책갈피창·저장 SOT §4.7.3 '키 이동'): 본문을 그릴 때마다(`sign_draft_layer.reposition`) 불린다 — 폴더 만들기(`mkdir`)를
     설정 폴더마다 한 번만. 시험이 설정 폴더를 바꾸면(테스트 모드·덮어쓰기) 그 폴더로 다시 만든다."""
     try:
         from PyQt6.QtCore import QStandardPaths

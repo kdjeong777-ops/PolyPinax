@@ -11075,7 +11075,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         from viewer import theme as _theme
         _theme.set_dark(dark)
         from viewer.widgets.keycaps import app_style as _keycap_style   # 261107-4(디자인 SOT §2.9.2): 메뉴 단축키 칸은 키캡 그림
-        # 261115-2 덧붙임(디자인 SOT §2.5 함정): setStyle 은 위젯 목록을 복사해 둔 채 위젯마다 polish·StyleChange 를 보낸다 —
+        # 261115-2 덧붙임(디자인 SOT §4.1 함정): setStyle 은 위젯 목록을 복사해 둔 채 위젯마다 polish·StyleChange 를 보낸다 —
         #   그 사이 파이썬 GC 가 순환 참조로 남은 부모 없는 위젯을 지우면 끊어진 포인터를 만져 0xC0000005. 모아 지운 뒤 GC 를 멈추고 바꾼다.
         import gc as _gc
         _style = _keycap_style("Fusion")

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""테마를 바꾸는 중(app.setStyle) 앱이 죽지 않는다 — 파이썬 GC 를 멈추고 바꾼다 (261115-2 덧붙임, 화면 디자인 SOT §2.5 함정).
+"""테마를 바꾸는 중(app.setStyle) 앱이 죽지 않는다 — 파이썬 GC 를 멈추고 바꾼다 (261115-2 덧붙임, 화면 디자인 SOT §4.1 함정).
 
 증상: test_merge_thread 가 `_apply_prefs → apply_theme → app.setStyle` 에서 0xC0000005 로 자주 죽었다(4개 동시 8번 중 4~7번).
 원인: `QApplication::setStyle` 은 위젯 목록을 복사해 둔 채 위젯마다 unpolish·polish·StyleChange 를 보낸다. 그 사이 파이썬 코드

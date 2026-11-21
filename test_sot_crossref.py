@@ -462,6 +462,10 @@ chk(bool(cmds) and not miss, "G4 scripts/i18n.py 명령이 다국어 SOT 에 모
 # ── H. 짝 ──────────────────────────────────────────────────────────────
 print(NL + "=== H. 짝 ===")
 m0 = mst[mst.find("## 0."):mst.find("## 1.")]
+# 261120-44(사용자 결정 S1): 마스터 §0 에는 지금 판(1.1.0~)만 — 옛 판 행은 이력 아카이브 '## 1. 마스터' 절에 같은 행으로 있다
+_hist = SOTS.get("뷰어 변경 이력 아카이브.md", "")
+_h1 = _hist.find("## 1. ")
+m0 += _hist[_h1:_hist.find("\n## 2. ", _h1)] if _h1 >= 0 else ""
 lost = []
 for name, txt in LIVE.items():
     if name in (MASTER, "CLAUDE.md"):

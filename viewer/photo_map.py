@@ -245,7 +245,7 @@ def _day_of(info: dict) -> str:
 
 
 class PhotoMapWorker(QObject):
-    """고른 사진의 위치 읽기(머리만) + 페이지 만들기 — 배경(응답성 SOT §4.4 감사표). 클라우드에만 있는 사진은 읽지 않는다."""
+    """고른 사진의 위치 읽기(머리만) + 페이지 만들기 — 배경(사진 보기 SOT §6.6 의무 표). 클라우드에만 있는 사진은 읽지 않는다."""
     done = pyqtSignal(dict)          # {"url": 주소 또는 "", "shown": n, "no_gps": n, "cloud": n}
     finished = pyqtSignal()
 

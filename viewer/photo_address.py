@@ -84,7 +84,7 @@ def online_address(lat, lon, lang: str = "ko") -> str:
 
 
 class PhotoAddressWorker(QObject):
-    """상세 주소(온라인) 한 번 — 응답성 SOT §4.4 감사표의 한 행. done(토큰, 주소 또는 '', 실패면 True)."""
+    """상세 주소(온라인) 한 번 — 사진 보기 SOT §6.6 의무 표의 한 행. done(토큰, 주소 또는 '', 실패면 True)."""
     done = pyqtSignal(int, str, bool)
     finished = pyqtSignal()
 

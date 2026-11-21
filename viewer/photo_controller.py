@@ -4262,7 +4262,7 @@ ORIENT_REPLACE_WAIT_S = 0.15
 
 class PhotoOrientSaveWorker(QObject):
     """사진 방향 저장 한 길(사진 보기 SOT 4.17, D17) — 배경에서: 읽기 → 임시 파일 → 확인 → 바꿔치기. 실패하면 원본 그대로.
-    응답성 SOT §4.4 감사표의 한 행(파일 작업은 메인에서 하지 않는다 — 마스터 §4.7.5)."""
+    사진 보기 SOT §6.6 의무 표의 한 행(파일 작업은 메인에서 하지 않는다 — 마스터 §4.7.5)."""
     done = pyqtSignal(str, bool, str)        # 경로, 성공, 실패 까닭
     finished = pyqtSignal()
 
@@ -4326,7 +4326,7 @@ COPY_MAX_SIDE = 8192            # 사진 복사 — 긴 변 상한(클립보드�
 
 
 class PhotoCopyWorker(QObject):
-    """사진 복사 — 배경에서 풀고(보기 회전까지) 메인은 클립보드에 넣기만(응답성 SOT §4.4 감사표의 한 행)."""
+    """사진 복사 — 배경에서 풀고(보기 회전까지) 메인은 클립보드에 넣기만(사진 보기 SOT §6.6 의무 표의 한 행)."""
     done = pyqtSignal(str, object)
     finished = pyqtSignal()
 
@@ -4624,7 +4624,7 @@ class PhotoShareWorker(QObject):
 
 class PhotoFlattenWorker(QObject):
     """사진 평탄화(4.21) — 배경: 원본(방향 세움) 위에 꾸밈 겹(PDF 한 쪽)을 같은 크기로 그려 얹고, 보기 회전까지 돌려
-    같은 폴더 임시 파일에 쓴 뒤 **새 이름**으로 옮긴다(원본은 덮어쓰지 않는다 — os.replace 도 배경). 응답성 SOT §4.4 감사표의 한 행."""
+    같은 폴더 임시 파일에 쓴 뒤 **새 이름**으로 옮긴다(원본은 덮어쓰지 않는다 — os.replace 도 배경). 사진 보기 SOT §6.6 의무 표의 한 행."""
     done = pyqtSignal(str, str, str)          # 원본, 새 파일(실패면 ""), 까닭
     finished = pyqtSignal()
 
@@ -4862,7 +4862,7 @@ def photo_address_text(info: dict) -> str:
 
 
 class PhotoInfoWorker(QObject):
-    """지금 사진의 정보(머리만)를 배경에서 읽는다 — 응답성 SOT §4.4 감사표의 한 행.
+    """지금 사진의 정보(머리만)를 배경에서 읽는다 — 사진 보기 SOT §6.6 의무 표의 한 행.
     위치가 있으면 정보를 보낸 **뒤** 행정동 주소를 찾아 `addr`(세대, 경로, 주소, 까닭)로 — 정보 한 줄은 주소를 기다리지 않는다(261111-21)."""
     done = pyqtSignal(int, str, dict)
     addr = pyqtSignal(int, str, str, str)
@@ -4912,7 +4912,7 @@ WATCH_DEBOUNCE_MS = 300        # 폴더 감시 알림을 모으는 시간(4.27) 
 
 
 class PhotoWatchScanWorker(QObject):
-    """폴더 감시(4.27) — 보는 폴더(하위 빼고)의 사진·zip 지문(이름·크기·수정 시각)을 배경에서. 응답성 SOT §4.4 감사표의 한 행."""
+    """폴더 감시(4.27) — 보는 폴더(하위 빼고)의 사진·zip 지문(이름·크기·수정 시각)을 배경에서. 사진 보기 SOT §6.6 의무 표의 한 행."""
     done = pyqtSignal(str, object)
     finished = pyqtSignal()
 
@@ -4944,7 +4944,7 @@ class PhotoWatchScanWorker(QObject):
 
 class PhotoIndexWorker(QObject):
     """사진 정보 색인(사진 보기 SOT 4.24) — 폴더(하위 포함) 사진을 훑어 바뀐 것만 머리를 읽어 넣는다, 사라진 것은 지운다.
-    응답성 SOT §4.4 감사표의 한 행(배경·pacing·취소)."""
+    사진 보기 SOT §6.6 의무 표의 한 행(배경·pacing·취소)."""
     done = pyqtSignal(str, int, int, int)      # 폴더, 새로·고친 장 수, 지운 장 수, 모두
     autoTags = pyqtSignal(dict)                # 경로 → 머리 자동 태그(태그 SOT §5.7) — 50장마다, 메인이 태그 저장소에
     finished = pyqtSignal()
@@ -5132,7 +5132,7 @@ class PhotoIndexWorker(QObject):
 
 class PhotoKindWorker(QObject):
     """사진 종류 자동 태그(태그 SOT §5.7) — 영수증·명함·서류. 글이 있어 보이는 사진만 작게 OCR, 글은 판정에만(저장 없음, 사진 SOT D15).
-    색인 훑기가 끝난 뒤 한 장씩, 취소 가능. 응답성 SOT §4.4 감사표의 한 행(배경·pacing·취소)."""
+    색인 훑기가 끝난 뒤 한 장씩, 취소 가능. 사진 보기 SOT §6.6 의무 표의 한 행(배경·pacing·취소)."""
     found = pyqtSignal(dict)                   # 경로 → [종류] 또는 [] — 판정할 때마다(OCR 이 느려 묶지 않는다)
     finished = pyqtSignal()
 
@@ -5253,7 +5253,7 @@ def _photo_taken_ts(taken: str, mtime: float) -> float:
 
 
 class PhotoDateWorker(QObject):
-    """책갈피창 사진 줄 날짜·'수정일 순' 정렬 값(사진 보기 SOT 4.37) — 촬영일(색인 → EXIF 머리만) → 파일 날짜. 응답성 SOT 감사표의 한 행.
+    """책갈피창 사진 줄 날짜·'수정일 순' 정렬 값(사진 보기 SOT 4.37) — 촬영일(색인 → EXIF 머리만) → 파일 날짜. 사진 보기 SOT §6.6 의무 표의 한 행.
 
     두 단계(261105-10): ① 기억한 값·사진 정보 색인 행·zip·**클라우드에만 있는 사진**(머리를 읽으면 통째로 내려받는다 — 파일 날짜를
     임시 값으로) — `stat` 만, 끝나면 `indexed` ② 나머지만 머리 읽기(pacing). `folder` 를 주면 **미리 읽기** — 그 폴더(하위 포함)
@@ -5403,7 +5403,7 @@ def photo_ocr_save(path: str, rot: int = 0, lang: str = "", picker=None) -> int:
 
 class PhotoOcrBatchWorker(QObject):
     """사진 여러 장 OCR(사진 보기 SOT 4.44, 261107-6) — 배경 한 워커가 차례로, 사진 사이 `pacing.pace`·[중단].
-    결과는 사진마다 보류 저장소(한 장과 같은 `photo_ocr_save`). 응답성 SOT 감사표의 한 행."""
+    결과는 사진마다 보류 저장소(한 장과 같은 `photo_ocr_save`). 사진 보기 SOT §6.6 의무 표의 한 행."""
     one = pyqtSignal(str, int)                   # 끝난 사진, 낱말 수(못 읽으면 -1)
     progress = pyqtSignal(int, int, str)         # 몇째, 모두, 경로
     done = pyqtSignal(int, int, bool)            # 읽음, 못 읽음, 멈춤
@@ -5446,7 +5446,7 @@ class PhotoOcrBatchWorker(QObject):
 
 
 class PhotoOcrWorker(QObject):
-    """사진 한 장 OCR(사진 보기 SOT 4.34, 단어학습 SOT §14.22) — 배경, 결과는 보류 저장소. 응답성 SOT 감사표의 한 행."""
+    """사진 한 장 OCR(사진 보기 SOT 4.34, 단어학습 SOT §14.22) — 배경, 결과는 보류 저장소. 사진 보기 SOT §6.6 의무 표의 한 행."""
     done = pyqtSignal(str, int)                  # 사진 경로, 낱말 수
     error = pyqtSignal(str, str)
     finished = pyqtSignal()
@@ -5465,7 +5465,7 @@ class PhotoOcrWorker(QObject):
 
 
 class PhotoDeviceListWorker(QObject):
-    """연결된 휴대 장치와 그 사진 폴더(사진 보기 SOT 4.33) — 배경, 셸 COM 은 이 스레드에서. 응답성 SOT 감사표의 한 행."""
+    """연결된 휴대 장치와 그 사진 폴더(사진 보기 SOT 4.33) — 배경, 셸 COM 은 이 스레드에서. 사진 보기 SOT §6.6 의무 표의 한 행."""
     done = pyqtSignal(list)                      # [(장치, [폴더…], 오류 종류 또는 '')]
     finished = pyqtSignal()
 
@@ -5499,7 +5499,7 @@ class PhotoDeviceListWorker(QObject):
 
 
 class PhotoDeviceWorker(QObject):
-    """휴대 장치의 사진 폴더 하나를 캐시로 복사(사진 보기 SOT 4.33) — 한 장씩 알림, 취소 가능. 응답성 SOT 감사표의 한 행."""
+    """휴대 장치의 사진 폴더 하나를 캐시로 복사(사진 보기 SOT 4.33) — 한 장씩 알림, 취소 가능. 사진 보기 SOT §6.6 의무 표의 한 행."""
     listed = pyqtSignal(int)                     # 폴더 안 사진 수
     fileReady = pyqtSignal(str)                  # 캐시에 들어온 사진 경로
     done = pyqtSignal(str, str, int, str)        # 장치, 폴더, 장 수, 오류 종류 또는 ''
@@ -5536,7 +5536,7 @@ class PhotoDeviceWorker(QObject):
 
 
 class PhotoDeviceScanWorker(QObject):
-    """단일 보기 — 장치의 모든 사진 이름(사진 보기 SOT 4.33). 새 폴더부터 한 폴더씩 알림, 받지는 않는다. 응답성 SOT 감사표의 한 행."""
+    """단일 보기 — 장치의 모든 사진 이름(사진 보기 SOT 4.33). 새 폴더부터 한 폴더씩 알림, 받지는 않는다. 사진 보기 SOT §6.6 의무 표의 한 행."""
     folderScanned = pyqtSignal(str, str, list)   # 장치, 폴더, 사진 이름
     finished = pyqtSignal()
 
@@ -5569,7 +5569,7 @@ class PhotoDeviceScanWorker(QObject):
 
 
 class PhotoZipWorker(QObject):
-    """사진이 든 zip 을 캐시로 꺼낸다(사진 보기 SOT 4.24 ③) — 배경, 취소 가능. 응답성 SOT §4.4 감사표의 한 행."""
+    """사진이 든 zip 을 캐시로 꺼낸다(사진 보기 SOT 4.24 ③) — 배경, 취소 가능. 사진 보기 SOT §6.6 의무 표의 한 행."""
     done = pyqtSignal(str, list)
     finished = pyqtSignal()
 
@@ -5608,7 +5608,7 @@ class PhotoZipWorker(QObject):
 
 
 class PhotoPreloadWorker(QObject):
-    """다음·이전 사진을 배경에서 미리 푼다(사진 보기 SOT §6.4) — 응답성 SOT §4.4 감사표의 한 행."""
+    """다음·이전 사진을 배경에서 미리 푼다(사진 보기 SOT §6.4) — 사진 보기 SOT §6.6 의무 표의 한 행."""
     finished = pyqtSignal()
     decodedOne = pyqtSignal(str, int)        # 다 푼 사진(경로, 긴 변) — box 를 준 해독 요청만
 

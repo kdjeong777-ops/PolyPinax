@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """구글 People API·Drive API REST (명함 SOT §5.29) — 표준 urllib 만, 배경에서 부른다.
 
-요청마다 시간 상한 `HTTP_TIMEOUT`, 429·5xx 는 1·2·4초 기다려 세 번까지. 오류 글은 HTTP 상태·갈래만(명함 값·토큰 없음, §2.1 의 3).
+요청마다 시간 상한 `HTTP_TIMEOUT`, 429·5xx 는 `RETRY_WAITS` 만큼 기다려 다시. 오류 글은 HTTP 상태·갈래만(명함 값·토큰 없음, §2.1 의 3).
 """
 from __future__ import annotations
 

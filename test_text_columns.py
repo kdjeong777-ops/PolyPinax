@@ -440,7 +440,7 @@ chk(d.values()["pages"] == list(range(30)),
     "(7) 쪽수를 제대로 주면 문서 전체를 읽는다", str(len(d.values()["pages"])) + "쪽")
 
 print()
-print("=== (8) 책갈피 '파일 폴더 열기' (디자인 §2.8.3) ===")
+print("=== (8) 책갈피 '파일 폴더 열기' (책갈피창·저장 SOT §4.7.13 우클릭 메뉴) ===")
 from viewer.widgets.bookmark_tree import BookmarkTree
 chk(hasattr(BookmarkTree, "_file_path_of"), "(8) 행에서 파일 경로를 얻는다")
 chk(hasattr(BookmarkTree, "_reveal_in_explorer"), "(8) 탐색기로 여는 길이 있다")

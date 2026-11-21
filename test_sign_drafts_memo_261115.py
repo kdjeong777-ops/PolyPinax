@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""261115-12: 서명 자리 기록(`sign_drafts`) — 본문을 그릴 때마다 파일을 다시 읽지 않는다 (응답성 SOT §4.7 ⑤).
+"""261115-12: 서명 자리 기록(`sign_drafts`) — 본문을 그릴 때마다 파일을 다시 읽지 않는다 (응답성 SOT §4.7 ⑤·책갈피창·저장 SOT §4.7.3 '키 이동').
 
 `sign_draft_layer.reposition` 이 그린 쪽마다 `drafts(path)` 를 불러 `drafts.json` 을 열고 폴더를 두 번 만들었다
 (큰 폴더 ↓ 연타 정지 표본에 `settings_dir → mkdir`·`sign_drafts._load` 가 잡혔다).

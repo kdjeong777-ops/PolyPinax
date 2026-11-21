@@ -1041,12 +1041,18 @@ def apply_import(store, persons, tag: str = "", src: str = "") -> int:
     src = 'remember'·'google' — 칸마다 출처를 적어 둔다(중복 검토의 출처·손으로 고친 칸 가리기)."""
     src_init(store)
     added = 0
+    got_labels = []
     for p in persons:
-        nid = _insert_contact(store, p, [t for t in ("명함", tag) if t])
+        lab = [x for x in p.get("labels") or [] if x]       # 구글 라벨 → 해시태그(§5.24.5 '라벨 카드 거르기', 사용자 지시 261121)
+        got_labels += lab
+        nid = _insert_contact(store, p, list(dict.fromkeys([t for t in ("명함", tag) if t] + lab)))
         if src:   # 전화 칸 출처도 — 이름 등을 손으로 고쳐도(그 칸 출처만 지움) 어느 주소록에서 왔는지 남는다(구글 싱크 §5.29 '새 사람', 261120-46)
             _set_srcs(store, nid, [k for k in _SCALARS if (p.get(k) or "").strip()] + (["phones"] if p.get("phones") else []), src)
         added += 1
     store.con.commit()
+    if got_labels:
+        from viewer.bizcard import gsync
+        gsync.add_label_tags(store, got_labels)          # 구글 싱크 라벨과도 양방향(§5.29 '라벨')
     return added
 
 

@@ -16,7 +16,7 @@ PEOPLE_BASE = "https://people.googleapis.com"
 DRIVE_BASE = "https://www.googleapis.com"
 HTTP_TIMEOUT = 30
 RETRY_WAITS = (1, 2, 4)
-PERSON_FIELDS = "names,organizations,phoneNumbers,emailAddresses,addresses,urls,biographies,photos,metadata"
+PERSON_FIELDS = "names,organizations,phoneNumbers,emailAddresses,addresses,urls,biographies,photos,memberships,metadata"
 UPDATE_FIELDS = "names,organizations,phoneNumbers,emailAddresses,addresses,urls,biographies"
 FOLDER_MIME = "application/vnd.google-apps.folder"
 
@@ -87,6 +87,34 @@ class Api:
     def update_photo(self, resource: str, jpeg: bytes) -> dict:
         return self._json("PATCH", PEOPLE_BASE + "/v1/%s:updateContactPhoto" % resource,
                           {"photoBytes": base64.b64encode(jpeg).decode("ascii"), "personFields": "photos,metadata"})
+
+    # ── 라벨(contactGroups — 같은 contacts 권한, 명함 SOT §5.29 '라벨', 261120-61) ──
+    def list_groups(self) -> list:
+        """[{resourceName, name, groupType}] — 시스템 라벨(SYSTEM_CONTACT_GROUP)도 함께, 거르기는 부르는 쪽이."""
+        out, tok = [], ""
+        while True:
+            q = {"pageSize": 1000, "groupFields": "name,groupType"}
+            if tok:
+                q["pageToken"] = tok
+            d = self._json("GET", PEOPLE_BASE + "/v1/contactGroups?" + urllib.parse.urlencode(q))
+            out += d.get("contactGroups") or []
+            tok = d.get("nextPageToken") or ""
+            if not tok:
+                return out
+
+    def create_group(self, name: str) -> dict:
+        return self._json("POST", PEOPLE_BASE + "/v1/contactGroups", {"contactGroup": {"name": name}})
+
+    def modify_members(self, group: str, add=(), remove=()) -> dict:
+        body = {}
+        if add:
+            body["resourceNamesToAdd"] = list(add)
+        if remove:
+            body["resourceNamesToRemove"] = list(remove)
+        return self._json("POST", PEOPLE_BASE + "/v1/%s/members:modify" % group, body)
+
+    def delete_group(self, group: str) -> None:
+        self._req("DELETE", PEOPLE_BASE + "/v1/%s?deleteContacts=false" % group)   # 라벨만 — 연락처는 그대로
 
     def get_bytes(self, url: str) -> bytes:
         return self._req("GET", url)

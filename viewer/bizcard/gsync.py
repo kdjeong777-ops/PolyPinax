@@ -26,12 +26,16 @@ NEW_CARD, NEW_GOOGLE, TO_CARD, TO_GOOGLE, GONE_GOOGLE, GONE_CARD, PHOTO_UP, PHOT
     "new_card", "new_google", "to_card", "to_google", "gone_google", "gone_card", "photo_up", "photo_down", "drive_up")
 KAKAO_UP, KAKAO_DOWN = "kakao_up", "kakao_down"     # 카톡 친구추가 방지(구글 이름 앞 '#') 바꿈 → 구글 · 구글 이름대로 표시 맞춤
 MERGED_GOOGLE = "merged_google"                 # 명함 합치기로 남지 못한 짝의 구글 연락처 — 지울까요(§5.29 '명함 합치기와 짝', 261120-46)
+LABELS, LABEL_GONE = "labels", "label_gone"     # 고른 해시태그 ↔ 구글 라벨 맞춤 · 고른 목록에서 뺀 라벨 — 지울까요(§5.29 '라벨', 261120-61)
 KINDS = (NEW_CARD, NEW_GOOGLE, TO_CARD, TO_GOOGLE, GONE_GOOGLE, GONE_CARD, MERGED_GOOGLE, PHOTO_UP, PHOTO_DOWN, DRIVE_UP,
-         KAKAO_UP, KAKAO_DOWN)
+         KAKAO_UP, KAKAO_DOWN, LABELS, LABEL_GONE)
+OPT_LABELS = "gsync_label_tags"                  # meta — 구글 라벨로 올릴 해시태그(명함 환경설정)
+OPT_LABELS_OFF = "gsync_label_off"               # meta — 환경설정에서 끈 것(구글 라벨이어도 다시 넣지 않음)
+META_LABEL_GROUPS = "gsync_label_groups"         # meta — 앱이 쓴 라벨 {이름: contactGroups/…}
 OPT_KAKAO_NEW = "gsync_kakao_new"               # meta — 구글에 새로 보낼 때 친구추가 방지(처음 켬)
 KAKAO_MARK = "#"
-DEFAULT_ON = {k: k not in (GONE_GOOGLE, GONE_CARD) for k in KINDS}    # 지워짐은 기본 '남김'(§5.29 '지운 것'), 합쳐져 남음은 켬(사용자 결정 261121)
-GOOGLE_WRITES = (NEW_GOOGLE, TO_GOOGLE, GONE_CARD, MERGED_GOOGLE, KAKAO_UP, PHOTO_UP, DRIVE_UP)   # 구글 쪽을 바꾸는 갈래 — 미리보기의 백업 권함
+DEFAULT_ON = {k: k not in (GONE_GOOGLE, GONE_CARD, LABEL_GONE) for k in KINDS}    # 지워짐은 기본 '남김'(§5.29 '지운 것'), 합쳐져 남음은 켬(사용자 결정 261121)
+GOOGLE_WRITES = (NEW_GOOGLE, TO_GOOGLE, GONE_CARD, MERGED_GOOGLE, KAKAO_UP, PHOTO_UP, DRIVE_UP, LABELS, LABEL_GONE)   # 구글 쪽을 바꾸는 갈래 — 미리보기의 백업 권함
 
 
 def row_default(r: dict) -> bool:
@@ -52,6 +56,8 @@ def init(store) -> None:
         store.con.execute("ALTER TABLE google_link ADD COLUMN front TEXT DEFAULT ''")   # 짝지은 명함의 열쇠 — 같은 id 를 다시 받은 새 명함과 가름
     if "merged" not in {r[1] for r in store.con.execute("PRAGMA table_info(google_link)")}:
         store.con.execute("ALTER TABLE google_link ADD COLUMN merged INTEGER DEFAULT 0")   # 합치기로 남지 못한 짝 — 남은 명함 id
+    if "labels" not in {r[1] for r in store.con.execute("PRAGMA table_info(google_link)")}:
+        store.con.execute("ALTER TABLE google_link ADD COLUMN labels TEXT DEFAULT '[]'")   # 지난 싱크 때 고른 라벨(261120-61)
     # 명함 파일 이름이 바뀌면(이름 바꾸기·옮기기·합치기) 짝의 열쇠도 따라감 — 어느 길이든 한 곳(261120-46)
     store.con.execute("CREATE TRIGGER IF NOT EXISTS google_link_front AFTER UPDATE OF front ON cards WHEN OLD.front IS NOT NEW.front "
                       "BEGIN UPDATE google_link SET front = NEW.front WHERE card_id = NEW.id AND front = OLD.front; END")
@@ -61,18 +67,20 @@ def init(store) -> None:
 def links(store) -> dict:
     init(store)
     return {r[0]: {"rn": r[1], "etag": r[2], "synced": r[3] or 0.0, "photo_sig": r[4] or "", "drive": json.loads(r[5] or "{}"),
-                   "front": r[6] or "", "merged": r[7] or 0}
-            for r in store.con.execute("SELECT card_id, resource_name, etag, synced, photo_sig, drive, front, merged FROM google_link")}
+                   "front": r[6] or "", "merged": r[7] or 0, "labels": json.loads(r[8] or "[]")}
+            for r in store.con.execute("SELECT card_id, resource_name, etag, synced, photo_sig, drive, front, merged, labels FROM google_link")}
 
 
 def _link_put(store, cid: int, rn: str, etag: str, **kw) -> None:
     old = links(store).get(cid) or {}
     row = store.con.execute("SELECT front FROM cards WHERE id=?", (cid,)).fetchone()
-    store.con.execute("INSERT INTO google_link(card_id, resource_name, etag, synced, photo_sig, drive, front) VALUES(?,?,?,?,?,?,?) "
+    keep_labels = old.get("labels", []) if old.get("rn") == rn else []
+    store.con.execute("INSERT INTO google_link(card_id, resource_name, etag, synced, photo_sig, drive, front, labels) VALUES(?,?,?,?,?,?,?,?) "
                       "ON CONFLICT(card_id) DO UPDATE SET resource_name=excluded.resource_name, etag=excluded.etag, "
-                      "synced=excluded.synced, photo_sig=excluded.photo_sig, drive=excluded.drive, front=excluded.front",
+                      "synced=excluded.synced, photo_sig=excluded.photo_sig, drive=excluded.drive, front=excluded.front, labels=excluded.labels",
                       (cid, rn, etag or old.get("etag") or "", kw.get("synced", time.time()), kw.get("photo_sig", old.get("photo_sig", "")),
-                       json.dumps(kw.get("drive", old.get("drive", {}))), (row[0] if row else "") or ""))
+                       json.dumps(kw.get("drive", old.get("drive", {}))), (row[0] if row else "") or "",
+                       json.dumps(list(kw.get("labels", keep_labels)), ensure_ascii=False)))
 
 
 # ── 카톡 친구추가 방지(§5.29 '카톡 친구추가 방지') — 명함 이름에는 '#' 를 두지 않고 사람마다 표시만 ──
@@ -287,8 +295,38 @@ def all_cards(store) -> list:
     return [store._row(r) for r in store.con.execute("SELECT * FROM cards ORDER BY id")]
 
 
-def plan(store, people: list, folder: str = "", photos: bool = False, drive: bool = False) -> list:
-    """계획 줄 [{kind, card_id, rn, name, fields, ...}] — 네트워크 없이. 반영 전에는 아무것도 바꾸지 않는다."""
+def label_tags(store) -> list:
+    """구글 라벨로 올릴 해시태그(명함 환경설정, §5.29 '라벨')."""
+    return [t for t in (store.meta_get(OPT_LABELS, []) or []) if str(t).strip()]
+
+
+def label_off(store) -> set:
+    return {P._tagkey(t) for t in (store.meta_get(OPT_LABELS_OFF, []) or [])}
+
+
+def add_label_tags(store, names) -> None:
+    """가져온 구글 라벨을 '구글 라벨로 올릴 해시태그' 에(끈 것 빼고) — 양방향(사용자 지시 261121)."""
+    off, cur = label_off(store), label_tags(store)
+    have = {P._tagkey(t) for t in cur}
+    new = [n for n in dict.fromkeys(names or []) if P._tagkey(n) and P._tagkey(n) not in have and P._tagkey(n) not in off]
+    if new:
+        store.meta_set(OPT_LABELS, cur + new)
+
+
+def _user_groups(groups) -> dict:
+    """사람이 만든 라벨만 {contactGroups/…: 이름} — 시스템 라벨(myContacts·starred …)은 뺀다."""
+    return {g["resourceName"]: g.get("name") or "" for g in groups or [] if g.get("groupType", "USER_CONTACT_GROUP") == "USER_CONTACT_GROUP"}
+
+
+def person_labels(p: dict, gmap: dict) -> list:
+    return [gmap[m["contactGroupMembership"]["contactGroupResourceName"]] for m in p.get("memberships") or []
+            if (m.get("contactGroupMembership") or {}).get("contactGroupResourceName") in gmap]
+
+
+def plan(store, people: list, folder: str = "", photos: bool = False, drive: bool = False, card_first: bool = False,
+         groups=None) -> list:
+    """계획 줄 [{kind, card_id, rn, name, fields, ...}] — 네트워크 없이. 반영 전에는 아무것도 바꾸지 않는다.
+    card_first = '명함 기준으로 올리기'(§5.29, 261120-59) — 명함 값이 이김: 구글에서 지워진 짝은 새 연락처로 다시, 구글 → 명함 줄 없음."""
     init(store)
     lk = links(store)
     kb = kakao_rows(store)
@@ -299,6 +337,8 @@ def plan(store, people: list, folder: str = "", photos: bool = False, drive: boo
     rn_linked = {v["rn"] for v in lk.values()}
     rows = []
     pairs = []
+    regone = []                                            # card_first — 구글에서 지워진 짝의 명함(새 연락처로 다시)
+    known = set(lk) | _google_src_ids(store)               # 예전 구글에 있던 명함(§5.29 '카톡' — 새로 보낼 때 # 없이, 261120-59)
     for cid, l in list(lk.items()):
         c, p = by_id.get(cid), by_rn.get(l["rn"])
         if c is not None and l.get("front") and l["front"] != (c.get("front") or ""):
@@ -309,23 +349,48 @@ def plan(store, people: list, folder: str = "", photos: bool = False, drive: boo
             rows.append({"kind": MERGED_GOOGLE if l.get("merged") else GONE_CARD, "card_id": cid, "rn": l["rn"],
                          "name": person_values(p)["name"]})
         elif p is None and c is not None:
-            rows.append({"kind": GONE_GOOGLE, "card_id": cid, "rn": l["rn"], "name": c.get("name") or ""})
+            if card_first:
+                regone.append(c)
+            else:
+                rows.append({"kind": GONE_GOOGLE, "card_id": cid, "rn": l["rn"], "name": c.get("name") or ""})
         elif c is not None:
             pairs.append((c, p, l))
-    free_cards = [c for c in cards if c["id"] not in lk]
+    free_cards = [c for c in cards if c["id"] not in lk] + regone
     from_google = _google_src_ids(store)
+    known_mob = {k for c in cards if c["id"] in known for k in P._mobile_keys(c)}
+
+    def new_kakao(c):
+        if c["id"] in kb:
+            return kb[c["id"]][0]                          # 사람마다 표시가 먼저
+        if c["id"] in known or set(P._mobile_keys(c)) & known_mob:
+            return False                                   # 예전 구글에 있던 사람은 # 없이(사용자 결정 261121)
+        return new_k
     free_people = [p for p in people if p["resourceName"] not in rn_linked]
     m = match(free_cards, free_people)
+    use_labels = groups is not None
+    gmap = _user_groups(groups) if use_labels else {}
+    ch = {}
+    if use_labels:                                         # 고른 해시태그 + 구글 라벨(끈 것 빼고, 사용자 지시 261121 '구글의 라벨을 해시태그로')
+        off = label_off(store)
+        for t in label_tags(store) + sorted(gmap.values()):
+            k = P._tagkey(t)
+            if k and k not in off:
+                ch.setdefault(k, t)
+
+    def _keys(names):
+        return [k for k in dict.fromkeys(P._tagkey(t) for t in names or []) if k in ch]
     for c in free_cards:
         if c["id"] in m:
             pairs.append((c, by_rn[m[c["id"]]], {"rn": m[c["id"]], "synced": 0.0, "photo_sig": "", "drive": {}, "new": True}))
         else:
             rows.append({"kind": NEW_GOOGLE, "card_id": c["id"], "rn": "", "name": c.get("name") or "",
-                         "kakao": kb[c["id"]][0] if c["id"] in kb else new_k,     # 새로 보낼 때는 기본 친구추가 방지
-                         "maybe_dup": c["id"] in from_google})                     # 구글 vCard 로 가져온 명함 — 구글에 이미 있을 수 있음
+                         "kakao": new_kakao(c),                                     # 새로 보낼 때는 기본 친구추가 방지
+                         "maybe_dup": c["id"] in from_google and not card_first,    # 구글 vCard 로 가져온 명함 — 구글에 이미 있을 수 있음
+                         "labels": [ch[k] for k in _keys(c.get("tags"))]})
     for p in free_people:
-        if p["resourceName"] not in m.values():
-            rows.append({"kind": NEW_CARD, "card_id": 0, "rn": p["resourceName"], "name": person_values(p)["name"]})
+        if p["resourceName"] not in m.values() and not card_first:
+            rows.append({"kind": NEW_CARD, "card_id": 0, "rn": p["resourceName"], "name": person_values(p)["name"],
+                         "tags_add": [ch[k] for k in _keys(person_labels(p, gmap))]})
     for c, p, l in pairs:
         pv = person_values(p)
         d = diff_fields(c, pv)
@@ -334,29 +399,46 @@ def plan(store, people: list, folder: str = "", photos: bool = False, drive: boo
         row = kb.get(c["id"])
         c_k = g_k if row is None else row[0]                 # 표시가 없으면 구글 이름대로(이미 있는 연락처는 그대로)
         if row is None and g_k:
-            rows.append({"kind": KAKAO_DOWN, "card_id": c["id"], "rn": p["resourceName"], "name": c.get("name") or "", "kakao": True})
+            if not card_first:
+                rows.append({"kind": KAKAO_DOWN, "card_id": c["id"], "rn": p["resourceName"], "name": c.get("name") or "", "kakao": True})
         elif row is not None and row[0] != g_k:
-            up = row[1] > syn                                  # 표시를 바꾼 뒤면 구글로, 아니면 구글 이름대로
+            up = row[1] > syn or card_first                    # 표시를 바꾼 뒤면 구글로, 아니면 구글 이름대로(명함 기준이면 늘 구글로)
             rows.append({"kind": KAKAO_UP if up else KAKAO_DOWN, "card_id": c["id"], "rn": p["resourceName"],
                          "name": c.get("name") or "", "kakao": row[0] if up else g_k, "etag": p.get("etag") or ""})
             c_k = row[0] if up else g_k
         if d:
             g_new, c_new = pt > syn, ct > syn
-            to_card = (g_new and not c_new) or (g_new == c_new and pt > ct)    # 한쪽만 바뀌었으면 그쪽, 둘 다면 나중 것
+            to_card = not card_first and ((g_new and not c_new) or (g_new == c_new and pt > ct))   # 한쪽만 바뀌었으면 그쪽, 둘 다면 나중 것
             rows.append({"kind": TO_CARD if to_card else TO_GOOGLE, "card_id": c["id"], "rn": p["resourceName"],
                          "name": c.get("name") or pv["name"], "fields": d, "etag": p.get("etag") or "", "link": bool(l.get("new")),
                          "kakao": c_k,
                          "changes": [(f,) + ((show(c, f), show(pv, f)) if to_card else (show(pv, f), show(c, f))) for f in d]})
         elif l.get("new"):                                   # 처음 짝 — 값이 같으면 짝만 적는다
             rows.append({"kind": "link", "card_id": c["id"], "rn": p["resourceName"], "name": c.get("name") or "",
-                         "etag": p.get("etag") or ""})
+                         "etag": p.get("etag") or "", "labels": [ch[k] for k in set(_keys(c.get("tags"))) & set(_keys(person_labels(p, gmap)))]})
+        if ch:                                               # 고른 해시태그 ↔ 구글 라벨(§5.29 '라벨', 261120-61)
+            C, Gs = set(_keys(c.get("tags"))), set(_keys(person_labels(p, gmap)))
+            L = (C & Gs) if l.get("new") else set(_keys(l.get("labels")))
+            if card_first:
+                add_g, rm_g, add_t, rm_t = C - Gs, Gs - C, set(), set()
+            else:
+                add_g, rm_g = (C - L) - Gs, (L - C) & Gs
+                add_t, rm_t = (Gs - L) - C, (L - Gs) & C
+            if add_g or rm_g or add_t or rm_t:
+                nm = lambda ks: sorted(ch[k] for k in ks)
+                txt = " ".join(["+" + x for x in nm(add_g)] + ["−" + x for x in nm(rm_g)])
+                tt = " ".join(["+" + x for x in nm(add_t)] + ["−" + x for x in nm(rm_t)])
+                rows.append({"kind": LABELS, "card_id": c["id"], "rn": p["resourceName"], "name": c.get("name") or "",
+                             "add_g": nm(add_g), "rm_g": nm(rm_g), "add_t": nm(add_t), "rm_t": nm(rm_t),
+                             "labels": nm((C | add_t) - rm_t),
+                             "txt": "  ".join(x for x in (("구글 " + txt) if txt else "", ("해시태그 " + tt) if tt else "") if x)})
         if photos:
             mine = first_photo(c, folder)
             gp = g_photo(p)
             if mine and not gp:
                 rows.append({"kind": PHOTO_UP, "card_id": c["id"], "rn": p["resourceName"], "name": c.get("name") or "",
                              "path": mine})
-            elif gp and not mine:
+            elif gp and not mine and not card_first:
                 rows.append({"kind": PHOTO_DOWN, "card_id": c["id"], "rn": p["resourceName"], "name": c.get("name") or "",
                              "url": gp})
         if drive and not str(c.get("front") or "").startswith("contact:"):
@@ -366,6 +448,11 @@ def plan(store, people: list, folder: str = "", photos: bool = False, drive: boo
                 if path and _sig(path) and have.get(side, {}).get("sig") != _sig(path):
                     rows.append({"kind": DRIVE_UP, "card_id": c["id"], "rn": p["resourceName"], "name": c.get("name") or "",
                                  "side": side, "path": path})
+    if use_labels:                                           # 앱이 쓰던 라벨을 고른 목록에서 뺐으면 — 지울까요(기본 남김)
+        used = store.meta_get(META_LABEL_GROUPS, {}) or {}
+        for name, grn in sorted(used.items()):
+            if P._tagkey(name) not in ch and grn in gmap:
+                rows.append({"kind": LABEL_GONE, "card_id": 0, "rn": grn, "name": name})
     order = {k: i for i, k in enumerate(KINDS + ("link",))}
     rows.sort(key=lambda r: (order.get(r["kind"], 99), r.get("name") or ""))
     return rows
@@ -389,6 +476,24 @@ def apply(store, api, rows: list, folder: str = "", drive_folder: str = DRIVE_FO
     by_rn = {p["resourceName"]: p for p in people or []}     # 계획 때 받은 목록(없으면 처음 필요할 때 한 번 받는다)
     folder_id = ""
     n = len(rows)
+    gcache = {}                                             # 라벨 이름(열쇠) → contactGroups/… — 처음 필요할 때 한 번 받는다
+
+    def group_of(name, make=True):
+        if not gcache:
+            for g in api.list_groups():
+                if g.get("groupType", "USER_CONTACT_GROUP") == "USER_CONTACT_GROUP":
+                    gcache[P._tagkey(g.get("name"))] = g["resourceName"]
+            gcache[""] = ""
+        rn = gcache.get(P._tagkey(name))
+        if not rn and make:
+            rn = api.create_group(name)["resourceName"]
+            gcache[P._tagkey(name)] = rn
+        if rn:
+            used = dict(store.meta_get(META_LABEL_GROUPS, {}) or {})
+            if used.get(name) != rn:
+                used[name] = rn
+                store.meta_set(META_LABEL_GROUPS, used)
+        return rn
     for i, r in enumerate(rows):
         k = r["kind"]
         try:
@@ -400,12 +505,17 @@ def apply(store, api, rows: list, folder: str = "", drive_folder: str = DRIVE_FO
                 cid = P._insert_contact(store, v, ["명함", TAG])
                 kakao_set(store, [cid], v.get("kakao", False), set_at=0.0)
                 P._set_srcs(store, cid, [x for x in P._SCALARS if (v.get(x) or "").strip()], SRC)
-                _link_put(store, cid, r["rn"], p.get("etag") or "")
+                if r.get("tags_add"):                         # 고른 라벨만 해시태그로(§5.29 '라벨')
+                    cc = P.card_by_id(store, cid)
+                    P.update_card(store, cid, {"tags": list(dict.fromkeys(list(cc.get("tags") or []) + list(r["tags_add"])))}, commit=False)
+                _link_put(store, cid, r["rn"], p.get("etag") or "", labels=list(r.get("tags_add") or []))
             elif k == NEW_GOOGLE:
                 c = P.card_by_id(store, r["card_id"])
                 p = api.create(card_person(c, kakao=bool(r.get("kakao"))))
                 kakao_set(store, [c["id"]], bool(r.get("kakao")), set_at=0.0)
-                _link_put(store, c["id"], p["resourceName"], p.get("etag") or "")
+                for name in r.get("labels") or []:               # 새 연락처도 고른 해시태그의 라벨을(§5.29 '라벨')
+                    api.modify_members(group_of(name), add=[p["resourceName"]])
+                _link_put(store, c["id"], p["resourceName"], p.get("etag") or "", labels=list(r.get("labels") or []))
             elif k == TO_CARD:
                 p = _fetch(api, r["rn"], by_rn)
                 v = person_values(p)
@@ -431,7 +541,25 @@ def apply(store, api, rows: list, folder: str = "", drive_folder: str = DRIVE_FO
             elif k == KAKAO_DOWN:
                 kakao_set(store, [r["card_id"]], bool(r.get("kakao")), set_at=0.0)
             elif k == "link":
-                _link_put(store, r["card_id"], r["rn"], r.get("etag") or "")
+                _link_put(store, r["card_id"], r["rn"], r.get("etag") or "", labels=list(r.get("labels") or []))
+            elif k == LABELS:                                    # 고른 해시태그 ↔ 구글 라벨(§5.29 '라벨', 261120-61)
+                for name in r.get("add_g") or []:
+                    api.modify_members(group_of(name), add=[r["rn"]])
+                for name in r.get("rm_g") or []:
+                    g = group_of(name, make=False)
+                    if g:
+                        api.modify_members(g, remove=[r["rn"]])
+                if r.get("add_t") or r.get("rm_t"):
+                    cc = P.card_by_id(store, r["card_id"])
+                    gone = {P._tagkey(t) for t in r.get("rm_t") or []}
+                    tags = [t for t in cc.get("tags") or [] if P._tagkey(t) not in gone] + list(r.get("add_t") or [])
+                    P.update_card(store, r["card_id"], {"tags": list(dict.fromkeys(tags))}, commit=False)
+                _link_put(store, r["card_id"], r["rn"], "", labels=list(r.get("labels") or []))
+            elif k == LABEL_GONE:                                # 라벨만 지움 — 연락처는 그대로
+                api.delete_group(r["rn"])
+                used = dict(store.meta_get(META_LABEL_GROUPS, {}) or {})
+                used.pop(r["name"], None)
+                store.meta_set(META_LABEL_GROUPS, used)
             elif k == GONE_GOOGLE:
                 delete_cards.append(r["card_id"])
                 store.con.execute("DELETE FROM google_link WHERE card_id=?", (r["card_id"],))
@@ -484,6 +612,8 @@ def apply(store, api, rows: list, folder: str = "", drive_folder: str = DRIVE_FO
         store.con.commit()
         if progress is not None:
             progress(i + 1, n)
+    add_label_tags(store, [n for r in rows for n in (r.get("tags_add") or []) + (r.get("add_t") or [])])   # 가져온 라벨도 목록에
+    store.con.commit()
     return {"done": done, "failed": failed, "delete_cards": delete_cards}
 
 

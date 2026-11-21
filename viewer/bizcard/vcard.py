@@ -340,6 +340,9 @@ def _parts(val: str) -> list:
     return out
 
 
+SYSTEM_LABELS = ("mycontacts", "starred", "friends", "family", "coworkers", "blocked", "chatbuddies", "all", "imported")   # 구글 기본 라벨
+
+
 def _tel_kind(params: dict) -> str:
     t = ",".join(params.get("TYPE", []) + [k for k, v in params.items() if v == [""]]).upper()
     return "fax" if "FAX" in t else "cell" if ("CELL" in t or "MOBILE" in t) else "work"
@@ -350,16 +353,19 @@ def people_from_vcf(text: str, card_words=()) -> list:
     우리가 내보낸 NOTE 의 '명함: 폴더/파일'·드라이브 찾기 줄은 메모로 들이지 않는다(card_words = 그 낱말들)."""
     out, cur = [], None
     words = tuple(w for w in card_words if w)
+    labels, groups = set(), set()                      # 라벨 이름(CATEGORIES)·그룹 카드 — 사람이 아닌 카드는 넣지 않는다(261120-60)
     for ln in _unfold(text):
         u = ln.strip().upper()
         if u == "BEGIN:VCARD":
             cur = {"name": "", "n": "", "company": "", "dept": "", "title": "", "phones": [], "emails": [], "urls": [],
-                   "address": "", "memo": ""}
+                   "address": "", "memo": "", "labels": []}
             continue
         if u == "END:VCARD":
             if cur is not None:
                 cur["name"] = cur["name"] or cur.pop("n", "")
                 cur.pop("n", None)
+                if cur.pop("_group", False):
+                    groups.add(id(cur))
                 if cur["name"] or cur["phones"] or cur["emails"]:
                     out.append(cur)
             cur = None
@@ -370,6 +376,13 @@ def people_from_vcf(text: str, card_words=()) -> list:
         if not p:
             continue
         name, params, val = p
+        if (name in ("KIND", "X-ADDRESSBOOKSERVER-KIND") and val.strip().lower() == "group") \
+                or name in ("MEMBER", "X-ADDRESSBOOKSERVER-MEMBER"):
+            cur["_group"] = True
+        elif name == "CATEGORIES":
+            got = [x.strip() for x in val.split(",") if x.strip()]
+            labels.update(got)
+            cur["labels"] += [x for x in got if x.lower() not in SYSTEM_LABELS and x not in cur["labels"]]   # 라벨 → 해시태그(261121)
         if name == "FN":
             cur["name"] = val.strip()
         elif name == "N":
@@ -395,4 +408,11 @@ def people_from_vcf(text: str, card_words=()) -> list:
             keep = [x for x in val.splitlines() if x.strip() and not x.startswith(DRIVE_SEARCH)
                     and not any(x.startswith(w + ": ") and "/" in x for w in words)]
             cur["memo"] = "\n".join(keep)
-    return out
+    low = {x.lower() for x in labels}
+
+    def person(c):
+        if id(c) in groups:
+            return False
+        bare = not (c["phones"] or c["emails"] or c["company"])
+        return not (bare and c["name"].strip().lower() in low)    # 라벨 이름뿐인 카드
+    return [c for c in out if person(c)]

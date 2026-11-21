@@ -17132,3 +17132,27 @@ msgstr ""
 #: viewer/widgets/bizcard_dupe_dialog.py
 msgid "앞에 체크한 칸을 한꺼번에 비웁니다 — [저장] 해야 명함에 반영됩니다"
 msgstr ""
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+msgid "라벨·해시태그 맞춤"
+msgstr ""
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+msgid "고른 목록에서 뺀 구글 라벨 — 지울까요(연락처는 그대로)"
+msgstr ""
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+msgid "명함 기준으로 올리기"
+msgstr ""
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+msgid "명함 값이 이깁니다 — 구글에서 지워진 사람은 새 연락처로 다시 만들고, 구글 → 명함으로 고치거나 가져오는 줄은 만들지 않습니다"
+msgstr ""
+
+#: viewer/widgets/bizcard_settings_dialog.py
+msgid "체크한 해시태그만 구글 연락처 라벨과 맞춥니다 — 명함에 붙이면 라벨에 넣고, 구글에서 라벨을 떼면 해시태그도 뗍니다"
+msgstr ""
+
+#: viewer/widgets/bizcard_settings_dialog.py
+msgid "구글 라벨로 올릴 해시태그:"
+msgstr ""

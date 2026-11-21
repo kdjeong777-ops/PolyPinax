@@ -11,6 +11,7 @@ import os
 from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QComboBox, QSpinBox,
                              QGroupBox, QFileDialog, QDialogButtonBox, QRadioButton, QMessageBox)
 
+from PyQt6.QtCore import Qt
 from viewer.i18n import tr, tr_noop
 from viewer.bizcard import people as P
 
@@ -234,12 +235,45 @@ class BizcardSettingsDialog(QDialog):
         f.addWidget(self.chk_gphotos)
         f.addWidget(self.chk_gdrive)
         f.addLayout(rd)
+        # 구글 라벨로 올릴 해시태그(§5.29 '라벨', 261120-61) — 체크한 해시태그만 구글 연락처 라벨과 양방향
+        from PyQt6.QtWidgets import QListWidget, QListWidgetItem
+        f.addWidget(QLabel(tr("구글 라벨로 올릴 해시태그:")))
+        self.lst_glabels = QListWidget()
+        self.lst_glabels.setToolTip(tr("체크한 해시태그만 구글 연락처 라벨과 맞춥니다 — 명함에 붙이면 라벨에 넣고, 구글에서 라벨을 떼면 해시태그도 뗍니다"))
+        self.lst_glabels.setMaximumHeight(120)
+        chosen = {str(t).lower() for t in (meta(G.OPT_LABELS, []) or [])}
+        self._glabels_on0 = set(chosen)
+        self._glabels_off0 = [str(t) for t in (meta(G.OPT_LABELS_OFF, []) or [])]
+        for t in self._all_tags(store, meta(G.OPT_LABELS, []) or []):
+            it = QListWidgetItem(t)
+            it.setFlags(it.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            it.setCheckState(Qt.CheckState.Checked if t.lower() in chosen else Qt.CheckState.Unchecked)
+            self.lst_glabels.addItem(it)
+        f.addWidget(self.lst_glabels)
         note = QLabel(tr("켜면 명함의 글 칸(과 고른 사진)을 구글 People·Drive API 로만 주고받습니다. 반영 전에는 늘 미리보기를 거칩니다."))
         note.setWordWrap(True)
         f.addWidget(note)
         v.addWidget(g)
         self._gworker = None
         self._gsync_status()
+
+    @staticmethod
+    def _all_tags(store, extra=()) -> list:
+        """명함들의 해시태그(앱 자동 태그 '명함' 빼고) + 이미 고른 것 — 이름 차례."""
+        out = {str(t) for t in extra if str(t).strip()}
+        if store is not None:
+            import json as _json
+            for (raw,) in store.con.execute("SELECT tags FROM cards"):
+                try:
+                    out.update(str(t) for t in _json.loads(raw or "[]") if str(t).strip())
+                except ValueError:
+                    pass
+        out.discard("명함")
+        return sorted(out, key=str.lower)
+
+    def label_tags_checked(self) -> list:
+        lw = self.lst_glabels
+        return [lw.item(i).text() for i in range(lw.count()) if lw.item(i).checkState() == Qt.CheckState.Checked]
 
     def _gsync_status(self):
         from viewer.bizcard import gsync_auth as A
@@ -293,6 +327,14 @@ class BizcardSettingsDialog(QDialog):
         self._st.meta_set(G.OPT_KAKAO_NEW, bool(self.chk_gkakao.isChecked()))
         self._st.meta_set(G.OPT_DRIVE, bool(self.chk_gdrive.isChecked()))
         self._st.meta_set(G.OPT_FOLDER, self.ed_gfolder.text().strip() or G.DRIVE_FOLDER_DEFAULT)
+        on = self.label_tags_checked()
+        self._st.meta_set(G.OPT_LABELS, on)                # 구글 라벨로 올릴 해시태그(261120-61)
+        lw = self.lst_glabels                               # 끈 것 — 처음 켜져 있던 것을 끈 것과 예전에 끈 것(구글 라벨이어도 다시 넣지 않음)
+        low_on = {t.lower() for t in on}
+        off = [t for t in self._glabels_off0 if t.lower() not in low_on]
+        off += [lw.item(i).text() for i in range(lw.count())
+                if lw.item(i).text().lower() in self._glabels_on0 and lw.item(i).text().lower() not in low_on]
+        self._st.meta_set(G.OPT_LABELS_OFF, list(dict.fromkeys(off)))
 
     def closeEvent(self, ev):
         if self._gworker is not None:

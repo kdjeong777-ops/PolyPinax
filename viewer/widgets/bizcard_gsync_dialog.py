@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from PyQt6.QtCore import Qt, QObject, pyqtSignal
 from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QTreeWidget, QTreeWidgetItem,
-                             QMessageBox, QProgressBar)
+                             QMessageBox, QProgressBar, QCheckBox)
 
 from viewer.i18n import tr, tr_noop
 from viewer.bizcard import gsync as G
@@ -21,7 +21,8 @@ KIND_LABELS = {G.NEW_CARD: tr_noop("구글에서 가져옴(새 명함)"), G.NEW_
                G.PHOTO_UP: tr_noop("인물 사진을 연락처 사진으로"), G.PHOTO_DOWN: tr_noop("연락처 사진을 인물 사진으로"),
                G.DRIVE_UP: tr_noop("명함 그림을 드라이브에"), "link": tr_noop("같은 사람으로 짝지음(값 같음)"),
                G.KAKAO_UP: tr_noop("카톡 친구추가 방지 바꿈(구글 이름 앞 #)"),
-               G.KAKAO_DOWN: tr_noop("카톡 친구추가 방지 표시를 구글 이름대로")}
+               G.KAKAO_DOWN: tr_noop("카톡 친구추가 방지 표시를 구글 이름대로"),
+               G.LABELS: tr_noop("라벨·해시태그 맞춤"), G.LABEL_GONE: tr_noop("고른 목록에서 뺀 구글 라벨 — 지울까요(연락처는 그대로)")}
 FIELD_LABELS = {"name": tr_noop("이름"), "company": tr_noop("회사"), "dept": tr_noop("부서"), "title": tr_noop("직함"),
                 "phones": tr_noop("전화"), "emails": tr_noop("메일"), "address": tr_noop("주소"), "urls": tr_noop("누리집"),
                 "memo": tr_noop("메모")}
@@ -65,9 +66,10 @@ class PlanWorker(QObject):
     done = pyqtSignal(list, list, str)
     finished = pyqtSignal()
 
-    def __init__(self, db, folder, photos, drive):
+    def __init__(self, db, folder, photos, drive, card_first=False):
         super().__init__()
         self._a = (db, folder, photos, drive)
+        self._card_first = bool(card_first)
 
     def run(self):
         from viewer.bizcard.store import BizcardStore
@@ -75,8 +77,10 @@ class PlanWorker(QObject):
         st = None
         try:
             st = BizcardStore(db)
-            people = _api(st).list_people()
-            rows = G.plan(st, people, folder, photos=photos, drive=drive)
+            api = _api(st)
+            people = api.list_people()
+            groups = api.list_groups() if (G.label_tags(st) or st.meta_get(G.META_LABEL_GROUPS, {})) else None   # 라벨(261120-61)
+            rows = G.plan(st, people, folder, photos=photos, drive=drive, card_first=self._card_first, groups=groups)
             self.done.emit(rows, people, "")
         except Exception as e:
             self.done.emit([], [], str(e) if str(e).startswith("http") else type(e).__name__)
@@ -125,6 +129,11 @@ class GSyncDialog(QDialog):
         self.setWindowTitle(tr("구글 주소록과 싱크"))
         self.resize(640, 560)
         v = QVBoxLayout(self)
+        self._card_first = False
+        self.chk_card_first = QCheckBox(tr("명함 기준으로 올리기"))   # §5.29 '명함 기준으로 올리기'(261120-59)
+        self.chk_card_first.setToolTip(tr("명함 값이 이깁니다 — 구글에서 지워진 사람은 새 연락처로 다시 만들고, 구글 → 명함으로 고치거나 가져오는 줄은 만들지 않습니다"))
+        self.chk_card_first.toggled.connect(self._toggle_card_first)
+        v.addWidget(self.chk_card_first)
         self.lbl = QLabel(tr("구글 주소록을 받는 중…"))
         self.lbl.setWordWrap(True)
         v.addWidget(self.lbl)
@@ -153,10 +162,22 @@ class GSyncDialog(QDialog):
         k = getattr(self.parent(), "_thread_keep", None) if self.parent() is not None else None
         return k if isinstance(k, list) else _KEEP
 
+    def _toggle_card_first(self, on):
+        if self.busy:
+            self.chk_card_first.blockSignals(True)
+            self.chk_card_first.setChecked(not on)
+            self.chk_card_first.blockSignals(False)
+            return
+        self._card_first = bool(on)
+        self.btn_apply.setEnabled(False)
+        self.tree.clear()
+        self.lbl.setText(tr("구글 주소록을 받는 중…"))
+        self.load()
+
     def load(self):
         from viewer.workers import run_in_thread
         self.busy = True
-        w = PlanWorker(self._db, self._folder, *self._opts)
+        w = PlanWorker(self._db, self._folder, *self._opts, card_first=self._card_first)
         w.done.connect(self._planned)
         run_in_thread(w, self._keep())
 
@@ -178,6 +199,8 @@ class GSyncDialog(QDialog):
                 txt = r.get("name") or tr("(이름 없음)")
                 if r.get("fields"):
                     txt += "  — " + ", ".join(_field(f) for f in r["fields"])
+                if r.get("txt"):                                  # 라벨 줄 — +라벨·−라벨(라벨 이름은 데이터)
+                    txt += "  — " + r["txt"].replace("구글 ", tr("구글") + " ", 1).replace("해시태그 ", tr("해시태그") + " ", 1)
                 if r.get("maybe_dup"):
                     txt += "  — " + tr("구글에 이미 있을 수 있음")
                 it = QTreeWidgetItem([txt])

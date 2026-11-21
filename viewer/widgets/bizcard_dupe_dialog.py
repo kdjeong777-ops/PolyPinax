@@ -325,6 +325,10 @@ class BizcardDupeDialog(QDialog):
                         tr(SRC_LABEL[g["src"][c["id"]]]), tr("대표") if is_rep else tr(WHY_LABEL[g["why"][c["id"]]])]
                 it = QTreeWidgetItem(cols)
                 it.setData(0, ROLE, (gi, c["id"]))
+                mk = (g.get("match") or {}).get(c["id"])
+                if mk:                                     # 어느 휴대폰으로 묶였는지(§5.24.8 '묶기', 261120-55 — 이 PC 화면에만)
+                    from viewer.bizcard import phone as PH
+                    it.setToolTip(len(cols) - 1, tr("묶인 휴대폰: {n}").format(n=PH.format_kr(mk) or mk))
                 it.setFlags(it.flags() | Qt.ItemFlag.ItemIsUserCheckable)
                 if is_rep:
                     it.setCheckState(0, Qt.CheckState.Checked if self.gchk[gi] else Qt.CheckState.Unchecked)

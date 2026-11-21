@@ -289,6 +289,8 @@ def update_card(store, card_id: int, fields: dict, commit: bool = True) -> None:
     row = store._row(store.con.execute("SELECT * FROM cards WHERE id=?", (card_id,)).fetchone())
     if row is None:
         return
+    if "phones" in fields:                              # 번호 종류 바로잡기 — 전화를 쓰는 모든 길이 여기(§5.11, 261120-55)
+        fields = fix_phone_fields(fields, row.get("memo") or "")
     row.update(fields)
     sets, args = [], []
     for k, v in fields.items():
@@ -309,6 +311,43 @@ def update_card(store, card_id: int, fields: dict, commit: bool = True) -> None:
     store.con.execute("INSERT INTO cards_fts(rowid, body) VALUES(?,?)", (card_id, store._body(row)))
     if commit:
         store.con.commit()
+
+
+def fix_phone_fields(fields: dict, memo: str = "") -> dict:
+    """fields 의 phones 를 `phone.fix_kinds` 로 — 빠진 옛 휴대폰은 메모(fields 의 memo, 없으면 지금 메모) 끝 줄로."""
+    from viewer.bizcard import phone as PH
+    ph, old = PH.fix_kinds(fields.get("phones") or [])
+    out = dict(fields, phones=ph)
+    if old:
+        out["memo"] = PH.memo_with_old(fields.get("memo", memo), old)
+    return out
+
+
+KINDS_FIXED_KEY = "phone_kinds_fixed"
+
+
+def fix_kinds_all(store, backup_path: str = "") -> int:
+    """이미 있는 명함 DB 의 번호 종류를 한 번 바로잡는다(§5.11 '번호 종류 바로잡기', 261120-55 — 배경에서, 자기 연결로).
+    바꿀 것이 있으면 먼저 backup_path 로 DB 백업(SQLite 온라인 백업). 반환 = 바꾼 명함 수. 끝나면 meta 에 표시."""
+    from viewer.bizcard import phone as PH
+    todo = []
+    for r in store.con.execute("SELECT * FROM cards").fetchall():
+        c = store._row(r)
+        ph, old = PH.fix_kinds(c.get("phones") or [])
+        if old or [tuple(x) for x in ph] != [tuple(x) for x in c.get("phones") or []]:
+            todo.append(c)
+    if todo and backup_path:
+        import sqlite3 as _sq
+        dst = _sq.connect(backup_path)
+        try:
+            store.con.backup(dst)
+        finally:
+            dst.close()
+    for c in todo:
+        update_card(store, c["id"], {"phones": c.get("phones") or []}, commit=False)   # 고친 시각이 새로 — 구글 싱크가 구글로
+    store.meta_set(KINDS_FIXED_KEY, time.time())
+    store.con.commit()
+    return len(todo)
 
 
 def card_by_id(store, card_id: int):
@@ -1015,6 +1054,7 @@ def _insert_contact(store, p: dict, tags) -> int:
     """그림 없는 명함 한 장(front `contact:<번호>`)을 넣고 찾기 색인까지 — 새 id. 커밋은 부르는 쪽이."""
     import uuid
     from viewer.bizcard.vcard import CONTACT_PREFIX
+    p = fix_phone_fields(p, p.get("memo") or "")          # 번호 종류 바로잡기(261120-55)
     front = CONTACT_PREFIX + uuid.uuid4().hex
     now = time.time()
     cur = store.con.execute(
@@ -1110,13 +1150,15 @@ MOBILE_PREFIX = ("010", "011", "016", "017", "018", "019")
 
 
 def _mobile_keys(card) -> list:
-    """휴대폰 번호만 — 회사 대표 번호·팩스는 여럿이 같이 쓴다(사용자 보고 261119). 국내 번호(0 으로 시작 — +82 도 0 꼴로)는
-    **01x 꼴만**(종류 칸이 '휴대폰'으로 잘못 든 02·031·070·050x 는 뺀다, 261120-48 덧고침), 외국 번호는 종류 '휴대폰'을 믿는다."""
+    """휴대폰 번호만 — 회사 대표 번호·팩스는 여럿이 같이 쓴다(사용자 보고 261119). 국내는 **010 꼴만**(+82·앞 0 빠짐도 국내 꼴로 —
+    종류 칸이 '휴대폰'으로 잘못 든 일반 번호·옛 011·016~019 는 뺀다, 261120-48 덧고침·-55), 외국은 + 로 시작하고 종류가 휴대폰일 때만.
+    판정은 `phone.mobile_key` 한 곳(구글 싱크 짝 맞추기도)."""
+    from viewer.bizcard import phone as PH
     out = []
     for x in card.get("phones") or []:
         kind, num = (x[0], x[-1]) if isinstance(x, (list, tuple)) and len(x) >= 2 else ("", x)
-        k = _phone_key(num)
-        if k and kind != "fax" and (k.startswith(MOBILE_PREFIX) or (kind == "cell" and not k.startswith("0"))):
+        k = PH.mobile_key(kind, num)
+        if len(k) >= 9:
             out.append(k)
     return out
 
@@ -1197,7 +1239,9 @@ def dupe_groups(store, order=None) -> list:
             x = p[x]
         return x
 
-    def link(a, b, why):
+    mkey = {}                                               # 명함 → 묶인 휴대폰(이유 풍선 도움말, 261120-55)
+
+    def link(a, b, why, key=""):
         if a == b:
             return
         ra, rb = find(par, a), find(par, b)
@@ -1212,6 +1256,8 @@ def dupe_groups(store, order=None) -> list:
             old = edges.get(x, {}).get(y)
             if old is None or _WHY_RANK[why] < _WHY_RANK[old]:
                 edges.setdefault(x, {})[y] = why
+            if key and (x not in mkey or why == "phone"):
+                mkey[x] = key
 
     # ① 같은 휴대폰 = 같은 사람(이름이 달라도 — 이름을 잘못 읽었을 수 있다). 일반 전화·팩스는 여럿이 같이 써서 평가에서 뺀다
     # (사용자 지시 261121, 261120-48). 메일은 이름이 같을(또는 한쪽이 빈) 때만 — 아래 ③, 휴대폰이 다르면 link 가 막는다.
@@ -1221,9 +1267,9 @@ def dupe_groups(store, order=None) -> list:
             bucket.setdefault(k, []).append(c)
         for e in {str(e).strip().lower() for e in c.get("emails") or [] if str(e).strip()}:
             mails.setdefault(e, []).append(c)
-    for same in bucket.values():
+    for k, same in bucket.items():
         for b in same[1:]:
-            link(same[0]["id"], b["id"], "phone")
+            link(same[0]["id"], b["id"], "phone", k)
     by_name, by_nc = {}, {}
     for c in cards:
         n = _nname(c.get("name"))
@@ -1237,8 +1283,9 @@ def dupe_groups(store, order=None) -> list:
         for i, a in enumerate(same):
             ka = _mobile_keys(a)
             for b in same[i + 1:]:
-                if any(mobile_typo(x, y) for x in ka for y in _mobile_keys(b)):
-                    link(a["id"], b["id"], "typo")
+                hit = next((x for x in ka for y in _mobile_keys(b) if mobile_typo(x, y)), "")
+                if hit:
+                    link(a["id"], b["id"], "typo", hit)
     for same in mails.values():
         for i, a in enumerate(same):
             for b in same[i + 1:]:
@@ -1259,6 +1306,7 @@ def dupe_groups(store, order=None) -> list:
         ordered = order_cards([byid[i] for i in ids], src, order)
         why = {i: min(edges.get(i, {}).values(), key=lambda w: _WHY_RANK[w]) for i in ids}
         out.append({"cards": ordered, "why": why, "src": src, "sure_root": {i: find(spar, i) for i in ids},
+                    "match": {i: mkey[i] for i in ids if i in mkey},
                     "manual": manual_fields(store, [byid[i] for i in ids])})
     out.sort(key=lambda g: _nname(g["cards"][0].get("name")))
     return out

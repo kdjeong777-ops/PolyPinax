@@ -123,7 +123,7 @@ def kinds(rows):
 print("=== A. 종류 없는 번호끼리 휴대폰 짝 ===")
 st, api = fresh("a")
 v = vcard_card(st)
-chk(P.card_by_id(st, v)["phones"][0][0] == "work", "A (전제) vCard 의 종류 없는 TEL 은 '전화' 로 들어옴")
+chk(P.card_by_id(st, v)["phones"][0][0] == "cell", "A (전제) vCard 의 종류 없는 010 TEL 도 '휴대폰' 으로 바로잡혀 들어옴(261120-55 — 종전엔 '전화')")
 rows = G.plan(st, api.list_people())
 chk(not any(r["kind"] in (G.NEW_CARD, G.NEW_GOOGLE) for r in rows), "A 같은 번호면 새 명함·새 연락처로 둘이 되지 않음", str(kinds(rows)))
 chk(any(r["kind"] in (G.TO_GOOGLE, G.TO_CARD, "link") and r["card_id"] == v and r["rn"] == "people/g1" for r in rows),

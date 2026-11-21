@@ -520,6 +520,31 @@ class _LineSplitter(QSplitter):
         return _LineHandle(self.orientation(), self)
 
 
+class _KindsFixWorker(QObject):
+    """이미 있는 명함 DB 의 번호 종류 한 번 바로잡기(§5.11 '번호 종류 바로잡기', 261120-55) — 배경, 자기 연결. done(바꾼 수)."""
+    done = pyqtSignal(int)
+    finished = pyqtSignal()
+
+    def __init__(self, db):
+        super().__init__()
+        self._db = db
+
+    def run(self):
+        n = 0
+        st = None
+        try:
+            from viewer.bizcard.store import BizcardStore
+            st = BizcardStore(self._db)
+            n = P.fix_kinds_all(st, str(st.path) + ".kinds_bak")
+        except Exception:
+            n = -1
+        finally:
+            if st is not None:
+                st.close()
+            self.done.emit(n)
+            self.finished.emit()
+
+
 class _KindCombo(QComboBox):
     """찾기 칸 앞 구분 — 항목 앞 체크 칸으로 여러 개(§5.24.1 '구분', 261120-49). 목록에서 항목을 누르면 체크만 바꾸고 펼친 채,
     콤보 글은 고른 것을 ' · ' 로. setCurrentIndex(키보드·종전 길)는 그 하나만 고른다. changed = 고른 것이 바뀜."""
@@ -1468,10 +1493,24 @@ class BizcardFindDialog(QDialog):
             cb.setChecked(k in on)
             cb.blockSignals(False)
         self._fav_fill_tabs(st.meta_get("fav_tab", None))
+        if not st.meta_get(P.KINDS_FIXED_KEY, None):        # 번호 종류 바로잡기 — 처음 열 때 한 번, 배경(261120-55)
+            from viewer.workers import run_in_thread
+            w = _KindsFixWorker(st.path)
+            w.done.connect(self._kinds_fixed)
+            keep = getattr(self._mw, "_thread_keep", None)
+            run_in_thread(w, keep if isinstance(keep, list) else _KEEP)
+            self._kinds_worker = w
         self.cb_kind.set_keys(st.meta_get("find_kind", "all"))   # 구분 기억(§5.24.1 '구분', 사용자 지시 261120 — 여러 개면 목록, 261120-49)
 
     def _save_copy_fields(self):
         self._store().meta_set("copy_fields", [k for k in P.COPY_FIELDS if self.chk[k].isChecked()])
+
+    def _kinds_fixed(self, n):
+        if n > 0:
+            self.refresh()
+            QMessageBox.information(self, tr("명함찾기"), tr(
+                "전화번호 종류를 바로잡았습니다 — 명함 {n}장(010 은 휴대폰, 그 밖은 일반 전화, 옛 011·016~019 번호는 메모로). "
+                "바꾸기 전 명함 DB 는 같은 폴더 'bizcard.db.kinds_bak' 에 두었습니다.").format(n=n))
 
     def kinds(self) -> list:
         """고른 구분들(§5.24.1 '구분' — 체크로 여러 개, 261120-49)."""

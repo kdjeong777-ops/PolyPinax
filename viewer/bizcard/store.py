@@ -140,7 +140,10 @@ class BizcardStore:
         return d
 
     def upsert(self, d: dict) -> int:
-        """`front`(정리본 앞면) 열쇠로 넣거나 고친다. 반환 = id."""
+        """`front`(정리본 앞면) 열쇠로 넣거나 고친다. 반환 = id. 전화는 번호 종류 바로잡기를 거친다(명함 SOT §5.11, 261120-55)."""
+        from viewer.bizcard import phone as PH
+        ph, old = PH.fix_kinds(d.get("phones") or [])
+        d = dict(d, phones=ph, memo=PH.memo_with_old(d.get("memo") or "", old) if old else d.get("memo"))
         now = time.time()
         vals = {k: d.get(k) or "" for k in _TEXT_COLS}
         js = {k: json.dumps(list(d.get(k) or []), ensure_ascii=False) for k in ("phones", "emails", "urls", "tags")}

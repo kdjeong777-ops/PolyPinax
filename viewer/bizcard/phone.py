@@ -45,6 +45,64 @@ def digits(s: str) -> str:
     return re.sub(r"\D", "", s or "")
 
 
+OLD_MOBILE = ("011", "016", "017", "018", "019")   # 옛 휴대폰 앞자리 — 전화 칸에서 빼 메모로(명함 SOT §5.11 '번호 종류 바로잡기', 261120-55)
+OLD_MEMO = "예전 휴대폰"                             # 메모 줄 머리 — 데이터라 번역하지 않는다(다국어 SOT §5)
+
+
+def kr_digits(num: str):
+    """한국 번호를 국내 꼴 숫자로(`+82`·`82…`·앞 0 빠진 01x 를 0 으로) — 외국 번호(+ 로 시작하는 82 아닌 것)면 None."""
+    t = (num or "").strip()
+    d = digits(t)
+    if t.startswith("+"):
+        return ("0" + d[2:].lstrip("0")) if d.startswith("82") else None
+    if d.startswith("82") and len(d) >= 11:
+        return "0" + d[2:].lstrip("0")
+    if not d.startswith("0") and len(d) == 10 and d[:2] in ("10", "11", "16", "17", "18", "19"):
+        return "0" + d
+    return d
+
+
+def mobile_key(kind: str, num: str) -> str:
+    """같은 사람을 가르는 휴대폰 열쇠(§5.24.8 '묶기') — 국내는 010 꼴만, 외국은 종류가 휴대폰일 때만, 팩스·일반 전화는 ''."""
+    if kind == "fax":
+        return ""
+    d = kr_digits(num)
+    if d is None:
+        f = digits(num)
+        return f if kind == "cell" and len(f) >= 9 else ""
+    return d if d.startswith("010") and len(d) >= 10 else ""
+
+
+def fix_kinds(phones):
+    """번호 종류 바로잡기(261120-55) — 010 은 '휴대폰', 휴대폰인데 010 아니면 일반 전화, 옛 011·016~019 는 빼서 돌려준다(메모로).
+    팩스·외국 번호는 그대로. 반환 (전화 목록[(종류, 번호)], 뺀 옛 휴대폰 번호들)."""
+    out, old = [], []
+    for x in phones or []:
+        kind, num = (x[0], x[-1]) if isinstance(x, (list, tuple)) and len(x) >= 2 else ("", x)
+        d = kr_digits(num) if kind != "fax" and num else None
+        if d is not None:
+            if d.startswith("010"):
+                kind = "cell"
+            elif d[:3] in OLD_MOBILE and len(d) in (10, 11):
+                old.append(num)
+                continue
+            elif kind == "cell":
+                kind = "work"
+        out.append((kind, num))
+    return out, old
+
+
+def memo_with_old(memo: str, old) -> str:
+    """옛 휴대폰 번호를 메모 끝에 `예전 휴대폰 011-…` 줄로 — 같은 줄이 있으면 다시 넣지 않는다."""
+    memo = memo or ""
+    lines = memo.split("\n") if memo else []
+    for n in old or []:
+        line = "%s %s" % (OLD_MEMO, n)
+        if line not in lines:
+            lines.append(line)
+    return "\n".join(lines)
+
+
 def format_kr(d: str) -> str:
     """국내 번호 숫자(0 또는 1로 시작) → 하이픈 꼴. 알 수 없는 길이면 ""."""
     n = len(d)

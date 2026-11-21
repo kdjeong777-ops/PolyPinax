@@ -17105,3 +17105,13 @@ msgstr ""
 #: viewer/widgets/bizcard_find_dialog.py
 msgid "해시태그 설정"
 msgstr ""
+
+#: viewer/widgets/bizcard_dupe_dialog.py
+#, python-brace-format
+msgid "묶인 휴대폰: {n}"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+#, python-brace-format
+msgid "전화번호 종류를 바로잡았습니다 — 명함 {n}장(010 은 휴대폰, 그 밖은 일반 전화, 옛 011·016~019 번호는 메모로). 바꾸기 전 명함 DB 는 같은 폴더 'bizcard.db.kinds_bak' 에 두었습니다."
+msgstr ""

@@ -257,6 +257,13 @@ class BizcardImportDialog(QDialog):
         self.chk_new.setToolTip(tr("아직 [적용] 하지 않은 명함만 봅니다"))
         self.chk_new.toggled.connect(lambda _c: self._apply_filter())
         top.addWidget(self.chk_new)
+        # 261120-31(§5.24.1 '사진에서 읽기'): [새 명함 입력] 창에서 넣은 사진만 — 그 길로 열 때만 보이고 켜진 채
+        self._sent = set()
+        self.chk_sent = QCheckBox(tr("입력한 명함만"))
+        self.chk_sent.setToolTip(tr("[새 명함 입력]의 [사진에서 읽기]로 넣은 사진만 봅니다"))
+        self.chk_sent.toggled.connect(lambda _c: self._apply_filter())
+        self.chk_sent.setVisible(False)
+        top.addWidget(self.chk_sent)
         self.btn_new = QPushButton(tr("새 명함 읽기"))
         self.btn_new.setToolTip(tr("폴더를 다시 훑어 창을 연 뒤에 넣은 명함 그림만 표 끝에 더하고 읽습니다"))
         self.btn_new.clicked.connect(lambda _c=False: self.read_new())
@@ -1022,6 +1029,9 @@ class BizcardImportDialog(QDialog):
             return
         st = self._store()
         cut = [p for p, made in out.items() if made]
+        for p in cut:                                  # 261120-31: 입력한 사진을 나눴으면 잘라낸 것도 '입력한 명함만' 안에
+            if os.path.normcase(os.path.abspath(p)) in self._sent:
+                self._sent |= {os.path.normcase(os.path.abspath(m)) for m in out[p]}
         self.multi_split = {p: list(made) for p, made in out.items() if made}
         files, olds = [], []
         for p in cut:
@@ -1043,6 +1053,7 @@ class BizcardImportDialog(QDialog):
         self._fill_empty_rows(0)
         self._applied_keys = None
         self.lbl_folder.setText(tr("폴더: {path}  ·  명함 {n}장").format(path=str(self._folder), n=len(self._items)))
+        self._apply_filter()                           # 261120-31: 다시 훑은 줄에도 거르기(입력한 명함만·새 명함만·확인 필요만)
         self._start()
 
     def split_selected(self):
@@ -1070,6 +1081,8 @@ class BizcardImportDialog(QDialog):
         hide = bool(only and not getattr(self._items[r], "need", True))
         if not hide and self.chk_new.isChecked():  # P5: 새 명함만 — 적용한(명함 DB 행이 있는) 줄은 숨김
             hide = os.path.normcase(os.path.abspath(str(self._items[r].key))) in self.applied_keys()
+        if not hide and self._sent and self.chk_sent.isChecked():   # 261120-31: 입력한 명함만
+            hide = os.path.normcase(os.path.abspath(str(self._items[r].front or self._items[r].key))) not in self._sent
         self.table.setRowHidden(r, hide)
 
     def applied_keys(self) -> set:
@@ -1118,6 +1131,31 @@ class BizcardImportDialog(QDialog):
         run_in_thread(self._worker, keep if keep is not None else _KEEP)
         self.table.scrollToItem(self.table.item(start, C_NAME))
         return len(new)
+
+    def read_sent(self, paths, _tries: int = 0) -> int:
+        """[새 명함 입력]의 [사진에서 읽기](261120-31) — 명함 폴더에 복사한 사진을 '입력한 명함만' 으로 보이고, 표에 없으면 새로 읽는다.
+        읽는 중이면 끝난 뒤 다시(0.5초마다, 상한 10분). 반환 = 새로 더한 장 수."""
+        if self._closing:
+            return 0
+        keys = {os.path.normcase(os.path.abspath(str(p))) for p in paths or []}
+        if not keys:
+            return 0
+        self._sent |= keys
+        self.chk_sent.setVisible(True)
+        self.chk_sent.setChecked(True)
+        known = {os.path.normcase(os.path.abspath(str(it.front or it.key))) for it in self._items}
+        n = 0
+        if not keys <= known:
+            busy = (self._worker is not None and not self._worker.done_event.is_set()) or self.region_busy or self._multi_busy()
+            if busy:
+                if _tries < 1200:
+                    QTimer.singleShot(500, lambda: self.read_sent(paths, _tries + 1))
+            else:
+                n = self.read_new(ask=False)
+        self._apply_filter()
+        self.raise_()
+        self.activateWindow()
+        return n
 
     def _set_dates(self):
         d = self.ed_date.text().strip()
@@ -1532,6 +1570,9 @@ class BizcardImportDialog(QDialog):
         return dlg
 
     def _after_manual(self, dlg):
+        if getattr(dlg, "read_files", None):           # 261120-31: [사진에서 읽기] — 이 창에서 읽어 확인
+            self.read_sent(dlg.read_files)
+            return
         if not getattr(dlg, "new_id", 0):
             return
         from viewer.bizcard import people as P

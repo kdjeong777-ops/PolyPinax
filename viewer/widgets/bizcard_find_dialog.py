@@ -1114,6 +1114,14 @@ class BizcardFindDialog(QDialog):
         return dlg
 
     def after_new_card(self, dlg):
+        if getattr(dlg, "read_files", None):           # 261120-31: [사진에서 읽기] — 명함 관리(명함 폴더)에서 읽어 확인
+            fn = getattr(self._mw, "_action_bizcard_import", None)
+            if callable(fn):
+                fn(self._bizcard_folder())
+                imp = getattr(self._mw, "_bizcard_dlg", None)
+                if imp is not None and hasattr(imp, "read_sent"):
+                    imp.read_sent(dlg.read_files)
+            return
         if not getattr(dlg, "new_id", 0):
             return
         c = P.card_by_id(self._store(), dlg.new_id)

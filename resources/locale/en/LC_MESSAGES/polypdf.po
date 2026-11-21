@@ -8780,6 +8780,14 @@ msgid "아직 [적용] 하지 않은 명함만 봅니다"
 msgstr "Show only cards that have not been applied yet"
 
 #: viewer/widgets/bizcard_import_dialog.py
+msgid "입력한 명함만"
+msgstr "Entered cards only"
+
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "[새 명함 입력]의 [사진에서 읽기]로 넣은 사진만 봅니다"
+msgstr "Show only the photos added with [Read from photos] in [Enter New Card]"
+
+#: viewer/widgets/bizcard_import_dialog.py
 msgid "새 명함 읽기"
 msgstr "Read New Cards"
 
@@ -9070,6 +9078,14 @@ msgstr "Card images"
 msgid "빼기"
 msgstr "Remove"
 
+#: viewer/widgets/bizcard_new_dialog.py
+msgid "사진에서 읽기"
+msgstr "Read from photos"
+
+#: viewer/widgets/bizcard_new_dialog.py
+msgid "명함 사진 여러 장(한 사진에 여러 장도)을 명함 폴더에 복사하고, 명함 관리에서 읽어 확인합니다(원본은 그대로)"
+msgstr "Copies several card photos (including several cards in one photo) to the card folder and reads them in Business Card Manager for checking (the originals stay)"
+
 #: viewer/widgets/bizcard_new_dialog.py viewer/widgets/settings_dialog.py
 msgid "고르기"
 msgstr "Choose"
@@ -9089,6 +9105,15 @@ msgstr "A back side alone cannot be added — choose a front image."
 #: viewer/widgets/bizcard_new_dialog.py
 msgid "앞면"
 msgstr "Front"
+
+#: viewer/widgets/bizcard_new_dialog.py
+msgid "입력한 칸은 저장하지 않습니다 — 사진을 명함 관리에서 읽을까요?"
+msgstr "The fields you typed will not be saved — read the photos in Business Card Manager?"
+
+#: viewer/widgets/bizcard_new_dialog.py
+#, python-brace-format
+msgid "사진 {n}장을 명함 폴더에 복사하지 못했습니다."
+msgstr "Could not copy {n} photos to the card folder."
 
 #: viewer/widgets/bizcard_new_dialog.py
 #, python-brace-format

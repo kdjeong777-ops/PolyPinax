@@ -46,6 +46,34 @@ class NewCardWorker(QObject):
             self.finished.emit()
 
 
+class CopyWorker(QObject):
+    """[사진에서 읽기](261120-31) — 고른 사진을 명함 폴더 맨 위에 복사(배경, 원본 그대로, 같은 이름이면 ' (2)').
+    done(복사한 경로들, 실패 수)."""
+    done = pyqtSignal(list, int)
+    finished = pyqtSignal()
+
+    def __init__(self, files, folder):
+        super().__init__()
+        self._files, self._folder = list(files), folder
+
+    def run(self):
+        import shutil
+        from pathlib import Path
+        from viewer.bizcard.apply import unique_path
+        out, bad = [], 0
+        try:
+            for f in self._files:
+                try:
+                    dst = unique_path(Path(self._folder), os.path.basename(f), set())
+                    shutil.copy2(f, str(dst))
+                    out.append(str(dst))
+                except Exception:                    # 경로·명함 값은 싣지 않는다(§2.1 의 3)
+                    bad += 1
+            self.done.emit(out, bad)
+        finally:
+            self.finished.emit()
+
+
 def fields_from(texts: dict, memo: str) -> dict:
     """칸 글 → 명함 값(세부 칸 [저장]과 같은 꼴 — 번호 꼴 §5.11, 한글 이름 다듬기, 회사 법인 꼴 뗌)."""
     g = {k: (texts.get(k) or "").strip() for k in ("name", "company", "dept", "title", "cell", "work", "fax",
@@ -71,6 +99,7 @@ class NewCardDialog(QDialog):
         self._db, self._folder = db, folder or ""
         self._img_filter = tr("그림") + " (%s)" % IMG_FILTER
         self.new_id, self.dupes, self.photo_bad, self.busy = 0, [], 0, False
+        self.read_files = []                           # [사진에서 읽기] 로 명함 폴더에 복사한 사진(부르는 쪽이 명함 관리로 넘긴다)
         self.front_img, self.back_img = "", ""
         self.setWindowTitle(tr("새 명함 입력"))
         self.resize(520, 720)
@@ -133,12 +162,18 @@ class NewCardDialog(QDialog):
             v.addWidget(note)
 
         brow = QHBoxLayout()
+        # 261120-31(§5.24.1 '사진에서 읽기'): 명함 사진 여러 장·다중 명함 사진 → 명함 폴더에 복사 → 명함 관리 확인 표에서 확인
+        self.btn_read = QPushButton(tr("사진에서 읽기"))
+        self.btn_read.setToolTip(tr("명함 사진 여러 장(한 사진에 여러 장도)을 명함 폴더에 복사하고, 명함 관리에서 읽어 확인합니다(원본은 그대로)"))
+        self.btn_read.clicked.connect(lambda _c=False: self.pick_read())
+        self.btn_read.setEnabled(has_folder)
+        brow.addWidget(self.btn_read)
         brow.addStretch(1)
         self.btn_save = QPushButton(tr("저장"))
         self.btn_save.clicked.connect(lambda _c=False: self.save())
         b_cancel = QPushButton(tr("취소"))
         b_cancel.clicked.connect(self.reject)
-        for b in (self.btn_save, b_cancel):
+        for b in (self.btn_read, self.btn_save, b_cancel):
             b.setAutoDefault(False)
             b.setDefault(False)
             brow.addWidget(b)
@@ -176,6 +211,41 @@ class NewCardDialog(QDialog):
 
     def photos(self) -> list:
         return [self.lst_photos.item(i).data(Qt.ItemDataRole.UserRole) for i in range(self.lst_photos.count())]
+
+    # ── 사진에서 읽기(261120-31) ──
+    def pick_read(self):
+        files, _ = QFileDialog.getOpenFileNames(self, tr("사진에서 읽기"), "", self._img_filter)
+        return self.read_photos(files)
+
+    def read_photos(self, files) -> bool:
+        """사진들을 명함 폴더에 복사(배경)한 뒤 창을 닫는다 — 부르는 쪽이 `read_files` 를 명함 관리로 넘긴다."""
+        files = [f for f in files or [] if f and os.path.isfile(f)]
+        if not files or self.busy or not self._folder:
+            return False
+        typed = any(ed.text().strip() for ed in self.eds.values()) or self.ed_memo.toPlainText().strip()
+        if typed and QMessageBox.question(self, tr("사진에서 읽기"),
+                                          tr("입력한 칸은 저장하지 않습니다 — 사진을 명함 관리에서 읽을까요?")) \
+                != QMessageBox.StandardButton.Yes:
+            return False
+        from viewer.workers import run_in_thread
+        self.busy = True
+        for b in (self.btn_read, self.btn_save):
+            b.setEnabled(False)
+        w = CopyWorker(files, self._folder)
+        w.done.connect(self._copied)
+        keep = getattr(self.parent(), "_thread_keep", None) if self.parent() is not None else None
+        run_in_thread(w, keep if isinstance(keep, list) else _KEEP)
+        return True
+
+    def _copied(self, out, bad):
+        self.busy = False
+        for b in (self.btn_read, self.btn_save):
+            b.setEnabled(True)
+        if bad:
+            QMessageBox.warning(self, tr("사진에서 읽기"), tr("사진 {n}장을 명함 폴더에 복사하지 못했습니다.").format(n=bad))
+        if out:
+            self.read_files = list(out)
+            self.accept()
 
     # ── 저장 ──
     def fields(self) -> dict:

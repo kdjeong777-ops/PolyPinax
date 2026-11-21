@@ -8528,6 +8528,14 @@ msgid "아직 [적용] 하지 않은 명함만 봅니다"
 msgstr ""
 
 #: viewer/widgets/bizcard_import_dialog.py
+msgid "입력한 명함만"
+msgstr ""
+
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "[새 명함 입력]의 [사진에서 읽기]로 넣은 사진만 봅니다"
+msgstr ""
+
+#: viewer/widgets/bizcard_import_dialog.py
 msgid "새 명함 읽기"
 msgstr ""
 
@@ -8816,6 +8824,14 @@ msgstr ""
 msgid "빼기"
 msgstr ""
 
+#: viewer/widgets/bizcard_new_dialog.py
+msgid "사진에서 읽기"
+msgstr ""
+
+#: viewer/widgets/bizcard_new_dialog.py
+msgid "명함 사진 여러 장(한 사진에 여러 장도)을 명함 폴더에 복사하고, 명함 관리에서 읽어 확인합니다(원본은 그대로)"
+msgstr ""
+
 #: viewer/widgets/bizcard_new_dialog.py viewer/widgets/settings_dialog.py
 msgid "고르기"
 msgstr ""
@@ -8834,6 +8850,15 @@ msgstr ""
 
 #: viewer/widgets/bizcard_new_dialog.py
 msgid "앞면"
+msgstr ""
+
+#: viewer/widgets/bizcard_new_dialog.py
+msgid "입력한 칸은 저장하지 않습니다 — 사진을 명함 관리에서 읽을까요?"
+msgstr ""
+
+#: viewer/widgets/bizcard_new_dialog.py
+#, python-brace-format
+msgid "사진 {n}장을 명함 폴더에 복사하지 못했습니다."
 msgstr ""
 
 #: viewer/widgets/bizcard_new_dialog.py

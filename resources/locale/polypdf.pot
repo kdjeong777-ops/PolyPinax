@@ -12333,6 +12333,43 @@ msgstr ""
 msgid "끝"
 msgstr ""
 
+#: viewer/widgets/bizcard_todo_panel.py
+msgid "체크하지 않으면 끝 없이 계속"
+msgstr ""
+
+#: viewer/widgets/bizcard_todo_panel.py
+msgid "할 일 내용"
+msgstr ""
+
+#: viewer/widgets/bizcard_todo_panel.py
+msgid "고친 내용을 오늘 날짜의 새 기록으로 — 보던 기록은 그대로 남습니다"
+msgstr ""
+
+#: viewer/widgets/bizcard_todo_panel.py
+msgid "보고 있는 기록 하나를 지웁니다"
+msgstr ""
+
+#: viewer/widgets/bizcard_todo_panel.py
+msgid "고친 할 일 내용을 저장할까요?"
+msgstr ""
+
+#: viewer/widgets/bizcard_todo_panel.py
+msgid "기한"
+msgstr ""
+
+#: viewer/widgets/bizcard_todo_panel.py
+msgid "끝 날짜가 시작 날짜보다 앞입니다."
+msgstr ""
+
+#: viewer/widgets/bizcard_todo_panel.py
+msgid "이 기록을 지웁니다 — 되돌릴 수 없습니다."
+msgstr ""
+
+#: viewer/widgets/bizcard_todo_panel.py
+#, python-brace-format
+msgid "수정일 {d}"
+msgstr ""
+
 #: viewer/widgets/print_dialog.py
 msgid "<b>인쇄 범위</b>"
 msgstr ""
@@ -13354,6 +13391,22 @@ msgstr ""
 
 #: viewer/widgets/settings_dialog.py
 msgid "전화번호 기본 국가:"
+msgstr ""
+
+#: viewer/widgets/bizcard_todo_panel.py
+msgid "이전 기록"
+msgstr ""
+
+#: viewer/widgets/bizcard_todo_panel.py
+msgid "다음 기록"
+msgstr ""
+
+#: viewer/widgets/bizcard_todo_panel.py
+msgid "#해시태그 — 빈칸으로 나눔(이 기록에만)"
+msgstr ""
+
+#: viewer/widgets/bizcard_todo_panel.py
+msgid "했음"
 msgstr ""
 
 #: viewer/widgets/settings_dialog.py

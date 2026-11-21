@@ -834,10 +834,22 @@ class BizcardFindDialog(QDialog):
         self._fav_key_timer.timeout.connect(self._fav_key_show)
         self._fav_key_id = None
 
-        # ── 왼쪽: 즐겨찾기 줄 + [표 | 세부] ──
+        # ── 위 띠: [탭 줄 + 사람 칸 | 할 일 칸] (§5.24.10 '배치', 261120-34) · 아래 왼쪽: [표 | 세부] ──
         left = QWidget()
         lv = QVBoxLayout(left)
         lv.setContentsMargins(0, 0, 0, 0)
+        self.top_band = QWidget()
+        tbl = QHBoxLayout(self.top_band)
+        tbl.setContentsMargins(0, 0, 0, 0)
+        favw = QWidget()
+        fvl = QVBoxLayout(favw)
+        fvl.setContentsMargins(0, 0, 0, 0)
+        tbl.addWidget(favw, 1)
+        from viewer.widgets.bizcard_todo_panel import TodoPanel
+        self.todo_panel = TodoPanel(self._store, self)
+        self.todo_panel.changed.connect(lambda: self._fav_fill_tabs(self._fav_gid()))
+        self.todo_panel.setVisible(False)
+        tbl.addWidget(self.todo_panel)
         tabs_row = QHBoxLayout()
         self.fav_tabs = _DropTabBar(accepts=lambda e: e.source() in (self.fav, self.table))
         self.fav_tabs.dropped.connect(self._drop_on_tab)
@@ -873,7 +885,7 @@ class BizcardFindDialog(QDialog):
         for w in (self.cb_recent, self.d_recent_from, self.d_recent_to):
             w.setVisible(False)
             tabs_row.addWidget(w)
-        lv.addLayout(tabs_row)
+        fvl.addLayout(tabs_row)
         self.fav = _OrderList(external=lambda _e: self.fav_add_selected(),
                               accepts=lambda e: e.source() is self.table and self._fav_gid() != RECENT)
         self.fav.setIconSize(QSize(FAV_ICON, FAV_ICON))
@@ -888,7 +900,8 @@ class BizcardFindDialog(QDialog):
         self.fav.currentItemChanged.connect(self._fav_current)    # 키보드로 옮겨도 그 명함(§5.24.2)
         self.fav.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.fav.customContextMenuRequested.connect(self._fav_menu)
-        lv.addWidget(self.fav)
+        fvl.addWidget(self.fav)
+        fvl.addStretch(1)
 
         mid = self.mid = QSplitter(Qt.Orientation.Horizontal)
         self.table = _CardTable([tr("이름"), tr("회사"), tr("직함"), tr("전화"), tr("메일"), tr("수정일")])   # 가상 표(§5.9 '결과'), 끝 열 = 수정일(261120-25)
@@ -1057,6 +1070,10 @@ class BizcardFindDialog(QDialog):
         self.split.setStretchFactor(0, 5)
         self.split.setStretchFactor(1, 2)
         self.split.splitterMoved.connect(lambda _p, _i: QTimer.singleShot(0, self._show_card))
+        self.split.splitterMoved.connect(lambda _p, _i: self._sync_todo_width())   # 할 일 칸 폭 = 사진창 폭(§5.24.10)
+        tbl.setSpacing(self.split.handleWidth())
+        self.top_band.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
+        v.addWidget(self.top_band)
         v.addWidget(self.split, 1)
 
         bot = QHBoxLayout()
@@ -1430,6 +1447,20 @@ class BizcardFindDialog(QDialog):
         super().resizeEvent(e)
         QTimer.singleShot(0, self._show_card)
         QTimer.singleShot(0, self._fav_fit)
+        QTimer.singleShot(0, self._sync_todo_width)
+
+    # ── 할 일 칸 (§5.24.10, 261120-34) ──
+    def _sync_todo_width(self):
+        """할 일 칸 폭 = 사진창 폭 — 그래서 위 띠의 칸 경계가 아래 띠(세부내용 | 사진창)와 맞는다."""
+        if getattr(self, "todo_panel", None) is not None and self.photo_split.width() > 0:
+            self.todo_panel.setFixedWidth(self.photo_split.width())
+
+    def _todo_show(self, gid):
+        """할 일 탭이면 칸에 그 기록, 아니면 칸을 숨기고 사람 칸이 위 띠 끝까지(사용자 지시)."""
+        on = self.todo_panel.set_group(gid) if gid not in (None, RECENT) else self.todo_panel.set_group(None)
+        self.todo_panel.setVisible(bool(on))
+        self._sync_todo_width()
+        QTimer.singleShot(0, self._fav_fit)
 
     def _style_detail(self):
         """세부내용 카드 꾸밈 — 색은 DETAIL_BG(테마별): 제목 띠·테두리 head, 본문 body, 메모 memo.
@@ -1486,6 +1517,7 @@ class BizcardFindDialog(QDialog):
             self._sized = True
             self._init_sizes()
             QTimer.singleShot(PRELOAD_MS, self._preload_tags)   # 쉬는 동안 [해시태그] 준비(261120-20)
+            QTimer.singleShot(0, lambda: self._todo_show(self._fav_gid()))   # 처음 탭이 할 일이면 칸(§5.24.10)
 
     def table_min_width(self) -> int:
         """이름·회사·직함·전화가 다 보이는 표 폭(§5.24.1 '처음 너비' — 메일·스캔일은 끌어 넓히면)."""
@@ -1772,6 +1804,11 @@ class BizcardFindDialog(QDialog):
             self._store().meta_set("fav_tab", gid)
         self._recent_bar(gid == RECENT)
         self._fav_fill()
+        tp = getattr(self, "todo_panel", None)
+        if tp is not None:
+            if tp.dirty and tp.gid not in (None, gid):
+                tp._ask_leave()                          # 고친 할 일 기록 — 저장·버리기(탭은 이미 바뀜, 취소는 버리기)
+            self._todo_show(gid)                         # 할 일 칸(§5.24.10)
 
     def _tab_clicked(self, i):
         """탭을 누르면 목록 표에 그 탭 사람들을 모두(사용자 지시 261119) — 찾기 칸·기간을 바꾸면 찾기 결과로."""
@@ -2102,7 +2139,7 @@ class BizcardFindDialog(QDialog):
         labels = {"live": tr("진행"), "soon": tr("예정"), "past": tr("기간 지남"), "closed": tr("마감")}
         for t in rows:
             t["state_label"] = labels.get(t["state"], "")
-        heads = [tr("시작일"), tr("종료일"), tr("상태"), tr("제목"), tr("내용"),
+        heads = [tr("시작일"), tr("종료일"), tr("상태"), tr("제목"), tr("내용"), tr("해시태그"),
                  tr("이름"), tr("회사"), tr("직함"), tr("휴대폰"), tr("메일")]
         from viewer.workers import run_in_thread
         w = _TodoXlsxWorker(path, rows, heads, tr("할 일"), tr("계속"))
@@ -2172,6 +2209,8 @@ class BizcardFindDialog(QDialog):
             return False
         P.todo_update(st, gid, info)
         self._fav_fill_tabs(self._fav_gid())
+        if getattr(self, "todo_panel", None) is not None and self.todo_panel.gid == gid:
+            self._todo_show(gid)                         # 제목·기간·내용(새 기록)을 할 일 칸에도(§5.24.10)
         return True
 
     def todo_delete(self, gid, ask: bool = True) -> bool:
@@ -2268,7 +2307,11 @@ class BizcardFindDialog(QDialog):
         g = self.fav.gridSize()
         per = max(1, (self.fav.viewport().width() or self.width()) // max(1, g.width()))
         rows = min(FAV_ROWS, max(1, math.ceil(self.fav.count() / per)))
-        self.fav.setFixedHeight(rows * g.height() + 2 * self.fav.frameWidth() + 4)
+        h = rows * g.height() + 2 * self.fav.frameWidth() + 4
+        tp = getattr(self, "todo_panel", None)
+        if tp is not None and tp.isVisible():            # 할 일 칸이 보이면 사람 칸도 그 높이까지(§5.24.10 '배치')
+            h = max(h, tp.minimumHeight() - self.fav_tabs.sizeHint().height())
+        self.fav.setFixedHeight(h)
 
     def fav_ids(self) -> list:
         return [self.fav.item(i).data(ROLE) for i in range(self.fav.count())]

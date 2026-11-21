@@ -12668,6 +12668,43 @@ msgstr "Start"
 msgid "끝"
 msgstr "End"
 
+#: viewer/widgets/bizcard_todo_panel.py
+msgid "체크하지 않으면 끝 없이 계속"
+msgstr "If unchecked, it continues without an end"
+
+#: viewer/widgets/bizcard_todo_panel.py
+msgid "할 일 내용"
+msgstr "To-do details"
+
+#: viewer/widgets/bizcard_todo_panel.py
+msgid "고친 내용을 오늘 날짜의 새 기록으로 — 보던 기록은 그대로 남습니다"
+msgstr "Save the changes as a new entry dated today — the entry you were viewing stays as it is"
+
+#: viewer/widgets/bizcard_todo_panel.py
+msgid "보고 있는 기록 하나를 지웁니다"
+msgstr "Delete the entry you are viewing"
+
+#: viewer/widgets/bizcard_todo_panel.py
+msgid "고친 할 일 내용을 저장할까요?"
+msgstr "Save the changed to-do details?"
+
+#: viewer/widgets/bizcard_todo_panel.py
+msgid "기한"
+msgstr "Due"
+
+#: viewer/widgets/bizcard_todo_panel.py
+msgid "끝 날짜가 시작 날짜보다 앞입니다."
+msgstr "The end date is before the start date."
+
+#: viewer/widgets/bizcard_todo_panel.py
+msgid "이 기록을 지웁니다 — 되돌릴 수 없습니다."
+msgstr "This entry will be deleted — this cannot be undone."
+
+#: viewer/widgets/bizcard_todo_panel.py
+#, python-brace-format
+msgid "수정일 {d}"
+msgstr "Modified {d}"
+
 #: viewer/widgets/print_dialog.py
 msgid "<b>인쇄 범위</b>"
 msgstr "<b>Print Range</b>"
@@ -13699,6 +13736,22 @@ msgstr "Business card folder:"
 #: viewer/widgets/settings_dialog.py
 msgid "전화번호 기본 국가:"
 msgstr "Default phone country:"
+
+#: viewer/widgets/bizcard_todo_panel.py
+msgid "이전 기록"
+msgstr "Previous entry"
+
+#: viewer/widgets/bizcard_todo_panel.py
+msgid "다음 기록"
+msgstr "Next entry"
+
+#: viewer/widgets/bizcard_todo_panel.py
+msgid "#해시태그 — 빈칸으로 나눔(이 기록에만)"
+msgstr "#hashtags — separated by spaces (this entry only)"
+
+#: viewer/widgets/bizcard_todo_panel.py
+msgid "했음"
+msgstr "Done"
 
 # | 수가 한도를 넘으면 자동으로 한도가 늘어납니다.</small>"
 #: viewer/widgets/settings_dialog.py

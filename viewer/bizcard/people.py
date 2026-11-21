@@ -280,6 +280,65 @@ def fav_init(store, default_name: str) -> None:
                 store.con.execute("ALTER TABLE %s ADD COLUMN %s %s" % (table, col, typ))
     if store.con.execute("SELECT COUNT(*) FROM fav_groups").fetchone()[0] == 0:
         store.con.execute("INSERT INTO fav_groups(name, pos) VALUES(?, 0)", (default_name,))
+    notes_init(store)                                  # 할 일 기록(§5.24.10, 261120-34) — 옛 할 일 내용은 첫 기록으로
+    store.con.commit()
+
+
+# ── 할 일 기록 (§5.24.10 '기록', 261120-34) — 할 일 탭마다 여러 기록, 고치면 새 기록(옛 기록 그대로) ──
+def notes_table(store) -> None:
+    store.con.execute("CREATE TABLE IF NOT EXISTS todo_notes(id INTEGER PRIMARY KEY, group_id INTEGER, made TEXT, body TEXT, "
+                      "done INTEGER DEFAULT 0, n_start TEXT DEFAULT '', n_end TEXT DEFAULT '', tags TEXT DEFAULT '[]', "
+                      "ts REAL DEFAULT 0)")
+
+
+def notes_init(store) -> None:
+    store.con.execute("CREATE TABLE IF NOT EXISTS todo_notes(id INTEGER PRIMARY KEY, group_id INTEGER, made TEXT, body TEXT, "
+                      "done INTEGER DEFAULT 0, n_start TEXT DEFAULT '', n_end TEXT DEFAULT '', tags TEXT DEFAULT '[]', "
+                      "ts REAL DEFAULT 0)")
+    rows = store.con.execute("SELECT g.id, g.t_memo, g.t_start, g.t_end FROM fav_groups g WHERE g.todo=1 "
+                             "AND IFNULL(g.t_memo, '') != '' AND NOT EXISTS (SELECT 1 FROM todo_notes n WHERE n.group_id = g.id)"
+                             ).fetchall()
+    for r in rows:                                     # 옛 할 일 — 내용을 첫 기록으로(한 번만)
+        store.con.execute("INSERT INTO todo_notes(group_id, made, body, n_start, n_end, ts) VALUES(?,?,?,?,?,?)",
+                          (r["id"], r["t_start"] or "", r["t_memo"], r["t_start"] or "", r["t_end"] or "", 0))
+
+
+def todo_notes(store, gid: int) -> list:
+    """그 할 일의 기록 — 최신이 처음. [{id, made, body, done, start, end, tags}]."""
+    out = []
+    for r in store.con.execute("SELECT * FROM todo_notes WHERE group_id=? ORDER BY ts DESC, id DESC", (gid,)).fetchall():
+        try:
+            tags = json.loads(r["tags"] or "[]")
+        except ValueError:
+            tags = []
+        out.append({"id": r["id"], "made": r["made"] or "", "body": r["body"] or "", "done": bool(r["done"]),
+                    "start": r["n_start"] or "", "end": r["n_end"] or "", "tags": list(tags)})
+    return out
+
+
+def _sync_memo(store, gid: int) -> None:
+    """탭 '내용'(t_memo) = 최신 기록의 내용(할 일 고치기 창·엑셀이 본다)."""
+    r = store.con.execute("SELECT body FROM todo_notes WHERE group_id=? ORDER BY ts DESC, id DESC LIMIT 1", (gid,)).fetchone()
+    store.con.execute("UPDATE fav_groups SET t_memo=? WHERE id=?", (r["body"] if r else "", gid))
+
+
+def note_add(store, gid: int, note: dict, today: str) -> int:
+    """새 기록(맨 앞) — 고친 기록은 그대로 둔다. note = {body, done, start, end, tags}. 반환 = 새 id."""
+    nid = store.con.execute(
+        "INSERT INTO todo_notes(group_id, made, body, done, n_start, n_end, tags, ts) VALUES(?,?,?,?,?,?,?,?)",
+        (gid, today, note.get("body") or "", 1 if note.get("done") else 0, note.get("start") or "", note.get("end") or "",
+         json.dumps(list(note.get("tags") or []), ensure_ascii=False), time.time())).lastrowid
+    _sync_memo(store, gid)
+    store.con.commit()
+    return nid
+
+
+def note_delete(store, nid: int) -> None:
+    r = store.con.execute("SELECT group_id FROM todo_notes WHERE id=?", (nid,)).fetchone()
+    if r is None:
+        return
+    store.con.execute("DELETE FROM todo_notes WHERE id=?", (nid,))
+    _sync_memo(store, r["group_id"])
     store.con.commit()
 
 
@@ -395,6 +454,15 @@ def memo_with_log(memo: str, today: str, labels: list, word: str) -> str:
 TODO_STATES = ("live", "soon", "past", "closed")   # 기간 안 · 시작 전 · 기간 지남 · 마감(D28)
 
 
+def _latest_tags(store, gid: int) -> list:
+    """최신 할 일 기록의 해시태그(§5.24.10) — 기록 표가 없는 옛 DB 면 []."""
+    try:
+        notes = todo_notes(store, gid)
+    except sqlite3.OperationalError:
+        return []
+    return list(notes[0]["tags"]) if notes else []
+
+
 def todo_rows(store, today: str) -> list:
     """모든 할 일(마감·기간 밖 포함) — 기간 차례(시작일, 같으면 종료일 — 계속은 뒤, 같으면 제목)로
     [{title, memo, start, end, state, members[명함 행]}] (§5.24.2 '할 일 엑셀', 261120-21)."""
@@ -410,7 +478,8 @@ def todo_rows(store, today: str) -> list:
         else:
             state = "live"
         out.append({"title": r["name"] or "", "memo": r["t_memo"] or "", "start": r["t_start"] or "",
-                    "end": r["t_end"] or "", "state": state, "members": fav_members(store, r["id"])})
+                    "end": r["t_end"] or "", "state": state, "members": fav_members(store, r["id"]),
+                    "tags": _latest_tags(store, r["id"])})
     out.sort(key=lambda d: (d["start"], d["end"] or "9999-99-99", d["title"].lower()))
     return out
 
@@ -452,15 +521,28 @@ def todo_add(store, info: dict, card_ids, ongoing: str) -> int:
     gid = store.con.execute("INSERT INTO fav_groups(name, pos, todo, t_memo, t_start, t_end) VALUES(?,?,1,?,?,?)",
                             (info["title"], pos, info.get("memo") or "", info.get("start") or "", info.get("end") or "")).lastrowid
     store.con.commit()
+    if info.get("memo"):                               # 처음 내용 = 첫 기록(§5.24.10)
+        try:
+            notes_table(store)                         # 표만 — 옛 할 일 옮기기(notes_init)는 이 할 일을 두 번 넣는다
+            import datetime
+            note_add(store, gid, {"body": info["memo"], "start": info.get("start") or "", "end": info.get("end") or ""},
+                     datetime.date.today().isoformat())
+        except sqlite3.OperationalError:
+            pass
     fav_add(store, gid, card_ids, ongoing=ongoing)
     return gid
 
 
 def todo_update(store, gid: int, info: dict) -> None:
-    """할 일 고치기 — 제목(탭 이름)·내용·기간. 메모는 다시 쓰지 않는다."""
+    """할 일 고치기 — 제목(탭 이름)·내용·기간. 메모는 다시 쓰지 않는다. 내용이 바뀌면 새 기록(§5.24.10 — 내용 = 최신 기록)."""
+    old = todo_info(store, gid)
     store.con.execute("UPDATE fav_groups SET name=?, t_memo=?, t_start=?, t_end=? WHERE id=? AND todo=1",
                       (info["title"], info.get("memo") or "", info.get("start") or "", info.get("end") or "", gid))
     store.con.commit()
+    if old is not None and (info.get("memo") or "") != (old.get("memo") or ""):
+        import datetime
+        last = (todo_notes(store, gid) or [{}])[0]
+        note_add(store, gid, dict(last, body=info.get("memo") or ""), datetime.date.today().isoformat())
 
 
 def fav_add_group(store, name: str) -> int:
@@ -491,6 +573,10 @@ def fav_delete_group(store, gid: int, ongoing: str = "") -> bool:
             update_card(store, m["card_id"], {"memo": new}, commit=False)
     store.con.execute("DELETE FROM fav_members WHERE group_id=?", (gid,))
     store.con.execute("DELETE FROM fav_groups WHERE id=?", (gid,))
+    try:
+        store.con.execute("DELETE FROM todo_notes WHERE group_id=?", (gid,))   # 할 일 기록도(§5.24.10)
+    except sqlite3.OperationalError:
+        pass
     store.con.commit()
     return True
 

@@ -8,9 +8,9 @@ from __future__ import annotations
 from pathlib import Path
 
 # 열(키, 머리말) — 할 일 칸은 그 할 일의 명단 줄들에 걸쳐 합친 칸
-TODO_KEYS = ("start", "end", "state", "title", "memo")
+TODO_KEYS = ("start", "end", "state", "title", "memo", "tags")   # tags = 최신 할 일 기록의 해시태그(§5.24.10)
 PERSON_KEYS = ("name", "company", "title", "cell", "email")
-WIDTHS = {"start": 12, "end": 12, "state": 10, "title": 24, "memo": 40, "name": 12, "company": 22, "p_title": 12,
+WIDTHS = {"start": 12, "end": 12, "state": 10, "title": 24, "memo": 40, "tags": 18, "name": 12, "company": 22, "p_title": 12,
           "cell": 16, "email": 28}
 
 
@@ -30,7 +30,7 @@ def table(rows: list, ongoing: str) -> list:
     for t in rows:
         people = t.get("members") or [{}]
         todo = [t.get("start") or "", t.get("end") or ongoing, t.get("state_label") or t.get("state") or "",
-                t.get("title") or "", t.get("memo") or ""]
+                t.get("title") or "", t.get("memo") or "", " ".join("#" + x for x in t.get("tags") or [])]
         for i, c in enumerate(people):
             person = [c.get("name") or "", c.get("company") or "", c.get("title") or "", _cell_phone(c) if c else "",
                       (c.get("emails") or [""])[0] if c else ""]

@@ -98,7 +98,7 @@ try:
     if ws is not None:
         rows = [[(c.value if c.value is not None else "") for c in r] for r in ws.iter_rows()]
         print("=== B. 차례·상태 ===")
-        chk(rows[0] == ["시작일", "종료일", "상태", "제목", "내용", "이름", "회사", "직함", "휴대폰", "메일"], "B 머리말", repr(rows[0]))
+        chk(rows[0] == ["시작일", "종료일", "상태", "제목", "내용", "해시태그", "이름", "회사", "직함", "휴대폰", "메일"], "B 머리말", repr(rows[0]))
         titles = [r[3] for r in rows[1:] if r[3]]
         chk(titles == ["가짜 지남", "가짜 마감", "가짜 진행", "가짜 예정"],"B 모든 할 일이 기간(시작일) 차례 — 마감·기간 밖 포함", repr(titles))
         state = {r[3]: r[2] for r in rows[1:] if r[3]}
@@ -106,16 +106,16 @@ try:
         chk(ws.freeze_panes == "A2" and ws.cell(1, 1).font.bold, "B 머리말 굵게·고정")
         print("\n=== C. 명단 줄·합친 칸 ===")
         i_live = next(i for i, r in enumerate(rows) if r[3] == "가짜 진행")
-        live_people = [rows[i_live][5], rows[i_live + 1][5]]
+        live_people = [rows[i_live][6], rows[i_live + 1][6]]
         chk(live_people == ["홍길동", "김철수"] and rows[i_live + 1][3] == "", "C 명단 한 사람이 한 줄(할 일 칸은 첫 줄에만)",
             repr(live_people))
         merged = [str(r) for r in ws.merged_cells.ranges]
         chk("D%d:D%d" % (i_live + 1, i_live + 2) in merged, "C 할 일 칸은 명단 줄에 걸쳐 합침", repr(merged[:6]))
         chk(rows[i_live][1] == "계속" and rows[i_live][4] == "첫 줄\n둘째 줄", "C 종료일 없으면 '계속', 내용 줄바꿈 그대로")
-        chk(rows[i_live][8] == "010-0000-0001" and rows[i_live][9] == "hong@example.com" and rows[i_live][7] == "부장",
-            "C 휴대폰은 적을 꼴, 메일·직함", repr(rows[i_live][7:]))
+        chk(rows[i_live][9] == "010-0000-0001" and rows[i_live][10] == "hong@example.com" and rows[i_live][8] == "부장",
+            "C 휴대폰은 적을 꼴, 메일·직함", repr(rows[i_live][8:]))
         i_past = next(i for i, r in enumerate(rows) if r[3] == "가짜 지남")
-        chk(rows[i_past][5] == "" and (i_past + 1 >= len(rows) or rows[i_past + 1][3] != ""), "C 명단 없는 할 일도 한 줄")
+        chk(rows[i_past][6] == "" and (i_past + 1 >= len(rows) or rows[i_past + 1][3] != ""), "C 명단 없는 할 일도 한 줄")
     dlg.close()
 except Exception:
     import traceback

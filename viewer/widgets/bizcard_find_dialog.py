@@ -816,10 +816,11 @@ class BizcardFindDialog(QDialog):
         self.btn_menu.setIconSize(QSize(18, 18))
         self.btn_menu.setAutoRaise(True)
         self.btn_menu.setToolTip(tr("메뉴"))
-        self.btn_menu.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         self.main_menu = QMenu(self.btn_menu)
         self.main_menu.aboutToShow.connect(self._fill_main_menu)
-        self.btn_menu.setMenu(self.main_menu)
+        # 메뉴 화살표(작은 v) 없이 — setMenu 대신 누르면 단추 아래에 띄운다(261120-40, 디자인 SOT §2.7 예외)
+        self.btn_menu.clicked.connect(
+            lambda: self.main_menu.popup(self.btn_menu.mapToGlobal(self.btn_menu.rect().bottomLeft())))
         top.addWidget(self.btn_menu)
         top.addWidget(self.cb_kind)
         self.ed_find = QLineEdit()

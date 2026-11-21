@@ -1669,6 +1669,37 @@ try:
     chk(ok_menu and "닫기" not in pushes,
         "I33 찾기 줄 맨 왼쪽 ≡ 메뉴 — 아래 단추와 같은 항목·차례·켜짐(명함 보기 꺼짐 그대로)·누르면 같은 길·주소록 하위 메뉴·끝에 '종료', [닫기] 단추 없음",
         str(pushes))
+
+    # I34 ≡ 단추에 메뉴 화살표(오른쪽 아래 작은 v) 없음 — 같은 그림의 맨 단추와 픽셀이 같다, 누르면 메뉴 (261120-40, 사용자 지시)
+    same_px, opened = [], False
+    if bmenu is not None:
+        from PyQt6.QtWidgets import QToolButton as _QTB
+        from PyQt6.QtCore import QPoint as _QP
+        from PyQt6.QtTest import QTest as _QT
+        from viewer.widgets.icons import themed_icon as _ti2
+        for th in ("dark", "light"):
+            mw.apply_theme(th)
+            pump(timeout=0.2)
+            ref = _QTB(bmenu.parentWidget())
+            ref.setIcon(_ti2("menu", size=18))
+            ref.setIconSize(bmenu.iconSize())
+            ref.setAutoRaise(True)
+            ref.setGeometry(bmenu.geometry().translated(0, 200))
+            ref.show()
+            pump(timeout=0.1)
+            same_px.append(bmenu.grab().toImage() == ref.grab().toImage())
+            ref.deleteLater()
+        seen = []
+
+        def _peek():                                   # 메뉴가 떴는지 보고 닫는다(모달로 떠도 검사가 멈추지 않게)
+            seen.append(dlg.main_menu.isVisible() and bool(dlg.main_menu.actions()))
+            dlg.main_menu.hide()
+        QTimer.singleShot(300, _peek)
+        _QT.mouseClick(bmenu, Qt.MouseButton.LeftButton, pos=_QP(bmenu.width() // 2, bmenu.height() // 2))
+        pump(timeout=0.6)
+        opened = seen == [True]
+    chk(same_px == [True, True] and opened,
+        "I34 ≡ 단추에 메뉴 화살표 없음(다크·라이트 모두 같은 그림의 맨 단추와 같다), 누르면 메뉴", "%s %s" % (same_px, opened))
     if bmenu is not None:
         quit_a = [a for a in dlg.main_menu.actions() if a.text() == "종료"]
         quit_a[0].trigger() if quit_a else dlg.close()

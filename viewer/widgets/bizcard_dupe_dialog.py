@@ -51,7 +51,7 @@ class CardEditDialog(QDialog):
 
     def __init__(self, card, parent=None):
         super().__init__(parent)
-        from PyQt6.QtWidgets import QFormLayout, QLineEdit, QPlainTextEdit, QDialogButtonBox
+        from PyQt6.QtWidgets import QFormLayout, QLineEdit, QPlainTextEdit, QDialogButtonBox, QCheckBox
         from viewer.bizcard import phone as PH
         from viewer.widgets import bizcard_find_dialog as FD
         self.card = card
@@ -63,12 +63,20 @@ class CardEditDialog(QDialog):
         vals = {k: card.get(k) or "" for k in ("name", "company", "dept", "title", "address")}
         vals.update(cell=PH.normalize(first("cell")), work=PH.normalize(first("work")), fax=PH.normalize(first("fax")),
                     email=(card.get("emails") or [""])[0], url=(card.get("urls") or [""])[0])
-        self.eds = {}
+        self.eds, self.checks = {}, {}                  # checks: 칸 열쇠(또는 추가 칸 위젯) → 앞 체크 칸(이름 칸은 없음)
+
+        def row(key, text, ed):
+            if key == "name":
+                form.addRow(text, ed)
+                return
+            cb = QCheckBox(text)                        # 칸 앞 체크 — [체크한 칸 비우기](§5.24.8 '명함 고치기')
+            self.checks[key] = cb
+            form.addRow(cb, ed)
         for k, label in FD.FIELDS:
             ed = QLineEdit(vals.get(k, ""))
             if k in FD.PHONE_KEYS:
                 PH.attach(ed)                          # 치는 대로 하이픈(§5.11 '번호 꼴')
-            form.addRow(tr(label), ed)
+            row(k, tr(label), ed)
             self.eds[k] = ed
         # 둘째 값부터도 칸으로(§5.24.8 '명함 고치기', 사용자 결정 261121 — 숨은 번호를 보고 지울 수 있게, 비우면 지움)
         labels = dict(FD.FIELDS)
@@ -77,24 +85,40 @@ class CardEditDialog(QDialog):
             for i, n in enumerate([n for k, n in (tuple(x) for x in ph) if k == kind][1:]):
                 ed = QLineEdit(PH.normalize(n))
                 PH.attach(ed)
-                form.addRow("%s %d" % (tr(labels[kind]), i + 2), ed)
+                row(ed, "%s %d" % (tr(labels[kind]), i + 2), ed)
                 self.extra_eds.append(("phone", kind, ed))
         for group, key, vals_ in (("email", "email", card.get("emails") or []), ("url", "url", card.get("urls") or [])):
             for i, x in enumerate(list(vals_)[1:]):
                 ed = QLineEdit(str(x[-1] if isinstance(x, (list, tuple)) else x))
-                form.addRow("%s %d" % (tr(labels[key]), i + 2), ed)
+                row(ed, "%s %d" % (tr(labels[key]), i + 2), ed)
                 self.extra_eds.append((group, "", ed))
         self.ed_memo = QPlainTextEdit(card.get("memo") or "")
         self.ed_memo.setMinimumHeight(80)
-        form.addRow(tr(FD.MEMO_LABEL), self.ed_memo)
+        row("memo", tr(FD.MEMO_LABEL), self.ed_memo)
         v.addLayout(form)
         bb = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
         bb.button(QDialogButtonBox.StandardButton.Save).setText(tr("저장"))
         bb.button(QDialogButtonBox.StandardButton.Cancel).setText(tr("취소"))
+        self.btn_clear_checked = bb.addButton(tr("체크한 칸 비우기"), QDialogButtonBox.ButtonRole.ActionRole)
+        self.btn_clear_checked.setToolTip(tr("앞에 체크한 칸을 한꺼번에 비웁니다 — [저장] 해야 명함에 반영됩니다"))
+        self.btn_clear_checked.clicked.connect(lambda _c=False: self.clear_checked())
         bb.accepted.connect(self._ok)
         bb.rejected.connect(self.reject)
         v.addWidget(bb)
         self.resize(420, self.sizeHint().height())
+
+    def clear_checked(self) -> int:
+        """체크한 칸을 비우고 체크를 푼다(잘못된 병합으로 겹친 값을 여럿 지우기, 사용자 지시 261121). 반환 = 비운 칸 수."""
+        n = 0
+        for key, cb in self.checks.items():
+            if not cb.isChecked():
+                continue
+            ed = self.ed_memo if key == "memo" else (self.eds.get(key) if isinstance(key, str) else key)
+            if ed is not None:
+                ed.clear()
+                n += 1
+            cb.setChecked(False)
+        return n
 
     def values(self) -> dict:
         from viewer.widgets.bizcard_find_dialog import edited_fields

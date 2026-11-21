@@ -96,6 +96,32 @@ try:
         "A 비운 둘째 휴대폰만 지움(나머지 그대로)", str((after["phones"], after["emails"])))
     chk(dd.groups == [], "A 고친 뒤 다시 묶어 그 번호로 이어졌던 명함은 빠짐", str(len(dd.groups)))
 
+    # ── C ── 체크한 칸 한꺼번에 비우기(실제 클릭)
+    print("\n=== C. 체크한 칸 비우기 ===")
+    from PyQt6.QtTest import QTest
+    from PyQt6.QtCore import Qt
+    st2 = fd._store()
+    P.update_card(st2, rep, {"phones": [("cell", "010-0000-1000"), ("cell", "010-0000-3000"), ("work", "02-0000-0000")],
+                             "emails": ["a@example.com", "b@example.com", "c@example.com"]})
+    ed2 = DD.CardEditDialog(P.card_by_id(st2, rep), dd)
+    ed2.show()
+    pump(lambda: ed2.isVisible())
+    checks = getattr(ed2, "checks", {})
+    chk("name" not in checks and checks.get("cell") is not None, "C 칸마다 앞 체크 칸(이름 칸은 없음)", str(sorted(map(str, checks))))
+    want = [e for g, k, e in getattr(ed2, "extra_eds", [])]
+    for e in want:
+        cb = checks.get(e)
+        if cb is not None:
+            QTest.mouseClick(cb, Qt.MouseButton.LeftButton)
+    btn = getattr(ed2, "btn_clear_checked", None)
+    if btn is not None:
+        QTest.mouseClick(btn, Qt.MouseButton.LeftButton)
+    v2 = ed2.values()
+    chk(btn is not None and all(not e.text() for e in want) and [n for _k, n in v2["phones"]] == ["010-0000-1000", "02-0000-0000"]
+        and v2["emails"] == ["a@example.com"] and not any(cb.isChecked() for cb in checks.values()),
+        "C 체크한 칸을 한꺼번에 비움(체크는 풀림, 나머지 그대로)", str((v2["phones"], v2["emails"])))
+    ed2.close()
+
     # ── B ──
     print("\n=== B. 명함 그림 떼기 ===")
     cc = P.card_by_id(fd._store(), rep)

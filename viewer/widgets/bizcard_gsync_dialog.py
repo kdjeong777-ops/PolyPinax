@@ -23,6 +23,7 @@ KIND_LABELS = {G.NEW_CARD: tr_noop("구글에서 가져옴(새 명함)"), G.NEW_
                G.KAKAO_UP: tr_noop("카톡 친구추가 방지 바꿈(구글 이름 앞 #)"),
                G.KAKAO_DOWN: tr_noop("카톡 친구추가 방지 표시를 구글 이름대로"),
                G.GONE_VALUE: tr_noop("구글에서 지운 값 — 명함에서도 지울까요(안 고르면 구글로 다시)"),
+               G.PHOTO_GONE: tr_noop("명함에서 지운 인물 사진 — 구글 연락처 사진도 지울까요"),
                G.LABELS: tr_noop("라벨·해시태그 맞춤"), G.LABEL_GONE: tr_noop("고른 목록에서 뺀 구글 라벨 — 지울까요(연락처는 그대로)")}
 FIELD_LABELS = {"name": tr_noop("이름"), "company": tr_noop("회사"), "dept": tr_noop("부서"), "title": tr_noop("직함"),
                 "phones": tr_noop("전화"), "emails": tr_noop("메일"), "address": tr_noop("주소"), "urls": tr_noop("누리집"),

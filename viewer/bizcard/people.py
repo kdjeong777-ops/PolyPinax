@@ -343,8 +343,10 @@ def fix_kinds_all(store, backup_path: str = "") -> int:
             store.con.backup(dst)
         finally:
             dst.close()
-    for c in todo:
-        update_card(store, c["id"], {"phones": c.get("phones") or []}, commit=False)   # 고친 시각이 새로 — 구글 싱크가 구글로
+    from viewer.bizcard import history as H
+    with H.source(store, "kinds"):                      # 변경 기록 출처 '번호 종류'(§5.30)
+        for c in todo:
+            update_card(store, c["id"], {"phones": c.get("phones") or []}, commit=False)   # 고친 시각이 새로 — 구글 싱크가 구글로
     store.meta_set(KINDS_FIXED_KEY, time.time())
     store.con.commit()
     return len(todo)
@@ -1384,6 +1386,13 @@ def merge_plan(cards, manual=None) -> dict:
 
 
 def merge_db(store, plan, extra: dict = None) -> None:
+    """합치기 — 바뀐·지운 명함은 변경 기록에 출처 '합치기' 로(§5.30)."""
+    from viewer.bizcard import history as H
+    with H.source(store, "merge"):
+        _merge_db(store, plan, extra)
+
+
+def _merge_db(store, plan, extra: dict = None) -> None:
     """합친 값을 남길 행에, 지울 행의 즐겨찾기·할 일·최근 칸·구글 짝·카톡 표시는 남길 행으로, 주소록 출처는 칸마다 값을 준 명함의 것.
     extra = 창이 정한 front·back(이름을 바꾼 뒤). 그 뒤 지울 행을 지운다(파일은 창이 먼저 옮김)."""
     kid = plan["keeper"]

@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
-"""중복 검토 — 숨은 둘째 번호까지 고치기·고친 뒤 다시 묶기·잘못 붙은 명함 그림 떼기 (명함 SOT §5.24.8 '명함 고치기'·'그림 떼기').
+"""중복 검토 — 숨은 둘째 번호까지 고치기·고친 뒤 다시 묶기·잘못 붙은 명함 그림 모두 떼기 (명함 SOT §5.24.8 '명함 고치기'·'명함 사진 지우기').
 가짜 명함·가짜 번호(010-0000-…)·임시 폴더만(§2.1).
 
 A '명함 고치기' 창에 종류마다 둘째 번호·둘째 메일도 칸으로 — 비우면 지우고, 고친 뒤 다시 묶어 그 번호로 이어졌던 명함은 빠짐
-B '명함 그림 떼기' — 정리본 앞·뒷면은 휴지통, 명함은 그림 없는 명함(연락처·메모 그대로), 인물 사진은 새 자리로, 원본 스캔은 그대로
+B 앞·뒷면 모두 떼기 — 정리본 앞·뒷면은 휴지통, 명함은 그림 없는 명함(연락처·메모 그대로), 인물 사진은 새 자리로, 원본 스캔도 휴지통(261120-65)
 """
 import os, sys, tempfile, time
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -123,15 +123,15 @@ try:
     ed2.close()
 
     # ── B ──
-    print("\n=== B. 명함 그림 떼기 ===")
+    print("\n=== B. 앞·뒷면 모두 떼기 ===")
     cc = P.card_by_id(fd._store(), rep)
     ok = dd.detach_image(rep, ask=False) if hasattr(dd, "detach_image") else False
     pump(lambda: not front.exists(), timeout=5)
     c2 = P.card_by_id(fd._store(), rep)
     chk(ok and V.is_contact(c2) and not front.exists() and not back.exists(), "B 정리본 앞·뒷면은 휴지통, 그림 없는 명함으로",
         str((ok, c2.get("front"), front.exists())))
-    chk(c2["name"] == "가짜대표" and "가짜 메모" in c2["memo"] and orig.exists() and not c2.get("src_key"),
-        "B 연락처·메모 그대로, 원본 스캔은 남고 인식 기록 열쇠는 뗌", str((c2.get("memo"), orig.exists(), c2.get("src_key"))))
+    chk(c2["name"] == "가짜대표" and "가짜 메모" in c2["memo"] and not orig.exists() and not c2.get("src_key"),
+        "B 연락처·메모 그대로, 원본 스캔도 휴지통(사용자 결정 261121, 261120-65)·인식 기록 열쇠는 뗌", str((c2.get("memo"), orig.exists(), c2.get("src_key"))))
     newpf = P.photo_front(c2, str(TMP / "cards"))
     chk(newpf and len(P.person_photos(newpf)) == 1, "B 인물 사진은 그림 없는 명함 자리로", str(newpf))
     m = []

@@ -124,7 +124,7 @@ try:
             return real_of(store, keys)
         TS.known_tags_of = counted2
         t0 = time.perf_counter()
-        QTest.mouseClick(dlg.btn_tags, Qt.MouseButton.LeftButton)
+        next(a for a in (dlg.tag_menu.aboutToShow.emit() or dlg.tag_menu.actions()) if a.text() == "해시태그 수정").trigger()   # '#' 풀다운 맨 아래(261120-66)
         dt = seen.get("shown_at", t0) - t0
         kn = seen.get("known") or []
         chk(calls["n"] == 0 and "가나다" in kn and "가짜새태그" not in kn,   # 기존 태그 = 지금 목록 명함 태그만(261120-52)

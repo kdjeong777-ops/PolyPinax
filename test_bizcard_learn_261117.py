@@ -168,8 +168,8 @@ try:
     # 261117-56: 본 뷰어 도구 탭의 `명함 ▾` 는 없앴다 — '명함 관리' 는 명함찾기 아래 줄 단추(명함 SOT §5.24.1 '단추')
     from viewer.widgets.bizcard_find_dialog import BizcardFindDialog as _BFD
     _fd = _BFD(mw)
-    chk(_fd.btn_manage.text() == "명함 관리" and not any("들이기" in t for t in acts), "F 글자 '명함 관리'(명함찾기 단추, 옛 '들이기' 없음)",
-        "%r %s" % (_fd.btn_manage.text(), acts))
+    chk(_fd.act_manage.text() == "명함 관리" and not any("들이기" in t for t in acts), "F 글자 '명함 관리'(명함찾기 단추, 옛 '들이기' 없음)",
+        "%r %s" % (_fd.act_manage.text(), acts))
     _fd.close()
     mw._action_bizcard_import(str(F))
     dlg = mw._bizcard_dlg

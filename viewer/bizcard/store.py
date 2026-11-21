@@ -91,6 +91,8 @@ class BizcardStore:
             c.execute("ALTER TABLE cards ADD COLUMN dept TEXT")
         c.execute("INSERT OR IGNORE INTO meta(k, v) VALUES('schema', ?)", (str(SCHEMA_VER),))
         c.commit()
+        from viewer.bizcard import history                # 변경 기록 트리거(연결마다 TEMP — 명함 SOT §5.30, 261120-64)
+        history.init(self)
 
     # ── 인식 캐시 ──
     def recog_get(self, src, sig: str) -> Optional[dict]:

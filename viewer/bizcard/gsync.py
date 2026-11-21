@@ -26,18 +26,30 @@ NEW_CARD, NEW_GOOGLE, TO_CARD, TO_GOOGLE, GONE_GOOGLE, GONE_CARD, PHOTO_UP, PHOT
     "new_card", "new_google", "to_card", "to_google", "gone_google", "gone_card", "photo_up", "photo_down", "drive_up")
 KAKAO_UP, KAKAO_DOWN = "kakao_up", "kakao_down"     # 카톡 친구추가 방지(구글 이름 앞 '#') 바꿈 → 구글 · 구글 이름대로 표시 맞춤
 MERGED_GOOGLE = "merged_google"                 # 명함 합치기로 남지 못한 짝의 구글 연락처 — 지울까요(§5.29 '명함 합치기와 짝', 261120-46)
+PHOTO_GONE = "photo_gone"                       # 명함에서 인물 사진을 모두 지운 짝 — 구글 연락처 사진도 지울까요(처음 꺼짐, 261120-65)
+PHOTO_GONE_KEY = "gsync_photo_gone"             # meta — 그런 명함 id 들
 GONE_VALUE = "gone_value"                       # 구글에서만 빠진 칸 값 — 명함에서도 지울까요(처음 꺼짐, 안 고르면 구글로 다시, 261120-62)
 LABELS, LABEL_GONE = "labels", "label_gone"     # 고른 해시태그 ↔ 구글 라벨 맞춤 · 고른 목록에서 뺀 라벨 — 지울까요(§5.29 '라벨', 261120-61)
 KINDS = (NEW_CARD, NEW_GOOGLE, TO_CARD, GONE_VALUE, TO_GOOGLE, GONE_GOOGLE, GONE_CARD, MERGED_GOOGLE, PHOTO_UP, PHOTO_DOWN, DRIVE_UP,
-         KAKAO_UP, KAKAO_DOWN, LABELS, LABEL_GONE)
+         KAKAO_UP, KAKAO_DOWN, LABELS, LABEL_GONE, PHOTO_GONE)
 OPT_LABELS = "gsync_label_tags"                  # meta — 구글 라벨로 올릴 해시태그(명함 환경설정)
 OPT_LABELS_OFF = "gsync_label_off"               # meta — 환경설정에서 끈 것(구글 라벨이어도 다시 넣지 않음)
 META_LABEL_GROUPS = "gsync_label_groups"         # meta — 앱이 쓴 라벨 {이름: contactGroups/…}
 OPT_KAKAO_NEW = "gsync_kakao_new"               # meta — 구글에 새로 보낼 때 친구추가 방지(처음 켬)
 KAKAO_MARK = "#"
-DEFAULT_ON = {k: k not in (GONE_GOOGLE, GONE_CARD, LABEL_GONE, GONE_VALUE) for k in KINDS}
+DEFAULT_ON = {k: k not in (GONE_GOOGLE, GONE_CARD, LABEL_GONE, GONE_VALUE, PHOTO_GONE) for k in KINDS}
 UNLINK_IF_KEPT = (GONE_GOOGLE, GONE_CARD, MERGED_GOOGLE)   # 체크하지 않으면(남김) 짝만 풀림(§5.29 '지운 것', 261120-62)    # 지워짐은 기본 '남김'(§5.29 '지운 것'), 합쳐져 남음은 켬(사용자 결정 261121)
-GOOGLE_WRITES = (NEW_GOOGLE, TO_GOOGLE, GONE_CARD, MERGED_GOOGLE, KAKAO_UP, PHOTO_UP, DRIVE_UP, LABELS, LABEL_GONE)   # 구글 쪽을 바꾸는 갈래 — 미리보기의 백업 권함
+GOOGLE_WRITES = (NEW_GOOGLE, TO_GOOGLE, GONE_CARD, MERGED_GOOGLE, KAKAO_UP, PHOTO_UP, DRIVE_UP, LABELS, LABEL_GONE, PHOTO_GONE)
+
+
+def photo_gone_ids(store) -> set:
+    return {int(x) for x in (store.meta_get(PHOTO_GONE_KEY, []) or [])}
+
+
+def photo_gone_add(store, cid: int, on: bool = True) -> None:
+    ids = photo_gone_ids(store)
+    (ids.add if on else ids.discard)(int(cid))
+    store.meta_set(PHOTO_GONE_KEY, sorted(ids))   # 구글 쪽을 바꾸는 갈래 — 미리보기의 백업 권함
 
 
 def row_default(r: dict) -> bool:
@@ -383,6 +395,7 @@ def plan(store, people: list, folder: str = "", photos: bool = False, drive: boo
     free_people = [p for p in people if p["resourceName"] not in rn_linked]
     m = match(free_cards, free_people)
     use_labels = groups is not None
+    photo_gone = photo_gone_ids(store) if photos else set()
     gmap = _user_groups(groups) if use_labels else {}
     ch = {}
     if use_labels:                                         # 고른 해시태그 + 구글 라벨(끈 것 빼고, 사용자 지시 261121 '구글의 라벨을 해시태그로')
@@ -460,6 +473,8 @@ def plan(store, people: list, folder: str = "", photos: bool = False, drive: boo
             if mine and not gp:
                 rows.append({"kind": PHOTO_UP, "card_id": c["id"], "rn": p["resourceName"], "name": c.get("name") or "",
                              "path": mine})
+            elif gp and not mine and c["id"] in photo_gone:   # 명함에서 지운 사진 — 다시 받지 않고 구글 사진도 지울까(261120-65)
+                rows.append({"kind": PHOTO_GONE, "card_id": c["id"], "rn": p["resourceName"], "name": c.get("name") or ""})
             elif gp and not mine and not card_first:
                 rows.append({"kind": PHOTO_DOWN, "card_id": c["id"], "rn": p["resourceName"], "name": c.get("name") or "",
                              "url": gp})
@@ -490,6 +505,14 @@ def counts(rows: list) -> dict:
 # ── 반영 ──
 def apply(store, api, rows: list, folder: str = "", drive_folder: str = DRIVE_FOLDER_DEFAULT, progress=None,
           people=None) -> dict:
+    """반영 — 바뀐 명함은 변경 기록에 출처 '싱크' 로(§5.30)."""
+    from viewer.bizcard import history as H
+    with H.source(store, "sync"):
+        return _apply(store, api, rows, folder, drive_folder, progress, people)
+
+
+def _apply(store, api, rows: list, folder: str = "", drive_folder: str = DRIVE_FOLDER_DEFAULT, progress=None,
+           people=None) -> dict:
     """고른 줄만 반영(배경). 반환 {'done': n, 'failed': n, 'delete_cards': [id]} — 명함 지우기는 부르는 쪽이 휴지통 길로(§5.20)."""
     init(store)
     P.src_init(store)
@@ -590,6 +613,9 @@ def apply(store, api, rows: list, folder: str = "", drive_folder: str = DRIVE_FO
             elif k in (GONE_CARD, MERGED_GOOGLE):
                 api.delete(r["rn"])
                 store.con.execute("DELETE FROM google_link WHERE card_id=?", (r["card_id"],))
+            elif k == PHOTO_GONE:                                # 구글 연락처 사진도 지움(§5.29 '사진', 261120-65)
+                api.delete_photo(r["rn"])
+                photo_gone_add(store, r["card_id"], False)
             elif k == PHOTO_UP:
                 with open(r["path"], "rb") as f:
                     api.update_photo(r["rn"], f.read())

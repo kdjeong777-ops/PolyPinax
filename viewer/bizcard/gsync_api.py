@@ -116,6 +116,9 @@ class Api:
     def delete_group(self, group: str) -> None:
         self._req("DELETE", PEOPLE_BASE + "/v1/%s?deleteContacts=false" % group)   # 라벨만 — 연락처는 그대로
 
+    def delete_photo(self, resource: str) -> None:
+        self._req("DELETE", PEOPLE_BASE + "/v1/%s:deleteContactPhoto" % resource)
+
     def get_bytes(self, url: str) -> bytes:
         return self._req("GET", url)
 

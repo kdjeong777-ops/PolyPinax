@@ -141,6 +141,48 @@ class CardEditDialog(QDialog):
         self.accept()
 
 
+class PicturePickDialog(QDialog):
+    """'명함 사진 지우기'(§5.24.8, 261120-65) — 그 명함의 앞면·뒷면·인물 사진을 썸네일로, 체크한 것만 지운다."""
+
+    def __init__(self, card, photos, parent=None):
+        super().__init__(parent)
+        from PyQt6.QtWidgets import QListWidget, QListWidgetItem, QDialogButtonBox
+        from PyQt6.QtCore import QSize
+        from PyQt6.QtGui import QIcon
+        from viewer.widgets.bizcard_find_dialog import _scaled
+        self.setWindowTitle(tr("명함 사진 지우기"))
+        v = QVBoxLayout(self)
+        v.addWidget(QLabel(tr("지울 사진을 체크하세요 — 앞면만 지우면 뒷면이 앞면이 되고, 앞·뒷면을 모두 지우면 원본 스캔까지 휴지통으로 보냅니다.")))
+        self.lst = QListWidget()
+        self.lst.setIconSize(QSize(120, 90))
+        items = []
+        for key, label in (("front", tr("명함 앞면")), ("back", tr("명함 뒷면"))):
+            path = card.get(key) or ""
+            if path and not V.is_contact(card) and os.path.exists(path):
+                items.append((key, label, path))
+        items += [(p, tr("인물 사진 {n}").format(n=i + 1), p) for i, p in enumerate(photos)]
+        for key, label, path in items:
+            it = QListWidgetItem(QIcon(_scaled(path, 120, 90)), label)
+            it.setFlags(it.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            it.setCheckState(Qt.CheckState.Unchecked)
+            it.setData(Qt.ItemDataRole.UserRole, key)
+            self.lst.addItem(it)
+        v.addWidget(self.lst, 1)
+        bb = QDialogButtonBox()
+        self.btn_ok = bb.addButton(tr("지우기"), QDialogButtonBox.ButtonRole.AcceptRole)
+        b_c = bb.addButton(tr("취소"), QDialogButtonBox.ButtonRole.RejectRole)
+        for b in (self.btn_ok, b_c):
+            b.setAutoDefault(False)
+        bb.accepted.connect(self.accept)
+        bb.rejected.connect(self.reject)
+        v.addWidget(bb)
+        self.resize(460, 420)
+
+    def picks(self) -> list:
+        return [self.lst.item(i).data(Qt.ItemDataRole.UserRole) for i in range(self.lst.count())
+                if self.lst.item(i).checkState() == Qt.CheckState.Checked]
+
+
 class _ImgWorker(QObject):
     """명함 그림 읽기(배경) — (세대, 큰 그림 세대, 줄 번호(-1 = 큰 그림), 경로, 그림). 명함찾기와 같은 축소 읽기 `_read`."""
     one = pyqtSignal(int, object, int, str, QImage)
@@ -606,8 +648,8 @@ class BizcardDupeDialog(QDialog):
             m.addAction(tr("대표로"), lambda: self.set_rep(gi, cid))
         m.addAction(tr("명함 고치기"), lambda: self.edit_card(gi, cid))   # 그 명함 자체(§5.24.8 '명함 고치기')
         c = next((x for x in self.groups[gi]["cards"] if x["id"] == cid), None)
-        if c is not None and not V.is_contact(c):
-            m.addAction(tr("명함 그림 떼기"), lambda: self.detach_image(cid))   # 잘못 붙은 다른 사람 명함 그림(§5.24.8 '그림 떼기')
+        if c is not None and (not V.is_contact(c) or self.fd._photo_front(c) and P.person_photos(self.fd._photo_front(c))):
+            m.addAction(tr("명함 사진 지우기"), lambda: self.delete_pictures(cid))   # 고른 앞면·뒷면·인물 사진만(§5.24.8, 261120-65)
         self._last_menu = m
         m.exec(self.before.viewport().mapToGlobal(pos))
 
@@ -640,7 +682,26 @@ class BizcardDupeDialog(QDialog):
                 "'{n}' 에 붙은 명함 그림(정리본 앞·뒷면)을 휴지통으로 보내고 그림 없는 명함으로 둡니다 — 연락처·메모는 그대로, "
                 "원본 스캔은 남아 명함 관리에서 다시 읽을 수 있습니다.").format(n=c.get("name") or "")) != QMessageBox.StandardButton.Yes:
             return False
-        ok = self.fd.detach_card_image(c)
+        ok = self.fd.detach_card_image(c, originals=True)   # 앞·뒷면 모두 — 원본 스캔도(사용자 결정 261121, 261120-65)
+        self.reload()
+        return ok
+
+    def delete_pictures(self, cid, ask: bool = True) -> bool:
+        """'명함 사진 지우기'(§5.24.8, 261120-65) — 창에서 고른 앞면·뒷면·인물 사진만 휴지통으로, 지운 뒤 다시 묶는다."""
+        c = P.card_by_id(self.fd._store(), cid)
+        if not c or self.working:
+            return False
+        pf = self.fd._photo_front(c)
+        dlg = PicturePickDialog(c, P.person_photos(pf) if pf else [], self)
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return False
+        picks = dlg.picks()
+        if not picks:
+            return False
+        if ask and QMessageBox.question(self, tr("중복 검토"), tr("고른 사진 {n}개를 휴지통으로 보냅니다.").format(n=len(picks))) \
+                != QMessageBox.StandardButton.Yes:
+            return False
+        ok = self.fd.delete_card_pictures(c, picks)
         self.reload()
         return ok
 

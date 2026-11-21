@@ -535,7 +535,7 @@ try:
         for c in (hong, kim):
             sm.select(dlg.table.model().index(dlg.row_of_id(c["id"]), 0),
                       QItemSelectionModel.SelectionFlag.Select | QItemSelectionModel.SelectionFlag.Rows)
-        QTest.mouseClick(dlg.btn_tags, Qt.MouseButton.LeftButton)
+        next(a for a in (dlg.tag_menu.aboutToShow.emit() or dlg.tag_menu.actions()) if a.text() == "해시태그 수정").trigger()   # '#' 풀다운 맨 아래(261120-66)
         pump(timeout=0.2)
     finally:
         _tad.TagApplyDialog.exec = _orig_exec
@@ -618,28 +618,28 @@ try:
     t = dlg.fav_copy_selected() if hasattr(dlg, "fav_copy_selected") else ""
     chk("홍길동" in t and "김철수" not in t and QApplication.clipboard().text() == t, "I14 즐겨찾기 사람 메뉴 '내용 복사' = 체크한 칸 글", repr(t[:40]))
     dlg.todo_delete(gid, ask=False)
-    # I19 아래 단추 줄 [명함 관리] — [주소록] 왼쪽, 누르면 명함 관리 창 길 `_action_bizcard_import`(사용자 지시 261119 — 도구 탭 메뉴는 261117-56 에 없앰)
-    bm_ = getattr(dlg, "btn_manage", None)
+    # I19 ≡ 메뉴 '명함 관리' — 본 뷰어 안에서 [중복 검토] 앞, 누르면 명함 관리 창 길 `_action_bizcard_import`(아래 단추 줄은 261120-66 에 없앰)
+    bm_ = getattr(dlg, "act_manage", None)
     calls = []
     _orig_imp = mw._action_bizcard_import
     mw._action_bizcard_import = lambda *a, **k: calls.append(a)
+    dlg.main_menu.aboutToShow.emit()
+    mnames = [a.text() for a in dlg.main_menu.actions() if not a.isSeparator()]
     try:
-        if bm_ is not None and bm_.isVisible():
-            QTest.mouseClick(bm_, Qt.MouseButton.LeftButton)
+        if bm_ is not None and bm_ in dlg.main_menu.actions():
+            bm_.trigger()
             pump(timeout=0.1)
     finally:
         mw._action_bizcard_import = _orig_imp
-    chk(bm_ is not None and bm_.isVisible() and bm_.text() == "명함 관리"
-        and abs(bm_.y() - dlg.btn_vcard.y()) <= 2 and bm_.x() < dlg.btn_vcard.x() and calls == [()],
-        "I19 [명함 관리] 단추는 [주소록] 왼쪽, 누르면 명함 관리 창 길", str(calls))
+    chk(bm_ is not None and bm_.text() == "명함 관리" and mnames[:3] == ["새 명함 입력", "명함 관리", "중복 검토"] and calls == [()],
+        "I19 ≡ 메뉴 '명함 관리' 는 [중복 검토] 앞, 누르면 명함 관리 창 길", str((mnames, calls)))
     # I15 탭·메뉴 개편 — 아이콘·끌어 복사·'+'·표/탭/사람 메뉴·이메일 복사·마감·삭제(메모 글)·최근·탭 명단 보기 (사용자 지시 261119)
     from PyQt6.QtWidgets import QMenu, QInputDialog, QToolButton, QWidgetAction
     st = dlg._store()
     chk(not any(hasattr(dlg, b) for b in ("btn_todo", "btn_fav_add", "btn_del"))
         and abs(dlg.btn_tags.mapTo(dlg, dlg.btn_tags.rect().center()).y() - dlg.ed_find.mapTo(dlg, dlg.ed_find.rect().center()).y()) <= 4
-        and dlg.btn_tags.x() > dlg.ed_find.x()
-        and abs(dlg.btn_vcard.y() - dlg.btn_open.y()) <= 2 and dlg.btn_vcard.x() < dlg.btn_open.x(),
-        "I15 [즐겨찾기에 넣기]·[할 일…]·[삭제] 없음, [해시태그…] 는 찾기 칸 오른쪽, [주소록 ▾] 은 [명함 보기] 왼쪽")
+        and dlg.btn_tags.x() > dlg.ed_find.x(),
+        "I15 [즐겨찾기에 넣기]·[할 일…]·[삭제] 없음, '#' 풀다운은 찾기 칸 오른쪽")
     shown = []
     _orig_exec = QMenu.exec
     QMenu.exec = lambda self, *a, **k: shown.append(self)
@@ -874,7 +874,7 @@ try:
     dlg.table.clearSelection()
     dlg.table.setCurrentCell(dlg.row_of_id(new[0]["id"]), 0)
     pump(timeout=0.1)
-    chk(not dlg.btn_photo.isEnabled() and not dlg.btn_open.isEnabled() and dlg.btn_tags.isEnabled(), "I8 그림 없는 명함 — 사진·명함 보기 끔")
+    chk(not dlg.btn_photo.isEnabled() and not dlg.act_open.isEnabled() and dlg.btn_tags.isEnabled(), "I8 그림 없는 명함 — 사진·명함 보기 끔")
     from viewer import bg_write
     rf = TMP / "remember.vcf"
     dlg.export_vcard(path=str(rf), style="remember")
@@ -1050,7 +1050,7 @@ try:
         dlg.table.clearSelection()
         dlg.table.selectRow(dlg.row_of_id(jane["id"]))
         pump(timeout=0.1)
-        QTest.mouseClick(dlg.btn_tags, Qt.MouseButton.LeftButton)
+        next(a for a in (dlg.tag_menu.aboutToShow.emit() or dlg.tag_menu.actions()) if a.text() == "해시태그 수정").trigger()   # '#' 풀다운 맨 아래(261120-66)
         pump(timeout=0.2)
     finally:
         _tad.TagApplyDialog.exec = _orig_exec
@@ -1181,16 +1181,10 @@ try:
 
     print("\n=== I27. 새 명함 입력 — 명함찾기·명함 관리 단추, 그림 없는/그림 명함, 인물 사진, 같은 사람 물음 (261120-15) ===")
     import viewer.widgets.bizcard_new_dialog as NDm
-    bnew = getattr(dlg, "btn_new_card", None)
-    order_ok = False
-    if bnew is not None:
-        lay = None
-        for i in range(dlg.layout().count()):
-            it = dlg.layout().itemAt(i)
-            if it.layout() is not None and it.layout().indexOf(dlg.btn_manage) >= 0:
-                lay = it.layout()
-        order_ok = lay is not None and lay.indexOf(bnew) == 0 and lay.indexOf(dlg.btn_manage) == 1
-    chk(order_ok, "I27 명함찾기 아래 줄 맨 앞에 [새 명함 입력]([명함 관리] 왼쪽)")
+    bnew = getattr(dlg, "act_new_card", None)
+    dlg.main_menu.aboutToShow.emit()
+    order_ok = bnew is not None and [a for a in dlg.main_menu.actions() if not a.isSeparator()][:1] == [bnew]
+    chk(order_ok, "I27 ≡ 메뉴 맨 앞에 '새 명함 입력'(아래 단추 줄은 261120-66 에 없앰)")
     jpg(TMP / "new_front.jpg", "mistyrose")
     jpg(TMP / "new_photo.jpg", "honeydew", size=(120, 160))
     plan = []
@@ -1220,7 +1214,7 @@ try:
         # A — 그림 없이(같은 메일의 홍길동이 있음 → 중복 검토 물음)
         plan.append(("새가짜", "가짜상사", "01000000099", "hong@example.com", "", str(TMP / "new_photo.jpg")))
         if bnew is not None:
-            QTest.mouseClick(bnew, Qt.MouseButton.LeftButton)
+            bnew.trigger()
         nd = getattr(dlg, "new_dlg", None)
         st = S.BizcardStore()
         ca = P.card_by_id(st, nd.new_id) if nd is not None and nd.new_id else None
@@ -1234,7 +1228,7 @@ try:
         # B — 앞면 그림을 붙이면 그림 명함(정리본 성명_회사명)
         plan.append(("그림가짜", "나다상사", "01000000098", "pic@example.com", str(TMP / "new_front.jpg"), str(TMP / "new_photo.jpg")))
         n_ask = len(asked3)
-        QTest.mouseClick(bnew, Qt.MouseButton.LeftButton)
+        bnew.trigger()
         nd = dlg.new_dlg
         cb_ = P.card_by_id(st, nd.new_id) if nd.new_id else None
         fr = str(cb_["front"]) if cb_ else ""
@@ -1657,8 +1651,7 @@ try:
         dlg.main_menu.aboutToShow.emit()                         # 메뉴를 여는 것과 같은 길(열 때마다 채움)
         acts = [a for a in dlg.main_menu.actions() if not a.isSeparator()]
         names = [a.text() for a in acts]
-        want_names = [b.text() for b in (dlg.btn_new_card, dlg.btn_manage, dlg.btn_dupe, dlg.btn_vcard, dlg.btn_open)
-                      if b.isVisibleTo(dlg)] + ["종료"]
+        want_names = ["새 명함 입력", "명함 관리", "중복 검토", "주소록", "명함 보기", "종료"]
         en = {a.text(): a.isEnabled() for a in acts}
         sub = next((a.menu() for a in acts if a.menu() is not None), None)
         hits4 = []
@@ -1669,12 +1662,12 @@ try:
         finally:
             dlg.open_dupes = _o_dupes
         ok_menu = (top_l2.indexOf(bmenu) == 0 and not bmenu.icon().isNull() and names == want_names
-                   and en.get("명함 보기") is False and en.get("명함 보기") == dlg.btn_open.isEnabled()
-                   and sub is not None and [a.text() for a in sub.actions() if a.text()] == [a.text() for a in dlg.btn_vcard.menu().actions() if a.text()]
+                   and en.get("명함 보기") is False and en.get("명함 보기") == dlg.act_open.isEnabled()
+                   and sub is dlg.vcard_menu and "구글 주소록과 싱크" in [a.text() for a in sub.actions()]
                    and hits4 == ["dupe"])
         print("I33", names, want_names, en, hits4)
     chk(ok_menu and "닫기" not in pushes,
-        "I33 찾기 줄 맨 왼쪽 ≡ 메뉴 — 아래 단추와 같은 항목·차례·켜짐(명함 보기 꺼짐 그대로)·누르면 같은 길·주소록 하위 메뉴·끝에 '종료', [닫기] 단추 없음",
+        "I33 찾기 줄 맨 왼쪽 ≡ 메뉴 — 종전 아래 단추 항목·차례·켜짐(명함 보기 꺼짐)·누르면 같은 길·주소록 하위 메뉴·끝에 '종료', [닫기] 단추 없음",
         str(pushes))
 
     # I35 탭 메뉴 — 이름 바꾸기·할 일 고치기 없음, 메일 한 묶음 → 주요 항목 수정·탭 마감·탭 삭제, 마감·삭제 글 자리 = 다른 항목 (261120-41)

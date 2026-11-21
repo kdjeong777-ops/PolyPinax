@@ -100,8 +100,8 @@ try:
 
     print("=== A. 주소록 명함에 사진 추가 ===")
     pick(lee)
-    chk(dlg.btn_photo.isEnabled() and not dlg.btn_open.isEnabled(), "A 주소록 명함 — [사진 추가] 켜짐, [명함 보기] 꺼짐",
-        "%s %s" % (dlg.btn_photo.isEnabled(), dlg.btn_open.isEnabled()))
+    chk(dlg.btn_photo.isEnabled() and not dlg.act_open.isEnabled(), "A 주소록 명함 — [사진 추가] 켜짐, [명함 보기] 꺼짐",
+        "%s %s" % (dlg.btn_photo.isEnabled(), dlg.act_open.isEnabled()))
     add_photo()
     want = F / "인물" / "이영희_사아자.jpg"
     chk(want.exists() and dlg.photos.count() == 1, "A [사진 추가] → 명함 폴더 인물\\성명_회사명.jpg, 썸네일 한 장",

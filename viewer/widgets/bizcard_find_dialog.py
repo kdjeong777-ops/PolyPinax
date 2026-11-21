@@ -14,7 +14,7 @@ from pathlib import Path
 
 from PyQt6.QtCore import (Qt, QTimer, QSize, QObject, QRectF, QPointF, QDate, pyqtSignal, QAbstractTableModel,
     QModelIndex)
-from PyQt6.QtGui import QPixmap, QIcon, QImage, QImageReader, QPainter, QPainterPath, QColor, QFont, QKeySequence, QShortcut, QPalette
+from PyQt6.QtGui import QPixmap, QIcon, QImage, QImageReader, QPainter, QPainterPath, QColor, QFont, QKeySequence, QShortcut, QPalette, QAction
 from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QComboBox, QTableView,
     QAbstractItemView, QHeaderView, QSplitter, QWidget, QFormLayout, QPlainTextEdit, QPushButton,
     QListWidget, QListWidgetItem, QListView, QMessageBox, QFileDialog, QSizePolicy, QCheckBox, QTabBar, QToolButton,
@@ -41,6 +41,7 @@ DETAIL_BG = {                        # 세부내용 카드·목록 표 — 띠(�
 }
 DETAIL_W = 330                     # 처음 너비 — 세부 칸(§5.24 '처음 너비': 목록은 네 열 최소 폭, 나머지는 사진창)
 FIND_DELAY_MS = 250
+PICKED_LINES = 2                   # 아래 줄 고른 명단 높이(줄 수, §5.24.1 '아래 줄', 261120-66)
 RECENT = -1                         # '최근' 탭의 tabData(명함 DB 의 탭 id 와 겹치지 않음, §5.24.2)
 FAV_KEY_MS = 120                    # 사람 칸을 키보드로 넘길 때 — 멈춘 뒤 마지막 사람만 그린다(§5.24.2)
 RECENT_MS = 3000                    # 세부 칸에 이만큼 넘게 보이면 '최근' 에 넣는다(D27)
@@ -953,9 +954,13 @@ class BizcardFindDialog(QDialog):
         self.ed_find.setPlaceholderText(tr("이름·회사·메모 등 — 낱말 여럿은 모두 들어 있는 명함, #낱말은 해시태그"))
         self.ed_find.setClearButtonEnabled(True)
         top.addWidget(self.ed_find, 1)
-        self.btn_tags = QPushButton(tr("해시태그"))       # 찾기 칸 바로 오른쪽(§5.24.1 '위 줄', 사용자 지시 261119)
-        self.btn_tags.setToolTip(tr("고른 명함들에 해시태그를 붙이거나 뗍니다 — 정리본 파일에도 같이, 찾기 칸에서 #낱말로 찾습니다"))
-        self.btn_tags.clicked.connect(lambda _c=False: self.edit_tags())
+        # '#' 풀다운 — 주 창 파일 목록 `#` 와 같은 꼴(§5.24.1 '# 풀다운', 디자인 SOT §2.7, 261120-66 — 종전 [해시태그] 단추)
+        self.btn_tags = QPushButton("#")
+        self.btn_tags.setFixedWidth(28)
+        self.btn_tags.setToolTip(tr("해시태그로 찾기 — 지금 목록의 해시태그 보기·고르기, 맨 아래 '해시태그 수정'"))
+        self.tag_menu = QMenu(self.btn_tags)
+        self.tag_menu.aboutToShow.connect(self._rebuild_tag_menu)
+        self.btn_tags.setMenu(self.tag_menu)
         top.addWidget(self.btn_tags)
         self.cb_period = QComboBox()
         for key, label in (("all", tr("전체")), ("1m", tr("최근 1개월")), ("3m", tr("최근 3개월")), ("1y", tr("최근 1년")),
@@ -990,6 +995,7 @@ class BizcardFindDialog(QDialog):
         self._find_timer.setInterval(FIND_DELAY_MS)
         self._find_timer.timeout.connect(self.refresh)
         self.ed_find.textChanged.connect(lambda _t: self._search_mode())
+        self.ed_find.textChanged.connect(lambda _t: self._style_tag_button())
         self.ed_find.installEventFilter(self)                   # 찾기 칸을 고르면 찾기 결과로(§5.24.2 '탭 줄')
         self.cb_period.currentIndexChanged.connect(self._on_period)
         self._recent_timer = QTimer(self)
@@ -1279,9 +1285,12 @@ class BizcardFindDialog(QDialog):
         self.btn_open = QPushButton(tr("명함 보기"))                     # D19: 종전 '사진 모드에서 열기' — 동작 그대로
         self.btn_open.setToolTip(tr("이 명함을 사진 모드에서 엽니다"))
         self.btn_open.clicked.connect(lambda _c=False: self.open_in_photo())
-        self.btn_vcard = QPushButton(tr("주소록"))       # 메뉴 단추 — 글자에 ▾ 없이 Qt 화살표 하나(디자인 SOT §2.7)                    # §5.24 D22·D23 — 구글 주소록·리멤버 명함첩(vCard)
-        self.btn_vcard.setToolTip(tr("주소록 vCard(.vcf) 가져오기·내보내기 — 구글 주소록·리멤버"))
-        bm = QMenu(self.btn_vcard)
+        # 종전 아래 단추 줄(새 명함 입력·명함 관리·중복 검토·주소록·명함 보기)은 ≡ 메뉴 항목으로만(§5.24.1 '아래 줄', 261120-66)
+        self.act_open = QAction(tr("명함 보기"), self)                 # D19: 종전 '사진 모드에서 열기' — 동작 그대로
+        self.act_open.setToolTip(tr("이 명함을 사진 모드에서 엽니다"))
+        self.act_open.triggered.connect(lambda _c=False: self.open_in_photo())
+        self.vcard_menu = bm = QMenu(tr("주소록"), self)                # §5.24 D22·D23 — 구글 주소록·리멤버 명함첩(vCard)
+        bm.setToolTipsVisible(True)
         _menu_act(bm, tr("리멤버 vCard 가져오기"), lambda: self.import_contacts(source="remember"))
         _menu_act(bm, tr("구글 주소록 vCard 가져오기"), lambda: self.import_contacts(source="google"))
         bm.addSeparator()
@@ -1289,24 +1298,29 @@ class BizcardFindDialog(QDialog):
         _menu_act(bm, tr("리멤버용 vCard 로 내보내기"), lambda: self.export_vcard(style="remember"))
         bm.addSeparator()
         _menu_act(bm, tr("구글 주소록과 싱크"), lambda: self.open_gsync())     # 261120-36(§5.29) — 구글 계정 연결은 명함 환경설정
-        self.btn_vcard.setMenu(bm)
-        from viewer.widgets.icons import drop_button
-        drop_button(self.btn_vcard)
-        self.btn_manage = QPushButton(tr("명함 관리"))      # 메뉴 '명함 관리' 와 같은 길(§5.24.1 '단추', 사용자 지시 261119)
-        self.btn_manage.setToolTip(tr("명함 폴더의 확인 표 창(명함 관리)을 엽니다"))
-        self.btn_manage.clicked.connect(lambda _c=False: self.open_manage())
-        self.btn_manage.setVisible(callable(getattr(self._mw, "_action_bizcard_import", None)))
-        self.btn_dupe = QPushButton(tr("중복 검토"))        # §5.24.8 D30 — 번호·메일 등으로 같은 사람 묶어 합치기
-        self.btn_dupe.setToolTip(tr("같은 사람으로 보이는 명함(같은 번호·메일, 번호 오타, 같은 이름·회사)을 묶어 우선순위대로 합칩니다"))
-        self.btn_dupe.clicked.connect(lambda _c=False: self.open_dupes())
-        self.btn_new_card = QPushButton(tr("새 명함 입력"))  # 맨 앞(§5.24.1 '새 명함 입력', 261120-15)
-        self.btn_new_card.setToolTip(tr("새 명함이나 새 인물 정보를 손으로 넣습니다 — 명함 그림·인물 사진도 함께"))
-        self.btn_new_card.clicked.connect(lambda _c=False: self.new_card())
-        for b in (self.btn_new_card, self.btn_manage, self.btn_dupe, self.btn_vcard, self.btn_open):   # [새 명함 입력] → [명함 관리] → [주소록] → [명함 보기](§5.24.1 '단추')
-            bot.addWidget(b)
-        bot.addStretch(1)                              # [닫기] 단추 없음 — 제목 줄 X·Alt+F4·Esc·≡ 메뉴 '종료'(261120-38)
+        bm.addSeparator()
+        _menu_act(bm, tr("변경 기록·되살리기"), lambda: self.open_history())   # §5.30(261120-64)
+        self.act_manage = QAction(tr("명함 관리"), self)    # 메뉴 '명함 관리' 와 같은 길 — 본 뷰어 안에서만(§5.24.1 '≡ 메뉴')
+        self.act_manage.setToolTip(tr("명함 폴더의 확인 표 창(명함 관리)을 엽니다"))
+        self.act_manage.triggered.connect(lambda _c=False: self.open_manage())
+        self.act_manage.setVisible(callable(getattr(self._mw, "_action_bizcard_import", None)))
+        self.act_dupe = QAction(tr("중복 검토"), self)      # §5.24.8 D30 — 번호·메일 등으로 같은 사람 묶어 합치기
+        self.act_dupe.setToolTip(tr("같은 사람으로 보이는 명함(같은 번호·메일, 번호 오타, 같은 이름·회사)을 묶어 우선순위대로 합칩니다"))
+        self.act_dupe.triggered.connect(lambda _c=False: self.open_dupes())
+        self.act_new_card = QAction(tr("새 명함 입력"), self)   # 맨 앞(§5.24.1 '새 명함 입력', 261120-15)
+        self.act_new_card.setToolTip(tr("새 명함이나 새 인물 정보를 손으로 넣습니다 — 명함 그림·인물 사진도 함께"))
+        self.act_new_card.triggered.connect(lambda _c=False: self.new_card())
+        # 고른 명단(§5.24.1 '아래 줄', 261120-66) — 고른 명함들의 '이름 #태그', 두 줄 높이 고정(넘치면 '외 n명'), 올리면 전체
+        self.lbl_picked = QLabel("")
+        self.lbl_picked.setWordWrap(True)
+        self.lbl_picked.setTextFormat(Qt.TextFormat.PlainText)
+        self.lbl_picked.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+        self.lbl_picked.setFixedHeight(self.lbl_picked.fontMetrics().lineSpacing() * PICKED_LINES + 4)
+        self.lbl_picked.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
+        bot.addWidget(self.lbl_picked, 1)              # 단추 없음 — [닫기]도 없음(제목 줄 X·Alt+F4·Esc·≡ 메뉴 '종료', 261120-38)
+        self.table.selectionModel().selectionChanged.connect(lambda *_a: self._update_picked())
         v.addLayout(bot)
-        for b in self.findChildren(QPushButton):      # Enter 가 [해시태그] 등을 누르지 않게 — 기본 단추 없음(사용자 보고 261119)
+        for b in self.findChildren(QPushButton):      # Enter 가 '#' 등을 누르지 않게 — 기본 단추 없음(사용자 보고 261119)
             b.setAutoDefault(False)
             b.setDefault(False)
         self._enable_card_buttons(False)
@@ -1361,21 +1375,16 @@ class BizcardFindDialog(QDialog):
             fn()
 
     def _fill_main_menu(self):
-        """≡ 메뉴를 열 때마다 — 아래 단추 줄과 같은 항목·차례, 단추의 보임·켜짐을 그대로, 누르면 그 단추와 같은 길. 끝에 '종료'."""
+        """≡ 메뉴를 열 때마다 — 새 명함 입력·명함 관리(본 뷰어 안에서만)·중복 검토·주소록 ▸·명함 보기(그림 없는 명함이면 흐림),
+        끝에 '종료'(§5.24.1 '≡ 메뉴' — 종전 아래 단추 줄은 261120-66 에 없앴다)."""
         m = self.main_menu
         m.clear()
-        for b in (self.btn_new_card, self.btn_manage, self.btn_dupe, self.btn_vcard, self.btn_open):
-            if not b.isVisible() and not b.isVisibleTo(self):
-                continue
-            if b.menu() is not None:                   # [주소록] — 그 단추의 메뉴 항목 그대로
-                sub = m.addMenu(b.text())
-                for a in b.menu().actions():
-                    sub.addAction(a) if not a.isSeparator() else sub.addSeparator()
-                sub.setEnabled(b.isEnabled())
-                continue
-            act = m.addAction(b.text())
-            act.setEnabled(b.isEnabled())
-            act.triggered.connect(lambda _c=False, btn=b: btn.click())
+        m.setToolTipsVisible(True)
+        for a in (self.act_new_card, self.act_manage, self.act_dupe, None, self.act_open):
+            if a is None:
+                m.addMenu(self.vcard_menu)
+            elif a.isVisible():
+                m.addAction(a)
         m.addSeparator()
         quit_act = m.addAction(tr("종료"))
         quit_act.triggered.connect(lambda _c=False: self.close())   # 따로 실행이면 프로그램이 끝나고, 본 뷰어 안이면 창만 닫힘
@@ -1421,6 +1430,20 @@ class BizcardFindDialog(QDialog):
         if gone:
             self.delete_cards(gone, ask=False)
         self.refresh()
+
+    def open_history(self, exec_: bool = True):
+        """[주소록] '변경 기록·되살리기'(명함 SOT §5.30) — 창을 닫으면 목록을 다시."""
+        if self._dirty and not self._ask_save():
+            return None
+        from viewer.widgets.bizcard_history_dialog import HistoryDialog
+        dlg = HistoryDialog(self, db=self._store().path)
+        self.history_dlg = dlg                               # 검사가 찾는다
+        dlg.finished.connect(lambda _r: self.refresh())
+        if not exec_:
+            dlg.show()
+            return dlg
+        dlg.exec()
+        return dlg
 
     def open_settings(self, exec_: bool = True):
         """톱니 — 명함 환경설정(§5.24.9). 닫으면 '최근' 탭·번호 꼴을 다시."""
@@ -1487,6 +1510,11 @@ class BizcardFindDialog(QDialog):
         except Exception:
             pass
         P.recent_prune(st)                                # '최근' 항목 제한(§5.24.2, 261120-18)
+        try:
+            from viewer.bizcard import history as H
+            H.maybe_prune(st)                             # 변경 기록 180일(§5.30) — 하루 한 번, 짧은 DELETE 하나
+        except Exception:
+            pass
         on = set(st.meta_get("copy_fields", list(P.COPY_DEFAULT)) or [])
         for k, cb in self.chk.items():
             cb.blockSignals(True)
@@ -1644,6 +1672,124 @@ class BizcardFindDialog(QDialog):
             self._load(c)
 
     # ── 한 명함 ──
+    def _update_picked(self):
+        """고른 명단(§5.24.1 '아래 줄', 261120-66) — 표에서 고른 명함들(없으면 지금 명함)의 '이름 #태그'(앱이 붙인 #명함 빼고)를
+        ' · ' 로 잇는다. 두 줄에 넘치면 들어가는 데까지 + '외 n명', 올리면 전체(줄마다 한 사람, 많으면 앞 200명)."""
+        lbl = getattr(self, "lbl_picked", None)
+        if lbl is None:
+            return
+        cards = self.selected_cards() or ([self._card] if self._card else [])
+        parts = []
+        for c in cards:
+            tags = ["#" + str(t) for t in (c.get("tags") or []) if str(t).strip() and str(t) != "명함"]
+            parts.append(" ".join([str(c.get("name") or c.get("company") or "").strip() or "-"] + tags))
+        fm = lbl.fontMetrics()
+        room = max(120, lbl.width() - 8) * PICKED_LINES * 0.9      # 줄바꿈 자리 여유
+        text = ""
+        for i, p in enumerate(parts):
+            cand = p if not text else text + " · " + p
+            rest = len(parts) - i - 1
+            tail = (" " + tr("외 {n}명").format(n=rest)) if rest else ""
+            if text and fm.horizontalAdvance(cand + tail) > room:
+                text += " " + tr("외 {n}명").format(n=len(parts) - i)
+                break
+            text = cand
+        lbl.setText(text)
+        lbl.setToolTip("\n".join(parts[:200]) if len(parts) > 1 or text != (parts[0] if parts else "") else "")
+
+    def _style_tag_button(self):
+        """'#' 단추 — 찾기 칸에 `#태그` 가 n 개면 '#n'·켜짐 색(디자인 SOT §2.5 '태그 켜짐'), 없으면 '#'."""
+        from viewer import theme as _theme
+        n = len([t for t in self.ed_find.text().split() if t.startswith("#") and len(t) > 1])
+        self.btn_tags.setText("#%d" % n if n else "#")
+        self.btn_tags.setStyleSheet(_theme.tag_button_style(bool(n)))
+
+    def _rebuild_tag_menu(self):
+        """'#' 풀다운(§5.24.1 '# 풀다운', 261120-66) — 주 창 파일 목록 `#` 와 같은 꼴(검색창 SOT §5.1). 개수 = 지금 목록 명함의
+        DB 태그(찾기 칸 `#낱말` 이 보는 것), 진실은 찾기 칸 글 — 체크·풀기 = `#태그` 넣기·빼기, 열 때 칸 글로 체크 복원."""
+        from PyQt6.QtWidgets import QCheckBox, QRadioButton, QScrollArea, QWidgetAction
+        from viewer.auto_tag import axis_of
+        m = self.tag_menu
+        m.clear()
+        counts, names = {}, {}
+        for c in self._rows or []:
+            for t in dict.fromkeys(str(x).strip() for x in (c.get("tags") or [])):
+                if t and t != "명함":                       # 앱이 모든 명함에 붙이는 #명함 은 보이지 않는다
+                    k = t.lower()
+                    names.setdefault(k, t)
+                    counts[k] = counts.get(k, 0) + 1
+        active = [t[1:] for t in self.ed_find.text().split() if t.startswith("#") and len(t) > 1]
+        for t in active:                                    # 목록에 없어도 찾기 칸에 있으면 보인다 — 풀 수 있게(0)
+            if t.lower() not in counts and t.lower() != "명함":
+                names[t.lower()] = t
+                counts[t.lower()] = 0
+        on = {t.lower() for t in active}
+        keys = sorted(counts, key=lambda k: (-counts[k], k))
+        if not keys:
+            m.addAction(tr("(이 목록의 명함에 해시태그 없음)")).setEnabled(False)
+        else:
+            panel = QWidget()
+            lay = QVBoxLayout(panel)
+            lay.setContentsMargins(8, 6, 8, 6)
+            lay.setSpacing(2)
+            groups = {"형식": [], "속성": [], "주제": []}
+            for k in keys:
+                ax = axis_of(names[k])
+                groups[ax if ax in groups else "주제"].append(k)
+            for gname in (tr_noop("형식"), tr_noop("속성"), tr_noop("주제")):
+                if not groups[gname]:
+                    continue
+                lay.addWidget(QLabel("<b>%s</b>" % tr(gname)))
+                one = gname in ("형식", "속성")             # 옵션 단추 — 묶음마다 하나만(다시 누르면 풀림)
+                grp = []
+                for k in groups[gname]:
+                    cb = (QRadioButton if one else QCheckBox)("#%s  (%d)" % (names[k], counts[k]))
+                    if one:
+                        cb.setAutoExclusive(False)
+                        grp.append((names[k], cb))
+                    cb.setChecked(k in on)
+                    cb.toggled.connect((lambda v, tag=names[k], g=grp: self._pick_one_tag(tag, v, g)) if one else
+                                       (lambda v, tag=names[k]: self._add_tag_to_find(tag) if v else self._remove_tag_from_find(tag)))
+                    lay.addWidget(cb)
+            area = QScrollArea()
+            area.setWidgetResizable(True)
+            area.setWidget(panel)
+            area.setMaximumHeight(320)
+            area.setMinimumWidth(200)
+            wa = QWidgetAction(m)
+            wa.setDefaultWidget(area)
+            m.addAction(wa)
+        m.addSeparator()
+        m.addAction(tr("찾기 비우기")).triggered.connect(lambda _c=False: self.ed_find.clear())
+        m.addSeparator()
+        ed = m.addAction(tr("해시태그 수정"))                 # 고른 명함들 — §5.24.4 창(종전 [해시태그] 단추와 같은 길)
+        ed.setEnabled(bool(self._card or self.selected_cards()))
+        ed.triggered.connect(lambda _c=False: self.edit_tags())
+
+    def _add_tag_to_find(self, tag: str):
+        if ("#" + tag).lower() not in [c.lower() for c in self.ed_find.text().split()]:
+            self.ed_find.setText((self.ed_find.text() + " #" + tag).strip())
+
+    def _remove_tag_from_find(self, tag: str):
+        keep = [c for c in self.ed_find.text().split() if not (c.startswith("#") and c[1:].lower() == tag.lower())]
+        self.ed_find.setText(" ".join(keep))
+
+    def _pick_one_tag(self, tag: str, on: bool, group):
+        """형식·속성 묶음은 하나만 — 고르면 같은 묶음의 다른 토큰을 빼고 넣는다(칸을 한 번만 바꿈), 다시 누르면 푼다."""
+        if not on:
+            self._remove_tag_from_find(tag)
+            return
+        others = {t.lower() for t, _b in group if t.lower() != tag.lower()}
+        keep = [c for c in self.ed_find.text().split() if not (c.startswith("#") and c[1:].lower() in others)]
+        if ("#" + tag).lower() not in [c.lower() for c in keep]:
+            keep.append("#" + tag)
+        for t, b in group:
+            if t.lower() != tag.lower() and b.isChecked():
+                b.blockSignals(True)
+                b.setChecked(False)
+                b.blockSignals(False)
+        self.ed_find.setText(" ".join(keep))
+
     def _load(self, card):
         self._fav_key_timer.stop()                         # 다른 길로 명함을 보이면 키보드 대기는 버린다
         self._card = card
@@ -1674,6 +1820,7 @@ class BizcardFindDialog(QDialog):
             self._loading = False
         self._set_dirty(False)
         self._enable_card_buttons(card is not None)
+        self._update_picked()
         self._show_card()
         self._fill_photos()
         self._recent_id = card["id"] if card else None     # RECENT_MS 넘게 보이면 '최근' 에(D27)
@@ -1830,6 +1977,7 @@ class BizcardFindDialog(QDialog):
         QTimer.singleShot(0, self._show_card)
         QTimer.singleShot(0, self._fav_fit)
         QTimer.singleShot(0, self._sync_todo_width)
+        QTimer.singleShot(0, self._update_picked)
 
     # ── 할 일 칸 (§5.24.10, 261120-34) ──
     def _sync_todo_width(self):
@@ -1932,9 +2080,8 @@ class BizcardFindDialog(QDialog):
     def _enable_card_buttons(self, on: bool):
         img = on and not V.is_contact(self._card)            # 주소록에서 가져온 명함 — 명함 그림 없음
         ph = on and bool(self._photo_front())                 # 인물 사진은 그림 없는 명함도(명함 폴더가 있으면, §5.24.3)
-        for b in (self.btn_tags, self.btn_copy):
-            b.setEnabled(on)
-        self.btn_open.setEnabled(img)
+        self.btn_copy.setEnabled(on)
+        self.act_open.setEnabled(img)
         self.btn_photo.setEnabled(ph and not self.photo_busy)
         self.photos.setEnabled(ph)
         self.btn_photo_del.setEnabled(ph and self.photos.count() > 0)
@@ -3101,12 +3248,50 @@ class BizcardFindDialog(QDialog):
         _menu_act(m, tr("지우기"), lambda: self.delete_photos())
         m.exec(self.photos.mapToGlobal(pos))
 
-    def detach_card_image(self, c) -> bool:
+    def delete_card_pictures(self, c, picks) -> bool:
+        """'명함 사진 지우기'(§5.24.8, 261120-65) — picks = 'front'·'back'·인물 사진 경로. 인물 사진 먼저(남은 것 이름 차례대로),
+        앞·뒷면을 모두(또는 뒷면 없는 앞면) 지우면 그림 떼기(원본 스캔까지), 앞면만이면 뒷면을 앞면 이름으로 올림, 뒷면만이면 뒷면 칸을 비움."""
+        from viewer.widgets.bizcard_import_dialog import trash_paths
+        st = self._store()
+        photos = [p for p in picks if p not in ("front", "back")]
+        if photos:
+            prev = self._card
+            self._card = c
+            try:
+                self.delete_photos(photos, ask=False)
+            finally:
+                self._card = prev
+            pf = self._photo_front(c)
+            if pf and not P.person_photos(pf):               # 구글 짝 — 다음 싱크에 구글 사진도 지울까 묻는다(§5.29 '사진')
+                from viewer.bizcard import gsync as G
+                if c["id"] in G.links(st):
+                    G.photo_gone_add(st, c["id"])
+        front, back = c.get("front") or "", c.get("back") or ""
+        has_back = bool(back) and os.path.exists(P._real(back))
+        if "front" in picks and ("back" in picks or not has_back):
+            return self.detach_card_image(P.card_by_id(st, c["id"]) or c, originals=True)
+        if "front" in picks:
+            f, b = P._real(front), P._real(back)
+            if trash_paths(self, self._mw, [f]):
+                return False
+            if not self._rename(b, f, quiet=True):           # 뒷면을 앞면 이름으로 — 인물 사진은 그대로 짝
+                return False
+            P.update_card(st, c["id"], {"back": ""})
+        elif "back" in picks and has_back:
+            if trash_paths(self, self._mw, [P._real(back)]):
+                return False
+            P.update_card(st, c["id"], {"back": ""})
+        self.refresh()
+        return True
+
+    def detach_card_image(self, c, originals: bool = False) -> bool:
         """명함 그림 떼기(§5.24.8 '그림 떼기') — 정리본 앞·뒷면을 휴지통(앱 한 길), 명함은 그림 없는 명함(`contact:…`)으로,
         인물 사진은 그림 없는 명함 자리로 옮긴다. 원본 스캔·인식 기록 열쇠(src_key)는 떼어 명함 관리가 새 명함으로 다시 읽게."""
         import uuid
         from viewer.widgets.bizcard_import_dialog import trash_paths
         outs = [P._real(x) for x in (c.get("front"), c.get("back")) if x and os.path.exists(P._real(x))]
+        if originals:                                        # 원본 스캔도(사용자 결정 261121, 261120-65)
+            outs += [p for p in P.card_files(c, self._bizcard_folder())[0] if os.path.exists(p) and p not in outs]
         old_pf = self._photo_front(c)
         photos = P.person_photos(old_pf) if old_pf else []
         failed = trash_paths(self, self._mw, outs) if outs else []

@@ -180,12 +180,14 @@ try:
     mw._action_bizcard_find()
     fd = mw._bizcard_find_dlg
     pump(lambda: fd.table.rowCount() >= 10, timeout=5)
-    bd = getattr(fd, "btn_dupe", None)
-    chk(bd is not None and bd.text() == "중복 검토" and abs(bd.y() - fd.btn_vcard.y()) <= 2
-        and fd.btn_manage.x() < bd.x() < fd.btn_vcard.x(), "C [중복 검토] 는 아래 줄 [명함 관리]·[주소록] 사이")
+    bd = getattr(fd, "act_dupe", None)
+    fd.main_menu.aboutToShow.emit()
+    mn = [a.text() for a in fd.main_menu.actions() if not a.isSeparator()]
+    chk(bd is not None and bd.text() == "중복 검토" and mn[1:4] == ["명함 관리", "중복 검토", "주소록"],
+        "C ≡ 메뉴 '중복 검토' 는 '명함 관리'·'주소록' 사이(아래 단추 줄은 261120-66 에 없앰)", str(mn))
     from viewer.widgets import bizcard_dupe_dialog as DD
     DD.BizcardDupeDialog.exec = lambda self: self.show()           # 모달 대신 보이기만(검사)
-    QTest.mouseClick(bd, Qt.MouseButton.LeftButton)
+    bd.trigger()
     dd = getattr(fd, "dupe_dlg", None)
     chk(dd is not None and dd.isVisible() and dd.before.topLevelItemCount() == 5 and dd.after.topLevelItemCount() == 5,
         "C 누르면 창 — 왼쪽 적용 전·오른쪽 적용 후 묶음 다섯")

@@ -17176,3 +17176,113 @@ msgstr ""
 #: viewer/widgets/tag_apply_dialog.py
 msgid "일부 파일에만 붙어 있습니다 — 고르고 [적용] 하면 나머지에도 붙입니다"
 msgstr ""
+
+#: viewer/widgets/bizcard_dupe_dialog.py
+msgid "명함 사진 지우기"
+msgstr ""
+
+#: viewer/widgets/bizcard_dupe_dialog.py
+msgid "지울 사진을 체크하세요 — 앞면만 지우면 뒷면이 앞면이 되고, 앞·뒷면을 모두 지우면 원본 스캔까지 휴지통으로 보냅니다."
+msgstr ""
+
+#: viewer/widgets/bizcard_dupe_dialog.py
+msgid "명함 앞면"
+msgstr ""
+
+#: viewer/widgets/bizcard_dupe_dialog.py
+msgid "명함 뒷면"
+msgstr ""
+
+#: viewer/widgets/bizcard_dupe_dialog.py
+#, python-brace-format
+msgid "인물 사진 {n}"
+msgstr ""
+
+#: viewer/widgets/bizcard_dupe_dialog.py
+#, python-brace-format
+msgid "고른 사진 {n}개를 휴지통으로 보냅니다."
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "해시태그로 찾기 — 지금 목록의 해시태그 보기·고르기, 맨 아래 '해시태그 수정'"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+#: viewer/widgets/bizcard_history_dialog.py
+msgid "변경 기록·되살리기"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "(이 목록의 명함에 해시태그 없음)"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "찾기 비우기"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+#, python-brace-format
+msgid "외 {n}명"
+msgstr ""
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+msgid "명함에서 지운 인물 사진 — 구글 연락처 사진도 지울까요"
+msgstr ""
+
+#: viewer/widgets/bizcard_history_dialog.py
+msgid "싱크"
+msgstr ""
+
+#: viewer/widgets/bizcard_history_dialog.py
+msgid "합치기"
+msgstr ""
+
+#: viewer/widgets/bizcard_history_dialog.py
+msgid "번호 종류"
+msgstr ""
+
+#: viewer/widgets/bizcard_history_dialog.py
+msgid "되살리기"
+msgstr ""
+
+#: viewer/widgets/bizcard_history_dialog.py
+msgid "체크한 명함을 기간이 시작되기 전 모습으로 되살립니다 — 되살리기도 기록에 남아 되돌릴 수 있습니다"
+msgstr ""
+
+#: viewer/widgets/bizcard_history_dialog.py
+msgid "지운 것·고친 것"
+msgstr ""
+
+#: viewer/widgets/bizcard_history_dialog.py
+msgid "지운 것만"
+msgstr ""
+
+#: viewer/widgets/bizcard_history_dialog.py
+msgid "고친 것만"
+msgstr ""
+
+#: viewer/widgets/bizcard_history_dialog.py
+msgid "때"
+msgstr ""
+
+#: viewer/widgets/bizcard_history_dialog.py
+msgid "되살리지 못했습니다 — 명함 DB 를 다른 곳에서 쓰고 있는지 확인하세요."
+msgstr ""
+
+#: viewer/widgets/bizcard_history_dialog.py
+#, python-brace-format
+msgid "바뀐 명함 {n}장 — 되살릴 값은 그 기간이 시작되기 전 모습입니다. 지운 그림 명함의 그림 파일은 휴지통에서 되살리세요."
+msgstr ""
+
+#: viewer/widgets/bizcard_history_dialog.py
+msgid "고침"
+msgstr ""
+
+#: viewer/widgets/bizcard_history_dialog.py
+msgid "그 뒤 또 바뀜"
+msgstr ""
+
+#: viewer/widgets/bizcard_history_dialog.py
+#, python-brace-format
+msgid "명함 {n}장을 되살렸습니다."
+msgstr ""

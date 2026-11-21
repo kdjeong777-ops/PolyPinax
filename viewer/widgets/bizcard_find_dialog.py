@@ -939,15 +939,6 @@ class BizcardFindDialog(QDialog):
         self.btn_fav_tab.clicked.connect(lambda _c=False: self.plus_menu())
         self.btn_fav_tab.dropped.connect(lambda src: self.plus_menu(self._drag_cards(src)))
         tabs_row.addWidget(self.btn_fav_tab)
-        self.btn_export = {}                               # 고른 탭 엑셀·Word 로(§5.24.2 '할 일 내보내기', 261120-42)
-        for kind, tip in (("xlsx", tr("고른 탭을 엑셀로 내보내기")), ("docx", tr("고른 탭을 Word 로 내보내기"))):
-            b = QToolButton()
-            b.setAutoRaise(True)
-            b.setToolTip(tip)
-            b.clicked.connect(lambda _c=False, k=kind: self.export_tab(kind=k))
-            self.btn_export[kind] = b
-            tabs_row.addWidget(b)
-        self._export_icons()
         tabs_row.addStretch(1)
         self.cb_recent = QComboBox()                       # '최근' 탭 기간(D27)
         for key, label in (("1w", tr("1주")), ("1m", tr("1개월")), ("3m", tr("3개월")), ("custom", tr("지정"))):
@@ -963,6 +954,15 @@ class BizcardFindDialog(QDialog):
         for w in (self.cb_recent, self.d_recent_from, self.d_recent_to):
             w.setVisible(False)
             tabs_row.addWidget(w)
+        self.btn_export = {}                               # 고른 탭 엑셀·Word 로(§5.24.2 '할 일 내보내기', 261120-42)
+        for kind, tip in (("xlsx", tr("고른 탭을 엑셀로 내보내기")), ("docx", tr("고른 탭을 Word 로 내보내기"))):
+            b = QToolButton()                              # 탭 줄 오른쪽 끝 = 탭 내용 창(명단 칸) 폭의 오른쪽 끝(261120-47)
+            b.setAutoRaise(True)
+            b.setToolTip(tip)
+            b.clicked.connect(lambda _c=False, k=kind: self.export_tab(kind=k))
+            self.btn_export[kind] = b
+            tabs_row.addWidget(b)
+        self._export_icons()
         fvl.addLayout(tabs_row)
         self.fav = _OrderList(external=lambda _e: self.fav_add_selected(),
                               accepts=lambda e: e.source() is self.table and self._fav_gid() != RECENT)

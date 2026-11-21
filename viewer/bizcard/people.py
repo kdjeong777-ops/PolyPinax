@@ -1059,15 +1059,6 @@ def _nname(s) -> str:
     return re.sub(r"\s+", "", str(s or "")).lower()
 
 
-def _keys_of(card) -> list:
-    out = []
-    for x in card.get("phones") or []:
-        k = _phone_key(x[-1] if isinstance(x, (list, tuple)) else x)
-        if k:
-            out.append(k)
-    return out
-
-
 MOBILE_PREFIX = ("010", "011", "016", "017", "018", "019")
 
 
@@ -1091,6 +1082,20 @@ def _same_person_name(a, b) -> bool:
 def one_off(a: str, b: str) -> bool:
     """숫자 수가 같고 한 자리만 다른 번호(오타 의심)."""
     return len(a) == len(b) and a != b and sum(x != y for x, y in zip(a, b)) == 1
+
+
+def mobile_typo(a: str, b: str) -> bool:
+    """휴대폰 오타 거리 — 한 자리만 다름, 또는 이웃한 두 자리가 자리바뀜(§5.24.8 '묶기', 사용자 결정 261121, 261120-48)."""
+    if one_off(a, b):
+        return True
+    if len(a) != len(b) or a == b:
+        return False
+    d = [i for i, (x, y) in enumerate(zip(a, b)) if x != y]
+    return len(d) == 2 and d[1] == d[0] + 1 and a[d[0]] == b[d[1]] and a[d[1]] == b[d[0]]
+
+
+def _mobiles_near(A, B) -> bool:
+    return any(x == y or mobile_typo(x, y) for x in A for y in B)
 
 
 def dupe_order(store) -> list:
@@ -1129,11 +1134,14 @@ def manual_fields(store, cards) -> set:
 
 def dupe_groups(store, order=None) -> list:
     """[{cards: [차례대로], why: {id: 이유}, sure_root: {id: 확실한 묶음 열쇠}, src: {id: 출처}}] — 두 장 이상 묶음만.
-    이유 = 'phone'·'mail'(확실) · 'typo'(이름 같고 번호 한 자리 다름) · 'namecomp'(이름+회사 같음)."""
+    이유 = 'phone'·'mail'(확실) · 'typo'(이름 같고 휴대폰 오타 거리) · 'namecomp'(이름+회사 같음).
+    휴대폰만 사람을 가른다 — 일반 전화·팩스는 평가에서 빼고, 휴대폰이 서로 다른 묶음끼리는 잇지 않는다(261120-48)."""
     order = order or dupe_order(store)
     cards = [store._row(r) for r in store.con.execute("SELECT * FROM cards").fetchall()]
     byid = {c["id"]: c for c in cards}
     par, spar, edges = {}, {}, {}
+    mob = {c["id"]: set(_mobile_keys(c)) for c in cards}
+    cm = dict((k, set(v)) for k, v in mob.items())         # 묶음 뿌리 → 그 묶음의 휴대폰들
 
     def find(p, x):
         while p.setdefault(x, x) != x:
@@ -1144,7 +1152,12 @@ def dupe_groups(store, order=None) -> list:
     def link(a, b, why):
         if a == b:
             return
-        par[find(par, a)] = find(par, b)
+        ra, rb = find(par, a), find(par, b)
+        if ra != rb and why != "phone" and cm.get(ra) and cm.get(rb) and not _mobiles_near(cm[ra], cm[rb]):
+            return                                          # 휴대폰이 서로 다르면 다른 사람 — 이름·회사·메일이 같아도
+        if ra != rb:
+            par[ra] = rb
+            cm[rb] = cm.get(rb, set()) | cm.pop(ra, set())
         if why in WHY_SURE:
             spar[find(spar, a)] = find(spar, b)
         for x, y in ((a, b), (b, a)):
@@ -1152,22 +1165,17 @@ def dupe_groups(store, order=None) -> list:
             if old is None or _WHY_RANK[why] < _WHY_RANK[old]:
                 edges.setdefault(x, {})[y] = why
 
-    # 같은 휴대폰 = 같은 사람(이름이 달라도 — 이름을 잘못 읽었을 수 있다). 회사 번호·팩스·메일은 여럿이 같이 쓰므로
-    # 이름이 같을(또는 한쪽이 빈) 때만(사용자 보고 261119 '첫번째 전화번호가 다르고 이름도 다른데 유사하다고 판단하면 안 됨')
-    bucket = {}
+    # ① 같은 휴대폰 = 같은 사람(이름이 달라도 — 이름을 잘못 읽었을 수 있다). 일반 전화·팩스는 여럿이 같이 써서 평가에서 뺀다
+    # (사용자 지시 261121, 261120-48). 메일은 이름이 같을(또는 한쪽이 빈) 때만 — 아래 ③, 휴대폰이 다르면 link 가 막는다.
+    bucket, mails = {}, {}
     for c in cards:
-        mob = set(_mobile_keys(c))
-        for k in mob:
-            bucket.setdefault(("c", k), []).append(c)
-        for k in set(_keys_of(c)) - mob:
-            bucket.setdefault(("t", k), []).append(c)
+        for k in mob[c["id"]]:
+            bucket.setdefault(k, []).append(c)
         for e in {str(e).strip().lower() for e in c.get("emails") or [] if str(e).strip()}:
-            bucket.setdefault(("m", e), []).append(c)
-    for (t, _k), same in bucket.items():
-        for i, a in enumerate(same):
-            for b in same[i + 1:]:
-                if t == "c" or _same_person_name(a, b):
-                    link(a["id"], b["id"], "mail" if t == "m" else "phone")
+            mails.setdefault(e, []).append(c)
+    for same in bucket.values():
+        for b in same[1:]:
+            link(same[0]["id"], b["id"], "phone")
     by_name, by_nc = {}, {}
     for c in cards:
         n = _nname(c.get("name"))
@@ -1181,11 +1189,17 @@ def dupe_groups(store, order=None) -> list:
         for i, a in enumerate(same):
             ka = _mobile_keys(a)
             for b in same[i + 1:]:
-                if any(one_off(x, y) for x in ka for y in _mobile_keys(b)):
+                if any(mobile_typo(x, y) for x in ka for y in _mobile_keys(b)):
                     link(a["id"], b["id"], "typo")
+    for same in mails.values():
+        for i, a in enumerate(same):
+            for b in same[i + 1:]:
+                if _same_person_name(a, b):
+                    link(a["id"], b["id"], "mail")
     for same in by_nc.values():
-        for b in same[1:]:
-            link(same[0]["id"], b["id"], "namecomp")
+        for i, a in enumerate(same):                       # 휴대폰이 다른 명함이 끼어도 나머지끼리 이을 수 있게 모든 짝
+            for b in same[i + 1:]:
+                link(a["id"], b["id"], "namecomp")
     comp = {}
     for cid in par:
         comp.setdefault(find(par, cid), []).append(cid)
@@ -1240,7 +1254,7 @@ def merge_plan(cards, manual=None) -> dict:
         for kind, num in c.get("phones") or []:
             k = _phone_key(num) or re.sub(r"\D", "", num or "")
             mob = bool(_mobile_keys({"phones": [(kind, num)]}))
-            if not k or k in keys or (mob and any(one_off(k, x) for x in mobs)):   # 휴대폰끼리만 오타로 봄(회사 직통은 한 자리 차이가 흔함)
+            if not k or k in keys or (mob and any(mobile_typo(k, x) for x in mobs)):   # 휴대폰끼리만 오타로 봄(회사 직통은 한 자리 차이가 흔함)
                 continue
             keys.append(k)
             phones.append((kind, num))

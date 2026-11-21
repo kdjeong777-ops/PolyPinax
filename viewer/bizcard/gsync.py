@@ -208,20 +208,10 @@ def _name_co(v: dict) -> str:
     return (n + "|" + _nz(strip_corp(v.get("company") or ""))) if n else ""
 
 
-_MOBILE = ("010", "011", "016", "017", "018", "019")
-
-
 def _cell_keys(phones) -> set:
-    """휴대폰 열쇠(끝 8자리) — 종류가 휴대폰이거나, 종류와 상관없이 국내 휴대폰 꼴(+82 10… · 010…)이면.
-    구글 연락처·구글 vCard 는 종류 없는 번호를 '전화' 로 들인다(261120-46). 팩스는 빼고."""
-    out = set()
-    for k, n in phones or []:
-        d = PH.digits(n)
-        if d.startswith("82"):
-            d = "0" + d[2:].lstrip("0")
-        if len(d) >= 8 and k != "fax" and (k == "cell" or (d[:3] in _MOBILE and len(d) in (10, 11))):
-            out.add(d[-8:])
-    return out
+    """휴대폰 열쇠(끝 8자리) — 중복 검토와 같은 휴대폰 꼴(`people._mobile_keys` 한 곳 — 종류가 휴대폰이거나 01x, +82 꼴도, 팩스 빼고).
+    구글 연락처·구글 vCard 는 종류 없는 번호를 '전화' 로 들인다(261120-46·-48)."""
+    return {k[-8:] for k in P._mobile_keys({"phones": list(phones or [])})}
 
 
 def match(cards: list, people: list) -> dict:

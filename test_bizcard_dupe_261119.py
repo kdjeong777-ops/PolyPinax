@@ -96,7 +96,7 @@ try:
     y_id = contact("google", name="이영희", company="사아자", dept="기획팀", phones=[("cell", "010-0000-0004")])
     z_id = contact("google", name="최가짜", company="가짜구글사", phones=[("cell", "010-0000-0006")])
     w_id = contact("remember", name="최가짜", company="가짜리멤버사", phones=[("cell", "010-0000-0006")])
-    v_id = contact("google", name="박가짜", company="가짜다른사", phones=[("cell", "010-0000-0077")])
+    v_id = contact("google", name="박가짜", company="가짜다른사", phones=[("work", "02-0000-0077")])   # 휴대폰 없음 — 이름+회사(휴대폰이 다르면 다른 사람, 261120-48)
     gid = P.fav_add_group(st, "가짜 탭") if hasattr(P, "fav_add_group") else None
     if gid is None:
         st.con.execute("INSERT INTO fav_groups(name, pos) VALUES('가짜 탭', 9)")
@@ -126,8 +126,8 @@ try:
         {"name": "병가짜", "company": "사슬사", "phones": [("fax", "02-0000-7301"), ("work", "02-0000-7302")], "emails": [], "urls": []},   # 을-병 팩스, 직통은 한 자리 다름
     ], "주소록", "google")
     sg = [sorted(c["name"] for c in g["cards"]) for g in P.dupe_groups(t2)]
-    chk(sorted(sg) == [["Fake Program", "한가짜"], ["윤가짜", "윤가짜"]],
-        "A0 이름이 다르면 회사 번호·팩스·메일이 같아도 묶지 않음(이름 다른 세 사람·사슬 갑-을 회사 번호·을-병 팩스·한 자리 다른 직통도), 같은 휴대폰이면 이름이 달라도(잘못 읽음) 묶음, 같은 이름은 회사 번호로도", str(sg))
+    chk(sorted(sg) == [["Fake Program", "한가짜"]],
+        "A0 이름이 다르면 회사 번호·팩스·메일이 같아도 묶지 않음(이름 다른 세 사람·사슬 갑-을 회사 번호·을-병 팩스·한 자리 다른 직통도), 같은 휴대폰이면 이름이 달라도(잘못 읽음) 묶음, 일반 전화는 같은 이름이어도 평가에서 뺌(261120-48)", str(sg))
     t2.close()
     gs = P.dupe_groups(st)
     by = {frozenset(c["id"] for c in g["cards"]): g for g in gs}

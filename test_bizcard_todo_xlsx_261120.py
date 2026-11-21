@@ -109,8 +109,13 @@ try:
         pump(None)
         gx = lambda w: w.mapTo(dlg, w.rect().topLeft()).x()
         plus_r = gx(dlg.btn_fav_tab) + dlg.btn_fav_tab.width()
-        chk(plus_r <= gx(bx) < gx(bw) and gx(bx) - plus_r < 12 and bx.isVisible(),
-            "A + 바로 오른쪽에 엑셀, 그 오른쪽에 워드", "+끝 %d 엑셀 %d 워드 %d" % (plus_r, gx(bx), gx(bw)))
+        fav_r = lambda: gx(dlg.fav) + dlg.fav.width()           # 탭 내용 창(명단 칸) 오른쪽 끝
+        w_r = lambda: gx(bw) + bw.width()
+        chk(plus_r < gx(bx) < gx(bw) and abs(w_r() - fav_r()) <= 6 and gx(bx) - plus_r > 12 and bx.isVisible(),
+            "A 엑셀·워드는 탭 내용 창 폭 오른쪽 끝(261120-47)", "+끝 %d 엑셀 %d 워드끝 %d 명단끝 %d" % (plus_r, gx(bx), w_r(), fav_r()))
+        dlg.resize(dlg.width() + 240, dlg.height())
+        pump(None)
+        chk(abs(w_r() - fav_r()) <= 6, "A 창 크기를 바꿔도 오른쪽 끝을 따라감", "워드끝 %d 명단끝 %d" % (w_r(), fav_r()))
 
     print("\n=== B. 탭 메뉴 ===")
     dlg._fav_tab_menu(tb.tabRect(tab_of(g_todo)).center())

@@ -273,8 +273,9 @@ try:
         str(sorted(os.listdir(pdir))))
     st = S.BizcardStore()
     row = st.card_by_front(nf)
-    chk(row is not None and row["company"] == "새회사" and row["memo"] == "골프 모임" and "새회사" in row["tags"]
-        and "가나도로공사" not in row["tags"] and st.count() == 3, "D DB 행 고침(새 행 없음·메모 지킴·#회사)", str(row and row["tags"]))
+    chk(row is not None and row["company"] == "새회사" and row["memo"].splitlines()[-1] == "골프 모임"
+        and row["memo"].startswith("[") and "새회사" in row["tags"]
+        and "가나도로공사" not in row["tags"] and st.count() == 3, "D DB 행 고침(새 행 없음·메모 지킴 — 맨 위 수정 기록 261120-26·#회사)", str(row and row["tags"]))
     st.close()
     tags = mw.bookmark_tree._tags
     tg = tags.get_manual(str(nf)) or []
@@ -383,7 +384,7 @@ try:
         and ps >= 0.35 * (ls + ps) and ps > dlg.mid.sizes()[0],
         "I11·I17 처음 너비 — 목록은 전화까지 보이는 최소 폭, 사진창이 목록보다 넓음", "%s %s tw=%s" % (dlg.split.sizes(), dlg.mid.sizes(), tw))
     r_h = next(r for r in range(dlg.table.rowCount()) if dlg.table.item(r, 0).text() == "홍길동")
-    chk(heads == ["이름", "회사", "직함", "전화", "메일", "스캔일"] and dlg.table.item(r_h, 3).text() == "010-0000-0001"
+    chk(heads == ["이름", "회사", "직함", "전화", "메일", "수정일"] and dlg.table.item(r_h, 3).text() == "010-0000-0001"
         and dlg.table.item(r_h, 4).text() == "hong@example.com",
         "I17 목록 직함 오른쪽에 전화(휴대폰)·메일 열", "%s %s" % (heads, [dlg.table.item(r_h, c).text() for c in range(dlg.table.columnCount())]))
     # I2 머리말 정렬 — 실제 마우스로 머리말을 누름
@@ -1143,17 +1144,18 @@ try:
 
     # I25 사진창 — '인물 사진' 제목 글 없음·위 명함과 아래 인물 사진 사이 가로 구분선(사용자 지시 261120)
     from PyQt6.QtWidgets import QLabel as _QL2
-    sep = getattr(dlg, "photo_sep", None)
+    # 구분선은 사진창 손잡이가 그린다(261120-22 — 끌어 크기 조절, 검사 test_bizcard_photo_handle_261120)
+    sep = dlg.photo_split.handle(1) if dlg.photo_split.count() > 1 else None
     titles = [w.text() for w in dlg.findChildren(_QL2) if w.text() == "인물 사진"]
     sep_px = ""
     if sep is not None:
-        y_sep = sep.mapTo(dlg, sep.rect().topLeft()).y()
+        y_sep = sep.mapTo(dlg, sep.rect().center()).y()
         y_pv = dlg.pv.mapTo(dlg, dlg.pv.rect().bottomLeft()).y()
         y_ph = dlg.photo_view.mapTo(dlg, dlg.photo_view.rect().topLeft()).y()
-        sep_px = sep.grab().toImage().pixelColor(sep.width() // 2, 0).name()
-    chk(not titles and sep is not None and sep.isVisible() and sep.height() == 1 and y_pv < y_sep < y_ph
+        sep_px = sep.grab().toImage().pixelColor(sep.width() // 2, sep.height() // 2).name()
+    chk(not titles and sep is not None and sep.isVisible() and y_pv < y_sep < y_ph
         and sep_px == getattr(BF, "DETAIL_BG", {}).get("light", {}).get("border"),
-        "I25 사진창 — '인물 사진' 글 없음, 명함과 인물 사진 사이 1px 구분선(카드 테 색)", "%s %s %s" % (titles, sep, sep_px))
+        "I25 사진창 — '인물 사진' 글 없음, 명함과 인물 사진 사이 1px 구분선(카드 테 색 — 손잡이가 그림)", "%s %s %s" % (titles, sep, sep_px))
 
     # I26 목록 머리말 높이·위 끝 = 세부내용 제목 띠(사용자 지시 261120 '목록 머리글 높이를 오른쪽 세부내용과 맞춰')
     hh2, hd2 = dlg.table.horizontalHeader(), getattr(dlg, "detail_head", None)

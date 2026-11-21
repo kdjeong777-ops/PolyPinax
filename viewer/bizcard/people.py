@@ -335,6 +335,86 @@ def todo_hidden(store, today: str) -> list:
     return [(r["id"], r["name"]) for r in rows if not _todo_live(r, today)]
 
 
+# ── 수정일·메모 기록 (§5.24.1 '수정일'·§5.9 '메모 기록', 261120-25·-26·-27) ──
+EDIT_KEYS = ("name", "company", "dept", "title", "address", "phones", "emails", "urls")   # 수정일을 바꾸는 칸(메모 아님)
+MEMO_LOG_KEY = "memo_log"            # meta — 메모에 고친 날짜·칸 기록(처음 켬)
+MEMO_DATE_KEY = "memo_date"          # meta — 메모를 쓰기 시작하면 오늘 날짜(처음 켬)
+
+
+def edited_init(store) -> None:
+    """cards 에 `edited`(사람이 칸을 고친 날 YYYY-MM-DD) 열 — 옛 DB 에는 더한다(옛 판은 모른다). 빈 값 = 고친 적 없음(스캔일)."""
+    have = {r[1] for r in store.con.execute("PRAGMA table_info(cards)")}
+    if "edited" not in have:
+        store.con.execute("ALTER TABLE cards ADD COLUMN edited TEXT DEFAULT ''")
+        store.con.commit()
+
+
+def shown_date(card) -> str:
+    """목록 '수정일' 칸 — 고친 날, 없으면 스캔일."""
+    return (card.get("edited") or card.get("scanned") or "")
+
+
+def memo_opt(store, key: str) -> bool:
+    v = store.meta_get(key) if store is not None else None
+    return True if v is None else bool(v)
+
+
+def set_memo_opt(store, key: str, on: bool) -> None:
+    store.meta_set(key, bool(on))
+
+
+def changed_keys(old: dict, new: dict) -> list:
+    """메모 밖 칸 중 바뀐 것 — 전화는 종류(cell·work·fax)마다 따로. 차례는 세부 칸 차례."""
+    out = []
+    for k in EDIT_KEYS:
+        if k == "phones":
+            o = {kind: [n for kk, n in (old.get("phones") or []) if kk == kind] for kind in ("cell", "work", "fax")}
+            n = {kind: [x for kk, x in (new.get("phones") or []) if kk == kind] for kind in ("cell", "work", "fax")}
+            out += [kind for kind in ("cell", "work", "fax") if o[kind] != n[kind]]
+        elif k in ("emails", "urls"):
+            if list(old.get(k) or []) != list(new.get(k) or []):
+                out.append("email" if k == "emails" else "url")
+        elif (old.get(k) or "") != (new.get(k) or ""):
+            out.append(k)
+    return out
+
+
+def memo_with_log(memo: str, today: str, labels: list, word: str) -> str:
+    """메모 맨 위에 `[오늘 수정] 칸·칸` — 같은 날 줄이 맨 위에 있으면 그 줄에 칸을 더한다(겹치지 않게). 옛 값은 남기지 않는다(§2.1)."""
+    memo = memo or ""
+    lines = memo.split("\n")
+    m = re.match(r"^\[(\d{4}-\d{2}-\d{2}) %s\] (.*)$" % re.escape(word), lines[0]) if lines else None
+    if m and m.group(1) == today:
+        have = [x for x in m.group(2).split("·") if x]
+        lines[0] = "[%s %s] %s" % (today, word, "·".join(have + [x for x in labels if x not in have]))
+        return "\n".join(lines)
+    head = "[%s %s] %s" % (today, word, "·".join(labels))
+    return head + ("\n" + memo if memo.strip() else "")
+
+
+TODO_STATES = ("live", "soon", "past", "closed")   # 기간 안 · 시작 전 · 기간 지남 · 마감(D28)
+
+
+def todo_rows(store, today: str) -> list:
+    """모든 할 일(마감·기간 밖 포함) — 기간 차례(시작일, 같으면 종료일 — 계속은 뒤, 같으면 제목)로
+    [{title, memo, start, end, state, members[명함 행]}] (§5.24.2 '할 일 엑셀', 261120-21)."""
+    rows = store.con.execute("SELECT * FROM fav_groups WHERE todo=1").fetchall()
+    out = []
+    for r in rows:
+        if r["closed"]:
+            state = "closed"
+        elif (r["t_start"] or "") > today:
+            state = "soon"
+        elif r["t_end"] and today > r["t_end"]:
+            state = "past"
+        else:
+            state = "live"
+        out.append({"title": r["name"] or "", "memo": r["t_memo"] or "", "start": r["t_start"] or "",
+                    "end": r["t_end"] or "", "state": state, "members": fav_members(store, r["id"])})
+    out.sort(key=lambda d: (d["start"], d["end"] or "9999-99-99", d["title"].lower()))
+    return out
+
+
 def todo_memo_entry(info: dict, ongoing: str) -> str:
     """인물 메모 맨 위에 넣는 글 — `[시작 ~ 끝|계속] 제목` + 내용."""
     head = "[%s ~ %s] %s" % (info.get("start") or "", info.get("end") or ongoing, info.get("title") or "")

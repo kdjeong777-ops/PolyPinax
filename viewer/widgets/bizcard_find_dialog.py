@@ -51,6 +51,8 @@ FIELDS = (("name", tr_noop("이름")), ("company", tr_noop("회사")), ("dept", 
           ("fax", tr_noop("팩스")), ("email", tr_noop("메일")), ("address", tr_noop("주소")), ("url", tr_noop("누리집")))
 MEMO_LABEL = tr_noop("메모")
 PHONE_KEYS = ("cell", "work", "fax")
+PHOTO_HANDLE = 9                    # 사진창 구분선 손잡이 높이(가운데 1px 선, §5.24.3 '구분선')
+PRELOAD_MS = 1500                  # 창이 뜬 뒤 이만큼 쉬면 [해시태그] 준비(모듈·전체 태그 목록 — §5.24.4 '빠르게')
 DROP_TINT, DROP_TINT_HOT = "0.04", "0.14"   # 놓을 자리 틀 바탕(강조색 투명도) — 창 위 / 그 자리 위(§5.24.3 '끌어 놓기')
 
 
@@ -147,7 +149,7 @@ class _CardModel(QAbstractTableModel):
     @staticmethod
     def _cells(c):
         return (c.get("name") or "", c.get("company") or "", c.get("title") or "", _list_phone(c), _list_mail(c),
-                c.get("scanned") or "")
+                P.shown_date(c))                              # 수정일 — 고친 날, 없으면 스캔일(§5.24.1 '수정일', 261120-25)
 
     def _reindex(self):
         self._at = {c["id"]: i for i, c in enumerate(self._rows)}
@@ -454,6 +456,108 @@ def _card_tag_store(real):
         def backup(self) -> bool:
             return False
     return _CardTagStore()
+
+
+from PyQt6.QtWidgets import QSplitterHandle   # noqa: E402 — 사진창 손잡이(261120-22)
+
+
+class _LineHandle(QSplitterHandle):
+    """사진창 위 명함·아래 인물 사진 사이 손잡이 — 가운데 1px 선(카드 테 색)이 곧 손잡이(§5.24.3 '구분선', 261120-22).
+    집을 수 있게 높이 `PHOTO_HANDLE`, 가리키면 선이 강조색 2px. 종전엔 선이 인물 사진 칸 안의 그림이고 손잡이는 그 위 빈 틈이라
+    선을 끌면 크기가 바뀌지 않았다(사용자 보고 '사진사이의 바 위에서 끌어서 옮길 수 있어. 바를 집어서 크기 조절하도록')."""
+
+    def __init__(self, orientation, parent):
+        super().__init__(orientation, parent)
+        self.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
+        self._hot = False
+
+    def enterEvent(self, e):
+        self._hot = True
+        self.update()
+        super().enterEvent(e)
+
+    def leaveEvent(self, e):
+        self._hot = False
+        self.update()
+        super().leaveEvent(e)
+
+    def line_color(self) -> QColor:
+        pal = self.palette()
+        if self._hot:
+            return pal.color(pal.ColorRole.Highlight)
+        c = DETAIL_BG["dark" if pal.color(pal.ColorRole.Window).lightness() < 128 else "light"]
+        return QColor(c["border"])
+
+    def paintEvent(self, e):
+        p = QPainter(self)
+        w = 2 if self._hot else 1
+        y = self.height() // 2
+        p.fillRect(6, y - (w // 2), max(0, self.width() - 6), w, self.line_color())   # 왼쪽 6 = 사진창 안쪽 여백과 같게
+        p.end()
+
+
+class _LineSplitter(QSplitter):
+    def createHandle(self):
+        return _LineHandle(self.orientation(), self)
+
+
+class _MemoTypeWatch(QObject):
+    """메모 칸에 글을 치기 시작하는 순간(글자 키·한글 입력) — 칸이 받기 전에 부른다(§5.9 '메모 날짜', 261120-27)."""
+
+    def __init__(self, edit, before):
+        super().__init__(edit)
+        self._before = before
+        edit.installEventFilter(self)
+
+    def eventFilter(self, obj, ev):
+        from PyQt6.QtCore import QEvent
+        t = ev.type()
+        if t == QEvent.Type.KeyPress and ev.text() and ev.text().isprintable() \
+                and not (ev.modifiers() & (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.AltModifier)):
+            self._before()
+        elif t == QEvent.Type.InputMethod and (ev.commitString() or ev.preeditString()):
+            self._before()
+        return False
+
+
+class _TodoXlsxWorker(QObject):
+    """할 일 엑셀 만들기·쓰기(배경, 261120-21) — done(성공, 실패 까닭 종류). ★ 명함 값은 신호·로그에 싣지 않는다(§2.1)."""
+    done = pyqtSignal(bool, str)
+    finished = pyqtSignal()
+
+    def __init__(self, path, rows, heads, sheet, ongoing):
+        super().__init__()
+        self._a = (path, rows, heads, sheet, ongoing)
+
+    def run(self):
+        try:
+            from viewer.bizcard.todo_xlsx import write_todos
+            write_todos(*self._a)
+            self.done.emit(True, "")
+        except Exception as e:
+            self.done.emit(False, type(e).__name__)
+        finally:
+            self.finished.emit()
+
+
+class _KnownWorker(QObject):
+    """저장소 사본의 전체 태그 목록을 배경에서 센다(`known_tags_of`, 261120-20) — done(실제 저장소, 목록, 센 때 세대, 센 때 데이터)."""
+    done = pyqtSignal(object, list, int, object)
+    finished = pyqtSignal()
+
+    def __init__(self, snap, real, gen, data):
+        super().__init__()
+        self._snap, self._real, self._gen, self._data = snap, real, gen, data
+
+    def run(self):
+        try:
+            from viewer.tag_store import known_tags_of
+            out = known_tags_of(self._snap, list(self._snap._data.keys()))
+            self.done.emit(self._real, out, self._gen, self._data)   # 실패하면 넘기지 않는다(창이 열 때 센다)
+        except Exception:
+            pass
+        finally:
+            self.finished.emit()
 
 
 def _menu_act(m: QMenu, text: str, fn):
@@ -787,7 +891,7 @@ class BizcardFindDialog(QDialog):
         lv.addWidget(self.fav)
 
         mid = self.mid = QSplitter(Qt.Orientation.Horizontal)
-        self.table = _CardTable([tr("이름"), tr("회사"), tr("직함"), tr("전화"), tr("메일"), tr("스캔일")])   # 가상 표(§5.9 '결과')
+        self.table = _CardTable([tr("이름"), tr("회사"), tr("직함"), tr("전화"), tr("메일"), tr("수정일")])   # 가상 표(§5.9 '결과'), 끝 열 = 수정일(261120-25)
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
@@ -860,6 +964,9 @@ class BizcardFindDialog(QDialog):
         rv.addWidget(self.chk["memo"])
         self.ed_memo = QPlainTextEdit()
         self.ed_memo.textChanged.connect(lambda: self._set_dirty(True) if not self._loading else None)
+        self._memo_watch = _MemoTypeWatch(self.ed_memo, self._memo_date_before_typing)   # 쓰기 시작하면 오늘 날짜(261120-27)
+        self._memo_view = 0                                # 메모 칸을 명함 값으로 새로 채울 때마다 +1 — 날짜는 한 보기에 한 번
+        self.ed_memo.textChanged.connect(lambda: setattr(self, "_memo_view", self._memo_view + 1) if self._loading else None)
         rv.addWidget(self.ed_memo, 1)
         self.lbl_file = QLabel("")
         self.lbl_file.setWordWrap(True)
@@ -885,7 +992,9 @@ class BizcardFindDialog(QDialog):
         lv.addWidget(mid, 1)
 
         # ── 오른쪽 끝: 사진창(위 명함 + 앞↔뒤, 아래 인물 사진) ──
-        self.photo_split = QSplitter(Qt.Orientation.Vertical)
+        self.photo_split = _LineSplitter(Qt.Orientation.Vertical)   # 위 명함과 아래 인물 사진 사이 구분선 = 손잡이(§5.24.3 '구분선', 261120-22)
+        self.photo_split.setHandleWidth(PHOTO_HANDLE)
+        self.photo_split.setChildrenCollapsible(False)
         cardw = QWidget()
         cv = QVBoxLayout(cardw)
         cv.setContentsMargins(6, 0, 0, 0)
@@ -903,13 +1012,6 @@ class BizcardFindDialog(QDialog):
         photow = QWidget()
         pvl = QVBoxLayout(photow)
         pvl.setContentsMargins(6, 0, 0, 0)
-        self.photo_sep = QWidget()                     # 위 명함과 아래 인물 사진 사이 가로 구분선(§5.24.3 '인물 사진' — 제목 글 대신)
-        self.photo_sep.setObjectName("bizPhotoSep")
-        self.photo_sep.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        self.photo_sep.setFixedHeight(1)
-        pvl.addSpacing(4)
-        pvl.addWidget(self.photo_sep)
-        pvl.addSpacing(4)
         # 위 = 큰 화면, 아래 = 썸네일 한 줄(§5.24 사진창, 사용자 지시 261119)
         self.photo_view = QLabel()
         self.photo_view.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -1354,8 +1456,8 @@ class BizcardFindDialog(QDialog):
                 "QTableView QHeaderView::up-arrow, QTableView QHeaderView::down-arrow"
                 "{subcontrol-origin:padding;subcontrol-position:center right;width:9px;height:9px;}" % c)
             self.fav.setStyleSheet("QListWidget{border:1px solid %(border)s;}" % c)   # 즐겨찾기 칸 테두리도 같은 테
-            if getattr(self, "photo_sep", None) is not None:
-                self.photo_sep.setStyleSheet("QWidget#bizPhotoSep{background:%(border)s;}" % c)   # 사진창 구분선(§5.24.3)
+            if getattr(self, "photo_split", None) is not None and self.photo_split.count() > 1:
+                self.photo_split.handle(1).update()     # 사진창 구분선(손잡이가 그림 — 테마가 바뀌면 다시, §5.24.3)
         self._match_head()
 
     def _match_head(self):
@@ -1375,6 +1477,7 @@ class BizcardFindDialog(QDialog):
         if not getattr(self, "_sized", False):
             self._sized = True
             self._init_sizes()
+            QTimer.singleShot(PRELOAD_MS, self._preload_tags)   # 쉬는 동안 [해시태그] 준비(261120-20)
 
     def table_min_width(self) -> int:
         """이름·회사·직함·전화가 다 보이는 표 폭(§5.24.1 '처음 너비' — 메일·스캔일은 끌어 넓히면)."""
@@ -1441,11 +1544,47 @@ class BizcardFindDialog(QDialog):
             return None
         nf, nb = got
         fields = dict(new, front=nf, back=nb, tags=new_tags)
+        # 수정일·메모 기록(§5.24.1 '수정일'·§5.9 '메모 기록', 261120-25·-26) — 메모 밖 칸이 바뀌었을 때만
+        keys = P.changed_keys(c, new)
+        if keys:
+            P.edited_init(st)
+            fields["edited"] = _today()
+            if P.memo_opt(st, P.MEMO_LOG_KEY):
+                labels = dict({k: tr(lb) for k, lb in FIELDS})
+                fields["memo"] = P.memo_with_log(fields.get("memo") or "", _today(), [labels.get(k, k) for k in keys],
+                                                 tr("수정"))
         P.update_card(st, c["id"], fields)
         P.forget_srcs(st, c["id"], [k for k in ("name", "company", "dept", "title", "address", "memo")
                                     if (new.get(k) or "") != (c.get(k) or "")])   # 손으로 고친 칸 — 주소록이 덮어쓰지 않게(D24)
         self._retag([x for x in (nf, nb) if x and os.path.exists(x)], old_auto, new_tags)
         return fields
+
+    def _memo_date_before_typing(self):
+        """메모를 쓰기 시작할 때 맨 위에 '오늘 ' 을 넣고 그 뒤에 쓰게 한다(§5.9 '메모 날짜', 261120-27 — 명함 환경설정에서 끔).
+        메모가 비었거나 커서가 맨 앞일 때만(가운데를 고치는 것은 그대로), 맨 윗줄이 이미 오늘 날짜면 넣지 않고,
+        한 명함을 보는 동안 한 번만(지운 날짜를 다시 넣지 않는다)."""
+        c = self._card
+        view = (c.get("id"), getattr(self, "_memo_view", 0)) if c else None
+        if not c or self._loading or getattr(self, "_memo_dated_view", None) == view:
+            return
+        self._memo_dated_view = view
+        try:
+            if not P.memo_opt(self._store(), P.MEMO_DATE_KEY):
+                return
+        except Exception:
+            return
+        ed = self.ed_memo
+        text = ed.toPlainText()
+        cur = ed.textCursor()
+        if text.strip() and cur.position() != 0:
+            return
+        today = _today()
+        if text.split("\n", 1)[0].startswith(today):
+            return
+        cur.movePosition(cur.MoveOperation.Start)
+        cur.insertText(today + " " + ("\n" if text.strip() else ""))
+        cur.setPosition(len(today) + 1)
+        ed.setTextCursor(cur)
 
     def save(self) -> bool:
         """고친 칸·메모 저장. 이름·회사가 바뀌면 정리본·뒷면·인물 사진 이름도(한 길). True = 저장함."""
@@ -1464,6 +1603,12 @@ class BizcardFindDialog(QDialog):
         if fields is None:
             return False
         nf = fields["front"]
+        if fields.get("memo") != new.get("memo"):         # 메모에 고친 기록이 들어갔으면 칸에도 보인다(다음 저장이 지우지 않게)
+            self._loading = True
+            try:
+                self.ed_memo.setPlainText(fields["memo"])
+            finally:
+                self._loading = False
         self._dirty = False
         self.btn_save.setEnabled(False)
         self._card = dict(c, **fields)
@@ -1921,8 +2066,62 @@ class BizcardFindDialog(QDialog):
                 if todo:
                     _menu_act(sm, tr("할 일 고치기"), lambda c=cid: self.todo_edit(c))
                 _menu_act(sm, tr("탭 삭제"), lambda c=cid: self.tab_delete(c))
+        if st.con.execute("SELECT 1 FROM fav_groups WHERE todo=1 LIMIT 1").fetchone():   # 할 일이 있을 때만(§5.24.2 '할 일 엑셀')
+            m.addSeparator()
+            _menu_act(m, tr("할 일 엑셀로 내보내기"), lambda: self.export_todos())
         self._tab_menu_obj = m                         # 검사용
         m.exec(self.fav_tabs.mapToGlobal(pos))
+
+    # ── 할 일 엑셀로 내보내기 (§5.24.2 '할 일 엑셀', 261120-21) ──
+    def export_todos(self, path=None):
+        """모든 할 일(마감·기간 밖 포함)을 기간 차례로 .xlsx 에 — 할 일마다 제목·내용·기간·상태와 명단(이름·회사·직함·휴대폰·메일).
+        파일 만들기·쓰기는 배경(응답성 SOT §6). path 를 주면 묻지 않고(검사). 반환 = 맡긴 할 일 수(없으면 0, 취소면 None)."""
+        st = self._store()
+        rows = P.todo_rows(st, _today())
+        if not rows:
+            QMessageBox.information(self, tr("할 일 엑셀로 내보내기"), tr("할 일이 없습니다."))
+            return 0
+        quiet = path is not None
+        if path is None:
+            start = Path.home() / "Documents" / ("%s_%s.xlsx" % (tr("할 일"), _today()))
+            if not start.parent.is_dir():
+                start = Path.home() / start.name
+            path, _f = QFileDialog.getSaveFileName(self, tr("할 일 엑셀로 내보내기"), str(start), "Excel (*.xlsx)")
+            if not path:
+                return None
+            if not path.lower().endswith(".xlsx"):
+                path += ".xlsx"
+        labels = {"live": tr("진행"), "soon": tr("예정"), "past": tr("기간 지남"), "closed": tr("마감")}
+        for t in rows:
+            t["state_label"] = labels.get(t["state"], "")
+        heads = [tr("시작일"), tr("종료일"), tr("상태"), tr("제목"), tr("내용"),
+                 tr("이름"), tr("회사"), tr("직함"), tr("휴대폰"), tr("메일")]
+        from viewer.workers import run_in_thread
+        w = _TodoXlsxWorker(path, rows, heads, tr("할 일"), tr("계속"))
+        w.done.connect(lambda ok, msg, p=path, n=len(rows), q=quiet: self._todos_written(ok, msg, p, n, q))
+        keep = getattr(self._mw, "_thread_keep", None)
+        self.todo_export_busy = True
+        run_in_thread(w, keep if isinstance(keep, list) else _KEEP)
+        self._todo_worker = w
+        return len(rows)
+
+    def _todos_written(self, ok, msg, path, n, quiet):
+        self.todo_export_busy = False
+        self.last_todo_export = (ok, path)               # 검사용
+        if quiet:
+            return
+        if not ok:
+            QMessageBox.warning(self, tr("할 일 엑셀로 내보내기"), tr("엑셀 파일을 쓰지 못했습니다 — 다른 프로그램이 열고 있는지 확인하세요."))
+            return
+        b = QMessageBox(QMessageBox.Icon.Information, tr("할 일 엑셀로 내보내기"),
+                        tr("할 일 {n}개를 엑셀로 썼습니다.").format(n=n) + "\n" + str(path), parent=self)
+        b_open = b.addButton(tr("폴더 열기"), QMessageBox.ButtonRole.ActionRole)
+        b.addButton(tr("닫기"), QMessageBox.ButtonRole.RejectRole)
+        b.exec()
+        if b.clickedButton() is b_open:
+            from PyQt6.QtGui import QDesktopServices
+            from PyQt6.QtCore import QUrl
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(Path(path).parent)))
 
     # ── 할 일(todo) — 즐겨찾기 탭 + 기간(D26) ──
     @staticmethod
@@ -2395,9 +2594,53 @@ class BizcardFindDialog(QDialog):
         bt = getattr(self._mw, "bookmark_tree", None)
         store = getattr(bt, "_tags", None) if bt is not None else None
         if store is None:
-            from viewer.tag_store import TagStore
-            store = TagStore()
+            store = self._own_tagstore()
         return store
+
+    def _own_tagstore(self):
+        """본 뷰어 없이(PolyCardex) — 태그 파일을 누를 때마다 새로 읽지 않고, 파일이 바뀌었을 때만(크기·고친 시각) 다시 연다.
+        다른 프로그램(본 뷰어)이 고쳐 쓰면 다음 누름에 새로 읽는다(§5.24.4 '빠르게', 261120-20)."""
+        from viewer.tag_store import TagStore
+        st = getattr(self, "_own_tags", None)
+        try:
+            from viewer.settings_store import settings_dir
+            fp = Path(settings_dir()) / "file_tags.json"
+            sig = (fp.stat().st_size, fp.stat().st_mtime_ns) if fp.exists() else None
+        except Exception:
+            sig = object()                              # 알 수 없으면 늘 새로
+        if st is None or getattr(self, "_own_tags_sig", None) != sig:
+            st = self._own_tags = TagStore()
+            self._own_tags_sig = sig
+        return st
+
+    def _preload_tags(self):
+        """창이 뜬 뒤 쉬는 동안 — '해시태그 수정' 창 모듈을 미리 불러오고, 저장소의 전체 태그 목록을 배경에서 세어 둔다
+        (첫 [해시태그] 누름이 늦던 원인 둘, 261120-20). 사본을 떠서 배경이 세고, 그사이 저장소가 바뀌었으면 버린다."""
+        if getattr(self, "_tags_preloaded", False):
+            return
+        self._tags_preloaded = True
+        try:
+            import viewer.widgets.tag_apply_dialog          # noqa: F401 — 첫 누름의 모듈 불러오기(workers·indexer·pymupdf)
+            real = self._tagstore()
+            kc = getattr(real, "_known_cache", None)
+            if kc is not None and kc[0] == real._gen and kc[1] is real._data:
+                return                                      # 이미 지금 세대로 세어 둠
+            snap = _card_tag_store(real)
+            w = _KnownWorker(snap, real, real._gen, real._data)
+            w.done.connect(self._known_ready)
+            from viewer.workers import run_in_thread
+            keep = getattr(self._mw, "_thread_keep", None)
+            run_in_thread(w, keep if isinstance(keep, list) else _KEEP)
+            self._known_worker = w
+        except Exception:
+            pass
+
+    def _known_ready(self, real, tags, gen, data):
+        try:
+            real.seed_known(tags, gen=gen, data=data)      # 그사이 저장소가 바뀌었으면 받지 않는다
+        except Exception:
+            pass
+        self.known_preloaded = True                        # 검사용
 
     def edit_tags(self, text=None):
         """고른 명함들(없으면 지금 명함) — 함께 붙은 태그를 보여 주고, 더한 것은 모두에 붙이고 뗀 것은 모두에서 뗀다.
@@ -2447,6 +2690,15 @@ class BizcardFindDialog(QDialog):
                 virt[f] = c
             fronts.append(f)
         before = {f: list(store.get_manual(f) or []) for f in fronts}
+        # 전체 태그 목록은 실제 저장소가 세어 둔 것(세대 캐시 — 미리 센 것이면 바로) + 그림 없는 명함의 태그 — 사본에서 다시 세지 않는다(261120-20)
+        try:
+            known = real.known_tags()
+            low = {t.lower() for t in known}
+            for f in virt:
+                known += [t for t in store.get(f) if t.lower() not in low and not low.add(t.lower())]
+            store.seed_known(known)
+        except Exception:
+            pass
         mw = self._mw
         prefs = getattr(mw, "_prefs", None) if mw is not None else None
         keep = mw.__dict__.setdefault("_thread_keep", []) if mw is not None else _KEEP
@@ -2494,6 +2746,9 @@ class BizcardFindDialog(QDialog):
             pass
         if n:
             self.refresh()
+        if getattr(real, "_known_cache", (None,))[0] != getattr(real, "_gen", 0):   # 태그를 바꿨으면 쉬는 동안 다시 세어 둔다
+            self._tags_preloaded = False
+            QTimer.singleShot(PRELOAD_MS, self._preload_tags)
         return n
 
     # ── 주소록 가져오기 (§5.24 D22·D23 — 구글 주소록·리멤버 명함첩 vCard) ──

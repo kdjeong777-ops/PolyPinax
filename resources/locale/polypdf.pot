@@ -8176,6 +8176,26 @@ msgid "이메일 복사"
 msgstr ""
 
 #: viewer/widgets/bizcard_find_dialog.py
+msgid "진행"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "예정"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "기간 지남"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "마감"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "상태"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
 msgid "다른 탭에 복사"
 msgstr ""
 
@@ -8193,6 +8213,10 @@ msgstr ""
 
 #: viewer/widgets/bizcard_find_dialog.py
 msgid "할 일"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "할 일 엑셀로 내보내기"
 msgstr ""
 
 #: viewer/widgets/bizcard_find_dialog.py
@@ -8250,6 +8274,10 @@ msgid "지정"
 msgstr ""
 
 #: viewer/widgets/bizcard_find_dialog.py
+msgid "수정일"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
 msgid "체크한 칸을 [내용 복사] 로 글로 복사합니다 — 체크는 다음에도 그대로"
 msgstr ""
 
@@ -8295,6 +8323,14 @@ msgstr ""
 
 #: viewer/widgets/bizcard_find_dialog.py
 msgid "마감한 탭"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "할 일이 없습니다."
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "엑셀 파일을 쓰지 못했습니다 — 다른 프로그램이 열고 있는지 확인하세요."
 msgstr ""
 
 #: viewer/widgets/bizcard_find_dialog.py
@@ -8349,6 +8385,10 @@ msgstr ""
 
 #: viewer/widgets/bizcard_find_dialog.py
 msgid "(인물 사진 없음 — 끌어 놓거나 [사진 추가])"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "수정"
 msgstr ""
 
 #: viewer/widgets/bizcard_find_dialog.py
@@ -8425,6 +8465,11 @@ msgstr ""
 #: viewer/widgets/bizcard_find_dialog.py
 #, python-brace-format
 msgid "주소가 {n}개라 쓰기 창 {w}개로 나눠 엽니다."
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+#, python-brace-format
+msgid "할 일 {n}개를 엑셀로 썼습니다."
 msgstr ""
 
 #: viewer/widgets/bizcard_find_dialog.py

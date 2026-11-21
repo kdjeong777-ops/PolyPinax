@@ -8427,6 +8427,26 @@ msgid "이메일 복사"
 msgstr "Copy Email Addresses"
 
 #: viewer/widgets/bizcard_find_dialog.py
+msgid "진행"
+msgstr "In progress"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "예정"
+msgstr "Upcoming"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "기간 지남"
+msgstr "Overdue"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "마감"
+msgstr "Closed"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "상태"
+msgstr "Status"
+
+#: viewer/widgets/bizcard_find_dialog.py
 msgid "다른 탭에 복사"
 msgstr "Copy to Another Tab"
 
@@ -8445,6 +8465,10 @@ msgstr "Portrait Photo"
 #: viewer/widgets/bizcard_find_dialog.py
 msgid "할 일"
 msgstr "To-do"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "할 일 엑셀로 내보내기"
+msgstr "Export To-dos to Excel"
 
 #: viewer/widgets/bizcard_find_dialog.py
 msgid "종료일이 시작일보다 앞입니다."
@@ -8501,6 +8525,10 @@ msgid "지정"
 msgstr "Region"
 
 #: viewer/widgets/bizcard_find_dialog.py
+msgid "수정일"
+msgstr "Modified"
+
+#: viewer/widgets/bizcard_find_dialog.py
 msgid "체크한 칸을 [내용 복사] 로 글로 복사합니다 — 체크는 다음에도 그대로"
 msgstr "[Copy details] copies the checked fields as text — the checks are remembered"
 
@@ -8547,6 +8575,14 @@ msgstr "Permanently deletes the tab and its people. Text this to-do wrote into p
 #: viewer/widgets/bizcard_find_dialog.py
 msgid "마감한 탭"
 msgstr "Closed Tabs"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "할 일이 없습니다."
+msgstr "There are no to-dos."
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "엑셀 파일을 쓰지 못했습니다 — 다른 프로그램이 열고 있는지 확인하세요."
+msgstr "Could not write the Excel file — check whether another program has it open."
 
 #: viewer/widgets/bizcard_find_dialog.py
 msgid "최근에서 빼기"
@@ -8601,6 +8637,10 @@ msgstr "(No image file)"
 #: viewer/widgets/bizcard_find_dialog.py
 msgid "(인물 사진 없음 — 끌어 놓거나 [사진 추가])"
 msgstr "(No person photo — drop one here or use [Add Photo])"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "수정"
+msgstr "edited"
 
 #: viewer/widgets/bizcard_find_dialog.py
 #, python-brace-format
@@ -8678,6 +8718,11 @@ msgstr "Delete the '{tab}' tab? The tab and its {n} people are permanently remov
 #, python-brace-format
 msgid "주소가 {n}개라 쓰기 창 {w}개로 나눠 엽니다."
 msgstr "{n} addresses — opening them in {w} compose windows."
+
+#: viewer/widgets/bizcard_find_dialog.py
+#, python-brace-format
+msgid "할 일 {n}개를 엑셀로 썼습니다."
+msgstr "Wrote {n} to-dos to Excel."
 
 #: viewer/widgets/bizcard_find_dialog.py
 #, python-brace-format

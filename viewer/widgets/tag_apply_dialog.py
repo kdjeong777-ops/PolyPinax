@@ -686,25 +686,11 @@ class TagApplyDialog(QDialog):
         """저장소의 모든 태그(한 번 센다) — 날짜 꼴(사진 촬영일·PDF 날짜 속성)과 사진 기본 정보로만 쓰인 태그(지역·장비 — §5.7
         `meta`, 이 창이 다루지 않는다)는 뺀다."""
         if self.__dict__.get("_known") is None:
-            import re as _re
-            seen, other = {}, set()
-            meta_only = set()
+            # 세는 것은 저장소가(`TagStore.known_tags` — 고친 세대가 같으면 다시 세지 않는다, 태그 SOT §8.7). 창을 열 때마다
+            #   모든 기록을 돌던 것이 [해시태그] 창이 늦게 뜨던 원인(261120-20 — 1만 개 0.1~0.35초, 3만 개 0.5초)
             st = self._store
-            for k in list(st._data.keys()):
-                try:
-                    meta = {t.lower() for t in st.get_auto_part(k, "meta")}
-                    for t in st.get(k):
-                        tl = t.lower()
-                        if _re.match(r"^\d{4}-\d{2}-\d{2}$", t or ""):
-                            continue
-                        seen.setdefault(tl, t)
-                        if tl in meta and tl not in {m.lower() for m in st.get_manual(k)}:
-                            meta_only.add(tl)
-                        else:
-                            other.add(tl)
-                except Exception:
-                    continue
-            self._known = [t for tl, t in seen.items() if tl in other or tl not in meta_only]
+            from viewer.tag_store import known_tags_of
+            self._known = st.known_tags() if hasattr(st, "known_tags") else known_tags_of(st, list(st._data.keys()))
         return self._known
 
     def _fill_lists(self):

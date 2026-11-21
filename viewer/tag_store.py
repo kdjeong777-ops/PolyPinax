@@ -95,6 +95,31 @@ def _resolve_dir(d: str) -> str:
         return ""
 
 
+def known_tags_of(store, keys) -> list:
+    """store 의 keys 기록에서 모든 태그 — `TagStore.known_tags` 의 본체(배경에서 사본으로도 부른다). 날짜 꼴·meta 로만 쓰인 태그 뺌."""
+    import re as _re
+    seen, other, meta_only = {}, set(), set()
+    for k in keys:
+        try:
+            meta = {t.lower() for t in store.get_auto_part(k, "meta")}
+            man = None
+            for t in store.get(k):
+                tl = t.lower()
+                if _re.match(r"^\d{4}-\d{2}-\d{2}$", t or ""):
+                    continue
+                seen.setdefault(tl, t)
+                if tl in meta:
+                    if man is None:
+                        man = {m.lower() for m in store.get_manual(k)}
+                    if tl not in man:
+                        meta_only.add(tl)
+                        continue
+                other.add(tl)
+        except Exception:
+            continue
+    return [t for tl, t in seen.items() if tl in other or tl not in meta_only]
+
+
 class TagStore:
     def __init__(self, path=None):
         if path is None:
@@ -116,9 +141,27 @@ class TagStore:
         except Exception:
             self._data = {}
 
+    _gen = 0                     # 고친 세대 — 쓰기는 모두 _save 를 지난다(일괄이면 끝날 때). 전체 태그 목록 캐시 열쇠(§8.7)
+
+    def known_tags(self) -> list:
+        """저장소의 모든 태그(대소문자는 처음 나온 꼴) — 날짜 꼴과 사진 기본 정보로만 쓰인 태그(§5.7 `meta`)는 뺀다.
+        '해시태그 수정' 창의 '기존 태그'(§8.7). 기록이 많으면 세는 데 오래 걸려(1만 개 0.1~0.35초) 세대가 같으면 다시 세지 않는다."""
+        c = getattr(self, "_known_cache", None)
+        if c is not None and c[0] == self._gen and c[1] is self._data:
+            return list(c[2])
+        out = known_tags_of(self, list(self._data.keys()))
+        self._known_cache = (self._gen, self._data, out)
+        return list(out)
+
+    def seed_known(self, tags, gen=None, data=None):
+        """다른 곳(배경 계산·같은 내용의 사본)에서 센 목록을 캐시로 — 세대·데이터가 지금과 같을 때만 받는다."""
+        if (gen is None or gen == self._gen) and (data is None or data is self._data):
+            self._known_cache = (self._gen, self._data, list(tags))
+
     def _save(self):
         """260829(§6): ★ 원자적 쓰기 — 임시파일 + os.replace. 중간 크래시에도 JSON 이 깨지지 않는다.
         bulk() 안에서는 쓰지 않고 표시만 해 뒀다가 빠져나올 때 1회 저장."""
+        self._gen += 1
         if self._bulk_depth > 0:
             self._dirty = True
             return
@@ -138,7 +181,7 @@ class TagStore:
         finally:
             self._bulk_depth -= 1
             if self._bulk_depth == 0 and self._dirty:
-                self._save()
+                self._save()                   # _dirty 만 켜던 길(일괄 안)도 여기서 _save → 세대가 오른다(known_tags 캐시)
 
     # ── 백업/복원 (§6 되돌리기) ───────────────────────────────────────────
     def backup(self) -> bool:

@@ -1331,6 +1331,16 @@ class BizcardFindDialog(QDialog):
         self.lbl_picked.setFixedHeight(self.lbl_picked.fontMetrics().lineSpacing() * PICKED_LINES + 4)
         self.lbl_picked.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
         bot.addWidget(self.lbl_picked, 1)              # 단추 없음 — [닫기]도 없음(제목 줄 X·Alt+F4·Esc·≡ 메뉴 '종료', 261120-38)
+        # 구글 싱크 2단계 — 사진·드라이브 올리는 중(§5.29 '단계', 261120-71). 돌 때만 보인다
+        self.lbl_media = QLabel("")
+        self.lbl_media.setVisible(False)
+        self.btn_media_stop = QPushButton(tr("멈춤"))
+        self.btn_media_stop.setToolTip(tr("사진 올리기를 멈춥니다 — 남은 것은 다음에 명함찾기를 열 때 이어서 올립니다"))
+        self.btn_media_stop.setVisible(False)
+        self.btn_media_stop.clicked.connect(lambda _c=False: self.stop_media())
+        bot.addWidget(self.lbl_media)
+        bot.addWidget(self.btn_media_stop)
+        self.media_busy = False
         self.table.selectionModel().selectionChanged.connect(lambda *_a: self._update_picked())
         v.addLayout(bot)
         for b in self.findChildren(QPushButton):      # Enter 가 '#' 등을 누르지 않게 — 기본 단추 없음(사용자 보고 261119)
@@ -1338,6 +1348,7 @@ class BizcardFindDialog(QDialog):
             b.setDefault(False)
         self._enable_card_buttons(False)
         self._init_store_bits()
+        QTimer.singleShot(0, self.start_media)          # 남은 사진·드라이브 대기열 — 열 때 저절로 이어서(§5.29 '단계', 261120-71)
         QTimer.singleShot(0, self.refresh)
 
     def new_card(self, exec_: bool = True):
@@ -1443,6 +1454,55 @@ class BizcardFindDialog(QDialog):
         if gone:
             self.delete_cards(gone, ask=False)
         self.refresh()
+        if res.get("queued"):
+            self.start_media()
+
+    # ── 구글 싱크 2단계(§5.29 '단계', 261120-71) ──
+    def start_media(self) -> bool:
+        """대기열에 사진·드라이브가 남았고 구글에 연결돼 있으면 배경 일꾼으로 이어 올린다(이미 [적용] 으로 고른 것만)."""
+        from viewer.bizcard import gsync as G
+        from viewer.bizcard import gsync_auth as A
+        if self.media_busy or not G.media_left(self._store()):
+            return False
+        try:
+            if not A.connected():
+                return False
+        except Exception:
+            return False
+        from viewer.widgets.bizcard_gsync_dialog import MediaWorker
+        from viewer.workers import run_in_thread
+        st = self._store()
+        w = MediaWorker(self._db or st.path, self._bizcard_folder(), str(st.meta_get(G.OPT_FOLDER, "") or G.DRIVE_FOLDER_DEFAULT))
+        w.progressed.connect(self._media_progress)
+        w.done.connect(self._media_done)
+        self.media_busy, self._media_worker = True, w
+        self.lbl_media.setText(tr("구글에 사진 올리는 중…"))
+        self.lbl_media.setVisible(True)
+        self.btn_media_stop.setEnabled(True)
+        self.btn_media_stop.setVisible(True)
+        keep = getattr(self._mw, "_thread_keep", None)
+        run_in_thread(w, keep if isinstance(keep, list) else _KEEP)
+        return True
+
+    def stop_media(self):
+        w = getattr(self, "_media_worker", None)
+        if w is not None and self.media_busy:
+            w.stop()
+            self.btn_media_stop.setEnabled(False)
+            self.lbl_media.setText(tr("멈추는 중… (지금 사람까지 올리고 멈춥니다)"))
+
+    def _media_progress(self, i, n):
+        self.lbl_media.setText(tr("구글에 사진 올리는 중 {i}/{n}").format(i=i, n=n))
+
+    def _media_done(self, res):
+        from viewer.widgets.bizcard_gsync_dialog import fail_text
+        self.media_busy, self._media_worker = False, None
+        self.lbl_media.setVisible(False)
+        self.btn_media_stop.setVisible(False)
+        if res.get("stopped") == "quota" or (res.get("reasons") or {}):
+            QMessageBox.warning(self, tr("구글 주소록과 싱크"), fail_text(res))
+        if res.get("done") and not self._dirty:
+            self.refresh()                                     # 링크가 누리집·메모에 들어갔다
 
     def open_history(self, exec_: bool = True):
         """[주소록] '변경 기록·되살리기'(명함 SOT §5.30) — 창을 닫으면 목록을 다시."""
@@ -3582,6 +3642,7 @@ class BizcardFindDialog(QDialog):
         if self._dirty and not self._ask_save():
             e.ignore()
             return
+        self.stop_media()                                # 사진 올리기 — 지금 사람까지 하고 멈춤(남은 것은 다음에 열 때)
         self._fav_gen += 1                               # 늦게 오는 그림은 버림
         if self._st is not None:
             self._st.close()

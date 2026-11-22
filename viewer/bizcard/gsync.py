@@ -18,6 +18,13 @@ from viewer.bizcard import phone as PH
 SRC = "google"                                  # contact_src 출처·태그
 TAG = "구글"
 OPT_PHOTOS, OPT_DRIVE, OPT_FOLDER = "gsync_photos", "gsync_drive", "gsync_drive_folder"   # 명함 DB meta
+DRIVE_MAX_PX, DRIVE_QUALITY = 1600, 85          # 드라이브에 올리는 그림 — 긴 변·JPG 화질(PC 원본은 그대로, 261120-70 사용자 결정 '줄여서')
+QUEUE_KEY = "gsync_media_queue"                 # meta — 2단계로 올릴 사진·드라이브 줄(§5.29 '단계', 261120-71)
+PHOTO_MAX_PX = 720                              # 연락처 사진도 줄여서 — 구글이 어차피 작게 보관(261120-71)
+BATCH = 200                                     # 일괄 만들기·고치기 한 요청의 사람 수(People API 상한)
+MEDIA_TRIES = 3                                 # 2단계 한 줄이 이만큼 실패하면 대기열에서 빼 '지난번 못 올림'
+FAILED_KEY = "gsync_failed"                     # meta — 지난 [적용] 에서 못 올린 사진·드라이브 줄 '갈래|명함 id|면'(§5.29 '못 올렸을 때')
+MEMO_LINK_BACK, MEMO_LINK_PHOTO = "명함 뒷면", "인물 사진 {n}"   # 메모 끝 링크 줄 머리 — 데이터라 번역하지 않음(§5.29 '드라이브')
 DRIVE_FOLDER_DEFAULT = "PolyCardex 명함"
 DEFAULT_PHOTO = "default"                       # 구글 사진의 기본 실루엣 표시(photos[].default)
 
@@ -421,6 +428,11 @@ def plan(store, people: list, folder: str = "", photos: bool = False, drive: boo
                          "kakao": new_kakao(c),                                     # 새로 보낼 때는 기본 친구추가 방지
                          "maybe_dup": c["id"] in from_google and not card_first,    # 구글 vCard 로 가져온 명함 — 구글에 이미 있을 수 있음
                          "labels": [ch[k] for k in _keys(c.get("tags"))]})
+            if photos and first_photo(c, folder):            # 새 연락처도 같은 [적용] 에서 사진·드라이브(261120-70)
+                rows.append({"kind": PHOTO_UP, "card_id": c["id"], "rn": "", "new": True, "name": c.get("name") or "",
+                             "path": first_photo(c, folder)})
+            if drive:
+                rows += _drive_rows(c, "", {}, folder, new=True)
     for p in free_people:
         if p["resourceName"] not in m.values() and not card_first:
             rows.append({"kind": NEW_CARD, "card_id": 0, "rn": p["resourceName"], "name": person_values(p)["name"],
@@ -484,21 +496,81 @@ def plan(store, people: list, folder: str = "", photos: bool = False, drive: boo
             elif gp and not mine and not card_first:
                 rows.append({"kind": PHOTO_DOWN, "card_id": c["id"], "rn": p["resourceName"], "name": c.get("name") or "",
                              "url": gp})
-        if drive and not str(c.get("front") or "").startswith("contact:"):
-            have = l.get("drive") or {}
-            for side in ("front", "back"):
-                path = c.get(side) or ""
-                if path and _sig(path) and have.get(side, {}).get("sig") != _sig(path):
-                    rows.append({"kind": DRIVE_UP, "card_id": c["id"], "rn": p["resourceName"], "name": c.get("name") or "",
-                                 "side": side, "path": path})
+        if drive:
+            rows += _drive_rows(c, p["resourceName"], l.get("drive") or {}, folder)
     if use_labels:                                           # 앱이 쓰던 라벨을 고른 목록에서 뺐으면 — 지울까요(기본 남김)
         used = store.meta_get(META_LABEL_GROUPS, {}) or {}
         for name, grn in sorted(used.items()):
             if P._tagkey(name) not in ch and grn in gmap:
                 rows.append({"kind": LABEL_GONE, "card_id": 0, "rn": grn, "name": name})
+    queued = {_fail_key(x) for x in (store.meta_get(QUEUE_KEY, []) or [])}
+    rows = [r for r in rows if _fail_key(r) not in queued]   # 대기열에서 올리는 중 — 다시 내지 않음(§5.29 '단계')
+    failed = set(store.meta_get(FAILED_KEY, []) or [])
+    for r in rows:                                           # 지난번 못 올린 것 — '(지난번 못 올림)', 체크된 채(§5.29 '못 올렸을 때')
+        if _fail_key(r) in failed:
+            r["retry"] = True
     order = {k: i for i, k in enumerate(KINDS + ("link",))}
     rows.sort(key=lambda r: (order.get(r["kind"], 99), r.get("name") or ""))
     return rows
+
+
+def _drive_rows(c, rn, have, folder, new=False) -> list:
+    """드라이브 줄 — 정리본 앞·뒷면(그림 명함만)과 인물 사진들(`photo1`…), 지난번과 지문이 다른 것만(§5.29 '드라이브')."""
+    out, sides = [], []
+    if not str(c.get("front") or "").startswith("contact:"):
+        sides += [("front", c.get("front") or ""), ("back", c.get("back") or "")]
+    pf = P.photo_front(c, folder)
+    sides += [("photo%d" % (i + 1), p) for i, p in enumerate(P.person_photos(pf) if pf else [])]
+    for side, path in sides:
+        if path and _sig(path) and (have.get(side) or {}).get("sig") != _sig(path):
+            r = {"kind": DRIVE_UP, "card_id": c["id"], "rn": rn, "name": c.get("name") or "", "side": side, "path": path}
+            if new:
+                r["new"] = True
+            out.append(r)
+    return out
+
+
+def _fail_key(r) -> str:
+    return "%s|%s|%s" % (r["kind"], r.get("card_id"), r.get("side") or "")
+
+
+def _why(e) -> str:
+    """실패 까닭 갈래 — quota·auth·limit·net·other(값은 싣지 않는다)."""
+    st, rs = getattr(e, "status", None), (getattr(e, "reason", "") or "")
+    if rs == "storageQuotaExceeded":
+        return "quota"
+    if st == 429 or rs in ("rateLimitExceeded", "userRateLimitExceeded", "RESOURCE_EXHAUSTED"):
+        return "limit"
+    if st in (401, 403):
+        return "auth"
+    if st == 0:
+        return "net"
+    return "other"
+
+
+def _shrunk(path) -> str:
+    """드라이브에 올릴 줄인 사본(긴 변 DRIVE_MAX_PX·JPG DRIVE_QUALITY) — 임시 파일 경로, 부른 쪽이 지운다."""
+    import os
+    import tempfile
+    from PIL import Image, ImageOps
+    with Image.open(path) as im:
+        im = ImageOps.exif_transpose(im).convert("RGB")
+        im.thumbnail((DRIVE_MAX_PX, DRIVE_MAX_PX))
+        fd, tmp = tempfile.mkstemp(suffix=".jpg")
+        os.close(fd)
+        im.save(tmp, "JPEG", quality=DRIVE_QUALITY)
+    return tmp
+
+
+def _memo_link(memo: str, head: str, link: str) -> str:
+    """메모 끝 링크 줄 `head: link` — 같은 머리 줄이 있으면 바꿔 쓰고, 없으면 끝에 더한다."""
+    lines = [ln for ln in (memo or "").splitlines()]
+    new = "%s: %s" % (head, link)
+    for i, ln in enumerate(lines):
+        if ln.startswith(head + ": "):
+            lines[i] = new
+            return "\n".join(lines)
+    return "\n".join([ln for ln in lines] + [new]).strip("\n")
 
 
 def counts(rows: list) -> dict:
@@ -519,14 +591,66 @@ def apply(store, api, rows: list, folder: str = "", drive_folder: str = DRIVE_FO
 
 def _apply(store, api, rows: list, folder: str = "", drive_folder: str = DRIVE_FOLDER_DEFAULT, progress=None,
            people=None) -> dict:
-    """고른 줄만 반영(배경). 반환 {'done': n, 'failed': n, 'delete_cards': [id]} — 명함 지우기는 부르는 쪽이 휴지통 길로(§5.20)."""
+    """1단계 — 고른 글 줄만 반영(배경). 사진·드라이브 줄은 대기열(QUEUE_KEY)에 넣고 2단계 `run_media` 가 올린다(§5.29 '단계', 261120-71).
+    반환 {'done', 'failed', 'delete_cards': [id], 'reasons': {까닭: n}, 'queued': 대기열에 넣은 수} — 명함 지우기는 부르는 쪽이 휴지통 길로(§5.20)."""
     init(store)
     P.src_init(store)
     done = failed = 0
     delete_cards = []
+    reasons = {}
+    media = [r for r in rows if r["kind"] in (PHOTO_UP, DRIVE_UP)]
+    rows = [r for r in rows if r["kind"] not in (PHOTO_UP, DRIVE_UP)]
     by_rn = {p["resourceName"]: p for p in people or []}     # 계획 때 받은 목록(없으면 처음 필요할 때 한 번 받는다)
-    folder_id = ""
     n = len(rows)
+    label_add = {}                                          # 새 연락처의 라벨 — 라벨마다 한 번에(261120-71)
+    handled = set()
+
+    def _fail(e):
+        why = _why(e)
+        reasons[why] = reasons.get(why, 0) + 1
+    # 일괄 만들기 — 새 연락처를 BATCH 명씩 한 요청으로(실패한 묶음은 아래에서 한 명씩)
+    news = [r for r in rows if r["kind"] == NEW_GOOGLE]
+    if news and callable(getattr(api, "batch_create", None)):
+        for j in range(0, len(news), BATCH):
+            chunk = news[j:j + BATCH]
+            cards = [P.card_by_id(store, r["card_id"]) for r in chunk]
+            try:
+                made = api.batch_create([card_person(c, kakao=bool(r.get("kakao"))) for c, r in zip(cards, chunk)])
+            except Exception:
+                continue
+            if len(made) != len(chunk):
+                continue
+            for c, r, pp in zip(cards, chunk, made):
+                kakao_set(store, [c["id"]], bool(r.get("kakao")), set_at=0.0)
+                for name in r.get("labels") or []:
+                    label_add.setdefault(name, []).append(pp["resourceName"])
+                _link_put(store, c["id"], pp["resourceName"], pp.get("etag") or "", labels=list(r.get("labels") or []))
+                by_rn[pp["resourceName"]] = pp
+                handled.add(id(r))
+                done += 1
+            store.con.commit()
+    # 일괄 고치기 — 명함 값을 구글로(실패한 묶음은 아래에서 한 명씩)
+    ups = [r for r in rows if r["kind"] == TO_GOOGLE]
+    if ups and callable(getattr(api, "batch_update", None)):
+        for j in range(0, len(ups), BATCH):
+            chunk = ups[j:j + BATCH]
+            body = {}
+            for r in chunk:
+                c = P.card_by_id(store, r["card_id"])
+                body[r["rn"]] = card_person(c, r.get("etag") or "", kakao=bool(r.get("kakao")))
+            try:
+                got = api.batch_update(body)
+            except Exception:
+                continue
+            for r in chunk:
+                pp = got.get(r["rn"])
+                if pp is None:
+                    continue
+                _link_put(store, r["card_id"], r["rn"], pp.get("etag") or "")
+                by_rn[r["rn"]] = pp
+                handled.add(id(r))
+                done += 1
+            store.con.commit()
     gcache = {}                                             # 라벨 이름(열쇠) → contactGroups/… — 처음 필요할 때 한 번 받는다
 
     def group_of(name, make=True):
@@ -547,6 +671,10 @@ def _apply(store, api, rows: list, folder: str = "", drive_folder: str = DRIVE_F
         return rn
     for i, r in enumerate(rows):
         k = r["kind"]
+        if id(r) in handled:
+            if progress is not None:
+                progress(i + 1, n)
+            continue
         try:
             if k == NEW_CARD:
                 p = r.get("person") or by_rn.get(r["rn"])
@@ -564,8 +692,9 @@ def _apply(store, api, rows: list, folder: str = "", drive_folder: str = DRIVE_F
                 c = P.card_by_id(store, r["card_id"])
                 p = api.create(card_person(c, kakao=bool(r.get("kakao"))))
                 kakao_set(store, [c["id"]], bool(r.get("kakao")), set_at=0.0)
-                for name in r.get("labels") or []:               # 새 연락처도 고른 해시태그의 라벨을(§5.29 '라벨')
-                    api.modify_members(group_of(name), add=[p["resourceName"]])
+                for name in r.get("labels") or []:               # 새 연락처도 고른 해시태그의 라벨을 — 라벨마다 한 번에(§5.29 '라벨')
+                    label_add.setdefault(name, []).append(p["resourceName"])
+                by_rn[p["resourceName"]] = p
                 _link_put(store, c["id"], p["resourceName"], p.get("etag") or "", labels=list(r.get("labels") or []))
             elif k == "unlink":                                  # '남김' — 짝만 풀림(다음 싱크에 다시 제안, 261120-62)
                 store.con.execute("DELETE FROM google_link WHERE card_id=?", (r["card_id"],))
@@ -622,10 +751,6 @@ def _apply(store, api, rows: list, folder: str = "", drive_folder: str = DRIVE_F
             elif k == PHOTO_GONE:                                # 구글 연락처 사진도 지움(§5.29 '사진', 261120-65)
                 api.delete_photo(r["rn"])
                 photo_gone_add(store, r["card_id"], False)
-            elif k == PHOTO_UP:
-                with open(r["path"], "rb") as f:
-                    api.update_photo(r["rn"], f.read())
-                _link_put(store, r["card_id"], r["rn"], "", photo_sig=_sig(r["path"]))
             elif k == PHOTO_DOWN:
                 c = P.card_by_id(store, r["card_id"])
                 pf = P.photo_front(c, folder)
@@ -643,34 +768,175 @@ def _apply(store, api, rows: list, folder: str = "", drive_folder: str = DRIVE_F
                 finally:
                     os.unlink(tmp)
                 _link_put(store, r["card_id"], r["rn"], "", photo_sig=_sig(str(dst)))
-            elif k == DRIVE_UP:
-                if not folder_id:
-                    folder_id = api.ensure_folder(drive_folder or DRIVE_FOLDER_DEFAULT)
-                lk = links(store).get(r["card_id"]) or {}
-                dr = dict(lk.get("drive") or {})
-                import os
-                fid = api.upload(r["path"], os.path.basename(r["path"]), folder_id, (dr.get(r["side"]) or {}).get("id", ""))
-                dr[r["side"]] = {"id": fid, "sig": _sig(r["path"])}
-                from viewer.bizcard.gsync_api import drive_link
-                c = P.card_by_id(store, r["card_id"])
-                link = drive_link(fid)
-                if link not in (c.get("urls") or []):                 # 연락처 누리집 칸에 링크(§5.29 '드라이브')
-                    urls = list(c.get("urls") or []) + [link]
-                    P.update_card(store, c["id"], {"urls": urls}, commit=False)
-                    c = P.card_by_id(store, c["id"])
-                    p = _fetch(api, r["rn"], by_rn)
-                    p2 = api.update(r["rn"], card_person(c, p.get("etag") or "", kakao=c["id"] in blocked_ids(store)))
-                    by_rn[r["rn"]] = p2
-                _link_put(store, r["card_id"], r["rn"], "", drive=dr)
             done += 1
-        except Exception:                                     # 값·토큰은 싣지 않는다 — 개수만
+        except Exception as e:                                # 값·토큰은 싣지 않는다 — 개수·까닭 갈래만
             failed += 1
+            _fail(e)
         store.con.commit()
         if progress is not None:
             progress(i + 1, n)
+    for name, rns in label_add.items():                      # 새 연락처 라벨 — 라벨마다 한 번에(1000명씩)
+        try:
+            g = group_of(name)
+            for j in range(0, len(rns), 1000):
+                api.modify_members(g, add=rns[j:j + 1000])
+        except Exception as e:
+            failed += 1
+            _fail(e)
     add_label_tags(store, [n for r in rows for n in (r.get("tags_add") or []) + (r.get("add_t") or [])])   # 가져온 라벨도 목록에
+    queued = enqueue_media(store, media)
     store.con.commit()
-    return {"done": done, "failed": failed, "delete_cards": delete_cards}
+    return {"done": done, "failed": failed, "delete_cards": delete_cards, "reasons": reasons, "queued": queued}
+
+
+def enqueue_media(store, rows) -> int:
+    """사진·드라이브 줄을 대기열에 — 같은 줄(갈래·명함·면)은 한 번만. 반환 = 새로 넣은 수(§5.29 '단계')."""
+    q = list(store.meta_get(QUEUE_KEY, []) or [])
+    have = {_fail_key(x) for x in q}
+    n = 0
+    for r in rows:
+        key = _fail_key(r)
+        if key in have:
+            continue
+        have.add(key)
+        q.append({"kind": r["kind"], "card_id": r["card_id"], "rn": r.get("rn") or "", "side": r.get("side") or "",
+                  "path": r.get("path") or "", "name": r.get("name") or "", "tries": 0})
+        n += 1
+    store.meta_set(QUEUE_KEY, q)
+    return n
+
+
+def media_left(store) -> int:
+    return len(store.meta_get(QUEUE_KEY, []) or [])
+
+
+def _photo_bytes(path) -> bytes:
+    """연락처 사진 — 긴 변 PHOTO_MAX_PX 로 줄인 JPG 바이트(구글이 어차피 작게 보관, 261120-71)."""
+    from PIL import Image, ImageOps
+    import io
+    with Image.open(path) as im:
+        im = ImageOps.exif_transpose(im).convert("RGB")
+        im.thumbnail((PHOTO_MAX_PX, PHOTO_MAX_PX))
+        buf = io.BytesIO()
+        im.save(buf, "JPEG", quality=DRIVE_QUALITY)
+    return buf.getvalue()
+
+
+def run_media(store, api, folder: str = "", drive_folder: str = DRIVE_FOLDER_DEFAULT, progress=None, should_stop=None) -> dict:
+    """2단계 — 대기열의 사진·드라이브를 **한 사람씩** 올린다(배경 일꾼, §5.29 '단계', 261120-71). 사람마다 연락처 사진·드라이브
+    파일을 올리고 링크는 한 번에(누리집·메모). 한 사람이 끝날 때마다 대기열을 줄여 저장 — 끊겨도 다음에 이어서.
+    should_stop() 이 참이면 그 사람 뒤에 멈춘다. 드라이브 저장 공간 부족이면 멈춘다(대기열 그대로). 다른 까닭으로
+    MEDIA_TRIES 번 실패한 줄은 대기열에서 빼 FAILED_KEY('지난번 못 올림'). 반환 {'done', 'failed', 'reasons', 'left', 'stopped'}."""
+    import os
+    from viewer.bizcard import history as H
+    from viewer.bizcard.gsync_api import drive_link
+    init(store)
+    done = failed = 0
+    reasons = {}
+    total = media_left(store)
+    by_rn, folder_id, stopped = {}, "", ""
+    fails = set(store.meta_get(FAILED_KEY, []) or [])
+    count = 0
+    while True:
+        q = list(store.meta_get(QUEUE_KEY, []) or [])
+        if not q:
+            break
+        if should_stop is not None and should_stop():
+            stopped = "stop"
+            break
+        cid = q[0]["card_id"]
+        mine = [x for x in q if x["card_id"] == cid]
+        lk = links(store).get(cid) or {}
+        rn = lk.get("rn") or ""
+        c = P.card_by_id(store, cid)
+        if not rn or c is None or any(x.get("rn") and x["rn"] != rn for x in mine):   # 새 연락처를 못 만들었거나 짝이 바뀜 — 뺀다(다음 싱크에 다시 제안)
+            store.meta_set(QUEUE_KEY, [x for x in q if x["card_id"] != cid])
+            count += len(mine)
+            continue
+        dr = dict(lk.get("drive") or {})
+        ok, bad, quota = [], [], False
+        etag = ""
+        ch = {}
+        for it in mine:
+            try:
+                if not it["path"] or not os.path.exists(it["path"]):
+                    ok.append(it)                                     # 그 사이 파일이 없어졌다 — 올릴 것 없음
+                    continue
+                if it["kind"] == PHOTO_UP:
+                    res = api.update_photo(rn, _photo_bytes(it["path"])) or {}
+                    etag = ((res.get("person") or {}).get("etag")) or etag
+                    _link_put(store, cid, rn, "", photo_sig=_sig(it["path"]))
+                else:
+                    if not folder_id:
+                        folder_id = api.ensure_folder(drive_folder or DRIVE_FOLDER_DEFAULT)
+                    tmp = _shrunk(it["path"])
+                    try:
+                        name = os.path.splitext(os.path.basename(it["path"]))[0] + ".jpg"
+                        fid = api.upload(tmp, name, folder_id, (dr.get(it["side"]) or {}).get("id", ""))
+                    finally:
+                        os.unlink(tmp)
+                    dr[it["side"]] = {"id": fid, "sig": _sig(it["path"])}
+                    link = drive_link(fid)
+                    if it["side"] == "front":                         # 대표 명함 = 누리집 칸(§5.29 '드라이브')
+                        urls = ch.get("urls", list(c.get("urls") or []))
+                        if link not in urls:
+                            ch["urls"] = urls + [link]
+                    else:                                             # 뒷면·인물 사진 = 메모 끝 링크 줄(261120-70)
+                        head = MEMO_LINK_BACK if it["side"] == "back" else MEMO_LINK_PHOTO.format(n=it["side"][5:])
+                        memo = _memo_link(ch.get("memo", c.get("memo") or ""), head, link)
+                        if memo != (c.get("memo") or ""):
+                            ch["memo"] = memo
+                ok.append(it)
+            except Exception as e:
+                why = _why(e)
+                reasons[why] = reasons.get(why, 0) + 1
+                failed += 1
+                if it["kind"] == DRIVE_UP and why == "quota":
+                    quota = True
+                    break
+                bad.append(it)
+        if ch:                                                        # 링크는 사람마다 한 번(261120-71)
+            try:
+                with H.source(store, "sync"):
+                    P.update_card(store, cid, ch, commit=False)
+                c2 = P.card_by_id(store, cid)
+                if not etag:
+                    etag = (_fetch(api, rn, by_rn) or {}).get("etag") or ""
+                p2 = api.update(rn, card_person(c2, etag, kakao=cid in blocked_ids(store)))
+                by_rn[rn] = p2
+            except Exception as e:
+                why = _why(e)
+                reasons[why] = reasons.get(why, 0) + 1
+                failed += 1
+        _link_put(store, cid, rn, "", drive=dr)
+        done += len(ok)
+        drop = {_fail_key(x) for x in ok}
+        nq = []
+        for x in list(store.meta_get(QUEUE_KEY, []) or []):
+            key = _fail_key(x)
+            if key in drop:
+                fails.discard(key)
+                continue
+            if any(_fail_key(b) == key for b in bad):
+                x = dict(x, tries=int(x.get("tries") or 0) + 1)
+                if x["tries"] >= MEDIA_TRIES:                         # 세 번 — 대기열에서 빼 '지난번 못 올림'
+                    fails.add(key)
+                    continue
+            nq.append(x)
+        if bad and not quota and all(_fail_key(x) in {_fail_key(b) for b in bad} for x in nq if x["card_id"] == cid):
+            nq = [x for x in nq if x["card_id"] != cid] + [x for x in nq if x["card_id"] == cid]   # 실패한 사람은 뒤로(다음 사람부터)
+        store.meta_set(QUEUE_KEY, nq)
+        store.meta_set(FAILED_KEY, sorted(fails))
+        store.con.commit()
+        count += len(mine)
+        if progress is not None:
+            progress(min(count, total), total)
+        if quota:
+            stopped = "quota"
+            break
+        if bad and all(x["card_id"] == cid for x in nq) and nq:
+            break                                                     # 남은 것이 이 사람의 실패뿐 — 이번엔 여기까지
+    return {"done": done, "failed": failed, "reasons": reasons, "left": media_left(store), "stopped": stopped}
 
 
 def _fetch(api, rn: str, cache: dict) -> dict:

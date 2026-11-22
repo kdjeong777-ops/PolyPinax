@@ -19,7 +19,7 @@ KIND_LABELS = {G.NEW_CARD: tr_noop("구글에서 가져옴(새 명함)"), G.NEW_
                G.GONE_GOOGLE: tr_noop("구글에서 지워짐 — 명함도 지울까요"), G.GONE_CARD: tr_noop("명함에서 지워짐 — 구글도 지울까요"),
                G.MERGED_GOOGLE: tr_noop("명함 합치기로 남은 구글 연락처 — 구글에서 지울까요"),
                G.PHOTO_UP: tr_noop("인물 사진을 연락처 사진으로"), G.PHOTO_DOWN: tr_noop("연락처 사진을 인물 사진으로"),
-               G.DRIVE_UP: tr_noop("명함 그림을 드라이브에"), "link": tr_noop("같은 사람으로 짝지음(값 같음)"),
+               G.DRIVE_UP: tr_noop("명함 그림·인물 사진을 드라이브에"), "link": tr_noop("같은 사람으로 짝지음(값 같음)"),
                G.KAKAO_UP: tr_noop("카톡 친구추가 방지 바꿈(구글 이름 앞 #)"),
                G.KAKAO_DOWN: tr_noop("카톡 친구추가 방지 표시를 구글 이름대로"),
                G.GONE_VALUE: tr_noop("구글에서 지운 값 — 명함에서도 지울까요(안 고르면 구글로 다시)"),
@@ -39,6 +39,38 @@ def _api(store):
     from viewer.bizcard.gsync_api import Api
     cid, sec = A.client(store)
     return Api(lambda: A.access_token(cid, sec))
+
+
+class MediaWorker(QObject):
+    """2단계 사진·드라이브(배경, 명함 SOT §5.29 '단계', 261120-71) — 대기열을 한 사람씩. progressed(i, n) · done(결과).
+    stop() 하면 그 사람 뒤에 멈춘다(남은 것은 대기열 — 다음에 열 때 이어서)."""
+    progressed = pyqtSignal(int, int)
+    done = pyqtSignal(dict)
+    finished = pyqtSignal()
+
+    def __init__(self, db, folder, drive_folder):
+        super().__init__()
+        self._a = (db, folder, drive_folder)
+        self._stop = False
+
+    def stop(self):
+        self._stop = True
+
+    def run(self):
+        from viewer.bizcard.store import BizcardStore
+        db, folder, dfolder = self._a
+        st = None
+        try:
+            st = BizcardStore(db)
+            res = G.run_media(st, _api(st), folder, dfolder, progress=lambda i, n: self.progressed.emit(i, n),
+                              should_stop=lambda: self._stop)
+        except Exception as e:
+            res = {"done": 0, "failed": 0, "reasons": {}, "left": -1, "error": type(e).__name__}
+        finally:
+            if st is not None:
+                st.close()
+        self.done.emit(res)
+        self.finished.emit()
 
 
 class LoginWorker(QObject):
@@ -117,6 +149,24 @@ class ApplyWorker(QObject):
             if st is not None:
                 st.close()
             self.finished.emit()
+
+
+WHY_LABELS = {"quota": tr_noop("드라이브 저장 공간 부족 {n}건"), "auth": tr_noop("권한 없음 {n}건"),
+              "limit": tr_noop("구글 한도 초과 {n}건"), "net": tr_noop("연결 안 됨 {n}건"), "other": tr_noop("그 밖 {n}건")}
+
+
+def fail_text(res) -> str:
+    """[적용] 뒤 못 한 것 — 까닭별(명함 SOT §5.29 '못 올렸을 때', 261120-70). 값은 싣지 않는다."""
+    msg = tr("{ok}건 적용, {bad}건은 하지 못했습니다(다음 싱크에서 다시 보입니다).").format(ok=res.get("done", 0), bad=res.get("failed", 0))
+    why = res.get("reasons") or {}
+    parts = [tr(WHY_LABELS[k]).format(n=why[k]) for k in WHY_LABELS if why.get(k)]
+    if parts:
+        msg += "\n" + tr("까닭: {list}").format(list=" · ".join(parts))
+    if why.get("quota"):                                      # 2단계가 멈춤 — 대기열 그대로, 다음에 열 때 이어서(261120-71)
+        msg += "\n" + tr("구글 드라이브 공간을 비운 뒤 명함찾기를 다시 열면 남은 사진·명함 그림을 이어서 올립니다.")
+    elif res.get("left", 0) > 0:
+        msg += "\n" + tr("남은 {n}건은 다음에 명함찾기를 열 때 이어서 올립니다.").format(n=res["left"])
+    return msg
 
 
 class GSyncDialog(QDialog):
@@ -205,6 +255,14 @@ class GSyncDialog(QDialog):
                     txt += "  — " + r["txt"].replace("구글 ", tr("구글") + " ", 1).replace("해시태그 ", tr("해시태그") + " ", 1)
                 if r.get("maybe_dup"):
                     txt += "  — " + tr("구글에 이미 있을 수 있음")
+                sd = r.get("side") or ""
+                if sd:                                            # 드라이브 줄 — 무엇을 올리는지(§5.29 '드라이브')
+                    txt += "  — " + (tr("명함 앞면") if sd == "front" else tr("명함 뒷면") if sd == "back"
+                                     else tr("인물 사진 {n}").format(n=sd[5:]))
+                if r.get("new"):                                  # 새 연락처와 같은 [적용] 에서(261120-70)
+                    txt += "  — " + tr("새 연락처와 함께")
+                if r.get("retry"):                                # 지난번 못 올림(§5.29 '못 올렸을 때')
+                    txt += "  — " + tr("지난번 못 올림")
                 it = QTreeWidgetItem([txt])
                 it.setFlags(it.flags() | Qt.ItemFlag.ItemIsUserCheckable)
                 it.setCheckState(0, Qt.CheckState.Checked if G.row_default(r) else Qt.CheckState.Unchecked)
@@ -268,7 +326,9 @@ class GSyncDialog(QDialog):
         self.busy = False
         self.result = res
         if res.get("failed"):
-            QMessageBox.warning(self, tr("구글 주소록과 싱크"),
-                                tr("{ok}건 적용, {bad}건은 하지 못했습니다(다음 싱크에서 다시 보입니다).").format(
-                                    ok=res.get("done", 0), bad=res.get("failed", 0)))
+            QMessageBox.warning(self, tr("구글 주소록과 싱크"), fail_text(res))
+        elif res.get("queued"):                               # 1단계 끝 — 사진·드라이브는 배경에서(§5.29 '단계', 261120-71)
+            QMessageBox.information(self, tr("구글 주소록과 싱크"), tr(
+                "글 자료 {n}건을 적용했습니다. 사진·명함 그림 {m}건은 명함찾기 아래 줄에서 이어 올립니다 — 창을 닫아도 다음에 열 때 이어서 올립니다.").format(
+                n=res.get("done", 0), m=res.get("queued", 0)))
         self.accept()

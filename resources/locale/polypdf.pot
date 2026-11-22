@@ -17357,3 +17357,80 @@ msgstr ""
 #: viewer/widgets/bizcard_todo_panel.py
 msgid "이 기록을 지웁니다 — 지운 기록은 ≡ 메뉴 '주소록 ▸ 변경 기록·되살리기' 에서 되살릴 수 있습니다."
 msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "사진 올리기를 멈춥니다 — 남은 것은 다음에 명함찾기를 열 때 이어서 올립니다"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "구글에 사진 올리는 중…"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "멈추는 중… (지금 사람까지 올리고 멈춥니다)"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+#, python-brace-format
+msgid "구글에 사진 올리는 중 {i}/{n}"
+msgstr ""
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+msgid "명함 그림·인물 사진을 드라이브에"
+msgstr ""
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+#, python-brace-format
+msgid "드라이브 저장 공간 부족 {n}건"
+msgstr ""
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+#, python-brace-format
+msgid "권한 없음 {n}건"
+msgstr ""
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+#, python-brace-format
+msgid "구글 한도 초과 {n}건"
+msgstr ""
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+#, python-brace-format
+msgid "연결 안 됨 {n}건"
+msgstr ""
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+#, python-brace-format
+msgid "그 밖 {n}건"
+msgstr ""
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+msgid "구글 드라이브 공간을 비운 뒤 명함찾기를 다시 열면 남은 사진·명함 그림을 이어서 올립니다."
+msgstr ""
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+#, python-brace-format
+msgid "까닭: {list}"
+msgstr ""
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+#, python-brace-format
+msgid "남은 {n}건은 다음에 명함찾기를 열 때 이어서 올립니다."
+msgstr ""
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+msgid "새 연락처와 함께"
+msgstr ""
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+msgid "지난번 못 올림"
+msgstr ""
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+#, python-brace-format
+msgid "글 자료 {n}건을 적용했습니다. 사진·명함 그림 {m}건은 명함찾기 아래 줄에서 이어 올립니다 — 창을 닫아도 다음에 열 때 이어서 올립니다."
+msgstr ""
+
+#: viewer/widgets/bizcard_settings_dialog.py
+msgid "명함 그림·인물 사진을 구글 드라이브에 올리고 연락처에 링크(앞면 = 웹사이트, 뒷면·사진 = 메모)"
+msgstr ""

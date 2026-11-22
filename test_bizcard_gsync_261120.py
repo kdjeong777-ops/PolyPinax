@@ -287,6 +287,7 @@ try:
     chk({r["kind"] for r in rows4} == {G.PHOTO_UP, G.PHOTO_DOWN}, "F 사진을 켜면 올림·받음 갈래", str([r["kind"] for r in rows4]))
     chk(not G.plan(st, people, str(FOLDER), photos=False), "F 사진을 끄면 사진 줄 없음")
     G.apply(st, api, rows4, str(FOLDER), people=people)
+    G.run_media(st, api, str(FOLDER))                         # 연락처 사진 올림은 2단계(261120-71)
     pf2 = P.photo_front(P.card_by_id(st, c2), str(FOLDER))
     chk("g1" in SV["photos"] and len(P.person_photos(pf2)) == 1, "F 인물 사진 ↔ 연락처 사진 주고받음")
     img_dir = FOLDER / "정리"
@@ -298,8 +299,10 @@ try:
     G.apply(st, api, [r for r in G.plan(st, people, str(FOLDER)) if r["kind"] == G.NEW_GOOGLE], str(FOLDER), people=people)
     people = api.list_people()
     rows5 = G.plan(st, people, str(FOLDER), drive=True)
-    chk([r["kind"] for r in rows5] == [G.DRIVE_UP], "F 드라이브를 켜면 명함 그림 올림 갈래", str([r["kind"] for r in rows5]))
+    chk({r["kind"] for r in rows5} == {G.DRIVE_UP} and "front" in [r.get("side") for r in rows5],   # 인물 사진도 함께(261120-70)
+        "F 드라이브를 켜면 명함 그림(·인물 사진) 올림 갈래", str([(r["kind"], r.get("side")) for r in rows5]))
     G.apply(st, api, rows5, str(FOLDER), drive_folder="가짜 폴더", people=people)
+    G.run_media(st, api, str(FOLDER), drive_folder="가짜 폴더")   # 드라이브는 2단계(261120-71)
     rn5 = G.links(st)[c5]["rn"]
     urls = [u["value"] for u in SV["people"][rn5].get("urls") or []]
     chk("가짜 폴더" in SV["folders"] and SV["files"] and any("drive.google.com/file/d/" in u for u in urls)

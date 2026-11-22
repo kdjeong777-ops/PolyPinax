@@ -16,15 +16,30 @@ PEOPLE_BASE = "https://people.googleapis.com"
 DRIVE_BASE = "https://www.googleapis.com"
 HTTP_TIMEOUT = 30
 RETRY_WAITS = (1, 2, 4)
+RATE_WAITS = (5, 10, 20, 40, 60)                 # 요청 한도(429) — Retry-After 가 없을 때 쉬는 초(끝 값을 되풀이, 261120-71)
+RATE_TRIES = 12                                  # 429 를 이만큼 연달아 받으면 그때 실패(약 10분 — 배경 일꾼 안에서만 기다린다)
 PERSON_FIELDS = "names,organizations,phoneNumbers,emailAddresses,addresses,urls,biographies,photos,memberships,metadata"
 UPDATE_FIELDS = "names,organizations,phoneNumbers,emailAddresses,addresses,urls,biographies"
 FOLDER_MIME = "application/vnd.google-apps.folder"
 
 
 class ApiError(Exception):
-    def __init__(self, what: str, status: int = 0):
+    """status = HTTP 상태(네트워크면 0), reason = 구글 오류 `reason` 한 낱말(예: storageQuotaExceeded) — 값·토큰은 싣지 않는다."""
+
+    def __init__(self, what: str, status: int = 0, reason: str = ""):
         super().__init__(what)
         self.status = status
+        self.reason = reason
+
+
+def _reason(e) -> str:
+    """HTTPError 본문에서 구글 오류 reason 한 낱말만(명함 SOT §5.29 '못 올렸을 때', 261120-70)."""
+    try:
+        d = json.loads(e.read().decode("utf-8", "replace") or "{}").get("error") or {}
+        errs = d.get("errors") or []
+        return str((errs[0].get("reason") if errs else "") or d.get("status") or "")[:40]
+    except Exception:
+        return ""
 
 
 class Api:
@@ -36,7 +51,9 @@ class Api:
     # ── HTTP ──
     def _req(self, method: str, url: str, body=None, raw: bytes = None, ctype: str = "application/json") -> bytes:
         data = raw if raw is not None else (json.dumps(body).encode("utf-8") if body is not None else None)
-        for i in range(len(RETRY_WAITS) + 1):
+        n429 = 0
+        i = 0
+        while i <= len(RETRY_WAITS):
             req = urllib.request.Request(url, data=data, method=method)
             req.add_header("Authorization", "Bearer " + self._token())
             if data is not None:
@@ -45,13 +62,23 @@ class Api:
                 with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT) as r:
                     return r.read()
             except urllib.error.HTTPError as e:
-                if (e.code == 429 or e.code >= 500) and i < len(RETRY_WAITS):
-                    self._sleep(RETRY_WAITS[i])
+                if e.code == 429 and n429 < RATE_TRIES:     # 한도 — 실패로 끝내지 않고 쉬었다 이어 감(명함 SOT §5.29 '네트워크', 261120-71)
+                    try:
+                        wait = float((e.headers or {}).get("Retry-After") or 0)
+                    except (TypeError, ValueError):
+                        wait = 0
+                    self._sleep(wait or RATE_WAITS[min(n429, len(RATE_WAITS) - 1)])
+                    n429 += 1
                     continue
-                raise ApiError("http %d" % e.code, e.code)
+                if e.code >= 500 and i < len(RETRY_WAITS):
+                    self._sleep(RETRY_WAITS[i])
+                    i += 1
+                    continue
+                raise ApiError("http %d" % e.code, e.code, _reason(e))
             except Exception as e:
                 if i < len(RETRY_WAITS):
                     self._sleep(RETRY_WAITS[i])
+                    i += 1
                     continue
                 raise ApiError(type(e).__name__)
         raise ApiError("retry")
@@ -76,6 +103,18 @@ class Api:
 
     def create(self, person: dict) -> dict:
         return self._json("POST", PEOPLE_BASE + "/v1/people:createContact?personFields=" + PERSON_FIELDS, person)
+
+    def batch_create(self, persons: list) -> list:
+        """새 연락처 여럿을 한 요청으로(최대 200 — `gsync.BATCH`, 261120-71). 반환 = 만든 사람들(보낸 차례)."""
+        body = {"contacts": [{"contactPerson": p} for p in persons], "readMask": PERSON_FIELDS}
+        d = self._json("POST", PEOPLE_BASE + "/v1/people:batchCreateContacts", body)
+        return [x.get("person") or {} for x in d.get("createdPeople") or []]
+
+    def batch_update(self, persons: dict) -> dict:
+        """연락처 여럿 고치기 한 요청으로 {resourceName: 사람(etag 포함)} → {resourceName: 고친 사람}(최대 200, 261120-71)."""
+        body = {"contacts": persons, "updateMask": UPDATE_FIELDS, "readMask": PERSON_FIELDS}
+        d = self._json("POST", PEOPLE_BASE + "/v1/people:batchUpdateContacts", body)
+        return {rn: (x.get("person") or {}) for rn, x in (d.get("updateResult") or {}).items()}
 
     def update(self, resource: str, person: dict) -> dict:
         q = urllib.parse.urlencode({"updatePersonFields": UPDATE_FIELDS, "personFields": PERSON_FIELDS})

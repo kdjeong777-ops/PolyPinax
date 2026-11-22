@@ -249,7 +249,7 @@ class BizcardSettingsDialog(QDialog):
         meta = (lambda k, d: store.meta_get(k, d)) if store is not None else (lambda k, d: d)
         self.chk_gphotos = QCheckBox(tr("인물 사진도 연락처 사진으로 주고받기"))
         self.chk_gphotos.setChecked(bool(meta(G.OPT_PHOTOS, False)))
-        self.chk_gdrive = QCheckBox(tr("명함 그림을 구글 드라이브에 원본으로 올리고 연락처에 링크"))
+        self.chk_gdrive = QCheckBox(tr("명함 그림·인물 사진을 구글 드라이브에 올리고 연락처에 링크(앞면 = 웹사이트, 뒷면·사진 = 메모)"))   # 줄여서 올림(§5.29 '드라이브', 261120-70)
         self.chk_gdrive.setChecked(bool(meta(G.OPT_DRIVE, False)))
         self.ed_gfolder = QLineEdit(str(meta(G.OPT_FOLDER, "") or G.DRIVE_FOLDER_DEFAULT))
         rd = QHBoxLayout()

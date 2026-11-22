@@ -87,6 +87,43 @@ class Host(QObject):
         dlg.show()
         return dlg
 
+    def _trash_bg(self, paths, photo: bool = True) -> dict:
+        """휴지통 — 본 뷰어 `_trash_bg` 와 같은 이름·같은 반환 {경로: None(지움)|예외}(§5.27 '경계', 261120-68).
+        배경 스레드에서 `trash_when_free`(잠깐 잡히면 다시), 0.3초가 넘으면 진행 창 — 부른 쪽은 끝날 때까지 기다린다.
+        별도 프로그램엔 사진 정보 색인이 없어 photo 는 받기만 한다."""
+        from PyQt6.QtCore import QThread, Qt
+        from PyQt6.QtWidgets import QProgressDialog
+        import viewer.widgets.bookmark_tree as _btm
+        from viewer.pathutil import trash_when_free
+        trash = _btm._trash_fn()
+        ps = [str(p) for p in paths]
+        out = {}
+
+        class _T(QThread):
+            def run(self_):
+                for p in ps:
+                    try:
+                        trash_when_free(p, trash)
+                        out[p] = None
+                    except Exception as e:            # noqa: BLE001
+                        out[p] = e
+
+        prog = QProgressDialog(tr("휴지통으로 보내는 중: {n}개").format(n=len(ps)), None, 0, 0, self.find_dlg)
+        prog.setWindowTitle(tr("파일 지우기"))
+        prog.setWindowModality(Qt.WindowModality.ApplicationModal)
+        prog.setMinimumDuration(300)
+        prog.setCancelButton(None)
+        th = _T()
+        th.finished.connect(prog.close)
+        th.finished.connect(prog.deleteLater)
+        th.start()
+        if th.isRunning():
+            prog.exec()                                   # 진행 창(0.3초 뒤 보임) — 본 뷰어 `_file_op_bg` 와 같은 모달 기다림
+        th.wait()
+        for p in ps:
+            out.setdefault(p, RuntimeError(tr("휴지통으로 보내지 못했습니다")))
+        return out
+
     def _photo_open_arg(self, path) -> bool:
         """[명함 보기] — 본 뷰어에 사진을 넘긴다(사진 모드 창이 있으면 그 창이 받음 — 사진 SOT §4.45)."""
         try:

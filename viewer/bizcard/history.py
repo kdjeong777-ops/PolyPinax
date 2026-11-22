@@ -15,6 +15,7 @@ KEEP_DAYS = 180                                   # 보존(사용자 결정 2611
 PRUNE_KEY = "history_pruned"
 SOURCES = ("edit", "sync", "merge", "kinds", "restore")
 _IGNORE = ("updated", "edited", "created", "top1")   # 이것만 바뀐 것은 남기지 않는다
+NOTE = "note"                                     # 지운 할 일 기록(§5.30 '할 일 기록', 261120-69) — card_id 칸 = 기록 id
 
 
 def _cols(con) -> list:
@@ -45,12 +46,11 @@ def init(store) -> None:
     con.commit()
 
 
-def _jd(ts: float) -> float:
-    """기록 시각은 유닉스 초(트리거가 julianday 를 초로 바꿔 쓴다)."""
-    return ts
-
-
-_ts = _jd
+def note_deleted(store, row: dict) -> None:
+    """할 일 기록 [삭제] 직전 — 그 기록 행(+ `_group` 탭 이름)을 변경 기록에 남긴다(되살릴 수 있게, 261120-69). 커밋은 부른 쪽."""
+    src = store.con.execute("SELECT src FROM temp.hist_ctx WHERE k = 1").fetchone()
+    store.con.execute("INSERT INTO card_history(card_id, at, kind, src, row) VALUES(?,?,?,?,?)",
+                      (int(row["id"]), time.time(), NOTE, (src[0] if src else "edit") or "edit", json.dumps(row, ensure_ascii=False)))
 
 
 @contextlib.contextmanager
@@ -68,19 +68,29 @@ def entries(store, since: float, until: float, kinds=None, srcs=None) -> list:
     row(되살릴 값 = 기간 안 첫 기록 = 그 기간이 시작되기 전 모습), name, later(그 뒤 또 바뀜), now(지금 행 또는 None)}."""
     con = store.con
     rows = con.execute("SELECT id, card_id, at, kind, src, row FROM card_history WHERE at BETWEEN ? AND ? ORDER BY id",
-                       (_jd(since), _jd(until))).fetchall()
+                       (since, until)).fetchall()       # 기록 시각 = 유닉스 초(트리거가 julianday 를 초로 바꿔 쓴다)
     by = {}
+    notes = []
     for r in rows:
+        if r[3] == NOTE:                                  # 지운 할 일 기록 — 한 줄씩(명함과 따로)
+            notes.append({"card_id": None, "note_id": r[1], "note": True, "row": json.loads(r[5] or "{}"), "srcs": {r[4] or "edit"},
+                          "at": r[2], "kind": "delete", "later": False, "now": None,
+                          "name": str(json.loads(r[5] or "{}").get("_group") or "")})
+            continue
         e = by.setdefault(r[1], {"card_id": r[1], "row": json.loads(r[5] or "{}"), "srcs": set(), "at": 0.0})
         e["srcs"].add(r[4] or "edit")
-        e["at"] = _ts(r[2])
+        e["at"] = r[2]
     out = []
+    for e in notes:
+        if (kinds and "delete" not in kinds) or (srcs and not (e["srcs"] & set(srcs))):
+            continue
+        out.append(e)
     for cid, e in by.items():
         cur = con.execute("SELECT * FROM cards WHERE id=?", (cid,)).fetchone()
         e["now"] = store._row(cur) if cur is not None else None
         e["kind"] = "edit" if cur is not None else "delete"
         e["name"] = (e["row"].get("name") or "")
-        e["later"] = con.execute("SELECT 1 FROM card_history WHERE card_id=? AND at > ? LIMIT 1", (cid, _jd(until))).fetchone() is not None
+        e["later"] = con.execute("SELECT 1 FROM card_history WHERE card_id=? AND kind <> 'note' AND at > ? LIMIT 1", (cid, until)).fetchone() is not None
         if kinds and e["kind"] not in kinds:
             continue
         if srcs and not (e["srcs"] & set(srcs)):
@@ -99,10 +109,13 @@ def restore(store, items) -> int:
     n = 0
     with source(store, "restore"):
         for e in items:
+            if e.get("note"):                             # 지운 할 일 기록 — 그 탭이 남아 있을 때만(§5.30 '할 일 기록')
+                n += _restore_note(store, e["row"])
+                continue
             row = dict(e["row"])
             cid = e["card_id"]
             row["updated"] = now
-            vals = {c: row.get(c) for c in cols if c != "id"}
+            vals = {c: row[c] for c in cols if c != "id" and c in row}   # 기록에 있는 칸만 — 뒤 판에서 는 칸은 그대로(261120-68)
             if con.execute("SELECT 1 FROM cards WHERE id=?", (cid,)).fetchone():
                 other = con.execute("SELECT 1 FROM cards WHERE front=? AND id<>?", (vals.get("front"), cid)).fetchone()
                 if other:
@@ -124,9 +137,26 @@ def restore(store, items) -> int:
     return n
 
 
+def _restore_note(store, row: dict) -> int:
+    con = store.con
+    gid = row.get("group_id")
+    if gid is None or not con.execute("SELECT 1 FROM fav_groups WHERE id=?", (gid,)).fetchone():
+        return 0                                          # 탭이 지워졌다 — 되살리지 않는다(못 한 수로)
+    cols = [r[1] for r in con.execute("PRAGMA main.table_info(todo_notes)")]
+    vals = {c: row[c] for c in cols if c in row and c != "id"}
+    nid = row.get("id")
+    if nid is not None and not con.execute("SELECT 1 FROM todo_notes WHERE id=?", (nid,)).fetchone():
+        vals = dict(id=nid, **vals)
+    con.execute("INSERT INTO todo_notes(%s) VALUES(%s)" % (", ".join('"%s"' % k for k in vals), ", ".join("?" * len(vals))),
+                list(vals.values()))
+    from viewer.bizcard import people as _P
+    _P._sync_memo(store, gid)
+    return 1
+
+
 def prune(store, days: int = KEEP_DAYS) -> int:
     """보존 기간이 지난 기록을 지운다. 반환 = 지운 수."""
-    cur = store.con.execute("DELETE FROM card_history WHERE at < ?", (_jd(time.time() - days * 86400),))
+    cur = store.con.execute("DELETE FROM card_history WHERE at < ?", (time.time() - days * 86400,))
     store.con.commit()
     return cur.rowcount or 0
 

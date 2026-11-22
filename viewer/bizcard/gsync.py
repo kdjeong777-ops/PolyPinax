@@ -61,6 +61,10 @@ _C2G = {"cell": "mobile", "fax": "workFax", "work": "work"}
 
 
 def init(store) -> None:
+    """짝·카톡 표·열·트리거 — 연결마다 한 번. 열린 쓰기(합치기 등) 도중에 불려도 커밋하지 않는다 — 그 일의 커밋에 함께(261120-68)."""
+    if getattr(store, "_gsync_inited", None) is store.con:
+        return
+    was_open = store.con.in_transaction
     store.con.execute("CREATE TABLE IF NOT EXISTS kakao_block(card_id INTEGER PRIMARY KEY, block INTEGER, set_at REAL)")
     store.con.execute("CREATE TRIGGER IF NOT EXISTS kakao_block_del AFTER DELETE ON cards "
                       "BEGIN DELETE FROM kakao_block WHERE card_id = OLD.id; END")
@@ -75,7 +79,9 @@ def init(store) -> None:
     # 명함 파일 이름이 바뀌면(이름 바꾸기·옮기기·합치기) 짝의 열쇠도 따라감 — 어느 길이든 한 곳(261120-46)
     store.con.execute("CREATE TRIGGER IF NOT EXISTS google_link_front AFTER UPDATE OF front ON cards WHEN OLD.front IS NOT NEW.front "
                       "BEGIN UPDATE google_link SET front = NEW.front WHERE card_id = NEW.id AND front = OLD.front; END")
-    store.con.commit()
+    if not was_open:
+        store.con.commit()
+    store._gsync_inited = store.con
 
 
 def links(store) -> dict:

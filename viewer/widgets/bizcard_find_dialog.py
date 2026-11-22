@@ -45,7 +45,9 @@ PICKED_LINES = 2                   # 아래 줄 고른 명단 높이(줄 수, §
 RECENT = -1                         # '최근' 탭의 tabData(명함 DB 의 탭 id 와 겹치지 않음, §5.24.2)
 FAV_KEY_MS = 120                    # 사람 칸을 키보드로 넘길 때 — 멈춘 뒤 마지막 사람만 그린다(§5.24.2)
 RECENT_MS = 3000                    # 세부 칸에 이만큼 넘게 보이면 '최근' 에 넣는다(D27)
-FAV_BG = "#cfe2f6"                  # 사진도 명함도 없을 때 — 옅은 파랑
+FAV_COLORS = {False: ("#cfe2f6", "#4a6f96"), True: ("#2b3a4b", "#9cc0e6")}   # 사진도 명함도 없을 때 (바탕, 첫 글자) — 키 = 다크(디자인 SOT §2.5 '즐겨찾기 빈 그림')
+KINDS_FAIL_KEY = "phone_kinds_fail"             # 번호 종류 바로잡기 실패 수 — 이만큼 쌓이면 더는 저절로 하지 않음(§5.11, 261120-68)
+KINDS_FAIL_MAX = 3
 IMG_FILTER = " ".join("*" + e for e in R.IMG_EXTS)
 # 칸(키, 화면 이름) — 전화는 종류마다 첫 번호만 고친다(나머지는 그대로 둔다)
 FIELDS = (("name", tr_noop("이름")), ("company", tr_noop("회사")), ("dept", tr_noop("부서")), ("title", tr_noop("직함")), ("cell", tr_noop("휴대폰")), ("work", tr_noop("전화")),
@@ -57,7 +59,7 @@ SWIPE_PX = 40                       # 사진 쓸어 넘기기 — 이만큼 넘�
 PHOTO_MIN_SHOW = 300                # 사진창 한 칸이 이보다 낮으면 그림이 있는 칸을 크게(§5.24.3 '크기 비율', 261120-51)
 PHOTO_FAVOR = 0.68                  # 그때 그림이 있는 칸의 몫
 PHOTO_SPLIT_KEY = "photo_split"     # 사람이 끈 비율(위 칸 몫) — 명함 DB meta
-PRELOAD_MS = 1500                  # 창이 뜬 뒤 이만큼 쉬면 [해시태그] 준비(모듈·전체 태그 목록 — §5.24.4 '빠르게')
+PRELOAD_MS = 1500                  # 창이 뜬 뒤 이만큼 쉬면 '해시태그 수정' 창 준비(모듈·전체 태그 목록 — §5.24.4 '빠르게')
 DROP_TINT, DROP_TINT_HOT = "0.04", "0.14"   # 놓을 자리 틀 바탕(강조색 투명도) — 창 위 / 그 자리 위(§5.24.3 '끌어 놓기')
 
 
@@ -393,12 +395,14 @@ def _rounded(img, name: str) -> QPixmap:
         sc = img.scaled(s, s, Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation)
         p.drawImage(-(sc.width() - s) // 2, -(sc.height() - s) // 2, sc)
     else:
-        p.fillRect(0, 0, s, s, QColor(FAV_BG))
+        from viewer import theme as _theme
+        bg, fg = FAV_COLORS[bool(_theme.is_dark())]
+        p.fillRect(0, 0, s, s, QColor(bg))
         f = QFont()
         f.setPixelSize(int(s * 0.42))
         f.setBold(True)
         p.setFont(f)
-        p.setPen(QColor("#4a6f96"))
+        p.setPen(QColor(fg))
         p.drawText(QRectF(0, 0, s, s), Qt.AlignmentFlag.AlignCenter, (name or "?").strip()[:1])
     p.end()
     return pm
@@ -521,28 +525,34 @@ class _LineSplitter(QSplitter):
         return _LineHandle(self.orientation(), self)
 
 
-class _KindsFixWorker(QObject):
-    """이미 있는 명함 DB 의 번호 종류 한 번 바로잡기(§5.11 '번호 종류 바로잡기', 261120-55) — 배경, 자기 연결. done(바꾼 수)."""
-    done = pyqtSignal(int)
+class _StoreChoresWorker(QObject):
+    """명함찾기를 열 때 한 번 — 변경 기록 정리(§5.30 '보존', 하루 한 번)와 이미 있는 DB 의 번호 종류 바로잡기(§5.11, kinds 일 때만).
+    배경, 자기 연결(응답성 SOT §4.4, 261120-55·-68). done(바꾼 수 — 안 했으면 0, 실패면 -1, 까닭)."""
+    done = pyqtSignal(int, str)
     finished = pyqtSignal()
 
-    def __init__(self, db):
+    def __init__(self, db, kinds: bool):
         super().__init__()
-        self._db = db
+        self._db, self._kinds = db, kinds
 
     def run(self):
-        n = 0
-        st = None
+        n, err, st = 0, "", None
         try:
             from viewer.bizcard.store import BizcardStore
+            from viewer.bizcard import history as H
             st = BizcardStore(self._db)
-            n = P.fix_kinds_all(st, str(st.path) + ".kinds_bak")
-        except Exception:
-            n = -1
+            try:
+                H.maybe_prune(st)
+            except Exception:
+                pass
+            if self._kinds:
+                n = P.fix_kinds_all(st, str(st.path) + ".kinds_bak")
+        except Exception as e:                            # noqa: BLE001 — 메인에서 알린다
+            n, err = -1, type(e).__name__
         finally:
             if st is not None:
                 st.close()
-            self.done.emit(n)
+            self.done.emit(n, err)
             self.finished.emit()
 
 
@@ -954,13 +964,16 @@ class BizcardFindDialog(QDialog):
         self.ed_find.setPlaceholderText(tr("이름·회사·메모 등 — 낱말 여럿은 모두 들어 있는 명함, #낱말은 해시태그"))
         self.ed_find.setClearButtonEnabled(True)
         top.addWidget(self.ed_find, 1)
-        # '#' 풀다운 — 주 창 파일 목록 `#` 와 같은 꼴(§5.24.1 '# 풀다운', 디자인 SOT §2.7, 261120-66 — 종전 [해시태그] 단추)
+        # '#' 풀다운 — 주 창 파일 목록과 같은 공용 위젯(§5.24.1 '# 풀다운', 검색창 SOT §5.1, 261120-66·-69). 명함은 '형식' 묶음을 숨긴다
+        from viewer.widgets.tag_filter_menu import TagFilterMenu
         self.btn_tags = QPushButton("#")
-        self.btn_tags.setFixedWidth(28)
         self.btn_tags.setToolTip(tr("해시태그로 찾기 — 지금 목록의 해시태그 보기·고르기, 맨 아래 '해시태그 수정'"))
-        self.tag_menu = QMenu(self.btn_tags)
-        self.tag_menu.aboutToShow.connect(self._rebuild_tag_menu)
-        self.btn_tags.setMenu(self.tag_menu)
+        self._known_tags = {}                              # 이 창에서 본 명함 태그(소문자 → 꼴) — 칸 토큰을 (0) 으로 남길지
+        self.tag_filter = TagFilterMenu(
+            self.btn_tags, self.ed_find, self._list_tag_counts, known=lambda: list(self._known_tags.values()),
+            clear_label=tr("찾기 비우기"), empty_text=tr("(이 목록의 명함에 해시태그 없음)"),
+            tail=self._tag_menu_tail, hide_axes=("형식",), parent=self)
+        self.tag_menu = self.tag_filter.menu
         top.addWidget(self.btn_tags)
         self.cb_period = QComboBox()
         for key, label in (("all", tr("전체")), ("1m", tr("최근 1개월")), ("3m", tr("최근 3개월")), ("1y", tr("최근 1년")),
@@ -995,7 +1008,7 @@ class BizcardFindDialog(QDialog):
         self._find_timer.setInterval(FIND_DELAY_MS)
         self._find_timer.timeout.connect(self.refresh)
         self.ed_find.textChanged.connect(lambda _t: self._search_mode())
-        self.ed_find.textChanged.connect(lambda _t: self._style_tag_button())
+        self.ed_find.textChanged.connect(lambda _t: self.tag_filter.update_button())
         self.ed_find.installEventFilter(self)                   # 찾기 칸을 고르면 찾기 결과로(§5.24.2 '탭 줄')
         self.cb_period.currentIndexChanged.connect(self._on_period)
         self._recent_timer = QTimer(self)
@@ -1510,30 +1523,35 @@ class BizcardFindDialog(QDialog):
         except Exception:
             pass
         P.recent_prune(st)                                # '최근' 항목 제한(§5.24.2, 261120-18)
-        try:
-            from viewer.bizcard import history as H
-            H.maybe_prune(st)                             # 변경 기록 180일(§5.30) — 하루 한 번, 짧은 DELETE 하나
-        except Exception:
-            pass
         on = set(st.meta_get("copy_fields", list(P.COPY_DEFAULT)) or [])
         for k, cb in self.chk.items():
             cb.blockSignals(True)
             cb.setChecked(k in on)
             cb.blockSignals(False)
         self._fav_fill_tabs(st.meta_get("fav_tab", None))
-        if not st.meta_get(P.KINDS_FIXED_KEY, None):        # 번호 종류 바로잡기 — 처음 열 때 한 번, 배경(261120-55)
-            from viewer.workers import run_in_thread
-            w = _KindsFixWorker(st.path)
-            w.done.connect(self._kinds_fixed)
-            keep = getattr(self._mw, "_thread_keep", None)
-            run_in_thread(w, keep if isinstance(keep, list) else _KEEP)
-            self._kinds_worker = w
+        # 변경 기록 정리(§5.30)와 번호 종류 바로잡기(처음 한 번, 실패 세 번이면 그만 — §5.11) — 배경 한 일꾼(261120-55·-68)
+        kinds = not st.meta_get(P.KINDS_FIXED_KEY, None) and (st.meta_get(KINDS_FAIL_KEY, 0) or 0) < KINDS_FAIL_MAX
+        from viewer.workers import run_in_thread
+        w = _StoreChoresWorker(st.path, kinds)
+        w.done.connect(self._kinds_fixed)
+        keep = getattr(self._mw, "_thread_keep", None)
+        run_in_thread(w, keep if isinstance(keep, list) else _KEEP)
+        self._chores_worker = w
         self.cb_kind.set_keys(st.meta_get("find_kind", "all"))   # 구분 기억(§5.24.1 '구분', 사용자 지시 261120 — 여러 개면 목록, 261120-49)
 
     def _save_copy_fields(self):
         self._store().meta_set("copy_fields", [k for k in P.COPY_FIELDS if self.chk[k].isChecked()])
 
-    def _kinds_fixed(self, n):
+    def _kinds_fixed(self, n, err=""):
+        if n < 0:                                         # 실패 — 세고 알린다, 세 번이면 더는 저절로 하지 않는다(261120-68)
+            st = self._store()
+            k = (st.meta_get(KINDS_FAIL_KEY, 0) or 0) + 1
+            st.meta_set(KINDS_FAIL_KEY, k)
+            msg = tr("전화번호 종류를 바로잡지 못했습니다({err}) — 명함은 그대로입니다.").format(err=err or "-")
+            msg += " " + (tr("다음에 명함찾기를 열 때 다시 해 봅니다.") if k < KINDS_FAIL_MAX
+                          else tr("{n}번 실패해 더는 저절로 하지 않습니다.").format(n=k))
+            QMessageBox.warning(self, tr("명함찾기"), msg)
+            return
         if n > 0:
             self.refresh()
             QMessageBox.information(self, tr("명함찾기"), tr(
@@ -1578,7 +1596,7 @@ class BizcardFindDialog(QDialog):
         else:
             since, until = self._range()
             q = "" if self._ghost_all else self.ed_find.text()   # 흐린 글을 다시 고름 = 전체(§5.24.1 '찾기 칸 흐린 글')
-            rows = P.find(self._store(), q, since, until)   # 상한 없이 전부(§5.9 '결과')
+            rows = P.find(self._store(), q, since, until, mates=self._tag_mates(q))   # 상한 없이 전부(§5.9 '결과'), #균열 은 짝 #crack 도
             ks = self.kinds()
             if ks != ["all"]:                           # 같은 묶음은 또는, 묶음끼리는 그리고(261120-49)
                 ph = P.photo_ids(rows, self._bizcard_folder()) if {"photo", "nophoto"} & set(ks) else None   # 사진 있음·없음(261120-24)
@@ -1589,6 +1607,11 @@ class BizcardFindDialog(QDialog):
                 rows = [c for c in rows if P.kinds_ok(c, ks, ph, bl)]
         self._rows = rows
         self._by_id = {c["id"]: c for c in self._rows}
+        for c in rows:                                     # 알려진 태그 — '#' 풀다운이 칸 토큰을 (0) 으로 남길지(검색창 SOT §5.1)
+            for t in c.get("tags") or []:
+                t = str(t).strip()
+                if t and t != "명함":
+                    self._known_tags.setdefault(t.lower(), t)
         keep = self._card["id"] if self._card else None
         self._loading = True
         try:
@@ -1610,6 +1633,19 @@ class BizcardFindDialog(QDialog):
 
     def row_of_id(self, cid) -> int:
         return self.table.model().row_of_id(cid)
+
+    @staticmethod
+    def _tag_mates(q) -> dict:
+        """찾기 칸 `#태그` 마다 한영 짝(태그 SOT §8.9 — 주 창 거르기와 같게, 261120-69). 짝 표가 없으면 빈 것."""
+        toks = [t[1:].lower() for t in (q or "").split() if t.startswith("#") and len(t) > 1]
+        if not toks:
+            return {}
+        try:
+            from viewer.tag_pairs import shared as _pairs
+            pt = _pairs()
+            return {t: (pt.partner(t) or "").lower() for t in toks if pt.partner(t)}
+        except Exception:
+            return {}
 
     def _card_at(self, r):
         return self.table.model().card(r)
@@ -1697,98 +1733,23 @@ class BizcardFindDialog(QDialog):
         lbl.setText(text)
         lbl.setToolTip("\n".join(parts[:200]) if len(parts) > 1 or text != (parts[0] if parts else "") else "")
 
-    def _style_tag_button(self):
-        """'#' 단추 — 찾기 칸에 `#태그` 가 n 개면 '#n'·켜짐 색(디자인 SOT §2.5 '태그 켜짐'), 없으면 '#'."""
-        from viewer import theme as _theme
-        n = len([t for t in self.ed_find.text().split() if t.startswith("#") and len(t) > 1])
-        self.btn_tags.setText("#%d" % n if n else "#")
-        self.btn_tags.setStyleSheet(_theme.tag_button_style(bool(n)))
-
-    def _rebuild_tag_menu(self):
-        """'#' 풀다운(§5.24.1 '# 풀다운', 261120-66) — 주 창 파일 목록 `#` 와 같은 꼴(검색창 SOT §5.1). 개수 = 지금 목록 명함의
-        DB 태그(찾기 칸 `#낱말` 이 보는 것), 진실은 찾기 칸 글 — 체크·풀기 = `#태그` 넣기·빼기, 열 때 칸 글로 체크 복원."""
-        from PyQt6.QtWidgets import QCheckBox, QRadioButton, QScrollArea, QWidgetAction
-        from viewer.auto_tag import axis_of
-        m = self.tag_menu
-        m.clear()
+    def _list_tag_counts(self) -> dict:
+        """'#' 풀다운 개수 — 지금 목록 명함의 DB 태그(찾기 칸 `#낱말` 이 보는 것), 앱이 모든 명함에 붙이는 `#명함` 빼고."""
         counts, names = {}, {}
         for c in self._rows or []:
             for t in dict.fromkeys(str(x).strip() for x in (c.get("tags") or [])):
-                if t and t != "명함":                       # 앱이 모든 명함에 붙이는 #명함 은 보이지 않는다
+                if t and t != "명함":
                     k = t.lower()
                     names.setdefault(k, t)
-                    counts[k] = counts.get(k, 0) + 1
-        active = [t[1:] for t in self.ed_find.text().split() if t.startswith("#") and len(t) > 1]
-        for t in active:                                    # 목록에 없어도 찾기 칸에 있으면 보인다 — 풀 수 있게(0)
-            if t.lower() not in counts and t.lower() != "명함":
-                names[t.lower()] = t
-                counts[t.lower()] = 0
-        on = {t.lower() for t in active}
-        keys = sorted(counts, key=lambda k: (-counts[k], k))
-        if not keys:
-            m.addAction(tr("(이 목록의 명함에 해시태그 없음)")).setEnabled(False)
-        else:
-            panel = QWidget()
-            lay = QVBoxLayout(panel)
-            lay.setContentsMargins(8, 6, 8, 6)
-            lay.setSpacing(2)
-            groups = {"형식": [], "속성": [], "주제": []}
-            for k in keys:
-                ax = axis_of(names[k])
-                groups[ax if ax in groups else "주제"].append(k)
-            for gname in (tr_noop("형식"), tr_noop("속성"), tr_noop("주제")):
-                if not groups[gname]:
-                    continue
-                lay.addWidget(QLabel("<b>%s</b>" % tr(gname)))
-                one = gname in ("형식", "속성")             # 옵션 단추 — 묶음마다 하나만(다시 누르면 풀림)
-                grp = []
-                for k in groups[gname]:
-                    cb = (QRadioButton if one else QCheckBox)("#%s  (%d)" % (names[k], counts[k]))
-                    if one:
-                        cb.setAutoExclusive(False)
-                        grp.append((names[k], cb))
-                    cb.setChecked(k in on)
-                    cb.toggled.connect((lambda v, tag=names[k], g=grp: self._pick_one_tag(tag, v, g)) if one else
-                                       (lambda v, tag=names[k]: self._add_tag_to_find(tag) if v else self._remove_tag_from_find(tag)))
-                    lay.addWidget(cb)
-            area = QScrollArea()
-            area.setWidgetResizable(True)
-            area.setWidget(panel)
-            area.setMaximumHeight(320)
-            area.setMinimumWidth(200)
-            wa = QWidgetAction(m)
-            wa.setDefaultWidget(area)
-            m.addAction(wa)
+                    counts[names[k]] = counts.get(names[k], 0) + 1
+        return counts
+
+    def _tag_menu_tail(self, m):
+        """'#' 풀다운 맨 아래 — '해시태그 수정'(고른 명함들 — §5.24.4 창)."""
         m.addSeparator()
-        m.addAction(tr("찾기 비우기")).triggered.connect(lambda _c=False: self.ed_find.clear())
-        m.addSeparator()
-        ed = m.addAction(tr("해시태그 수정"))                 # 고른 명함들 — §5.24.4 창(종전 [해시태그] 단추와 같은 길)
+        ed = m.addAction(tr("해시태그 수정"))
         ed.setEnabled(bool(self._card or self.selected_cards()))
         ed.triggered.connect(lambda _c=False: self.edit_tags())
-
-    def _add_tag_to_find(self, tag: str):
-        if ("#" + tag).lower() not in [c.lower() for c in self.ed_find.text().split()]:
-            self.ed_find.setText((self.ed_find.text() + " #" + tag).strip())
-
-    def _remove_tag_from_find(self, tag: str):
-        keep = [c for c in self.ed_find.text().split() if not (c.startswith("#") and c[1:].lower() == tag.lower())]
-        self.ed_find.setText(" ".join(keep))
-
-    def _pick_one_tag(self, tag: str, on: bool, group):
-        """형식·속성 묶음은 하나만 — 고르면 같은 묶음의 다른 토큰을 빼고 넣는다(칸을 한 번만 바꿈), 다시 누르면 푼다."""
-        if not on:
-            self._remove_tag_from_find(tag)
-            return
-        others = {t.lower() for t, _b in group if t.lower() != tag.lower()}
-        keep = [c for c in self.ed_find.text().split() if not (c.startswith("#") and c[1:].lower() in others)]
-        if ("#" + tag).lower() not in [c.lower() for c in keep]:
-            keep.append("#" + tag)
-        for t, b in group:
-            if t.lower() != tag.lower() and b.isChecked():
-                b.blockSignals(True)
-                b.setChecked(False)
-                b.blockSignals(False)
-        self.ed_find.setText(" ".join(keep))
 
     def _load(self, card):
         self._fav_key_timer.stop()                         # 다른 길로 명함을 보이면 키보드 대기는 버린다
@@ -2052,7 +2013,7 @@ class BizcardFindDialog(QDialog):
         if not getattr(self, "_sized", False):
             self._sized = True
             self._init_sizes()
-            QTimer.singleShot(PRELOAD_MS, self._preload_tags)   # 쉬는 동안 [해시태그] 준비(261120-20)
+            QTimer.singleShot(PRELOAD_MS, self._preload_tags)   # 쉬는 동안 '해시태그 수정' 창 준비(261120-20)
             QTimer.singleShot(0, lambda: self._todo_show(self._fav_gid()))   # 처음 탭이 할 일이면 칸(§5.24.10)
 
     def table_min_width(self) -> int:
@@ -2697,7 +2658,7 @@ class BizcardFindDialog(QDialog):
         tm.addSeparator()
         _menu_act(tm, tr("새 할 일"), lambda: self.todo_new(cards=cards))
         _menu_act(m, tr("이메일 복사"), lambda: self.copy_emails(cards))
-        _menu_act(m, tr("해시태그 설정"), lambda: self.tags_for_cards(cards))   # 고른 명함들 — [해시태그] 창(261120-54)
+        _menu_act(m, tr("해시태그 수정"), lambda: self.tags_for_cards(cards))   # 고른 명함들 — '해시태그 수정' 창(261120-54, 이름 261120-69)
         m.addSeparator()                               # 카톡 친구추가 방지 — 표시만, 구글에는 다음 싱크 때(§5.29)
         _menu_act(m, tr("카톡 친구추가 방지"), lambda: self.set_kakao(cards, True))
         _menu_act(m, tr("카톡 친구추가 방지 해제"), lambda: self.set_kakao(cards, False))
@@ -2745,7 +2706,7 @@ class BizcardFindDialog(QDialog):
                 _menu_act(sm, tr("탭 삭제"), lambda c=cid: self.tab_delete(c))
         m.addSeparator()                               # 이 탭만 엑셀·Word 로(§5.24.2 '할 일 내보내기', 261120-42)
         self._export_menu(m, gid, gid != RECENT and P.todo_info(st, gid) is not None)
-        _menu_act(m, tr("해시태그 설정"), lambda: self.tags_for_cards(self._tab_members(gid)))   # 그 탭 사람 모두(261120-54)
+        _menu_act(m, tr("해시태그 수정"), lambda: self.tags_for_cards(self._tab_members(gid)))   # 그 탭 사람 모두(261120-54)
         self._tab_menu_obj = m                         # 검사용
         m.exec(self.fav_tabs.mapToGlobal(pos))
 
@@ -3085,7 +3046,7 @@ class BizcardFindDialog(QDialog):
         self._tab_menu_groups(cm, cards, exclude=gid)
         _menu_act(m, tr("새 즐겨찾기 탭으로"), lambda: self.fav_new_tab(cards=cards))
         _menu_act(m, tr("새 할 일로"), lambda: self.todo_new(cards=cards))
-        _menu_act(m, tr("해시태그 설정"), lambda: self.tags_for_cards(cards))   # 고른 사람들(261120-54)
+        _menu_act(m, tr("해시태그 수정"), lambda: self.tags_for_cards(cards))   # 고른 사람들(261120-54)
         m.addSeparator()
         _menu_act(m, tr("최근에서 빼기") if gid == RECENT else tr("탭에서 빼기"), lambda: self.fav_remove_selected())
         self._fav_menu_obj = m                         # 검사용
@@ -3430,7 +3391,7 @@ class BizcardFindDialog(QDialog):
 
     def _preload_tags(self):
         """창이 뜬 뒤 쉬는 동안 — '해시태그 수정' 창 모듈을 미리 불러오고, 저장소의 전체 태그 목록을 배경에서 세어 둔다
-        (첫 [해시태그] 누름이 늦던 원인 둘, 261120-20). 사본을 떠서 배경이 세고, 그사이 저장소가 바뀌었으면 버린다."""
+        (첫 '해시태그 수정' 창이 늦던 원인 둘, 261120-20). 사본을 떠서 배경이 세고, 그사이 저장소가 바뀌었으면 버린다."""
         if getattr(self, "_tags_preloaded", False):
             return
         self._tags_preloaded = True
@@ -3458,7 +3419,7 @@ class BizcardFindDialog(QDialog):
         self.known_preloaded = True                        # 검사용
 
     def tags_for_cards(self, cards):
-        """목록·탭·사람 칸 메뉴 '해시태그 설정'(§5.24.4 '여는 길', 261120-54) — 그 명함들을 [해시태그] 창으로."""
+        """목록·탭·사람 칸 메뉴 '해시태그 수정'(§5.24.4 '여는 길', 261120-54 — 이름 261120-69) — 그 명함들을 '해시태그 수정' 창으로."""
         cards = [c for c in cards or [] if c]
         if not cards:
             return None

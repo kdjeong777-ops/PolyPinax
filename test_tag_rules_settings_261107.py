@@ -18,7 +18,7 @@ from pathlib import Path
 app = QApplication.instance() or QApplication(sys.argv[:1])
 QCoreApplication.setApplicationName("polypdf_tag_rules_settings_%d" % os.getpid())
 import modal_guard
-modal_guard.install(label=lambda: "해시태그 설정", echo=False)   # 마스터 §14.7.2 의 6
+modal_guard.install(label=lambda: "해시태그 규칙 설정", echo=False)   # 마스터 §14.7.2 의 6
 fails = []
 
 

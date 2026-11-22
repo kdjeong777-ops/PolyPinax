@@ -150,7 +150,7 @@ class PicturePickDialog(QDialog):
         from PyQt6.QtCore import QSize
         from PyQt6.QtGui import QIcon
         from viewer.widgets.bizcard_find_dialog import _scaled
-        self.setWindowTitle(tr("명함 사진 지우기"))
+        self.setWindowTitle(tr("명함 사진 삭제"))
         v = QVBoxLayout(self)
         v.addWidget(QLabel(tr("지울 사진을 체크하세요 — 앞면만 지우면 뒷면이 앞면이 되고, 앞·뒷면을 모두 지우면 원본 스캔까지 휴지통으로 보냅니다.")))
         self.lst = QListWidget()
@@ -340,7 +340,7 @@ class BizcardDupeDialog(QDialog):
         bot = QHBoxLayout()
         self.lbl = QLabel()
         bot.addWidget(self.lbl, 1)
-        self.btn_apply = QPushButton(tr("합치기 적용"))
+        self.btn_apply = QPushButton(tr("적용"))   # 미리보기 → [적용] 공통(디자인 SOT §2.7, 261120-69)
         self.btn_apply.clicked.connect(lambda _c=False: self.apply())
         self.btn_undo = QPushButton(tr("마지막 합치기 되돌리기"))
         self.btn_undo.clicked.connect(lambda _c=False: self.undo())
@@ -348,10 +348,10 @@ class BizcardDupeDialog(QDialog):
         b_close.clicked.connect(lambda _c=False: self.accept())
         for b in (self.btn_apply, self.btn_undo, b_close):
             bot.addWidget(b)
-        for b in self.findChildren(QPushButton):          # Enter 가 칸 고치기를 마치지 않고 단추를 누르지 않게
-            b.setAutoDefault(False)
-            b.setDefault(False)
         v.addLayout(bot)
+        for b in self.findChildren(QPushButton):          # Enter 가 칸 고치기를 마치지 않고 단추를 누르지 않게 — 아래 줄을 붙인
+            b.setAutoDefault(False)                       # 뒤에(그 전엔 아래 줄 단추가 창의 자식이 아니라 빠져 [적용] 이 기본 단추였다, 261120-69)
+            b.setDefault(False)
         self.reload()
 
     # ── 묶음 ──
@@ -649,7 +649,7 @@ class BizcardDupeDialog(QDialog):
         m.addAction(tr("명함 고치기"), lambda: self.edit_card(gi, cid))   # 그 명함 자체(§5.24.8 '명함 고치기')
         c = next((x for x in self.groups[gi]["cards"] if x["id"] == cid), None)
         if c is not None and (not V.is_contact(c) or self.fd._photo_front(c) and P.person_photos(self.fd._photo_front(c))):
-            m.addAction(tr("명함 사진 지우기"), lambda: self.delete_pictures(cid))   # 고른 앞면·뒷면·인물 사진만(§5.24.8, 261120-65)
+            m.addAction(tr("명함 사진 삭제"), lambda: self.delete_pictures(cid))   # 고른 앞면·뒷면·인물 사진만(§5.24.8, 261120-65)
         self._last_menu = m
         m.exec(self.before.viewport().mapToGlobal(pos))
 

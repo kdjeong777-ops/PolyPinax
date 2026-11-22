@@ -186,6 +186,12 @@ try:
     from viewer.widgets.bizcard_settings_dialog import BizcardSettingsDialog
     sd = BizcardSettingsDialog(None, host=None, store=st)
     lw = getattr(sd, "lst_glabels", None)
+    from PyQt6.QtWidgets import QApplication as _QA
+    import time as _t
+    _end = _t.monotonic() + 5                             # 명함 해시태그 전체는 배경에서 채운다(261120-68)
+    while lw is not None and _t.monotonic() < _end and not any(lw.item(i).text() == "가짜안고름" for i in range(lw.count())):
+        _QA.processEvents()
+        _t.sleep(0.01)
     items = {lw.item(i).text(): lw.item(i).checkState() for i in range(lw.count())} if lw is not None else {}
     from PyQt6.QtCore import Qt
     chk(items.get("가짜새라벨") == Qt.CheckState.Checked and items.get("가짜안고름") == Qt.CheckState.Unchecked and "명함" not in items,

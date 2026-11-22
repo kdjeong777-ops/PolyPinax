@@ -22,11 +22,11 @@ def _nk(p) -> str:
 
 
 # ── 찾기 ──
-def find(store, text: str = "", since: str = "", until: str = "", limit=None) -> list:
+def find(store, text: str = "", since: str = "", until: str = "", limit=None, mates=None) -> list:
     """검색 연산자(검색창 SOT §4.2 — 띄어쓰기 AND·`|` OR·`-` NOT·괄호·"구절") — 단위는 명함 하나, 낱말은 모든 칸 글자 **일부**로
     (대소문자·빈칸·하이픈 무시). `#낱말` 은 해시태그(앞부분 일치). 스캔일 범위 YYYY-MM-DD.
     반환 = 명함 DB 행(dict), 스캔일 최근 먼저, 찾은 것 전부(명함 SOT §5.9 '결과' — 종전 500장 상한은 '전체 목록이 일부만' 이라 없앰).
-    limit 을 주면 그 장 수까지만.
+    limit 을 주면 그 장 수까지만. mates = {`#낱말`(소문자): 한영 짝} — 짝 태그와 이름이 같은 태그도 맞음(태그 SOT §8.9, 261120-69).
     261117-30: 칸을 이어 붙인 글을 식으로 보려고 날짜로만 SQL 에서 거르고 낱말은 파이썬에서 본다(명함 수천 장 — 수 ms)."""
     from viewer.query import parse, flat_text
     pq = parse(text or "")
@@ -54,7 +54,8 @@ def find(store, text: str = "", since: str = "", until: str = "", limit=None) ->
         def has(w, hay=hay, tags=tags):
             if w.startswith("#") and len(w) > 1:
                 t = w[1:].lower()
-                return any(x.startswith(t) for x in tags)
+                mate = (mates or {}).get(t)
+                return any(x.startswith(t) or (mate and x == mate) for x in tags)
             return flat_text(w).lower() in hay
         if pq.test(has):
             out.append(store._row(r))
@@ -130,6 +131,18 @@ def kinds_ok(card: dict, kinds, photos=None, blocked=None) -> bool:
         if mine and not any(kind_ok(card, k, photos, blocked) for k in mine):
             return False
     return True
+
+
+def all_tags(store) -> list:
+    """명함들의 해시태그(앱 자동 태그 '명함' 빼고) — 이름 차례. 명함 환경설정 '구글 라벨로 올릴 해시태그' 가 배경에서 부른다(261120-68)."""
+    out = set()
+    for (raw,) in store.con.execute("SELECT tags FROM cards"):
+        try:
+            out.update(str(t) for t in json.loads(raw or "[]") if str(t).strip())
+        except (ValueError, TypeError):
+            pass
+    out.discard("명함")
+    return sorted(out, key=str.lower)
 
 
 def _tagkey(t) -> str:
@@ -494,9 +507,15 @@ def note_add(store, gid: int, note: dict, today: str) -> int:
 
 
 def note_delete(store, nid: int) -> None:
-    r = store.con.execute("SELECT group_id FROM todo_notes WHERE id=?", (nid,)).fetchone()
+    """할 일 기록 하나 지우기 — 지우기 전 행을 변경 기록에 남긴다(되살릴 수 있게, 명함 SOT §5.24.10·§5.30, 261120-69)."""
+    r = store.con.execute("SELECT * FROM todo_notes WHERE id=?", (nid,)).fetchone()
     if r is None:
         return
+    row = {k: r[k] for k in r.keys()}
+    g = store.con.execute("SELECT name FROM fav_groups WHERE id=?", (r["group_id"],)).fetchone()
+    row["_group"] = (g["name"] if g else "") or ""
+    from viewer.bizcard import history as _H
+    _H.note_deleted(store, row)
     store.con.execute("DELETE FROM todo_notes WHERE id=?", (nid,))
     _sync_memo(store, r["group_id"])
     store.con.commit()

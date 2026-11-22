@@ -772,13 +772,17 @@ class BookmarkTree(QWidget):
         search_row.addWidget(self.search_edit, 1)
 
         # 260623: 즐겨찾기 별 버튼 삭제 → 해시태그(#) 필터 버튼. (폴더 즐겨찾기는 우클릭 메뉴로)
-        from PyQt6.QtWidgets import QMenu
+        # 261120-69(검색 SOT §5.1 '공용 위젯 하나'): 명함찾기와 같은 `TagFilterMenu` — 이 창은 넘기는 값만
+        from viewer.widgets.tag_filter_menu import TagFilterMenu
         self.btn_tag = QPushButton("#")
-        self.btn_tag.setFixedWidth(28)
         self.btn_tag.setToolTip(tr("해시태그로 검색 — 등록된 태그 보기/선택"))
-        self._tag_menu = QMenu(self)
-        self._tag_menu.aboutToShow.connect(self._rebuild_tag_menu)
-        self.btn_tag.setMenu(self._tag_menu)
+        self._tag_filter = TagFilterMenu(
+            self.btn_tag, self.search_edit, lambda: self._list_tag_counts(),
+            known=lambda: (self._tags.all_tags() if self._tags else []),
+            clear_label=tr("검색 비우기"),
+            empty_text=tr("(이 목록의 파일에 해시태그 없음 — 파일 우클릭 → 해시태그 편집)"),
+            head=lambda: self._tag_busy_text(), tail=lambda _m: self._add_tag_tool_items(), parent=self)
+        self._tag_menu = self._tag_filter.menu
         search_row.addWidget(self.btn_tag)
         layout.addLayout(search_row)
 
@@ -2189,94 +2193,15 @@ class BookmarkTree(QWidget):
         return cnt
 
     def _rebuild_tag_menu(self):
-        """'#' 버튼 — 체크형 패널 풀다운(검색 SOT §5.1, 260830 P4).
+        """'#' 버튼 — 체크형 패널 풀다운(검색 SOT §5.1). 261120-69: 공용 `TagFilterMenu` 가 그린다(명함찾기와 한 위젯).
+        개수 = **지금 목록의 파일** 기준(`_list_tag_counts`, 261107-9), 칸에 든 토큰은 태그 저장소에 있는 태그면 (0) 으로 남김."""
+        self._tag_filter.rebuild()
 
-        ★ 풀다운은 입력 수단일 뿐, 진실은 검색박스 텍스트다: 체크/해제 =
-        `#태그` 토큰 추가/제거와 완전히 같은 행위(양방향 — 열 때 토큰으로 체크 복원).
-        체크해도 닫히지 않는다(QWidgetAction). 개수 = **지금 목록의 파일** 기준(`_list_tag_counts`, 261107-9) —
-        거르기(`_on_filter`)가 보는 것과 같은 줄이라, 고르면 그 개수만큼 남는다. 연도 불포함(태그 SOT §3.6)."""
-        self._tag_menu.clear()
+    def _tag_busy_text(self) -> str:
         try:                                  # 261114-13(태그 SOT §8.2): 태그 계산이 도는 동안 맨 위 한 줄
-            busy = self.window().autotag_busy_text()
+            return self.window().autotag_busy_text()
         except Exception:
-            busy = ""
-        if busy:
-            self._tag_menu.addAction(busy).setEnabled(False)
-        counts = self._list_tag_counts()
-        active = {c.lstrip("#").lower() for c in self.search_edit.text().split()
-                  if c.startswith("#")}
-        known = {t.lower(): t for t in (self._tags.all_tags() if self._tags else [])}
-        for a in active:                      # 목록에 없는 태그라도 검색 칸에 있으면 보여 준다 — 풀어 줄 수 있게(0)
-            if a not in {t.lower() for t in counts} and a in known:
-                counts[known[a]] = 0
-        tags = sorted(counts, key=lambda t: (-counts[t], t.lower()))
-        if not tags:
-            a = self._tag_menu.addAction(tr("(이 목록의 파일에 해시태그 없음 — 파일 우클릭 → 해시태그 편집)"))
-            a.setEnabled(False)
-            self._add_tag_tool_items()
-            return
-        from PyQt6.QtWidgets import (QCheckBox, QLabel as _QL, QRadioButton, QScrollArea,
-                                     QVBoxLayout, QWidget, QWidgetAction)
-        try:
-            from viewer.auto_tag import axis_of
-        except Exception:
-            def axis_of(_t):
-                return tr("주제")
-        panel = QWidget()
-        lay = QVBoxLayout(panel)
-        lay.setContentsMargins(8, 6, 8, 6)
-        lay.setSpacing(2)
-        groups = {"형식": [], "속성": [], "주제": []}      # 261113-10: PDF 속성(한글·스캔문서 …, 태그 SOT §5.3.1)
-        from viewer import photo_tags as _pt
-        for t in tags:
-            if _pt.is_date_tag(t):
-                continue                      # 사진 촬영일 — 아래 '날짜' 묶음에 해·달로(태그 SOT §5.7, 검색 SOT §5.1)
-            groups[axis_of(t) if axis_of(t) in groups else "주제"].append(t)
-        # 축 이름은 태그 데이터의 내부 값(한글)이다 — 키는 그대로, 머리글만 번역(다국어 SOT §5)
-        for gname in (tr_noop("형식"), tr_noop("속성"), tr_noop("주제")):
-            if not groups[gname]:
-                continue
-            hd = _QL("<b>%s</b>" % tr(gname))
-            lay.addWidget(hd)
-            one = gname in ("형식", "속성")       # 261114-14(사용자 지시): 형식·속성은 옵션 단추 — 묶음마다 하나만(다시 누르면 풀림)
-            btns = []
-            for t in groups[gname]:
-                cb = (QRadioButton if one else QCheckBox)(f"#{t}  ({counts.get(t, 0)})")
-                if one:
-                    cb.setAutoExclusive(False)
-                    btns.append((t, cb))
-                cb.setChecked(t.lower() in active)
-                cb.toggled.connect(
-                    (lambda on, tag=t, grp=btns: self._pick_one_tag(tag, on, grp)) if one else
-                    (lambda on, tag=t: (self._add_tag_to_search(tag) if on
-                                        else self._remove_tag_from_search(tag))))
-                lay.addWidget(cb)
-        dates = _pt.date_groups(counts)       # 261105-6: 하루 태그는 늘어놓지 않고 해·달 토큰으로(앞부분 일치)
-        if dates:
-            lay.addWidget(_QL("<b>%s</b>" % tr("날짜")))
-            for tok, n in dates:
-                cb = QCheckBox(("#%s  (%d)" if len(tok) == 4 else "    #%s  (%d)") % (tok, n))
-                cb.setChecked(tok.lower() in active)
-                cb.toggled.connect(
-                    lambda on, tag=tok: (self._add_tag_to_search(tag) if on
-                                         else self._remove_tag_from_search(tag)))
-                lay.addWidget(cb)
-        area = QScrollArea()
-        area.setWidgetResizable(True)
-        area.setWidget(panel)
-        area.setMaximumHeight(320)
-        area.setMinimumWidth(200)
-        wa = QWidgetAction(self._tag_menu)
-        wa.setDefaultWidget(area)
-        self._tag_menu.addAction(wa)
-        self._tag_menu.addSeparator()
-        # 261113-10 덧붙임(검색 SOT §5.1, 사용자 지시 '항목에서 모두 해제 삭제'): 종전 '모두 해제'(# 토큰만 빼기)는 없앴다 —
-        #   '검색 비우기' 가 태그 토큰과 글자를 함께 지운다, 태그 하나는 풀다운 체크를 풀어 뺀다
-        clr = self._tag_menu.addAction(tr("검색 비우기"))
-        clr.triggered.connect(lambda: self.search_edit.clear())
-        # 261113-10 덧붙임(태그 SOT §8.5, 사용자 지시): 종전 '자동 부여 취소 ▸' 는 없앴다 — 자동 태그 끄기는 환경설정
-        #   '자동 해시태그 (PDF 모드)·(사진 모드)' 에서(이미 붙은 것도 곧바로 뺀다, §5.8)
-        self._add_tag_tool_items()
+            return ""
 
     def _add_tag_tool_items(self):
         """'#' 메뉴 끝 — '해시태그 수정'(태그 SOT §8.7, 261113-9 — 종전 '해시태그 넣기')·'해시태그 폴더로 사본 저장'(§8.8) — 글 끝 '…' 없음(디자인 SOT §2.7, 261112-1). 261111-6: '새 태그 후보 검토' 는
@@ -2293,33 +2218,15 @@ class BookmarkTree(QWidget):
             b.triggered.connect(lambda: self.tag_export_provider())
 
     def _add_tag_to_search(self, tag: str):
-        cur = self.search_edit.text().split()
-        if ("#" + tag).lower() not in [c.lower() for c in cur]:
-            self.search_edit.setText((self.search_edit.text() + " #" + tag).strip())
+        self._tag_filter.add(tag)
 
     def _remove_tag_from_search(self, tag: str):
         """§5.1 체크 해제 = 토큰 제거(진실은 검색박스 텍스트)."""
-        keep = [c for c in self.search_edit.text().split()
-                if not (c.startswith("#") and c.lstrip("#").lower() == tag.lower())]
-        self.search_edit.setText(" ".join(keep))
+        self._tag_filter.remove(tag)
 
     def _pick_one_tag(self, tag: str, on: bool, group):
-        """261114-14(검색 SOT §5.1, 사용자 지시): '#' 메뉴 형식·속성 묶음은 하나만 — 고르면 같은 묶음의 다른 토큰을 빼고
-        이 토큰을 넣는다(검색 칸을 한 번만 바꾼다), 다시 누르면 푼다."""
-        if not on:
-            self._remove_tag_from_search(tag)
-            return
-        others = {t.lower() for t, _b in group if t.lower() != tag.lower()}
-        keep = [c for c in self.search_edit.text().split()
-                if not (c.startswith("#") and c.lstrip("#").lower() in others)]
-        if ("#" + tag).lower() not in [c.lower() for c in keep]:
-            keep.append("#" + tag)
-        for t, b in group:
-            if t.lower() != tag.lower() and b.isChecked():
-                b.blockSignals(True)
-                b.setChecked(False)
-                b.blockSignals(False)
-        self.search_edit.setText(" ".join(keep))
+        """261114-14(검색 SOT §5.1): 형식·속성 묶음은 하나만 — 공용 위젯 한 곳(261120-69)."""
+        self._tag_filter.pick_one(tag, on, group)
 
     def set_format(self, paths, fmt) -> list:
         """261114-2(태그 SOT §5.3.2): 문서 종류 바꾸기 — 자동 종류는 거절, fmt 는 직접 태그(None = 종류 없음)."""
@@ -2988,12 +2895,8 @@ class BookmarkTree(QWidget):
 
     def _style_tag_button(self):
         """`#` 거르기 단추 — 켜지면(태그 토큰이 있으면) 테마별 바탕·글자 한 쌍 + 굵게, 꺼지면 테마 기본. 테마를 바꾸면 다시 부른다."""
-        if not getattr(self, "_tag_active", False):
-            self.btn_tag.setStyleSheet("")
-            return
         from viewer import theme as _theme
-        bg, fg = self.TAG_ACTIVE[bool(_theme.is_dark())]
-        self.btn_tag.setStyleSheet("QPushButton{background:%s;color:%s;font-weight:bold;}" % (bg, fg))
+        self.btn_tag.setStyleSheet(_theme.tag_button_style(bool(getattr(self, "_tag_active", False))))   # 한 곳(디자인 SOT §2.5, 261120-68)
 
     def _on_filter(self, text: str):
         toks = (text or "").strip().split()
@@ -3010,9 +2913,7 @@ class BookmarkTree(QWidget):
             return _SEP.join([item.text(0)] + [_sub_text(item.child(i)) for i in range(item.childCount())])
         # 260830 P4(검색 SOT §5.1): 버튼에 활성 태그 수 표시(#N + 강조 — 디자인 §2.11)
         try:
-            self.btn_tag.setText(f"#{len(tagq)}" if tagq else "#")
-            self._tag_active = bool(tagq)
-            self._style_tag_button()
+            self._tag_active = bool(self._tag_filter.update_button())   # 글·색 — 공용 위젯 한 곳(261120-69)
         except Exception:
             pass
 

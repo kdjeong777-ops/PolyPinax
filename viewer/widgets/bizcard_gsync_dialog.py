@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """구글 주소록 싱크 — 로그인 일꾼·미리보기 창 (명함 SOT §5.29 '연결'·'미리보기', 261120-36).
 
-[구글 주소록과 싱크](명함찾기 [주소록] 메뉴) → 배경에서 구글 목록을 받아 계획만 세움 → 갈래별 줄·체크 → [반영] 을 눌러야 바뀐다.
+[구글 주소록과 싱크](명함찾기 ≡ 메뉴 '주소록 ▸') → 배경에서 구글 목록을 받아 계획만 세움 → 갈래별 줄·체크 → [반영] 을 눌러야 바뀐다.
 네트워크·DB 쓰기는 모두 배경 일꾼(응답성 SOT §4). 오류 글에 명함 값·토큰을 싣지 않는다(§2.1 의 3).
 """
 from __future__ import annotations
@@ -147,7 +147,7 @@ class GSyncDialog(QDialog):
         v.addWidget(self.bar)
         row = QHBoxLayout()
         row.addStretch(1)
-        self.btn_apply = QPushButton(tr("반영"))
+        self.btn_apply = QPushButton(tr("적용"))   # 미리보기 → [적용] 공통(디자인 SOT §2.7, 261120-69)
         self.btn_apply.setEnabled(False)
         self.btn_apply.clicked.connect(lambda _c=False: self.apply())
         b_close = QPushButton(tr("닫기"))
@@ -214,10 +214,10 @@ class GSyncDialog(QDialog):
                 top.addChild(it)
             self.tree.addTopLevelItem(top)
         total = sum(cnt.values())
-        msg = (tr("바뀔 것 {n}건 — 줄을 골라 [반영] 을 누르면 바뀝니다(지워진 것은 처음에 '남김').").format(n=total)
+        msg = (tr("바뀔 것 {n}건 — 줄을 골라 [적용] 을 누르면 바뀝니다(지워진 것은 처음에 '남김').").format(n=total)
                if total else tr("구글 주소록과 명함이 같습니다 — 바꿀 것이 없습니다."))
         if any(r["kind"] in G.GOOGLE_WRITES for r in rows):
-            msg += "\n" + tr("구글 주소록이 바뀝니다 — [반영] 전에 contacts.google.com → 내보내기로 백업해 두기를 권합니다.")
+            msg += "\n" + tr("구글 주소록이 바뀝니다 — [적용] 전에 contacts.google.com → 내보내기로 백업해 두기를 권합니다.")
         self.lbl.setText(msg)
         self.btn_apply.setEnabled(bool(total))
 
@@ -232,7 +232,7 @@ class GSyncDialog(QDialog):
         return out
 
     def to_apply(self) -> list:
-        """[반영] 에 넘길 줄 — 체크한 것 + 체크하지 않은 지워짐은 짝만 풀기, 체크하지 않은 '구글에서 지운 값' 은 명함 값을 구글로 다시
+        """[적용] 에 넘길 줄 — 체크한 것 + 체크하지 않은 지워짐은 짝만 풀기, 체크하지 않은 '구글에서 지운 값' 은 명함 값을 구글로 다시
         (§5.29 '지운 것'·'구글에서 지운 값', 261120-62). 갈래 차례대로(명함 고침이 구글로 다시보다 먼저)."""
         out = []
         for i in range(self.tree.topLevelItemCount()):
@@ -269,6 +269,6 @@ class GSyncDialog(QDialog):
         self.result = res
         if res.get("failed"):
             QMessageBox.warning(self, tr("구글 주소록과 싱크"),
-                                tr("{ok}건 반영, {bad}건은 하지 못했습니다(다음 싱크에서 다시 보입니다).").format(
+                                tr("{ok}건 적용, {bad}건은 하지 못했습니다(다음 싱크에서 다시 보입니다).").format(
                                     ok=res.get("done", 0), bad=res.get("failed", 0)))
         self.accept()

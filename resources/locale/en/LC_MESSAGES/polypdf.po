@@ -18950,3 +18950,106 @@ msgstr "Changed again later"
 #, python-brace-format
 msgid "명함 {n}장을 되살렸습니다."
 msgstr "Restored {n} cards."
+
+#: viewer/widgets/bizcard_dupe_dialog.py
+msgid "명함 사진 삭제"
+msgstr "Delete card pictures"
+
+#: viewer/widgets/bizcard_find_dialog.py
+#, python-brace-format
+msgid "전화번호 종류를 바로잡지 못했습니다({err}) — 명함은 그대로입니다."
+msgstr "Could not correct the phone number types ({err}) — the cards are unchanged."
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "다음에 명함찾기를 열 때 다시 해 봅니다."
+msgstr "It will try again the next time Find Business Card opens."
+
+#: viewer/widgets/bizcard_find_dialog.py
+#, python-brace-format
+msgid "{n}번 실패해 더는 저절로 하지 않습니다."
+msgstr "Failed {n} times, so it will no longer run automatically."
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+msgid "구글 주소록이 바뀝니다 — [적용] 전에 contacts.google.com → 내보내기로 백업해 두기를 권합니다."
+msgstr "Your Google Contacts will change — we recommend backing them up first via contacts.google.com → Export before [Apply]."
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+#, python-brace-format
+msgid "바뀔 것 {n}건 — 줄을 골라 [적용] 을 누르면 바뀝니다(지워진 것은 처음에 '남김')."
+msgstr "{n} changes — choose rows and press [Apply] (deletions start as 'keep')."
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+#, python-brace-format
+msgid "{ok}건 적용, {bad}건은 하지 못했습니다(다음 싱크에서 다시 보입니다)."
+msgstr "{ok} applied, {bad} failed (they will show again on the next sync)."
+
+#: viewer/widgets/bizcard_history_dialog.py
+#, python-brace-format
+msgid "{n}건을 되살렸습니다."
+msgstr "Restored {n} items."
+
+#: viewer/widgets/bizcard_history_dialog.py
+#, python-brace-format
+msgid "{m}건은 되살리지 못했습니다(할 일 탭이 지워졌음)."
+msgstr "{m} could not be restored (their to-do tab was deleted)."
+
+#: viewer/widgets/bizcard_history_dialog.py
+msgid "할 일 기록"
+msgstr "To-do record"
+
+# | 서비스 → 라이브러리' 에서 'People API' 를 검색해 [사용](처음 보이는 '사용 설정된 API' 목록에는 켜기 전이라
+# | 없습니다). 명함 그림을 드라이브에 올리려면 'Google Drive API' 도 같은 방법으로.\n" "3. 'Google 인증
+# | 플랫폼' 시작하기: 앱 이름(예: PolyCardex)·사용자 지원 이메일·연락처 이메일에 본인 Gmail. 대상은 '외부'(개인
+# | Gmail 은 '내부' 를 고를 수 없습니다). 로고·홈페이지·개인정보처리방침·도메인은 비워 둡니다(로고를 올리면 구글 검증 제출이
+# | 필요해집니다).\n" "4. 테스트 사용자: 'Google 인증 플랫폼 → 대상 → 테스트 사용자 → [+ Add users]' 에
+# | 로그인할 본인 Gmail 을 넣습니다(빠뜨리면 로그인 때 '403 오류: access_denied — 앱은 현재 테스트 중' 이
+# | 뜹니다). 테스트 상태에서는 7일마다 다시 연결해야 합니다.\n" "5. 클라이언트 만들기: 'Google 인증 플랫폼 → 클라이언트
+# →
+# | [클라이언트 만들기]' → 애플리케이션 유형 '데스크톱 앱', 이름(예: PolyCardex), 'AI 기반 에이전트에 이 클라이언트
+# | 사용' 은 체크하지 않음 → [만들기] → 나온 클라이언트 ID·보안 비밀을 복사합니다.\n" "\n" "그다음 이 창에서:\n"
+# "6.
+# | 클라이언트 ID·보안 비밀을 붙여 넣고 [구글 계정 연결] → 브라우저에서 4번에 넣은 계정을 고르고, 'Google 에서 확인하지
+# 않은
+# | 앱' 이 뜨면 [계속] → 주소록(드라이브) 권한에 체크 → [계속]. 위쪽에 '연결됨 — (메일)' 이 보이면 [확인] 으로
+# | 닫습니다.\n" "7. 싱크: 명함찾기 [주소록] → [구글 주소록과 싱크] → 미리보기에서 바꿀 줄을 고르고 [반영]. 처음에는 몇
+# | 줄만 골라 시험해 보세요.\n" "\n" "콘솔에서 바꾼 설정은 반영되는 데 몇 분 걸릴 수 있습니다. 로그인은 구글 화면에서 하고,
+# 이
+# | 앱은 구글 비밀번호를 보지 않습니다. 7일이 지나 '연결 안 됨' 이 되면 [구글 계정 연결] 만 다시 누르면 됩니다."
+#: viewer/widgets/bizcard_settings_dialog.py
+msgid ""
+"구글 주소록 연결 — 처음 한 번, 구글 클라우드 콘솔(console.cloud.google.com)에서:\n"
+"\n"
+"1. 프로젝트 만들기: 위쪽 프로젝트 고르기 → [새 프로젝트].\n"
+"2. People API 켜기: 왼쪽 'API 및 서비스 → 라이브러리' 에서 'People API' 를 검색해 [사용](처음 보이는 '사용 설정된 API' 목록에는 켜기 전이라 없습니다). 명함 그림을 드라이브에 올리려면 'Google Drive API' 도 같은 방법으로.\n"
+"3. 'Google 인증 플랫폼' 시작하기: 앱 이름(예: PolyCardex)·사용자 지원 이메일·연락처 이메일에 본인 Gmail. 대상은 '외부'(개인 Gmail 은 '내부' 를 고를 수 없습니다). 로고·홈페이지·개인정보처리방침·도메인은 비워 둡니다(로고를 올리면 구글 검증 제출이 필요해집니다).\n"
+"4. 테스트 사용자: 'Google 인증 플랫폼 → 대상 → 테스트 사용자 → [+ Add users]' 에 로그인할 본인 Gmail 을 넣습니다(빠뜨리면 로그인 때 '403 오류: access_denied — 앱은 현재 테스트 중' 이 뜹니다). 테스트 상태에서는 7일마다 다시 연결해야 합니다.\n"
+"5. 클라이언트 만들기: 'Google 인증 플랫폼 → 클라이언트 → [클라이언트 만들기]' → 애플리케이션 유형 '데스크톱 앱', 이름(예: PolyCardex), 'AI 기반 에이전트에 이 클라이언트 사용' 은 체크하지 않음 → [만들기] → 나온 클라이언트 ID·보안 비밀을 복사합니다.\n"
+"\n"
+"그다음 이 창에서:\n"
+"6. 클라이언트 ID·보안 비밀을 붙여 넣고 [구글 계정 연결] → 브라우저에서 4번에 넣은 계정을 고르고, 'Google 에서 확인하지 않은 앱' 이 뜨면 [계속] → 주소록(드라이브) 권한에 체크 → [계속]. 위쪽에 '연결됨 — (메일)' 이 보이면 [확인] 으로 닫습니다.\n"
+"7. 싱크: 명함찾기 ≡ 메뉴 → 주소록 → 구글 주소록과 싱크 → 미리보기에서 바꿀 줄을 고르고 [적용]. 처음에는 몇 줄만 골라 시험해 보세요.\n"
+"\n"
+"콘솔에서 바꾼 설정은 반영되는 데 몇 분 걸릴 수 있습니다. 로그인은 구글 화면에서 하고, 이 앱은 구글 비밀번호를 보지 않습니다. 7일이 지나 '연결 안 됨' 이 되면 [구글 계정 연결] 만 다시 누르면 됩니다."
+msgstr ""
+"Connecting Google Contacts — once, in the Google Cloud console (console.cloud.google.com):\n"
+"\n"
+"1. Create a project: project picker at the top → [New project].\n"
+"2. Enable the People API: in the left menu 'APIs & Services → Library', search for 'People API' and press [Enable] (it is not in the first 'Enabled APIs' list until you enable it). To upload card images to Drive, enable 'Google Drive API' the same way.\n"
+"3. Get started with 'Google Auth Platform': app name (e.g. PolyCardex), user support email and contact email = your Gmail. Audience: 'External' (a personal Gmail account cannot choose 'Internal'). Leave the logo, homepage, privacy policy and domains empty (uploading a logo requires submitting the app for Google verification).\n"
+"4. Test users: 'Google Auth Platform → Audience → Test users → [+ Add users]' and add the Gmail you will sign in with (without it, sign-in shows 'Error 403: access_denied — the app is currently being tested'). In testing status you must reconnect every 7 days.\n"
+"5. Create a client: 'Google Auth Platform → Clients → [Create client]' → application type 'Desktop app', a name (e.g. PolyCardex), leave 'Use this client for AI-based agents' unchecked → [Create] → copy the client ID and secret.\n"
+"\n"
+"Then in this window:\n"
+"6. Paste the client ID and secret and press [Connect Google account] → in the browser choose the account from step 4; if 'Google hasn't verified this app' appears press [Continue] → tick the contacts (and Drive) permissions → [Continue]. When 'Connected — (email)' shows at the top, close with [OK].\n"
+"7. Sync: Find Business Card ≡ menu → Contacts → Sync with Google Contacts → choose rows in the preview and press [Apply]. Try a few rows first.\n"
+"\n"
+"Changes in the console can take a few minutes to apply. You sign in on Google's page; this app never sees your Google password. When it shows 'Not connected' after 7 days, just press [Connect Google account] again."
+
+# | 거칩니다."
+#: viewer/widgets/bizcard_settings_dialog.py
+msgid "켜면 명함의 글 칸(과 고른 사진)을 구글 People·Drive API 로만 주고받습니다. 적용 전에는 늘 미리보기를 거칩니다."
+msgstr "When on, card text fields (and the chosen photos) are exchanged only with the Google People and Drive APIs. Changes always go through a preview before [Apply]."
+
+#: viewer/widgets/bizcard_todo_panel.py
+msgid "이 기록을 지웁니다 — 지운 기록은 ≡ 메뉴 '주소록 ▸ 변경 기록·되살리기' 에서 되살릴 수 있습니다."
+msgstr "Delete this record? Deleted records can be restored from ≡ menu 'Contacts ▸ Change history and restore'."

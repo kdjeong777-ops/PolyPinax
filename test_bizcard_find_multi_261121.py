@@ -7,7 +7,7 @@ B(-50) 명함 그림 좌우로 끌어 놓기 = 뒷면, 인물 사진 위 휠 = �
 C(-51) 사진창 — 둘 다 있으면 같은 높이, 창이 작고 명함 그림만 있으면 위를 크게, 손잡이를 끌면 비율 기억
 D(-52) [해시태그] 창 — 기존 태그 = 지금 목록 명함 태그(찾기 단어 적용), 문서 종류·자동 속성 묶음·[문서 종류] 단추 없음
 E(-53) 회사명이 바뀌는 길 — auto_retag·합치기·구글 싱크 '명함 고침' 이 옛 회사 태그를 걷고 새로
-F(-54) 목록·탭·사람 칸 오른쪽 메뉴 '해시태그 설정'
+F(-54) 목록·탭·사람 칸 오른쪽 메뉴 '해시태그 수정'
 """
 import os, sys, tempfile, time
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -226,7 +226,7 @@ try:
     chk("라마바" not in t2 and "새가짜사" in t2 and "등산" in t2, "E 구글 싱크 '명함을 구글 값으로 고침' 도 회사 태그를 바꿈", str(t2))
 
     # ── F ──
-    print("\n=== F. 해시태그 설정 메뉴 ===")
+    print("\n=== F. 해시태그 수정 메뉴 ===")
     menus = []
     QMenu.exec = lambda self, *a, **k: menus.append(self) or None
     texts = lambda m: [a.text() for a in m.actions()] if m else []
@@ -234,16 +234,16 @@ try:
     pump(lambda: len(dlg._rows) == 3)
     dlg.table.selectRow(0)
     dlg._table_menu(dlg.table.visualRect(dlg.table.model().index(0, 0)).center())
-    chk("해시태그 설정" in texts(menus[-1] if menus else None), "F 목록 오른쪽 메뉴 '해시태그 설정'", str(texts(menus[-1] if menus else None)))
+    chk("해시태그 수정" in texts(menus[-1] if menus else None), "F 목록 오른쪽 메뉴 '해시태그 수정'", str(texts(menus[-1] if menus else None)))
     tb = dlg.fav_tabs
     ti = next(i for i in range(tb.count()) if tb.tabData(i) == g_fav)
     dlg._fav_tab_menu(tb.tabRect(ti).center())
-    chk("해시태그 설정" in texts(menus[-1]), "F 탭 메뉴 '해시태그 설정'", str(texts(menus[-1])))
+    chk("해시태그 수정" in texts(menus[-1]), "F 탭 메뉴 '해시태그 수정'", str(texts(menus[-1])))
     tb.setCurrentIndex(ti)
     pump(lambda: dlg.fav.count() >= 2)
     dlg.fav.item(0).setSelected(True)
     dlg._fav_menu(dlg.fav.visualItemRect(dlg.fav.item(0)).center())
-    chk("해시태그 설정" in texts(menus[-1]), "F 사람 칸 오른쪽 메뉴 '해시태그 설정'", str(texts(menus[-1])))
+    chk("해시태그 수정" in texts(menus[-1]), "F 사람 칸 오른쪽 메뉴 '해시태그 수정'", str(texts(menus[-1])))
 except Exception:
     import traceback
     traceback.print_exc()

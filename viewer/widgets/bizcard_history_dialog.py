@@ -60,6 +60,30 @@ class _RestoreWorker(QObject):
             self.finished.emit()
 
 
+class _EntriesWorker(QObject):
+    """목록 읽기(`history.entries` — 명함마다 지금 행·그 뒤 기록) — 배경, 자기 연결(261120-68). done(세대, 줄들)."""
+    done = pyqtSignal(int, list)
+    finished = pyqtSignal()
+
+    def __init__(self, db, gen, args):
+        super().__init__()
+        self._db, self._gen, self._args = db, gen, args
+
+    def run(self):
+        items, st = [], None
+        try:
+            from viewer.bizcard.store import BizcardStore
+            st = BizcardStore(self._db)
+            items = H.entries(st, *self._args[:2], kinds=self._args[2], srcs=self._args[3])
+        except Exception:
+            items = []
+        finally:
+            if st is not None:
+                st.close()
+            self.done.emit(self._gen, items)
+            self.finished.emit()
+
+
 class HistoryDialog(QDialog):
     def __init__(self, parent=None, db=None):
         super().__init__(parent)
@@ -67,6 +91,7 @@ class HistoryDialog(QDialog):
         self.setWindowTitle(tr("변경 기록·되살리기"))
         self.resize(760, 560)
         self.items, self.busy, self.last_restored = [], False, None
+        self._gen = 0                                    # 목록 읽기 세대 — 늦게 끝난 옛 읽기는 버린다
         v = QVBoxLayout(self)
         top = QHBoxLayout()
         top.addWidget(QLabel(tr("기간")))
@@ -105,7 +130,7 @@ class HistoryDialog(QDialog):
         v.addWidget(self.tree, 1)
         brow = QHBoxLayout()
         brow.addStretch(1)
-        self.btn_restore = QPushButton(tr("되살리기"))
+        self.btn_restore = QPushButton(tr("적용"))   # 미리보기 → [적용] 공통(디자인 SOT §2.7, 261120-69)
         self.btn_restore.setToolTip(tr("체크한 명함을 기간이 시작되기 전 모습으로 되살립니다 — 되살리기도 기록에 남아 되돌릴 수 있습니다"))
         self.btn_restore.clicked.connect(lambda _c=False: self.restore())
         b_close = QPushButton(tr("닫기"))
@@ -124,21 +149,43 @@ class HistoryDialog(QDialog):
         t1 = time.mktime((b.year(), b.month(), b.day(), 0, 0, 0, 0, 0, -1)) - 0.001
         return t0, t1
 
+    def _keep(self) -> list:
+        par = self.parent()
+        keep = getattr(getattr(par, "_mw", None), "_thread_keep", None) if par is not None else None
+        return keep if isinstance(keep, list) else _KEEP
+
     def reload(self):
+        """조건으로 목록을 배경에서 다시 읽는다(`_EntriesWorker`, 261120-68) — 끝나면 `_fill`."""
         if self.busy:
             return
-        from viewer.bizcard.store import BizcardStore
+        from viewer.workers import run_in_thread
         t0, t1 = self._range()
         kind = self.cb_kind.currentData()
         srcs = {k for k, cb in self.chk_src.items() if cb.isChecked()}
-        st = BizcardStore(self._db, ui=True)
-        try:
-            self.items = H.entries(st, t0, t1, kinds=None if kind == "both" else {kind}, srcs=srcs or {"-"})
-        finally:
-            st.close()
+        self._gen += 1
+        w = _EntriesWorker(self._db, self._gen, (t0, t1, None if kind == "both" else {kind}, srcs or {"-"}))
+        w.done.connect(self._fill)
+        run_in_thread(w, self._keep())
+        self._entries_worker = w
+
+    def _fill(self, gen, items):
+        if gen != self._gen:
+            return
+        self.items = items
         self.tree.clear()
         for i, e in enumerate(self.items):
             row = e["row"]
+            if e.get("note"):                             # 지운 할 일 기록(§5.30 '할 일 기록')
+                it = QTreeWidgetItem([" · ".join(x for x in (tr("할 일 기록"), e.get("name") or "", str(row.get("made") or "")) if x),
+                                      tr("지움"), time.strftime("%Y-%m-%d %H:%M", time.localtime(e["at"])),
+                                      ", ".join(tr(SRC_LABELS.get(s, s)) for s in sorted(e["srcs"])), ""])
+                it.setFlags(it.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+                it.setCheckState(0, Qt.CheckState.Checked)
+                it.setData(0, Qt.ItemDataRole.UserRole, i)
+                for ln in [x for x in str(row.get("body") or "").splitlines() if x.strip()][:3]:
+                    it.addChild(QTreeWidgetItem([_txt(ln)]))
+                self.tree.addTopLevelItem(it)
+                continue
             nm = " · ".join(x for x in (row.get("name") or "", row.get("company") or "") if x) or tr("(이름 없음)")
             it = QTreeWidgetItem([nm, tr("지움") if e["kind"] == "delete" else tr("고침"),
                                   time.strftime("%Y-%m-%d %H:%M", time.localtime(e["at"])),
@@ -174,21 +221,24 @@ class HistoryDialog(QDialog):
         from viewer.workers import run_in_thread
         self.busy = True
         self.setEnabled(False)
+        self._asked = len(items)
         w = _RestoreWorker(self._db, items)
         w.done.connect(self._restored)
-        par = self.parent()
-        keep = getattr(getattr(par, "_mw", None), "_thread_keep", None) if par is not None else None
-        run_in_thread(w, keep if isinstance(keep, list) else _KEEP)
+        run_in_thread(w, self._keep())
         return True
 
     def _restored(self, n):
         self.busy = False
         self.setEnabled(True)
         self.last_restored = n
+        asked, self._asked = getattr(self, "_asked", n), None
         if n < 0:
             QMessageBox.warning(self, tr("변경 기록·되살리기"), tr("되살리지 못했습니다 — 명함 DB 를 다른 곳에서 쓰고 있는지 확인하세요."))
         else:
-            QMessageBox.information(self, tr("변경 기록·되살리기"), tr("명함 {n}장을 되살렸습니다.").format(n=n))
+            msg = tr("{n}건을 되살렸습니다.").format(n=n)
+            if asked is not None and asked > n:            # 탭이 지워진 할 일 기록 등(§5.30 '할 일 기록')
+                msg += " " + tr("{m}건은 되살리지 못했습니다(할 일 탭이 지워졌음).").format(m=asked - n)
+            QMessageBox.information(self, tr("변경 기록·되살리기"), msg)
         self.reload()
 
     def reject(self):

@@ -298,7 +298,7 @@ class TodoPanel(QFrame):
     def delete(self, ask: bool = True) -> bool:
         if self.gid is None or not self.notes:
             return False
-        if ask and QMessageBox.question(self, tr("할 일"), tr("이 기록을 지웁니다 — 되돌릴 수 없습니다.")) \
+        if ask and QMessageBox.question(self, tr("할 일"), tr("이 기록을 지웁니다 — 지운 기록은 ≡ 메뉴 '주소록 ▸ 변경 기록·되살리기' 에서 되살릴 수 있습니다.")) \
                 != QMessageBox.StandardButton.Yes:
             return False
         P.note_delete(self._store(), self.notes[self.idx]["id"])

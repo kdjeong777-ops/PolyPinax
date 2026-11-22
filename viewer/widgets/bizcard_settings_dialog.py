@@ -11,12 +11,39 @@ import os
 from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QComboBox, QSpinBox,
                              QGroupBox, QFileDialog, QDialogButtonBox, QRadioButton, QMessageBox)
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QObject, pyqtSignal
 from viewer.i18n import tr, tr_noop
 from viewer.bizcard import people as P
 
 # '최근' 제한 고르기 — (모드, n) · n=0 이면 직접(옆 칸)
 LIMIT_CHOICES = (("count", 20), ("count", 0), ("days", 7), ("days", 14), ("days", 0))
+
+
+_KEEP = []
+
+
+class _TagsWorker(QObject):
+    """명함 해시태그 모으기(`people.all_tags`) — 배경, 자기 연결(응답성 SOT §4.4, 261120-68). done(태그 목록)."""
+    done = pyqtSignal(list)
+    finished = pyqtSignal()
+
+    def __init__(self, db):
+        super().__init__()
+        self._db = db
+
+    def run(self):
+        tags, st = [], None
+        try:
+            from viewer.bizcard.store import BizcardStore
+            st = BizcardStore(self._db)
+            tags = P.all_tags(st)
+        except Exception:
+            tags = []
+        finally:
+            if st is not None:
+                st.close()
+            self.done.emit(tags)
+            self.finished.emit()
 
 
 class BizcardSettingsDialog(QDialog):
@@ -241,35 +268,43 @@ class BizcardSettingsDialog(QDialog):
         self.lst_glabels = QListWidget()
         self.lst_glabels.setToolTip(tr("체크한 해시태그만 구글 연락처 라벨과 맞춥니다 — 명함에 붙이면 라벨에 넣고, 구글에서 라벨을 떼면 해시태그도 뗍니다"))
         self.lst_glabels.setMaximumHeight(120)
-        chosen = {str(t).lower() for t in (meta(G.OPT_LABELS, []) or [])}
+        chosen = {P._tagkey(t) for t in (meta(G.OPT_LABELS, []) or [])}   # 비교는 어디서나 _tagkey(공백·대소문자 무시, 261120-68)
         self._glabels_on0 = set(chosen)
         self._glabels_off0 = [str(t) for t in (meta(G.OPT_LABELS_OFF, []) or [])]
-        for t in self._all_tags(store, meta(G.OPT_LABELS, []) or []):
-            it = QListWidgetItem(t)
-            it.setFlags(it.flags() | Qt.ItemFlag.ItemIsUserCheckable)
-            it.setCheckState(Qt.CheckState.Checked if t.lower() in chosen else Qt.CheckState.Unchecked)
-            self.lst_glabels.addItem(it)
+        self._add_label_items([str(t) for t in (meta(G.OPT_LABELS, []) or []) if str(t).strip()])   # 고른 것부터 곧바로
         f.addWidget(self.lst_glabels)
-        note = QLabel(tr("켜면 명함의 글 칸(과 고른 사진)을 구글 People·Drive API 로만 주고받습니다. 반영 전에는 늘 미리보기를 거칩니다."))
+        if store is not None:                            # 명함 해시태그 전체는 배경에서 모아 더한다(261120-68)
+            from viewer.workers import run_in_thread
+            w = _TagsWorker(store.path)
+            w.done.connect(self._add_label_items)
+            keep = getattr(self._host, "_thread_keep", None)
+            run_in_thread(w, keep if isinstance(keep, list) else _KEEP)
+            self._tags_worker = w
+        note = QLabel(tr("켜면 명함의 글 칸(과 고른 사진)을 구글 People·Drive API 로만 주고받습니다. 적용 전에는 늘 미리보기를 거칩니다."))
         note.setWordWrap(True)
         f.addWidget(note)
         v.addWidget(g)
         self._gworker = None
         self._gsync_status()
 
-    @staticmethod
-    def _all_tags(store, extra=()) -> list:
-        """명함들의 해시태그(앱 자동 태그 '명함' 빼고) + 이미 고른 것 — 이름 차례."""
-        out = {str(t) for t in extra if str(t).strip()}
-        if store is not None:
-            import json as _json
-            for (raw,) in store.con.execute("SELECT tags FROM cards"):
-                try:
-                    out.update(str(t) for t in _json.loads(raw or "[]") if str(t).strip())
-                except ValueError:
-                    pass
-        out.discard("명함")
-        return sorted(out, key=str.lower)
+    def _add_label_items(self, tags):
+        """'구글 라벨로 올릴 해시태그' 목록에 없는 태그만 더한다(같은 태그 = _tagkey) — 이름 차례로 다시 놓는다."""
+        from PyQt6.QtWidgets import QListWidgetItem
+        lw = self.lst_glabels
+        have = {P._tagkey(lw.item(i).text()): lw.item(i) for i in range(lw.count())}
+        for t in tags or []:
+            k = P._tagkey(t)
+            if not k or k == P._tagkey("명함"):
+                continue
+            if k in have:                                 # 같은 태그 — 명함에 붙은 꼴로 보인다(고른 목록엔 옛 꼴이 남아 있을 수 있다)
+                have[k].setText(str(t))
+                continue
+            it = QListWidgetItem(str(t))
+            it.setFlags(it.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            it.setCheckState(Qt.CheckState.Checked if k in self._glabels_on0 else Qt.CheckState.Unchecked)
+            lw.addItem(it)
+            have[k] = it
+        lw.sortItems()
 
     def label_tags_checked(self) -> list:
         lw = self.lst_glabels
@@ -330,10 +365,10 @@ class BizcardSettingsDialog(QDialog):
         on = self.label_tags_checked()
         self._st.meta_set(G.OPT_LABELS, on)                # 구글 라벨로 올릴 해시태그(261120-61)
         lw = self.lst_glabels                               # 끈 것 — 처음 켜져 있던 것을 끈 것과 예전에 끈 것(구글 라벨이어도 다시 넣지 않음)
-        low_on = {t.lower() for t in on}
-        off = [t for t in self._glabels_off0 if t.lower() not in low_on]
+        key_on = {P._tagkey(t) for t in on}
+        off = [t for t in self._glabels_off0 if P._tagkey(t) not in key_on]
         off += [lw.item(i).text() for i in range(lw.count())
-                if lw.item(i).text().lower() in self._glabels_on0 and lw.item(i).text().lower() not in low_on]
+                if P._tagkey(lw.item(i).text()) in self._glabels_on0 and P._tagkey(lw.item(i).text()) not in key_on]
         self._st.meta_set(G.OPT_LABELS_OFF, list(dict.fromkeys(off)))
 
     def closeEvent(self, ev):
@@ -358,7 +393,7 @@ GSYNC_HELP = tr_noop("구글 주소록 연결 — 처음 한 번, 구글 클라�
                      "\n"
                      "그다음 이 창에서:\n"
                      "6. 클라이언트 ID·보안 비밀을 붙여 넣고 [구글 계정 연결] → 브라우저에서 4번에 넣은 계정을 고르고, 'Google 에서 확인하지 않은 앱' 이 뜨면 [계속] → 주소록(드라이브) 권한에 체크 → [계속]. 위쪽에 '연결됨 — (메일)' 이 보이면 [확인] 으로 닫습니다.\n"
-                     "7. 싱크: 명함찾기 [주소록] → [구글 주소록과 싱크] → 미리보기에서 바꿀 줄을 고르고 [반영]. 처음에는 몇 줄만 골라 시험해 보세요.\n"
+                     "7. 싱크: 명함찾기 ≡ 메뉴 → 주소록 → 구글 주소록과 싱크 → 미리보기에서 바꿀 줄을 고르고 [적용]. 처음에는 몇 줄만 골라 시험해 보세요.\n"
                      "\n"
                      "콘솔에서 바꾼 설정은 반영되는 데 몇 분 걸릴 수 있습니다. 로그인은 구글 화면에서 하고, 이 앱은 구글 비밀번호를 보지 않습니다. 7일이 지나 '연결 안 됨' 이 되면 [구글 계정 연결] 만 다시 누르면 됩니다.")
 

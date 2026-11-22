@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-19 20:21+0900\n"
+"POT-Creation-Date: 2026-11-22 14:56+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -314,7 +314,8 @@ msgstr "&File"
 msgid "새 창"
 msgstr "New Window"
 
-#: viewer/app.py viewer/print_controller.py viewer/widgets/settings_dialog.py
+#: viewer/app.py viewer/print_controller.py
+#: viewer/widgets/bizcard_find_dialog.py viewer/widgets/settings_dialog.py
 msgid "폴더 열기"
 msgstr "Open Folder"
 
@@ -337,10 +338,12 @@ msgstr "Save bookmarks, annotations and page edits to a new file — choose the 
 
 #: viewer/app.py viewer/convert/__init__.py viewer/edit_controller.py
 #: viewer/jobs_controller.py viewer/photo_controller.py viewer/redact.py
-#: viewer/study_controller.py viewer/widgets/bizcard_find_dialog.py
-#: viewer/widgets/bookmark_tree.py viewer/widgets/ctx_menu.py
-#: viewer/widgets/encrypt_dialog.py viewer/widgets/line_text_settings_dialog.py
-#: viewer/widgets/merge_preview.py viewer/widgets/twoup_dialog.py
+#: viewer/study_controller.py viewer/widgets/bizcard_dupe_dialog.py
+#: viewer/widgets/bizcard_find_dialog.py viewer/widgets/bizcard_new_dialog.py
+#: viewer/widgets/bizcard_todo_panel.py viewer/widgets/bookmark_tree.py
+#: viewer/widgets/ctx_menu.py viewer/widgets/encrypt_dialog.py
+#: viewer/widgets/line_text_settings_dialog.py viewer/widgets/merge_preview.py
+#: viewer/widgets/twoup_dialog.py
 msgid "저장"
 msgstr "Save"
 
@@ -557,7 +560,8 @@ msgstr "Bookmark Generation Stopped"
 #: viewer/app.py viewer/compare_controller.py viewer/jobs_controller.py
 #: viewer/photo_controller.py viewer/print_controller.py
 #: viewer/update_controller.py viewer/widgets/bizcard_dupe_dialog.py
-#: viewer/widgets/bizcard_find_dialog.py
+#: viewer/widgets/bizcard_find_dialog.py viewer/widgets/bizcard_gsync_dialog.py
+#: viewer/widgets/bizcard_history_dialog.py
 #: viewer/widgets/bizcard_import_dialog.py
 #: viewer/widgets/glossary_edit_dialog.py viewer/widgets/hyperlink_dialog.py
 #: viewer/widgets/image_tune_dialog.py viewer/widgets/stamp_dialog.py
@@ -612,7 +616,9 @@ msgstr "Continue with Available Languages"
 #: viewer/present_controller.py viewer/read_ocr_offer.py
 #: viewer/share_controller.py viewer/sign_controller.py
 #: viewer/sign_draft_controller.py viewer/study_controller.py
-#: viewer/update_controller.py viewer/widgets/bookmark_tree.py
+#: viewer/update_controller.py viewer/widgets/bizcard_dupe_dialog.py
+#: viewer/widgets/bizcard_find_dialog.py viewer/widgets/bizcard_new_dialog.py
+#: viewer/widgets/bizcard_settings_dialog.py viewer/widgets/bookmark_tree.py
 #: viewer/widgets/crop_dialog.py viewer/widgets/encrypt_dialog.py
 #: viewer/widgets/line_text_settings_dialog.py viewer/widgets/main_view.py
 #: viewer/widgets/merge_dialog.py viewer/widgets/pen_settings_dialog.py
@@ -1306,7 +1312,8 @@ msgid "{head}{v}쪽"
 msgstr "{head}{v}"
 
 #: viewer/app.py viewer/edit_controller.py viewer/sign_controller.py
-#: viewer/toc_page_flow.py viewer/vprinter_controller.py viewer/workers.py
+#: viewer/toc_page_flow.py viewer/vprinter_controller.py
+#: viewer/widgets/bizcard_find_dialog.py viewer/workers.py
 msgid "완료"
 msgstr "Done"
 
@@ -1651,8 +1658,8 @@ msgstr "Automatic tagging: {get} reviewed, tags added to {n_auto} files"
 msgid "태그 자동 부여"
 msgstr "Automatic Tagging"
 
-#: viewer/app.py viewer/widgets/main_view.py
-#: viewer/widgets/pen_settings_dialog.py
+#: viewer/app.py viewer/widgets/bizcard_settings_dialog.py
+#: viewer/widgets/main_view.py viewer/widgets/pen_settings_dialog.py
 #: viewer/widgets/pointer_settings_dialog.py viewer/widgets/settings_dialog.py
 #: viewer/widgets/toc_review_dialog.py
 msgid "확인"
@@ -2606,7 +2613,7 @@ msgstr "Edit mode"
 msgid "다시실행"
 msgstr "Redo"
 
-#: viewer/app.py
+#: viewer/app.py viewer/widgets/bizcard_find_dialog.py
 msgid "종료"
 msgstr "Exit"
 
@@ -2861,8 +2868,9 @@ msgstr "Please try again after the current task finishes."
 
 #: viewer/app.py viewer/photo_controller.py
 #: viewer/widgets/bizcard_find_dialog.py
-#: viewer/widgets/bizcard_import_dialog.py viewer/widgets/favorites_dialog.py
-#: viewer/widgets/hyperlink_dialog.py viewer/widgets/image_to_pdf_dialog.py
+#: viewer/widgets/bizcard_import_dialog.py viewer/widgets/bizcard_todo_panel.py
+#: viewer/widgets/favorites_dialog.py viewer/widgets/hyperlink_dialog.py
+#: viewer/widgets/image_to_pdf_dialog.py
 #: viewer/widgets/line_text_settings_dialog.py viewer/widgets/merge_dialog.py
 #: viewer/widgets/merge_preview.py viewer/widgets/strip.py
 #: viewer/widgets/thumbs_list.py viewer/widgets/toc_review_dialog.py
@@ -3531,8 +3539,26 @@ msgstr "No component can read this format: {name}"
 msgid "그림을 읽을 수 없습니다: {name}"
 msgstr "Cannot read this picture: {name}"
 
+#: viewer/bizcard/gsync_auth.py
+msgid "로그인이 끝났습니다 — 이 창을 닫고 PolyCardex 로 돌아가세요."
+msgstr "Sign-in is complete — close this window and return to PolyCardex."
+
+#: viewer/bizcard/standalone.py viewer/photo_controller.py
+msgid "파일 지우기"
+msgstr "Delete Files"
+
+#: viewer/bizcard/standalone.py viewer/photo_controller.py
+#, python-brace-format
+msgid "휴지통으로 보내는 중: {n}개"
+msgstr "Moving {n} file(s) to the Recycle Bin"
+
+#: viewer/bizcard/standalone.py viewer/photo_controller.py
+msgid "휴지통으로 보내지 못했습니다"
+msgstr "Could not move to the Recycle Bin"
+
 #: viewer/bizcard/vcard.py viewer/widgets/bizcard_dupe_dialog.py
 #: viewer/widgets/bizcard_find_dialog.py
+#: viewer/widgets/bizcard_history_dialog.py
 #: viewer/widgets/bizcard_import_dialog.py
 msgid "명함"
 msgstr "Business Cards"
@@ -3584,7 +3610,7 @@ msgstr "Bookmark page {p} is outside the PDF range (1–{n}): {t}"
 msgid "바뀜"
 msgstr "Changed"
 
-#: viewer/compare.py
+#: viewer/compare.py viewer/widgets/bizcard_history_dialog.py
 msgid "지움"
 msgstr "Deleted"
 
@@ -3927,7 +3953,7 @@ msgstr "Password"
 msgid "작성자"
 msgstr "Author"
 
-#: viewer/doc_info.py viewer/widgets/bookmark_tree.py
+#: viewer/doc_info.py viewer/widgets/tag_filter_menu.py
 msgid "주제"
 msgstr "Topic"
 
@@ -3940,8 +3966,9 @@ msgid "있음"
 msgstr "Yes"
 
 #: viewer/doc_info.py viewer/twoup.py viewer/widgets/bizcard_import_dialog.py
-#: viewer/widgets/image_tune_dialog.py viewer/widgets/pres_timer.py
-#: viewer/widgets/sign_dialogs.py viewer/widgets/stamp_dialog.py
+#: viewer/widgets/bizcard_new_dialog.py viewer/widgets/image_tune_dialog.py
+#: viewer/widgets/pres_timer.py viewer/widgets/sign_dialogs.py
+#: viewer/widgets/stamp_dialog.py
 msgid "없음"
 msgstr "None"
 
@@ -4897,8 +4924,8 @@ msgstr "Name folders automatically — save without asking next time"
 msgid "다시 물으려면 Shift 를 누른 채 공유용 사본을 고르세요."
 msgstr "To be asked again, hold Shift while choosing Sharing copy."
 
-#: viewer/photo_controller.py viewer/widgets/bookmark_tree.py
-#: viewer/widgets/convert_dialog.py viewer/widgets/image_tune_dialog.py
+#: viewer/photo_controller.py viewer/widgets/convert_dialog.py
+#: viewer/widgets/image_tune_dialog.py viewer/widgets/tag_filter_menu.py
 msgid "형식"
 msgstr "Format"
 
@@ -4959,7 +4986,8 @@ msgid "고도"
 msgstr "Altitude"
 
 #: viewer/photo_controller.py viewer/widgets/bizcard_dupe_dialog.py
-#: viewer/widgets/bizcard_find_dialog.py
+#: viewer/widgets/bizcard_find_dialog.py viewer/widgets/bizcard_gsync_dialog.py
+#: viewer/widgets/bizcard_history_dialog.py
 msgid "주소"
 msgstr "Address"
 
@@ -5202,10 +5230,6 @@ msgstr "Could not make the sharing copy — the original is unchanged."
 #: viewer/photo_controller.py
 msgid "사진 지우기"
 msgstr "Delete Photos"
-
-#: viewer/photo_controller.py
-msgid "파일 지우기"
-msgstr "Delete Files"
 
 #: viewer/photo_controller.py
 msgid "편집 모드에서 지울 수 있습니다."
@@ -5642,15 +5666,6 @@ msgstr "Made {n} sharing copies; {m} could not be made."
 msgid "휴지통으로 보내는 중: {n}장"
 msgstr "Moving {n} photo(s) to the Recycle Bin"
 
-#: viewer/photo_controller.py
-#, python-brace-format
-msgid "휴지통으로 보내는 중: {n}개"
-msgstr "Moving {n} file(s) to the Recycle Bin"
-
-#: viewer/photo_controller.py
-msgid "휴지통으로 보내지 못했습니다"
-msgstr "Could not move to the Recycle Bin"
-
 #: viewer/photo_controller.py viewer/widgets/bookmark_tree.py
 #, python-brace-format
 msgid "대상 폴더가 없습니다: {dst}"
@@ -5858,8 +5873,8 @@ msgid "다음·이전 사진으로 그대로 넘길 수 있습니다."
 msgstr "You can move on to the next or previous photo as usual."
 
 #: viewer/photo_label.py viewer/sign_draft_controller.py
-#: viewer/widgets/bookmark_tree.py viewer/widgets/sign_dialogs.py
-#: viewer/widgets/stamp_dialog.py
+#: viewer/widgets/sign_dialogs.py viewer/widgets/stamp_dialog.py
+#: viewer/widgets/tag_filter_menu.py
 msgid "날짜"
 msgstr "Date"
 
@@ -6366,6 +6381,7 @@ msgid "스크롤 캡처 중 — 한 번 더 누르면 여기까지 저장 (Esc·
 msgstr "Scrolling capture — click again to save up to here (or Esc · [Stop])"
 
 #: viewer/scroll_capture.py viewer/widgets/bizcard_dupe_dialog.py
+#: viewer/widgets/bizcard_find_dialog.py
 msgid "멈춤"
 msgstr "Stop"
 
@@ -6848,7 +6864,9 @@ msgstr "Signature image"
 msgid "다른 쪽에도 놓기"
 msgstr "Place on Other Pages"
 
-#: viewer/sign_draft_controller.py viewer/widgets/bizcard_find_dialog.py
+#: viewer/sign_draft_controller.py viewer/widgets/bizcard_dupe_dialog.py
+#: viewer/widgets/bizcard_find_dialog.py
+#: viewer/widgets/bizcard_settings_dialog.py
 #: viewer/widgets/image_tune_dialog.py viewer/widgets/photo_label_dialog.py
 #: viewer/widgets/sign_dialogs.py viewer/widgets/stamp_dialog.py
 msgid "지우기"
@@ -6867,7 +6885,8 @@ msgid "이 파일의 서명 자리를 모두 지울까요?"
 msgstr "Remove all signature places of this file?"
 
 #: viewer/sign_draft_controller.py viewer/widgets/bizcard_dupe_dialog.py
-#: viewer/widgets/bizcard_find_dialog.py
+#: viewer/widgets/bizcard_find_dialog.py viewer/widgets/bizcard_gsync_dialog.py
+#: viewer/widgets/bizcard_history_dialog.py
 #: viewer/widgets/bizcard_import_dialog.py viewer/widgets/capture_settings.py
 #: viewer/widgets/image_to_pdf_dialog.py viewer/widgets/sign_dialogs.py
 #: viewer/widgets/stamp_dialog.py
@@ -6964,7 +6983,9 @@ msgid "원본 파일에는 서명을 저장하지 않습니다 — 다른 이름
 msgstr "Signatures are not saved into the original file — choose another name."
 
 #: viewer/sign_draft_controller.py viewer/toc_page_flow.py
-#: viewer/widgets/bizcard_import_dialog.py viewer/widgets/sign_dialogs.py
+#: viewer/widgets/bizcard_find_dialog.py
+#: viewer/widgets/bizcard_import_dialog.py
+#: viewer/widgets/bizcard_settings_dialog.py viewer/widgets/sign_dialogs.py
 msgid "바꾸기"
 msgstr "Replace"
 
@@ -8043,7 +8064,7 @@ msgstr "Conversion tool error (code {rc})"
 msgid "리멤버"
 msgstr "Remember"
 
-#: viewer/widgets/bizcard_dupe_dialog.py
+#: viewer/widgets/bizcard_dupe_dialog.py viewer/widgets/bizcard_gsync_dialog.py
 msgid "구글"
 msgstr "Google"
 
@@ -8054,6 +8075,10 @@ msgstr "Contacts"
 #: viewer/widgets/bizcard_dupe_dialog.py
 msgid "같은 번호"
 msgstr "Same number"
+
+#: viewer/widgets/bizcard_dupe_dialog.py
+msgid "이름·메일 같음(확정)"
+msgstr "Same name and email (confirmed)"
 
 #: viewer/widgets/bizcard_dupe_dialog.py
 msgid "같은 메일"
@@ -8068,42 +8093,68 @@ msgid "이름·회사 같음"
 msgstr "Same name and company"
 
 #: viewer/widgets/bizcard_dupe_dialog.py viewer/widgets/bizcard_find_dialog.py
+#: viewer/widgets/bizcard_gsync_dialog.py
+#: viewer/widgets/bizcard_history_dialog.py
 #: viewer/widgets/bizcard_import_dialog.py
 msgid "회사"
 msgstr "Company"
 
 #: viewer/widgets/bizcard_dupe_dialog.py viewer/widgets/bizcard_find_dialog.py
+#: viewer/widgets/bizcard_gsync_dialog.py
+#: viewer/widgets/bizcard_history_dialog.py
 #: viewer/widgets/bizcard_import_dialog.py
 msgid "부서"
 msgstr "Department"
 
 #: viewer/widgets/bizcard_dupe_dialog.py viewer/widgets/bizcard_find_dialog.py
+#: viewer/widgets/bizcard_gsync_dialog.py
+#: viewer/widgets/bizcard_history_dialog.py
 #: viewer/widgets/bizcard_import_dialog.py
 msgid "직함"
 msgstr "Title"
 
 #: viewer/widgets/bizcard_dupe_dialog.py viewer/widgets/bizcard_find_dialog.py
+#: viewer/widgets/bizcard_gsync_dialog.py
+#: viewer/widgets/bizcard_history_dialog.py
 #: viewer/widgets/bizcard_import_dialog.py
 msgid "전화"
 msgstr "Phone"
 
 #: viewer/widgets/bizcard_dupe_dialog.py viewer/widgets/bizcard_find_dialog.py
+#: viewer/widgets/bizcard_gsync_dialog.py
+#: viewer/widgets/bizcard_history_dialog.py
 #: viewer/widgets/bizcard_import_dialog.py
 msgid "메일"
 msgstr "Email"
 
 #: viewer/widgets/bizcard_dupe_dialog.py viewer/widgets/bizcard_find_dialog.py
+#: viewer/widgets/bizcard_gsync_dialog.py
+#: viewer/widgets/bizcard_history_dialog.py
 msgid "누리집"
 msgstr "Website"
 
 #: viewer/widgets/bizcard_dupe_dialog.py viewer/widgets/bizcard_find_dialog.py
-#: viewer/widgets/main_view.py
+#: viewer/widgets/bizcard_gsync_dialog.py
+#: viewer/widgets/bizcard_history_dialog.py
+#: viewer/widgets/bizcard_settings_dialog.py viewer/widgets/main_view.py
 msgid "메모"
 msgstr "Note"
 
 #: viewer/widgets/bizcard_dupe_dialog.py
 msgid "명함 고치기"
 msgstr "Edit Business Card"
+
+#: viewer/widgets/bizcard_dupe_dialog.py
+msgid "체크한 칸 비우기"
+msgstr "Clear checked fields"
+
+#: viewer/widgets/bizcard_dupe_dialog.py
+msgid "앞에 체크한 칸을 한꺼번에 비웁니다 — [저장] 해야 명함에 반영됩니다"
+msgstr "Clears all checked fields at once — the card changes only when you click [Save]"
+
+#: viewer/widgets/bizcard_dupe_dialog.py
+msgid "명함 사진 삭제"
+msgstr "Delete card pictures"
 
 #: viewer/widgets/bizcard_dupe_dialog.py viewer/widgets/bizcard_find_dialog.py
 msgid "중복 검토"
@@ -8133,17 +8184,34 @@ msgstr "Double-click a value to edit it; the merge uses your value — separate 
 msgid "(명함 그림 없음)"
 msgstr "(no card image)"
 
-#: viewer/widgets/bizcard_dupe_dialog.py
-msgid "합치기 적용"
-msgstr "Apply Merge"
+#: viewer/widgets/bizcard_dupe_dialog.py viewer/widgets/bizcard_gsync_dialog.py
+#: viewer/widgets/bizcard_history_dialog.py
+#: viewer/widgets/bizcard_import_dialog.py viewer/widgets/crop_dialog.py
+#: viewer/widgets/line_text_settings_dialog.py
+#: viewer/widgets/photo_label_dialog.py viewer/widgets/tag_apply_dialog.py
+#: viewer/widgets/view_settings_dialog.py
+msgid "적용"
+msgstr "Apply"
 
 #: viewer/widgets/bizcard_dupe_dialog.py
 msgid "마지막 합치기 되돌리기"
 msgstr "Undo Last Merge"
 
+#: viewer/widgets/bizcard_dupe_dialog.py viewer/widgets/bizcard_find_dialog.py
+msgid "이름을 비울 수 없습니다."
+msgstr "The name cannot be empty."
+
 #: viewer/widgets/bizcard_dupe_dialog.py
-msgid "대표로"
-msgstr "Make Primary"
+msgid "지울 사진을 체크하세요 — 앞면만 지우면 뒷면이 앞면이 되고, 앞·뒷면을 모두 지우면 원본 스캔까지 휴지통으로 보냅니다."
+msgstr "Check the pictures to delete — deleting only the front makes the back the front; deleting both sides also sends the original scan to the Recycle Bin."
+
+#: viewer/widgets/bizcard_dupe_dialog.py viewer/widgets/bizcard_gsync_dialog.py
+msgid "명함 앞면"
+msgstr "Card front"
+
+#: viewer/widgets/bizcard_dupe_dialog.py viewer/widgets/bizcard_gsync_dialog.py
+msgid "명함 뒷면"
+msgstr "Card back"
 
 #: viewer/widgets/bizcard_dupe_dialog.py
 msgid "병합 우선순위(끌어 순서 바꾸기):"
@@ -8153,8 +8221,9 @@ msgstr "Merge priority (drag to reorder):"
 msgid "적용 전 — 대표와 그 아래 유사한 명함(체크한 것만 합침)"
 msgstr "Before — primary card with similar cards below (only checked ones are merged)"
 
-#: viewer/widgets/bizcard_dupe_dialog.py viewer/widgets/glossary_edit_dialog.py
-#: viewer/widgets/translate_dialog.py
+#: viewer/widgets/bizcard_dupe_dialog.py
+#: viewer/widgets/bizcard_history_dialog.py
+#: viewer/widgets/glossary_edit_dialog.py viewer/widgets/translate_dialog.py
 msgid "출처"
 msgstr "Source"
 
@@ -8171,11 +8240,15 @@ msgid "칸"
 msgstr "Field"
 
 #: viewer/widgets/bizcard_dupe_dialog.py
+msgid "대표로"
+msgstr "Make Primary"
+
+#: viewer/widgets/bizcard_dupe_dialog.py
 msgid "(합치지 않음)"
 msgstr "(not merged)"
 
 #: viewer/widgets/bizcard_dupe_dialog.py viewer/widgets/bizcard_find_dialog.py
-#: viewer/widgets/tag_apply_dialog.py
+#: viewer/widgets/bizcard_history_dialog.py viewer/widgets/tag_apply_dialog.py
 msgid "직접"
 msgstr "Custom"
 
@@ -8197,6 +8270,11 @@ msgstr "No photo with several cards was found."
 msgid "마지막 합치기를 되돌립니다 — 옮긴 파일을 제자리로, 명함 DB 를 합치기 전으로."
 msgstr "Undo the last merge — moved files go back and the card database returns to its state before the merge."
 
+#: viewer/widgets/bizcard_dupe_dialog.py viewer/widgets/bizcard_gsync_dialog.py
+#, python-brace-format
+msgid "인물 사진 {n}"
+msgstr "Portrait photo {n}"
+
 #: viewer/widgets/bizcard_dupe_dialog.py
 msgid "대표"
 msgstr "Primary"
@@ -8207,8 +8285,23 @@ msgid "파일 {n}개를 옮기지 못했습니다 — 다른 프로그램이 열
 msgstr "Could not move {n} file(s) — check whether another program has them open."
 
 #: viewer/widgets/bizcard_dupe_dialog.py
+#, python-brace-format
+msgid "명함 DB 를 쓰지 못했습니다({err})."
+msgstr "Could not write the business card database ({err})."
+
+#: viewer/widgets/bizcard_dupe_dialog.py
 msgid "모두"
 msgstr "All"
+
+#: viewer/widgets/bizcard_dupe_dialog.py
+#, python-brace-format
+msgid "'{n}' 에 붙은 명함 그림(정리본 앞·뒷면)을 휴지통으로 보내고 그림 없는 명함으로 둡니다 — 연락처·메모는 그대로, 원본 스캔은 남아 명함 관리에서 다시 읽을 수 있습니다."
+msgstr "Moves the card image attached to '{n}' (tidied front and back) to the Recycle Bin and keeps it as a card without an image — contacts and memo stay, and the original scan remains so it can be read again in Card Manager."
+
+#: viewer/widgets/bizcard_dupe_dialog.py
+#, python-brace-format
+msgid "고른 사진 {n}개를 휴지통으로 보냅니다."
+msgstr "Sends {n} selected pictures to the Recycle Bin."
 
 #: viewer/widgets/bizcard_dupe_dialog.py
 #, python-brace-format
@@ -8219,6 +8312,11 @@ msgstr "Looking for multi-card photos {d} / {t}"
 #, python-brace-format
 msgid "묶음 {n}개를 합칩니다 — 대표가 아닌 명함 {d}장은 지웁니다(그림 파일은 '병합 보관' 폴더로). [마지막 합치기 되돌리기] 로 되돌릴 수 있습니다."
 msgstr "Merge {n} groups — {d} non-primary cards will be removed (their image files go to the merge-holding folder). You can undo with [Undo Last Merge]."
+
+#: viewer/widgets/bizcard_dupe_dialog.py
+#, python-brace-format
+msgid "묶인 휴대폰: {n}"
+msgstr "Matched mobile: {n}"
 
 #: viewer/widgets/bizcard_dupe_dialog.py
 #, python-brace-format
@@ -8235,50 +8333,40 @@ msgid "팩스"
 msgstr "Fax"
 
 #: viewer/widgets/bizcard_find_dialog.py
+msgid "기본 메일 앱으로 보내기"
+msgstr "Send with Default Mail App"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "네이버 메일 보내기"
+msgstr "Send with Naver Mail"
+
+#: viewer/widgets/bizcard_find_dialog.py
 msgid "작업 제목 — 즐겨찾기 탭 이름이 됩니다"
 msgstr "Task title — becomes the favorites tab name"
-
-#: viewer/widgets/bizcard_find_dialog.py
-msgid "작업 제목"
-msgstr "Task title"
-
-#: viewer/widgets/bizcard_find_dialog.py viewer/widgets/search_panel.py
-#: viewer/widgets/text_panel.py viewer/widgets/toc_review_dialog.py
-msgid "내용"
-msgstr "Content"
-
-#: viewer/widgets/bizcard_find_dialog.py
-msgid "시작일"
-msgstr "Start date"
-
-#: viewer/widgets/bizcard_find_dialog.py
-msgid "종료일"
-msgstr "End date"
-
-#: viewer/widgets/bizcard_find_dialog.py
-msgid "체크하지 않으면 시작일부터 계속"
-msgstr "If unchecked, it continues from the start date"
 
 #: viewer/widgets/bizcard_find_dialog.py
 msgid "명함찾기"
 msgstr "Find Business Card"
 
 #: viewer/widgets/bizcard_find_dialog.py
-msgid "한글·영어 = 이름 글자, 명함 있음·없음 = 명함 그림(없음 = 주소록에서 들인 명함)"
-msgstr "Korean / English = letters of the name; With / Without card = card image (without = imported from contacts)"
+msgid "한글·영어 = 이름 글자, 명함 있음·없음 = 명함 그림(없음 = 주소록에서 들인 명함), 사진 있음·없음 = 인물 사진 — 체크로 여러 개(같은 묶음은 또는, 묶음끼리는 그리고)"
+msgstr "Korean/English = letters in the name, With/Without card = card image (without = imported from contacts), With/Without photo = portrait photo — check several (OR within a group, AND across groups)"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "메뉴"
+msgstr "Menu"
 
 #: viewer/widgets/bizcard_find_dialog.py
 msgid "이름·회사·메모 등 — 낱말 여럿은 모두 들어 있는 명함, #낱말은 해시태그"
 msgstr "Name, company, memo, etc. — several words find cards containing all of them, #word filters by hashtag"
 
-#: viewer/widgets/bizcard_find_dialog.py viewer/widgets/settings_dialog.py
-#: viewer/widgets/tag_apply_dialog.py
-msgid "해시태그"
-msgstr "Hashtags"
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "해시태그로 찾기 — 지금 목록의 해시태그 보기·고르기, 맨 아래 '해시태그 수정'"
+msgstr "Find by hashtag — view and pick the hashtags in the current list; 'Edit hashtags' at the bottom"
 
 #: viewer/widgets/bizcard_find_dialog.py
-msgid "고른 명함들에 해시태그를 붙이거나 뗍니다 — 정리본 파일에도 같이, 찾기 칸에서 #낱말로 찾습니다"
-msgstr "Add or remove hashtags on the selected cards — also on the card image files; search with #word"
+msgid "명함 환경설정 — 명함 폴더·전화번호·'최근' 제한·메일 보내기·메모·구글 주소록"
+msgstr "Business card settings — card folder, phone numbers, 'Recent' limit, sending mail, memo, Google Contacts"
 
 #: viewer/widgets/bizcard_find_dialog.py
 msgid "새 즐겨찾기 탭·새 할 일 — 표에서 고른 명단이 들어갑니다(사람 칸에서 끌어 놓아도)"
@@ -8295,6 +8383,10 @@ msgstr "Drop list rows here to add them to this tab — drag to reorder, drop on
 #: viewer/widgets/bizcard_find_dialog.py
 msgid "세부내용"
 msgstr "Details"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "#해시태그 — 빈칸으로 나눔"
+msgstr "#hashtags — separate with spaces"
 
 #: viewer/widgets/bizcard_find_dialog.py
 msgid "고친 칸·메모를 명함 DB 에 저장합니다 — 이름·회사를 바꾸면 정리본 파일 이름도 '성명_회사명' 으로"
@@ -8320,7 +8412,7 @@ msgstr "Card front ↔ back"
 msgid "끌어 차례를 바꿉니다(첫 사진이 즐겨찾기 그림) — Delete 로 지우기(휴지통)"
 msgstr "Drag to reorder (the first photo is the favorites picture) — Delete moves it to the Recycle Bin"
 
-#: viewer/widgets/bizcard_find_dialog.py
+#: viewer/widgets/bizcard_find_dialog.py viewer/widgets/bizcard_new_dialog.py
 msgid "사진 추가"
 msgstr "Add Photo"
 
@@ -8345,10 +8437,6 @@ msgid "이 명함을 사진 모드에서 엽니다"
 msgstr "Open this card in photo mode"
 
 #: viewer/widgets/bizcard_find_dialog.py
-msgid "주소록 vCard(.vcf) 가져오기·내보내기 — 구글 주소록·리멤버"
-msgstr "Import or export contacts as vCard (.vcf) — Google Contacts, Remember"
-
-#: viewer/widgets/bizcard_find_dialog.py
 msgid "리멤버 vCard 가져오기"
 msgstr "Import Remember vCard"
 
@@ -8363,6 +8451,23 @@ msgstr "Export vCard for Google Contacts"
 #: viewer/widgets/bizcard_find_dialog.py
 msgid "리멤버용 vCard 로 내보내기"
 msgstr "Export vCard for Remember"
+
+#: viewer/widgets/bizcard_find_dialog.py viewer/widgets/bizcard_gsync_dialog.py
+msgid "구글 주소록과 싱크"
+msgstr "Sync with Google Contacts"
+
+#: viewer/widgets/bizcard_find_dialog.py
+#: viewer/widgets/bizcard_history_dialog.py
+msgid "변경 기록·되살리기"
+msgstr "Change history and restore"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "명함 자료 내보내기(zip)"
+msgstr "Export business card data (zip)"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "명함 자료 불러오기(zip)"
+msgstr "Import business card data (zip)"
 
 #: viewer/widgets/bizcard_find_dialog.py
 msgid "명함 폴더의 확인 표 창(명함 관리)을 엽니다"
@@ -8383,6 +8488,31 @@ msgid "새 명함이나 새 인물 정보를 손으로 넣습니다 — 명함 �
 msgstr "Enter a new business card or a new person by hand — with the card images and portrait photos"
 
 #: viewer/widgets/bizcard_find_dialog.py
+msgid "사진 올리기를 멈춥니다 — 남은 것은 다음에 명함찾기를 열 때 이어서 올립니다"
+msgstr "Stop uploading photos — the rest will continue the next time Find Business Card opens"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "구글에 사진 올리는 중…"
+msgstr "Uploading photos to Google…"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "명함 자료"
+msgstr "Business card data"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "명함 자료를 zip 으로 저장하는 중…"
+msgstr "Saving business card data to zip…"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "명함 자료를 불러오는 중…"
+msgstr "Importing business card data…"
+
+#: viewer/widgets/bizcard_find_dialog.py viewer/widgets/bookmark_tree.py
+#: viewer/widgets/tag_apply_dialog.py
+msgid "해시태그 수정"
+msgstr "Modify Hashtags"
+
+#: viewer/widgets/bizcard_find_dialog.py
 msgid "고친 내용을 저장할까요?"
 msgstr "Save your changes?"
 
@@ -8391,16 +8521,23 @@ msgid "Gmail 보내기"
 msgstr "Send with Gmail"
 
 #: viewer/widgets/bizcard_find_dialog.py
+#: viewer/widgets/bizcard_settings_dialog.py
 msgid "받는 사람"
 msgstr "To"
 
 #: viewer/widgets/bizcard_find_dialog.py
+#: viewer/widgets/bizcard_settings_dialog.py
 msgid "숨은 참조"
 msgstr "Bcc"
 
 #: viewer/widgets/bizcard_find_dialog.py
-msgid "보낼 계정 바꾸기"
-msgstr "Change sender account"
+#: viewer/widgets/bizcard_settings_dialog.py
+msgid "메일 보내기"
+msgstr "Send Email"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "메일 주소를 넣을 칸 — 명함 환경설정에서 바꿀 수 있습니다:"
+msgstr "Field for the email addresses — you can change it in Business card settings:"
 
 #: viewer/widgets/bizcard_find_dialog.py
 msgid "보낼 Gmail 주소 — 브라우저에 구글 계정이 여럿이면 이 계정으로 엽니다(비우면 기본 계정):"
@@ -8427,24 +8564,56 @@ msgid "이메일 복사"
 msgstr "Copy Email Addresses"
 
 #: viewer/widgets/bizcard_find_dialog.py
-msgid "진행"
-msgstr "In progress"
+msgid "카톡 친구추가 방지"
+msgstr "Block KakaoTalk auto-friend"
 
 #: viewer/widgets/bizcard_find_dialog.py
-msgid "예정"
-msgstr "Upcoming"
+msgid "카톡 친구추가 방지 해제"
+msgstr "Unblock KakaoTalk auto-friend"
 
 #: viewer/widgets/bizcard_find_dialog.py
-msgid "기간 지남"
-msgstr "Overdue"
+msgid "할 일 내보내기"
+msgstr "Export To-dos"
 
 #: viewer/widgets/bizcard_find_dialog.py
-msgid "마감"
-msgstr "Closed"
+msgid "명단 내보내기"
+msgstr "Export List"
+
+#: viewer/widgets/bizcard_find_dialog.py
+#: viewer/widgets/bizcard_history_dialog.py viewer/widgets/tag_apply_dialog.py
+msgid "기간"
+msgstr "Period"
 
 #: viewer/widgets/bizcard_find_dialog.py
 msgid "상태"
 msgstr "Status"
+
+#: viewer/widgets/bizcard_find_dialog.py viewer/widgets/bizcard_gsync_dialog.py
+#: viewer/widgets/bizcard_history_dialog.py viewer/widgets/settings_dialog.py
+#: viewer/widgets/tag_apply_dialog.py
+msgid "해시태그"
+msgstr "Hashtags"
+
+#: viewer/widgets/bizcard_find_dialog.py viewer/widgets/bizcard_todo_panel.py
+msgid "할 일"
+msgstr "To-do"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "명단"
+msgstr "List"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "수정일"
+msgstr "Modified"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "기한"
+msgstr "Due"
+
+#: viewer/widgets/bizcard_find_dialog.py viewer/widgets/search_panel.py
+#: viewer/widgets/text_panel.py viewer/widgets/toc_review_dialog.py
+msgid "내용"
+msgstr "Content"
 
 #: viewer/widgets/bizcard_find_dialog.py
 msgid "다른 탭에 복사"
@@ -8458,21 +8627,29 @@ msgstr "To New Favorites Tab"
 msgid "새 할 일로"
 msgstr "To New To-do"
 
-#: viewer/widgets/bizcard_find_dialog.py
+#: viewer/widgets/bizcard_find_dialog.py viewer/widgets/bizcard_new_dialog.py
 msgid "인물 사진"
 msgstr "Portrait Photo"
 
 #: viewer/widgets/bizcard_find_dialog.py
-msgid "할 일"
-msgstr "To-do"
+msgid "작업 제목"
+msgstr "Task title"
 
 #: viewer/widgets/bizcard_find_dialog.py
-msgid "명단"
-msgstr "List"
+msgid "탭 이름"
+msgstr "Tab name"
 
 #: viewer/widgets/bizcard_find_dialog.py
-msgid "할 일 엑셀로 내보내기"
-msgstr "Export To-dos to Excel"
+msgid "시작일"
+msgstr "Start date"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "종료일"
+msgstr "End date"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "체크하지 않으면 시작일부터 계속"
+msgstr "If unchecked, it continues from the start date"
 
 #: viewer/widgets/bizcard_find_dialog.py
 msgid "종료일이 시작일보다 앞입니다."
@@ -8484,16 +8661,12 @@ msgid "명함 {n}"
 msgstr "Card {n}"
 
 #: viewer/widgets/bizcard_find_dialog.py
-msgid "한글"
-msgstr "Korean"
+msgid "찾기 비우기"
+msgstr "Clear search"
 
 #: viewer/widgets/bizcard_find_dialog.py
-msgid "명함 있음"
-msgstr "With card"
-
-#: viewer/widgets/bizcard_find_dialog.py
-msgid "명함 없음"
-msgstr "Without card"
+msgid "(이 목록의 명함에 해시태그 없음)"
+msgstr "(No hashtags on the cards in this list)"
 
 #: viewer/widgets/bizcard_find_dialog.py
 msgid "최근 1개월"
@@ -8513,14 +8686,7 @@ msgid "스캔일"
 msgstr "Scan Date"
 
 #: viewer/widgets/bizcard_find_dialog.py
-msgid "고른 탭을 엑셀로 내보내기"
-msgstr "Export selected tab to Excel"
-
-#: viewer/widgets/bizcard_find_dialog.py
-msgid "고른 탭을 Word 로 내보내기"
-msgstr "Export selected tab to Word"
-
-#: viewer/widgets/bizcard_find_dialog.py
+#: viewer/widgets/bizcard_settings_dialog.py
 msgid "1주"
 msgstr "1 week"
 
@@ -8537,12 +8703,49 @@ msgid "지정"
 msgstr "Region"
 
 #: viewer/widgets/bizcard_find_dialog.py
-msgid "수정일"
-msgstr "Modified"
+msgid "고른 탭을 엑셀로 내보내기"
+msgstr "Export selected tab to Excel"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "고른 탭을 Word 로 내보내기"
+msgstr "Export selected tab to Word"
 
 #: viewer/widgets/bizcard_find_dialog.py
 msgid "체크한 칸을 [내용 복사] 로 글로 복사합니다 — 체크는 다음에도 그대로"
 msgstr "[Copy details] copies the checked fields as text — the checks are remembered"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "먼저 명함 환경설정(톱니)의 '구글 주소록' 에서 구글 계정을 연결하세요."
+msgstr "First connect your Google account under 'Google Contacts' in the card settings (gear)."
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "멈추는 중… (지금 사람까지 올리고 멈춥니다)"
+msgstr "Stopping… (finishing the current person first)"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid ""
+"이 PC 의 명함 자료를 어떻게 할까요?\n"
+"\n"
+"바꾸기 — 지금 명함 DB·그림을 먼저 zip 으로 백업한 뒤 불러온 것으로 통째로 바꿉니다.\n"
+"합치기 — 지금 명함에 없는 것만 더하고, 끝나면 중복 검토를 엽니다."
+msgstr ""
+"What should happen to the business card data on this PC?\n"
+"\n"
+"Replace — back up the current card database and images to a zip first, then replace everything with the imported data.\n"
+"Merge — add only cards that are not here yet, then open Duplicate review."
+
+#: viewer/widgets/bizcard_find_dialog.py
+#: viewer/widgets/bizcard_history_dialog.py
+msgid "합치기"
+msgstr "Merge"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "그림을 풀 명함 폴더를 고르세요"
+msgstr "Choose the business card folder to put the images in"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "불러오다 멈췄습니다 — 일부만 바뀌었을 수 있습니다."
+msgstr "Import stopped partway — some data may have changed."
 
 #: viewer/widgets/bizcard_find_dialog.py
 msgid "인물 사진을 넣는 중입니다 — 끝난 뒤에 다시 하세요."
@@ -8551,10 +8754,6 @@ msgstr "Adding portrait photos — try again when it finishes."
 #: viewer/widgets/bizcard_find_dialog.py
 msgid "즐겨찾기"
 msgstr "Favorites"
-
-#: viewer/widgets/bizcard_find_dialog.py
-msgid "이름을 비울 수 없습니다."
-msgstr "The name cannot be empty."
 
 #: viewer/widgets/bizcard_find_dialog.py
 msgid "명함 이름 바꾸기"
@@ -8573,8 +8772,17 @@ msgid "메일 주소가 있는 사람이 없습니다."
 msgstr "No one has an email address."
 
 #: viewer/widgets/bizcard_find_dialog.py
-msgid "이름 바꾸기"
-msgstr "Rename"
+#, python-brace-format
+msgid "메일 주소 {n}개를 복사했습니다 — 네이버 메일에서 [메일 쓰기]를 누르고 받는 사람 칸에 붙여 넣으세요."
+msgstr "Copied {n} email address(es) — in Naver Mail, click [Write] and paste them into the To field."
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "모두 삭제"
+msgstr "Delete all"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "주요 항목 수정"
+msgstr "Edit Details"
 
 #: viewer/widgets/bizcard_find_dialog.py
 msgid "탭 삭제"
@@ -8597,14 +8805,6 @@ msgid "파일을 쓰지 못했습니다 — 다른 프로그램이 열고 있는
 msgstr "Could not write the file — check whether another program has it open."
 
 #: viewer/widgets/bizcard_find_dialog.py
-msgid "할 일이 없습니다."
-msgstr "There are no to-dos."
-
-#: viewer/widgets/bizcard_find_dialog.py
-msgid "엑셀 파일을 쓰지 못했습니다 — 다른 프로그램이 열고 있는지 확인하세요."
-msgstr "Could not write the Excel file — check whether another program has it open."
-
-#: viewer/widgets/bizcard_find_dialog.py
 msgid "최근에서 빼기"
 msgstr "Remove from Recent"
 
@@ -8612,7 +8812,8 @@ msgstr "Remove from Recent"
 msgid "탭에서 빼기"
 msgstr "Remove from tab"
 
-#: viewer/widgets/bizcard_find_dialog.py viewer/widgets/study_panel.py
+#: viewer/widgets/bizcard_find_dialog.py viewer/widgets/bizcard_new_dialog.py
+#: viewer/widgets/study_panel.py
 msgid "그림"
 msgstr "Image"
 
@@ -8647,8 +8848,47 @@ msgid "이 파일에서 연락처를 찾지 못했습니다."
 msgstr "No contacts were found in this file."
 
 #: viewer/widgets/bizcard_find_dialog.py
-msgid "(주소록에서 가져온 명함 — 그림 없음)"
-msgstr "(Imported from contacts — no card image)"
+msgid "한글"
+msgstr "Korean"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "명함 있음"
+msgstr "With card"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "명함 없음"
+msgstr "Without card"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "사진 있음"
+msgstr "With photo"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "사진 없음"
+msgstr "Without photo"
+
+#: viewer/widgets/bizcard_find_dialog.py
+#, python-brace-format
+msgid "구글에 사진 올리는 중 {i}/{n}"
+msgstr "Uploading photos to Google {i}/{n}"
+
+#: viewer/widgets/bizcard_find_dialog.py
+#, python-brace-format
+msgid "명함 {n}장·그림 {m}개를 불러왔습니다."
+msgstr "Imported {n} cards and {m} images."
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "'최근' 기록을 모두 지웁니다 — 되돌릴 수 없습니다(명함은 그대로)."
+msgstr "Clears all 'Recent' entries — this cannot be undone (the cards stay)."
+
+#: viewer/widgets/bizcard_find_dialog.py
+#, python-brace-format
+msgid "전화번호 종류를 바로잡지 못했습니다({err}) — 명함은 그대로입니다."
+msgstr "Could not correct the phone number types ({err}) — the cards are unchanged."
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "다음에 명함찾기를 열 때 다시 해 봅니다."
+msgstr "It will try again the next time Find Business Card opens."
 
 #: viewer/widgets/bizcard_find_dialog.py
 msgid "(그림 파일이 없습니다)"
@@ -8694,10 +8934,6 @@ msgid "새 할 일 ({n}명)"
 msgstr "New To-do ({n} people)"
 
 #: viewer/widgets/bizcard_find_dialog.py
-msgid "할 일 고치기"
-msgstr "Edit To-do"
-
-#: viewer/widgets/bizcard_find_dialog.py
 msgid "다시 열기"
 msgstr "Reopen"
 
@@ -8718,8 +8954,22 @@ msgid "내보냈습니다."
 msgstr "Exported."
 
 #: viewer/widgets/bizcard_find_dialog.py
+msgid "할 일 고치기"
+msgstr "Edit To-do"
+
+#: viewer/widgets/bizcard_find_dialog.py
 msgid "그림 없는 주소록 명함 — 명함 DB 태그 칸에만"
 msgstr "Contact without a card image (tags go to the card database only)"
+
+#: viewer/widgets/bizcard_find_dialog.py
+#, python-brace-format
+msgid "명함 {n}장·그림 {m}개를 zip 으로 저장했습니다. 개인정보가 든 파일이니 옮긴 뒤 지우거나 안전한 곳에 두세요 — 다른 PC 에서 ≡ 메뉴 '주소록 ▸ 명함 자료 불러오기(zip)' 로 엽니다(구글은 그 PC 에서 다시 연결)."
+msgstr "Saved {n} cards and {m} images to a zip. It contains personal information — delete it or keep it somewhere safe after moving it. On the other PC, open it with ≡ menu 'Contacts ▸ Import business card data (zip)' (reconnect Google on that PC)."
+
+#: viewer/widgets/bizcard_find_dialog.py
+#, python-brace-format
+msgid "전화번호 종류를 바로잡았습니다 — 명함 {n}장(010 은 휴대폰, 그 밖은 일반 전화, 옛 011·016~019 번호는 메모로). 바꾸기 전 명함 DB 는 같은 폴더 'bizcard.db.kinds_bak' 에 두었습니다."
+msgstr "Corrected phone number types — {n} cards (010 = mobile, others = phone, old 011/016–019 numbers moved to the memo). The card database before the change is kept as 'bizcard.db.kinds_bak' in the same folder."
 
 #: viewer/widgets/bizcard_find_dialog.py
 #, python-brace-format
@@ -8736,9 +8986,53 @@ msgid "메일 없는 {n}명은 뺐습니다."
 msgstr "Left out {n} without an email address."
 
 #: viewer/widgets/bizcard_find_dialog.py
+msgid "진행"
+msgstr "In progress"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "예정"
+msgstr "Upcoming"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "기간 지남"
+msgstr "Overdue"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "마감"
+msgstr "Closed"
+
+#: viewer/widgets/bizcard_find_dialog.py
 #, python-brace-format
 msgid "같은 휴대폰·메일의 명함이 {n}장 있습니다 — 같은 사람일 수 있습니다. [중복 검토]를 열까요?"
 msgstr "{n} card(s) have the same mobile number or email — this may be the same person. Open [Review Duplicates]?"
+
+#: viewer/widgets/bizcard_find_dialog.py
+#, python-brace-format
+msgid "내보내지 못했습니다({err})."
+msgstr "Could not export ({err})."
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "PolyCardex 명함 자료 zip 이 아닙니다"
+msgstr "this is not a PolyCardex business card zip"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "더 새 프로그램이 만든 zip 입니다 — 프로그램을 먼저 업데이트하세요"
+msgstr "the zip was made by a newer version — update the program first"
+
+#: viewer/widgets/bizcard_find_dialog.py
+#, python-brace-format
+msgid "불러오지 못했습니다 — {why}. 지금 자료는 그대로입니다."
+msgstr "Could not import — {why}. Your current data is unchanged."
+
+#: viewer/widgets/bizcard_find_dialog.py
+#, python-brace-format
+msgid "바꾸기 전 자료는 '{p}' 에 백업했습니다."
+msgstr "The data from before the replacement was backed up to '{p}'."
+
+#: viewer/widgets/bizcard_find_dialog.py
+#, python-brace-format
+msgid "{n}번 실패해 더는 저절로 하지 않습니다."
+msgstr "Failed {n} times, so it will no longer run automatically."
 
 # | 그대로입니다."
 #: viewer/widgets/bizcard_find_dialog.py
@@ -8750,11 +9044,6 @@ msgstr "Delete the '{tab}' tab? The tab and its {n} people are permanently remov
 #, python-brace-format
 msgid "주소가 {n}개라 쓰기 창 {w}개로 나눠 엽니다."
 msgstr "{n} addresses — opening them in {w} compose windows."
-
-#: viewer/widgets/bizcard_find_dialog.py
-#, python-brace-format
-msgid "할 일 {n}개를 엑셀로 썼습니다."
-msgstr "Wrote {n} to-dos to Excel."
 
 #: viewer/widgets/bizcard_find_dialog.py
 #, python-brace-format
@@ -8786,10 +9075,298 @@ msgid "연락처 {n}명을 읽었습니다 — 모두 그림 없는 명함으로
 msgstr "Read {n} contacts — all will be added as cards without images, then you choose which to merge with existing cards in the [Review Duplicates] window."
 
 #: viewer/widgets/bizcard_find_dialog.py
+#, python-brace-format
+msgid "바꾸기 전 자료는 '{p}' 에 있습니다 — 그 zip 을 '바꾸기' 로 불러오면 되돌아갑니다."
+msgstr "The data from before is in '{p}' — import that zip with 'Replace' to go back."
+
+#: viewer/widgets/bizcard_find_dialog.py
 #: viewer/widgets/bizcard_import_dialog.py
 #, python-brace-format
 msgid "vCard 에 {n}장을 썼습니다."
 msgstr "Wrote {n} cards to the vCard file."
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+msgid "구글에서 가져옴(새 명함)"
+msgstr "From Google (new cards)"
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+msgid "구글로 보냄(새 연락처)"
+msgstr "To Google (new contacts)"
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+msgid "명함을 구글 값으로 고침"
+msgstr "Update cards from Google"
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+msgid "구글을 명함 값으로 고침"
+msgstr "Update Google from cards"
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+msgid "구글에서 지워짐 — 명함도 지울까요"
+msgstr "Deleted in Google — delete the card too?"
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+msgid "명함에서 지워짐 — 구글도 지울까요"
+msgstr "Deleted in cards — delete in Google too?"
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+msgid "명함 합치기로 남은 구글 연락처 — 구글에서 지울까요"
+msgstr "Google contacts left over after merging cards — delete them from Google?"
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+msgid "인물 사진을 연락처 사진으로"
+msgstr "Person photo → contact photo"
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+msgid "연락처 사진을 인물 사진으로"
+msgstr "Contact photo → person photo"
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+msgid "명함 그림·인물 사진을 드라이브에"
+msgstr "Card images and portrait photos to Drive"
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+msgid "같은 사람으로 짝지음(값 같음)"
+msgstr "Paired as the same person (same values)"
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+msgid "카톡 친구추가 방지 바꿈(구글 이름 앞 #)"
+msgstr "KakaoTalk auto-friend block changed (# before the Google name)"
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+msgid "# 바로잡기 — 예전 구글 연락처의 이름 앞 # 뗌"
+msgstr "Fix # — remove the # before names of contacts that were already in Google"
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+msgid "카톡 친구추가 방지 표시를 구글 이름대로"
+msgstr "Match KakaoTalk auto-friend block to the Google name"
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+msgid "구글에서 지운 값 — 명함에서도 지울까요(안 고르면 구글로 다시)"
+msgstr "Values deleted in Google — delete them from the card too? (if not chosen, they go back to Google)"
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+msgid "명함에서 지운 인물 사진 — 구글 연락처 사진도 지울까요"
+msgstr "Portrait photos deleted from the card — delete the Google contact photo too?"
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+msgid "라벨·해시태그 맞춤"
+msgstr "Match labels and hashtags"
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+msgid "고른 목록에서 뺀 구글 라벨 — 지울까요(연락처는 그대로)"
+msgstr "Google labels removed from the chosen list — delete them? (contacts stay)"
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+msgid "구글에서 가져온 명함"
+msgstr "card imported from Google"
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+msgid "구글 이름을 따른 표시"
+msgstr "mark taken from the Google name"
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+msgid "예전 구글 연락처와 짝"
+msgstr "paired with an existing Google contact"
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+msgid "같은 휴대폰이 예전 구글 연락처에"
+msgstr "same mobile as an existing Google contact"
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+msgid "직접 정한 표시"
+msgstr "set by you"
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+msgid "설정에서 끔"
+msgstr "turned off in settings"
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+msgid "지난 싱크의 표시"
+msgstr "mark from the last sync"
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+#, python-brace-format
+msgid "드라이브 저장 공간 부족 {n}건"
+msgstr "Google Drive storage full: {n}"
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+#, python-brace-format
+msgid "권한 없음 {n}건"
+msgstr "No permission: {n}"
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+#, python-brace-format
+msgid "구글 한도 초과 {n}건"
+msgstr "Google rate limit exceeded: {n}"
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+#, python-brace-format
+msgid "연결 안 됨 {n}건"
+msgstr "No connection: {n}"
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+#, python-brace-format
+msgid "그 밖 {n}건"
+msgstr "Other: {n}"
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+#, python-brace-format
+msgid "{ok}건 적용, {bad}건은 하지 못했습니다(다음 싱크에서 다시 보입니다)."
+msgstr "{ok} applied, {bad} failed (they will show again on the next sync)."
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+msgid "구글 드라이브 공간을 비운 뒤 명함찾기를 다시 열면 남은 사진·명함 그림을 이어서 올립니다."
+msgstr "Free up Google Drive space, then open Find Business Card again — the remaining photos and card images will continue uploading."
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+msgid "명함 기준으로 올리기"
+msgstr "Upload with cards as the source"
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+msgid "명함 값이 이깁니다 — 구글에서 지워진 사람은 새 연락처로 다시 만들고, 구글 → 명함으로 고치거나 가져오는 줄은 만들지 않습니다"
+msgstr "Card values win — people deleted in Google are created again as new contacts, and no rows are made to update or import cards from Google"
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+msgid "구글 주소록을 받는 중…"
+msgstr "Fetching Google Contacts…"
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+msgid "구글 주소록과 명함이 같습니다 — 바꿀 것이 없습니다."
+msgstr "Google Contacts and the cards match — nothing to change."
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+msgid "구글 주소록이 바뀝니다 — [적용] 전에 contacts.google.com → 내보내기로 백업해 두기를 권합니다."
+msgstr "Your Google Contacts will change — we recommend backing them up first via contacts.google.com → Export before [Apply]."
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+#, python-brace-format
+msgid "까닭: {list}"
+msgstr "Reasons: {list}"
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+#: viewer/widgets/bizcard_history_dialog.py
+#: viewer/widgets/bizcard_import_dialog.py
+msgid "(이름 없음)"
+msgstr "(no name)"
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+#, python-brace-format
+msgid "바뀔 것 {n}건 — 줄을 골라 [적용] 을 누르면 바뀝니다(지워진 것은 처음에 '남김')."
+msgstr "{n} changes — choose rows and press [Apply] (deletions start as 'keep')."
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+#, python-brace-format
+msgid "남은 {n}건은 다음에 명함찾기를 열 때 이어서 올립니다."
+msgstr "The remaining {n} will continue the next time Find Business Card opens."
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+#, python-brace-format
+msgid "구글에 연결하지 못했습니다({err}). 명함 환경설정에서 연결을 확인하세요."
+msgstr "Could not connect to Google ({err}). Check the connection in the card settings."
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+msgid "구글에 이미 있을 수 있음"
+msgstr "may already be in Google"
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+msgid "새 연락처와 함께"
+msgstr "with the new contact"
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+msgid "지난번 못 올림"
+msgstr "failed last time"
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+msgid "# 붙임"
+msgstr "adds #"
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+#, python-brace-format
+msgid "글 자료 {n}건을 적용했습니다. 사진·명함 그림 {m}건은 명함찾기 아래 줄에서 이어 올립니다 — 창을 닫아도 다음에 열 때 이어서 올립니다."
+msgstr "Applied {n} text changes. {m} photos and card images are now uploading (shown at the bottom of Find Business Card) — if you close it, uploading continues the next time it opens."
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+#, python-brace-format
+msgid "# 없음 — {why}"
+msgstr "no # — {why}"
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+#: viewer/widgets/bizcard_history_dialog.py
+msgid "(없음)"
+msgstr "(none)"
+
+#: viewer/widgets/bizcard_history_dialog.py
+msgid "싱크"
+msgstr "Sync"
+
+#: viewer/widgets/bizcard_history_dialog.py
+msgid "번호 종류"
+msgstr "Number type"
+
+#: viewer/widgets/bizcard_history_dialog.py
+msgid "되살리기"
+msgstr "Restore"
+
+#: viewer/widgets/bizcard_history_dialog.py
+msgid "체크한 명함을 기간이 시작되기 전 모습으로 되살립니다 — 되살리기도 기록에 남아 되돌릴 수 있습니다"
+msgstr "Restores the checked cards to how they were before the period — restoring is also recorded, so it can be undone"
+
+#: viewer/widgets/bizcard_history_dialog.py
+msgid "지운 것·고친 것"
+msgstr "Deleted and changed"
+
+#: viewer/widgets/bizcard_history_dialog.py
+msgid "지운 것만"
+msgstr "Deleted only"
+
+#: viewer/widgets/bizcard_history_dialog.py
+msgid "고친 것만"
+msgstr "Changed only"
+
+#: viewer/widgets/bizcard_history_dialog.py viewer/widgets/sign_dialogs.py
+#: viewer/widgets/stamp_dialog.py viewer/widgets/study_panel.py
+msgid "종류"
+msgstr "Type"
+
+#: viewer/widgets/bizcard_history_dialog.py
+msgid "때"
+msgstr "When"
+
+#: viewer/widgets/bizcard_history_dialog.py
+msgid "되살리기도 기록에 남아 이 창에서 되돌릴 수 있습니다."
+msgstr "Restores are recorded too, so you can undo them in this window."
+
+#: viewer/widgets/bizcard_history_dialog.py
+msgid "되살리지 못했습니다 — 명함 DB 를 다른 곳에서 쓰고 있는지 확인하세요."
+msgstr "Could not restore — check whether the card database is in use elsewhere."
+
+#: viewer/widgets/bizcard_history_dialog.py
+#, python-brace-format
+msgid "{n}건을 되살렸습니다."
+msgstr "Restored {n} items."
+
+#: viewer/widgets/bizcard_history_dialog.py
+msgid "고침"
+msgstr "Changed"
+
+#: viewer/widgets/bizcard_history_dialog.py
+msgid "그 뒤 또 바뀜"
+msgstr "Changed again later"
+
+#: viewer/widgets/bizcard_history_dialog.py
+#, python-brace-format
+msgid "바뀐 명함 {n}장 — 되살릴 값은 그 기간이 시작되기 전 모습입니다. 지운 그림 명함의 그림 파일은 휴지통에서 되살리세요."
+msgstr "{n} changed cards — values are restored to how they were before the period. Restore image files of deleted cards from the Recycle Bin."
+
+#: viewer/widgets/bizcard_history_dialog.py
+#, python-brace-format
+msgid "{m}건은 되살리지 못했습니다(할 일 탭이 지워졌음)."
+msgstr "{m} could not be restored (their to-do tab was deleted)."
+
+#: viewer/widgets/bizcard_history_dialog.py
+msgid "할 일 기록"
+msgstr "To-do record"
 
 #: viewer/widgets/bizcard_import_dialog.py
 msgid "명함 위를 끌어 이름·회사 등의 자리를 지정하면 그 자리만 다시 읽어 칸을 채우고, 같은 회사 명함에 기억합니다"
@@ -8876,13 +9453,6 @@ msgstr "Reading %v / %m"
 msgid "영문 칸 — 뒷면 등에서 읽은 영문"
 msgstr "English fields — English text read from the back side, etc."
 
-#: viewer/widgets/bizcard_import_dialog.py viewer/widgets/crop_dialog.py
-#: viewer/widgets/line_text_settings_dialog.py
-#: viewer/widgets/photo_label_dialog.py viewer/widgets/tag_apply_dialog.py
-#: viewer/widgets/view_settings_dialog.py
-msgid "적용"
-msgstr "Apply"
-
 #: viewer/widgets/bizcard_import_dialog.py
 msgid "체크한 명함을 정리 폴더에 '성명_회사명.jpg' 로 만듭니다 — 원본은 그대로 둡니다"
 msgstr "Creates the checked cards as 'Name_Company.jpg' in the output folder — the originals are left as they are"
@@ -8915,7 +9485,7 @@ msgstr "Insert"
 msgid "정리 폴더"
 msgstr "Output Folder"
 
-#: viewer/widgets/bizcard_import_dialog.py
+#: viewer/widgets/bizcard_import_dialog.py viewer/widgets/bizcard_new_dialog.py
 msgid "뒷면"
 msgstr "Back"
 
@@ -8926,10 +9496,6 @@ msgstr "New File Name"
 #: viewer/widgets/bizcard_import_dialog.py
 msgid "정리 폴더:"
 msgstr "Output folder:"
-
-#: viewer/widgets/bizcard_import_dialog.py
-msgid "(이름 없음)"
-msgstr "(no name)"
 
 #: viewer/widgets/bizcard_import_dialog.py
 msgid "지금 읽는 중입니다 — 다 읽은 뒤에 다시 하세요."
@@ -9157,6 +9723,282 @@ msgstr "Could not add the card ({err})."
 msgid "인물 사진 {n}개를 넣지 못했습니다."
 msgstr "Could not add {n} portrait photo(s)."
 
+# | 서비스 → 라이브러리' 에서 'People API' 를 검색해 [사용](처음 보이는 '사용 설정된 API' 목록에는 켜기 전이라
+# | 없습니다). 명함 그림을 드라이브에 올리려면 'Google Drive API' 도 같은 방법으로.\n" "3. 'Google 인증
+# | 플랫폼' 시작하기: 앱 이름(예: PolyCardex)·사용자 지원 이메일·연락처 이메일에 본인 Gmail. 대상은 '외부'(개인
+# | Gmail 은 '내부' 를 고를 수 없습니다). 로고·홈페이지·개인정보처리방침·도메인은 비워 둡니다(로고를 올리면 구글 검증 제출이
+# | 필요해집니다).\n" "4. 테스트 사용자: 'Google 인증 플랫폼 → 대상 → 테스트 사용자 → [+ Add users]' 에
+# | 로그인할 본인 Gmail 을 넣습니다(빠뜨리면 로그인 때 '403 오류: access_denied — 앱은 현재 테스트 중' 이
+# | 뜹니다). 테스트 상태에서는 7일마다 다시 연결해야 합니다.\n" "5. 클라이언트 만들기: 'Google 인증 플랫폼 → 클라이언트
+# →
+# | [클라이언트 만들기]' → 애플리케이션 유형 '데스크톱 앱', 이름(예: PolyCardex), 'AI 기반 에이전트에 이 클라이언트
+# | 사용' 은 체크하지 않음 → [만들기] → 나온 클라이언트 ID·보안 비밀을 복사합니다.\n" "\n" "그다음 이 창에서:\n"
+# "6.
+# | 클라이언트 ID·보안 비밀을 붙여 넣고 [구글 계정 연결] → 브라우저에서 4번에 넣은 계정을 고르고, 'Google 에서 확인하지
+# 않은
+# | 앱' 이 뜨면 [계속] → 주소록(드라이브) 권한에 체크 → [계속]. 위쪽에 '연결됨 — (메일)' 이 보이면 [확인] 으로
+# | 닫습니다.\n" "7. 싱크: 명함찾기 [주소록] → [구글 주소록과 싱크] → 미리보기에서 바꿀 줄을 고르고 [반영]. 처음에는 몇
+# | 줄만 골라 시험해 보세요.\n" "\n" "콘솔에서 바꾼 설정은 반영되는 데 몇 분 걸릴 수 있습니다. 로그인은 구글 화면에서 하고,
+# 이
+# | 앱은 구글 비밀번호를 보지 않습니다. 7일이 지나 '연결 안 됨' 이 되면 [구글 계정 연결] 만 다시 누르면 됩니다."
+#: viewer/widgets/bizcard_settings_dialog.py
+msgid ""
+"구글 주소록 연결 — 처음 한 번, 구글 클라우드 콘솔(console.cloud.google.com)에서:\n"
+"\n"
+"1. 프로젝트 만들기: 위쪽 프로젝트 고르기 → [새 프로젝트].\n"
+"2. People API 켜기: 왼쪽 'API 및 서비스 → 라이브러리' 에서 'People API' 를 검색해 [사용](처음 보이는 '사용 설정된 API' 목록에는 켜기 전이라 없습니다). 명함 그림을 드라이브에 올리려면 'Google Drive API' 도 같은 방법으로.\n"
+"3. 'Google 인증 플랫폼' 시작하기: 앱 이름(예: PolyCardex)·사용자 지원 이메일·연락처 이메일에 본인 Gmail. 대상은 '외부'(개인 Gmail 은 '내부' 를 고를 수 없습니다). 로고·홈페이지·개인정보처리방침·도메인은 비워 둡니다(로고를 올리면 구글 검증 제출이 필요해집니다).\n"
+"4. 테스트 사용자: 'Google 인증 플랫폼 → 대상 → 테스트 사용자 → [+ Add users]' 에 로그인할 본인 Gmail 을 넣습니다(빠뜨리면 로그인 때 '403 오류: access_denied — 앱은 현재 테스트 중' 이 뜹니다). 테스트 상태에서는 7일마다 다시 연결해야 합니다.\n"
+"5. 클라이언트 만들기: 'Google 인증 플랫폼 → 클라이언트 → [클라이언트 만들기]' → 애플리케이션 유형 '데스크톱 앱', 이름(예: PolyCardex), 'AI 기반 에이전트에 이 클라이언트 사용' 은 체크하지 않음 → [만들기] → 나온 클라이언트 ID·보안 비밀을 복사합니다.\n"
+"\n"
+"그다음 이 창에서:\n"
+"6. 클라이언트 ID·보안 비밀을 붙여 넣고 [구글 계정 연결] → 브라우저에서 4번에 넣은 계정을 고르고, 'Google 에서 확인하지 않은 앱' 이 뜨면 [계속] → 주소록(드라이브) 권한에 체크 → [계속]. 위쪽에 '연결됨 — (메일)' 이 보이면 [확인] 으로 닫습니다.\n"
+"7. 싱크: 명함찾기 ≡ 메뉴 → 주소록 → 구글 주소록과 싱크 → 미리보기에서 바꿀 줄을 고르고 [적용]. 처음에는 몇 줄만 골라 시험해 보세요.\n"
+"\n"
+"콘솔에서 바꾼 설정은 반영되는 데 몇 분 걸릴 수 있습니다. 로그인은 구글 화면에서 하고, 이 앱은 구글 비밀번호를 보지 않습니다. 7일이 지나 '연결 안 됨' 이 되면 [구글 계정 연결] 만 다시 누르면 됩니다."
+msgstr ""
+"Connecting Google Contacts — once, in the Google Cloud console (console.cloud.google.com):\n"
+"\n"
+"1. Create a project: project picker at the top → [New project].\n"
+"2. Enable the People API: in the left menu 'APIs & Services → Library', search for 'People API' and press [Enable] (it is not in the first 'Enabled APIs' list until you enable it). To upload card images to Drive, enable 'Google Drive API' the same way.\n"
+"3. Get started with 'Google Auth Platform': app name (e.g. PolyCardex), user support email and contact email = your Gmail. Audience: 'External' (a personal Gmail account cannot choose 'Internal'). Leave the logo, homepage, privacy policy and domains empty (uploading a logo requires submitting the app for Google verification).\n"
+"4. Test users: 'Google Auth Platform → Audience → Test users → [+ Add users]' and add the Gmail you will sign in with (without it, sign-in shows 'Error 403: access_denied — the app is currently being tested'). In testing status you must reconnect every 7 days.\n"
+"5. Create a client: 'Google Auth Platform → Clients → [Create client]' → application type 'Desktop app', a name (e.g. PolyCardex), leave 'Use this client for AI-based agents' unchecked → [Create] → copy the client ID and secret.\n"
+"\n"
+"Then in this window:\n"
+"6. Paste the client ID and secret and press [Connect Google account] → in the browser choose the account from step 4; if 'Google hasn't verified this app' appears press [Continue] → tick the contacts (and Drive) permissions → [Continue]. When 'Connected — (email)' shows at the top, close with [OK].\n"
+"7. Sync: Find Business Card ≡ menu → Contacts → Sync with Google Contacts → choose rows in the preview and press [Apply]. Try a few rows first.\n"
+"\n"
+"Changes in the console can take a few minutes to apply. You sign in on Google's page; this app never sees your Google password. When it shows 'Not connected' after 7 days, just press [Connect Google account] again."
+
+#: viewer/widgets/bizcard_settings_dialog.py
+msgid "명함 환경설정"
+msgstr "Business card settings"
+
+#: viewer/widgets/bizcard_settings_dialog.py viewer/widgets/settings_dialog.py
+msgid "명함 폴더"
+msgstr "Business Card Folder"
+
+#: viewer/widgets/bizcard_settings_dialog.py viewer/widgets/settings_dialog.py
+msgid "지정하지 않음 — '명함 관리' 는 열린 폴더"
+msgstr "Not set — 'Business Card Manager' uses the open folder"
+
+#: viewer/widgets/bizcard_settings_dialog.py viewer/widgets/settings_dialog.py
+msgid "다른 폴더로 이전"
+msgstr "Move to Another Folder"
+
+#: viewer/widgets/bizcard_settings_dialog.py viewer/widgets/settings_dialog.py
+msgid "명함 폴더 안의 모든 것(원본·PDF·정리·인물 사진)을 새 폴더로 옮기고, 명함 기록·해시태그의 경로도 바꿉니다"
+msgstr "Moves everything in the business card folder (originals, PDFs, output, photos of people) to the new folder and updates the paths of card records and hashtags"
+
+#: viewer/widgets/bizcard_settings_dialog.py
+msgid "한국 — +82 번호를 010-… 국내 꼴로"
+msgstr "Korea — write +82 numbers as domestic 010-…"
+
+#: viewer/widgets/bizcard_settings_dialog.py
+msgid "지정 안 함 — +82 번호도 국제 꼴 그대로"
+msgstr "None — keep +82 numbers in international form"
+
+#: viewer/widgets/bizcard_settings_dialog.py
+msgid "비우면 브라우저의 기본 구글 계정"
+msgstr "Leave empty for the browser's default Google account"
+
+#: viewer/widgets/bizcard_settings_dialog.py
+msgid "'최근' 항목 제한"
+msgstr "'Recent' limit"
+
+#: viewer/widgets/bizcard_settings_dialog.py
+msgid "20개"
+msgstr "20 items"
+
+#: viewer/widgets/bizcard_settings_dialog.py
+msgid "개수 직접"
+msgstr "Custom count"
+
+#: viewer/widgets/bizcard_settings_dialog.py
+msgid "2주"
+msgstr "2 weeks"
+
+#: viewer/widgets/bizcard_settings_dialog.py
+msgid "기간 직접"
+msgstr "Custom period"
+
+#: viewer/widgets/bizcard_settings_dialog.py
+msgid "넘는 기록은 지웁니다(명함은 그대로)."
+msgstr "Older entries are removed (the cards stay)."
+
+#: viewer/widgets/bizcard_settings_dialog.py
+msgid "칸을 고치면 메모 맨 위에 날짜와 고친 칸 이름을 적기"
+msgstr "When a field is changed, note the date and the changed fields at the top of the memo"
+
+#: viewer/widgets/bizcard_settings_dialog.py
+msgid "예: [2026-11-21 수정] 휴대폰·메일 — 옛 값은 적지 않습니다"
+msgstr "e.g. [2026-11-21 edited] Mobile·Email — old values are not recorded"
+
+#: viewer/widgets/bizcard_settings_dialog.py
+msgid "메모를 쓰기 시작하면 맨 앞에 오늘 날짜"
+msgstr "Put today's date first when starting to write a memo"
+
+#: viewer/widgets/bizcard_settings_dialog.py
+msgid "메모가 비었거나 맨 앞에서 쓸 때 — 넣은 날짜는 지워도 됩니다"
+msgstr "When the memo is empty or you type at the very start — you can delete the inserted date"
+
+#: viewer/widgets/bizcard_settings_dialog.py viewer/widgets/settings_dialog.py
+msgid "새 명함 폴더"
+msgstr "New Business Card Folder"
+
+#: viewer/widgets/bizcard_settings_dialog.py
+msgid "구글 주소록"
+msgstr "Google Contacts"
+
+#: viewer/widgets/bizcard_settings_dialog.py
+msgid "구글 클라우드 '개인 모드' 프로젝트의 데스크톱 앱 클라이언트 ID"
+msgstr "Desktop app client ID of your Google Cloud 'personal mode' project"
+
+#: viewer/widgets/bizcard_settings_dialog.py
+msgid "클라이언트 ID:"
+msgstr "Client ID:"
+
+#: viewer/widgets/bizcard_settings_dialog.py
+msgid "클라이언트 보안 비밀:"
+msgstr "Client secret:"
+
+#: viewer/widgets/bizcard_settings_dialog.py
+msgid "구글 계정 연결"
+msgstr "Connect Google account"
+
+#: viewer/widgets/bizcard_settings_dialog.py
+msgid "연결 끊기"
+msgstr "Disconnect"
+
+#: viewer/widgets/bizcard_settings_dialog.py
+msgid "구글에 연결 권한 철회를 요청하고, 이 PC 에 보관한 토큰과 짝 기록을 지웁니다"
+msgstr "Asks Google to revoke access and deletes the token and pairing records kept on this PC"
+
+#: viewer/widgets/bizcard_settings_dialog.py viewer/widgets/help_button.py
+msgid "도움말"
+msgstr "Help"
+
+#: viewer/widgets/bizcard_settings_dialog.py
+msgid "인물 사진도 연락처 사진으로 주고받기"
+msgstr "Also sync person photos as contact photos"
+
+#: viewer/widgets/bizcard_settings_dialog.py
+msgid "명함 그림·인물 사진을 구글 드라이브에 올리고 연락처에 링크(앞면 = 웹사이트, 뒷면·사진 = 메모)"
+msgstr "Upload card images and portrait photos to Google Drive and link them in the contact (front = website, back and photos = notes)"
+
+#: viewer/widgets/bizcard_settings_dialog.py
+msgid "구글에 새로 보낼 때 카톡 친구추가 방지(이름 앞 #)"
+msgstr "Block KakaoTalk auto-friend for contacts newly sent to Google (# before the name)"
+
+#: viewer/widgets/bizcard_settings_dialog.py
+msgid "휴대폰이 구글 주소록을 받아도 카카오톡이 자동 친구로 넣지 않게 — 이미 구글에 있는 연락처는 그대로"
+msgstr "So KakaoTalk does not auto-add them as friends when your phone syncs Google Contacts — contacts already in Google are left as they are"
+
+#: viewer/widgets/bizcard_settings_dialog.py
+msgid "체크한 해시태그만 구글 연락처 라벨과 맞춥니다 — 명함에 붙이면 라벨에 넣고, 구글에서 라벨을 떼면 해시태그도 뗍니다"
+msgstr "Only checked hashtags are matched with Google contact labels — adding one to a card puts the contact in the label, and removing the label in Google removes the hashtag"
+
+# | 거칩니다."
+#: viewer/widgets/bizcard_settings_dialog.py
+msgid "켜면 명함의 글 칸(과 고른 사진)을 구글 People·Drive API 로만 주고받습니다. 적용 전에는 늘 미리보기를 거칩니다."
+msgstr "When on, card text fields (and the chosen photos) are exchanged only with the Google People and Drive APIs. Changes always go through a preview before [Apply]."
+
+#: viewer/widgets/bizcard_settings_dialog.py
+msgid "브라우저에서 구글 로그인을 마치세요…"
+msgstr "Finish signing in to Google in the browser…"
+
+#: viewer/widgets/bizcard_settings_dialog.py
+msgid "전화번호 기본 국가:"
+msgstr "Default phone country:"
+
+#: viewer/widgets/bizcard_settings_dialog.py
+msgid "받는 칸:"
+msgstr "Address field:"
+
+#: viewer/widgets/bizcard_settings_dialog.py
+msgid "Gmail 보낼 계정:"
+msgstr "Gmail sender account:"
+
+#: viewer/widgets/bizcard_settings_dialog.py
+msgid "개"
+msgstr "items"
+
+#: viewer/widgets/bizcard_settings_dialog.py
+msgid "일"
+msgstr "days"
+
+#: viewer/widgets/bizcard_settings_dialog.py
+msgid "드라이브 폴더:"
+msgstr "Drive folder:"
+
+#: viewer/widgets/bizcard_settings_dialog.py
+msgid "구글 라벨로 올릴 해시태그:"
+msgstr "Hashtags to sync as Google labels:"
+
+#: viewer/widgets/bizcard_settings_dialog.py
+msgid "클라이언트 ID 를 넣으세요 — [도움말] 에 만드는 차례가 있습니다."
+msgstr "Enter a client ID — [Help] shows how to create one."
+
+#: viewer/widgets/bizcard_settings_dialog.py
+msgid "이 PC 에서 비밀값을 잠글 수 없어 보안 비밀은 저장하지 않습니다(이번 연결에만 씁니다)."
+msgstr "This PC cannot encrypt secrets, so the client secret is not saved (used for this connection only)."
+
+#: viewer/widgets/bizcard_settings_dialog.py
+msgid "연결됨"
+msgstr "Connected"
+
+#: viewer/widgets/bizcard_settings_dialog.py
+msgid "연결 안 됨"
+msgstr "Not connected"
+
+#: viewer/widgets/bizcard_settings_dialog.py
+#, python-brace-format
+msgid "연결됨 — {email}"
+msgstr "Connected — {email}"
+
+#: viewer/widgets/bizcard_settings_dialog.py
+#, python-brace-format
+msgid "구글 계정을 연결하지 못했습니다({err})."
+msgstr "Could not connect the Google account ({err})."
+
+#: viewer/widgets/bizcard_todo_panel.py
+msgid "이전 기록"
+msgstr "Previous entry"
+
+#: viewer/widgets/bizcard_todo_panel.py
+msgid "다음 기록"
+msgstr "Next entry"
+
+#: viewer/widgets/bizcard_todo_panel.py
+msgid "#해시태그 — 빈칸으로 나눔(이 기록에만)"
+msgstr "#hashtags — separated by spaces (this entry only)"
+
+#: viewer/widgets/bizcard_todo_panel.py
+msgid "눌러서 새 줄 — ☐ 체크·기한 날짜(처음 오늘)·글"
+msgstr "Click for a new line — ☐ check, due date (today at first), text"
+
+#: viewer/widgets/bizcard_todo_panel.py
+msgid "고친 내용을 오늘 날짜의 새 기록으로 — 보던 기록은 그대로 남습니다"
+msgstr "Save the changes as a new entry dated today — the entry you were viewing stays as it is"
+
+#: viewer/widgets/bizcard_todo_panel.py
+msgid "보고 있는 기록 하나를 지웁니다"
+msgstr "Delete the entry you are viewing"
+
+#: viewer/widgets/bizcard_todo_panel.py
+msgid "고친 할 일 내용을 저장할까요?"
+msgstr "Save the changed to-do details?"
+
+#: viewer/widgets/bizcard_todo_panel.py
+msgid "이 기록을 지웁니다 — 지운 기록은 ≡ 메뉴 '주소록 ▸ 변경 기록·되살리기' 에서 되살릴 수 있습니다."
+msgstr "Delete this record? Deleted records can be restored from ≡ menu 'Contacts ▸ Change history and restore'."
+
+#: viewer/widgets/bizcard_todo_panel.py
+#, python-brace-format
+msgid "수정일 {d}"
+msgstr "Modified {d}"
+
 #: viewer/widgets/bookmark_tree.py
 msgid "전자서명 있음 — 열면 본문 위 띠에 검증 결과가 보입니다."
 msgstr "Digitally signed — open it to see the verification result in the band above the page."
@@ -9288,14 +10130,6 @@ msgid "글자층이 없는 스캔 쪽을 OCR 로 읽어 보이지 않는 글자�
 msgstr "Reads scanned pages without a text layer with OCR and adds an invisible text layer to the original PDF — other programs can then search and copy the text (a backup is kept the first time)."
 
 #: viewer/widgets/bookmark_tree.py
-msgid "속성"
-msgstr "Attribute"
-
-#: viewer/widgets/bookmark_tree.py
-msgid "검색 비우기"
-msgstr "Clear Search"
-
-#: viewer/widgets/bookmark_tree.py
 msgid "암호화 설정 파일 - 암호 열음"
 msgstr "Encrypted file - opened with password"
 
@@ -9376,6 +10210,14 @@ msgstr "Extracts only the selected files to a folder you choose."
 #: viewer/widgets/bookmark_tree.py
 msgid "확장자 순"
 msgstr "By extension"
+
+#: viewer/widgets/bookmark_tree.py
+msgid "검색 비우기"
+msgstr "Clear Search"
+
+#: viewer/widgets/bookmark_tree.py
+msgid "(이 목록의 파일에 해시태그 없음 — 파일 우클릭 → 해시태그 편집)"
+msgstr "(No hashtags on files in this list — right-click a file → Edit Hashtags)"
 
 #: viewer/widgets/bookmark_tree.py viewer/widgets/merge_dialog.py
 msgid "정렬:"
@@ -9468,14 +10310,6 @@ msgstr ""
 #: viewer/widgets/bookmark_tree.py viewer/widgets/favorites_dialog.py
 msgid "📄 파일"
 msgstr "📄 File"
-
-#: viewer/widgets/bookmark_tree.py
-msgid "(이 목록의 파일에 해시태그 없음 — 파일 우클릭 → 해시태그 편집)"
-msgstr "(No hashtags on files in this list — right-click a file → Edit Hashtags)"
-
-#: viewer/widgets/bookmark_tree.py viewer/widgets/tag_apply_dialog.py
-msgid "해시태그 수정"
-msgstr "Modify Hashtags"
 
 #: viewer/widgets/bookmark_tree.py viewer/widgets/main_view.py
 msgid "암호가 올바르지 않습니다."
@@ -10829,10 +11663,6 @@ msgstr "No sentences using '{term}' found in the text."
 #, python-brace-format
 msgid "사용자 사전 저장 실패: {name__}: {e}"
 msgstr "Failed to save user dictionary: {name__}: {e}"
-
-#: viewer/widgets/help_button.py
-msgid "도움말"
-msgstr "Help"
 
 #: viewer/widgets/help_dialog.py
 msgid "사용법 파일을 찾지 못했습니다."
@@ -12700,43 +13530,6 @@ msgstr "Start"
 msgid "끝"
 msgstr "End"
 
-#: viewer/widgets/bizcard_todo_panel.py
-msgid "체크하지 않으면 끝 없이 계속"
-msgstr "If unchecked, it continues without an end"
-
-#: viewer/widgets/bizcard_todo_panel.py
-msgid "할 일 내용"
-msgstr "To-do details"
-
-#: viewer/widgets/bizcard_todo_panel.py
-msgid "고친 내용을 오늘 날짜의 새 기록으로 — 보던 기록은 그대로 남습니다"
-msgstr "Save the changes as a new entry dated today — the entry you were viewing stays as it is"
-
-#: viewer/widgets/bizcard_todo_panel.py
-msgid "보고 있는 기록 하나를 지웁니다"
-msgstr "Delete the entry you are viewing"
-
-#: viewer/widgets/bizcard_todo_panel.py
-msgid "고친 할 일 내용을 저장할까요?"
-msgstr "Save the changed to-do details?"
-
-#: viewer/widgets/bizcard_todo_panel.py
-msgid "기한"
-msgstr "Due"
-
-#: viewer/widgets/bizcard_todo_panel.py
-msgid "끝 날짜가 시작 날짜보다 앞입니다."
-msgstr "The end date is before the start date."
-
-#: viewer/widgets/bizcard_todo_panel.py
-msgid "이 기록을 지웁니다 — 되돌릴 수 없습니다."
-msgstr "This entry will be deleted — this cannot be undone."
-
-#: viewer/widgets/bizcard_todo_panel.py
-#, python-brace-format
-msgid "수정일 {d}"
-msgstr "Modified {d}"
-
 #: viewer/widgets/print_dialog.py
 msgid "<b>인쇄 범위</b>"
 msgstr "<b>Print Range</b>"
@@ -13554,36 +14347,12 @@ msgid "사진 모드에서 발표보기(F5)로 연 슬라이드쇼가 이 간격
 msgstr "A slideshow opened with Presentation (F5) in photo mode moves to the next photo at this interval. 0 turns it off."
 
 #: viewer/widgets/settings_dialog.py
-msgid "지정하지 않음 — '명함 관리' 는 열린 폴더"
-msgstr "Not set — 'Business Card Manager' uses the open folder"
-
-#: viewer/widgets/settings_dialog.py
 msgid "명함 사진이 있는 폴더 — 도구 › 명함 › 명함 관리 가 이 폴더를 엽니다"
 msgstr "Folder with the business card images — Tools › Business Cards › Business Card Manager opens this folder"
 
 #: viewer/widgets/settings_dialog.py
-msgid "다른 폴더로 이전"
-msgstr "Move to Another Folder"
-
-#: viewer/widgets/settings_dialog.py
-msgid "명함 폴더 안의 모든 것(원본·PDF·정리·인물 사진)을 새 폴더로 옮기고, 명함 기록·해시태그의 경로도 바꿉니다"
-msgstr "Moves everything in the business card folder (originals, PDFs, output, photos of people) to the new folder and updates the paths of card records and hashtags"
-
-#: viewer/widgets/settings_dialog.py
 msgid "지정 안 함"
 msgstr "Clear"
-
-#: viewer/widgets/settings_dialog.py
-msgid "한국 — +82 번호를 010-… 국내 꼴로"
-msgstr "Korea — write +82 numbers as domestic 010-…"
-
-#: viewer/widgets/settings_dialog.py
-msgid "지정 안 함 — +82 번호도 국제 꼴 그대로"
-msgstr "None — keep +82 numbers in international form"
-
-#: viewer/widgets/settings_dialog.py
-msgid "명함 인식·명함찾기·명함 관리·주소록 가져오기에서 전화번호를 적는 꼴"
-msgstr "How phone numbers are written in business card recognition, Find Business Card, Business Card Manager and contact import"
 
 #: viewer/widgets/settings_dialog.py
 msgid "자동 해시태그"
@@ -13663,14 +14432,6 @@ msgstr "Save current settings as defaults (for distribution)"
 #: viewer/widgets/settings_dialog.py
 msgid "설정 초기화(기본값으로 되돌리기)"
 msgstr "Reset settings (restore defaults)"
-
-#: viewer/widgets/settings_dialog.py
-msgid "명함 폴더"
-msgstr "Business Card Folder"
-
-#: viewer/widgets/settings_dialog.py
-msgid "새 명함 폴더"
-msgstr "New Business Card Folder"
 
 #: viewer/widgets/settings_dialog.py
 msgid "외부 언어팩 사용"
@@ -13766,28 +14527,8 @@ msgid "명함 폴더:"
 msgstr "Business card folder:"
 
 #: viewer/widgets/settings_dialog.py
-msgid "전화번호 기본 국가:"
-msgstr "Default phone country:"
-
-#: viewer/widgets/bizcard_todo_panel.py
-msgid "이전 기록"
-msgstr "Previous entry"
-
-#: viewer/widgets/bizcard_todo_panel.py
-msgid "다음 기록"
-msgstr "Next entry"
-
-#: viewer/widgets/bizcard_todo_panel.py
-msgid "#해시태그 — 빈칸으로 나눔(이 기록에만)"
-msgstr "#hashtags — separated by spaces (this entry only)"
-
-#: viewer/widgets/bizcard_todo_panel.py
-msgid "눌러서 새 줄 — ☐ 체크·기한 날짜(처음 오늘)·글"
-msgstr "Click for a new line — ☐ check, due date (today at first), text"
-
-#: viewer/widgets/bizcard_todo_panel.py
-msgid "했음"
-msgstr "Done"
+msgid "그 밖의 명함 설정(전화번호 꼴·'최근' 제한)은 명함찾기 창 오른쪽 위 톱니(명함 환경설정)에서 바꿉니다."
+msgstr "Other business card settings (phone number format, 'Recent' limit) are in the gear (Business card settings) at the top right of Find Business Card."
 
 # | 수가 한도를 넘으면 자동으로 한도가 늘어납니다.</small>"
 #: viewer/widgets/settings_dialog.py
@@ -14293,11 +15034,6 @@ msgstr "Enter the password."
 #: viewer/widgets/sign_dialogs.py
 msgid "두 비밀번호가 다릅니다."
 msgstr "The passwords do not match."
-
-#: viewer/widgets/sign_dialogs.py viewer/widgets/stamp_dialog.py
-#: viewer/widgets/study_panel.py
-msgid "종류"
-msgstr "Type"
 
 #: viewer/widgets/sign_dialogs.py
 msgid "지문"
@@ -15123,10 +15859,6 @@ msgid "짝 낱말"
 msgstr "Paired word"
 
 #: viewer/widgets/tag_apply_dialog.py
-msgid "기간"
-msgstr "Period"
-
-#: viewer/widgets/tag_apply_dialog.py
 msgid "오늘"
 msgstr "Today"
 
@@ -15155,9 +15887,21 @@ msgid "새 태그 후보"
 msgstr "New tag candidates"
 
 #: viewer/widgets/tag_apply_dialog.py
+msgid "모두에 붙이기"
+msgstr "Add to all"
+
+#: viewer/widgets/tag_apply_dialog.py
 #, python-brace-format
 msgid "고른 파일 {n}개 / 보이는 {v}개 / 모두 {m}개"
 msgstr "{n} selected / {v} shown / {m} files"
+
+#: viewer/widgets/tag_apply_dialog.py
+msgid "이미 모두에 붙어 있음"
+msgstr "Already on all"
+
+#: viewer/widgets/tag_apply_dialog.py
+msgid "이 태그를 대상 파일 모두에 붙입니다(Enter) — 되돌리기 한 걸음"
+msgstr "Adds this tag to all target files (Enter) — one undo step"
 
 #: viewer/widgets/tag_apply_dialog.py
 #, python-brace-format
@@ -15182,6 +15926,10 @@ msgstr "Document type — adding it makes this the only type of the chosen PDFs"
 #, python-brace-format
 msgid "  ({n}건)"
 msgstr "  ({n})"
+
+#: viewer/widgets/tag_apply_dialog.py
+msgid "일부 파일에만 붙어 있습니다 — 고르고 [적용] 하면 나머지에도 붙입니다"
+msgstr "On some files only — select it and click [Apply] to add it to the rest"
 
 #: viewer/widgets/tag_apply_dialog.py
 msgid "날짜는 고른 파일마다 그 파일 날짜로, 한글·영어와 스캔문서·텍스트문서는 짝 중 하나만 붙습니다"
@@ -15294,6 +16042,10 @@ msgstr "If the name is taken, the copy is saved as 'name (2)'. Hashtags and OCR 
 #, python-brace-format
 msgid "#{tag}  ({n}개)"
 msgstr "#{tag}  ({n})"
+
+#: viewer/widgets/tag_filter_menu.py
+msgid "속성"
+msgstr "Attribute"
 
 #: viewer/widgets/tag_rules_panel.py
 msgid "지역"
@@ -18396,868 +19148,89 @@ msgstr "Getting Started"
 #~ msgid "처음 {n}장"
 #~ msgstr "First {n}"
 
-#: viewer/widgets/bizcard_find_dialog.py
-msgid "기본 메일 앱으로 보내기"
-msgstr "Send with Default Mail App"
+#~ msgid "명함 인식·명함찾기·명함 관리·주소록 가져오기에서 전화번호를 적는 꼴"
+#~ msgstr "How phone numbers are written in business card recognition, Find Business Card, Business Card Manager and contact import"
 
-#: viewer/widgets/bizcard_find_dialog.py
-msgid "네이버 메일 보내기"
-msgstr "Send with Naver Mail"
+#~ msgid "보낼 계정 바꾸기"
+#~ msgstr "Change sender account"
 
-#: viewer/widgets/bizcard_find_dialog.py
-msgid "한글·영어 = 이름 글자, 명함 있음·없음 = 명함 그림(없음 = 주소록에서 들인 명함), 사진 있음·없음 = 인물 사진"
-msgstr "Korean/English = letters in the name, With/Without card = card image (without = imported from contacts), With/Without photo = portrait photo"
+#~ msgid "했음"
+#~ msgstr "Done"
 
-#: viewer/widgets/bizcard_find_dialog.py
-msgid "명함 환경설정 — 명함 폴더·전화번호 기본 국가·'최근' 항목 제한"
-msgstr "Business card settings — card folder, default phone country, 'Recent' limit"
+#~ msgid "체크하지 않으면 끝 없이 계속"
+#~ msgstr "If unchecked, it continues without an end"
 
-#: viewer/widgets/bizcard_find_dialog.py
-#: viewer/widgets/bizcard_settings_dialog.py
-msgid "메일 보내기"
-msgstr "Send Email"
+#~ msgid "할 일 내용"
+#~ msgstr "To-do details"
 
-#: viewer/widgets/bizcard_find_dialog.py
-msgid "메일 주소를 넣을 칸 — 명함 환경설정에서 바꿀 수 있습니다:"
-msgstr "Field for the email addresses — you can change it in Business card settings:"
+#~ msgid "기한"
+#~ msgstr "Due"
 
-#: viewer/widgets/bizcard_find_dialog.py
-#, python-brace-format
-msgid "메일 주소 {n}개를 복사했습니다 — 네이버 메일에서 [메일 쓰기]를 누르고 받는 사람 칸에 붙여 넣으세요."
-msgstr "Copied {n} email address(es) — in Naver Mail, click [Write] and paste them into the To field."
+#~ msgid "끝 날짜가 시작 날짜보다 앞입니다."
+#~ msgstr "The end date is before the start date."
 
-#: viewer/widgets/bizcard_find_dialog.py
-msgid "모두 삭제"
-msgstr "Delete all"
+# | 명함 그림을 올리려면 'Google Drive API' 도).\n" "3. OAuth 동의 화면에 앱 이름·연락 메일을
+# 적습니다.\n"
+# | "4. 사용자 인증 정보 → OAuth 클라이언트 ID 만들기 → '데스크톱 앱' 을 고릅니다.\n" "5. 나온 클라이언트
+# ID·보안
+# | 비밀을 여기 붙여 넣고 [구글 계정 연결] 을 누릅니다.\n" "로그인은 구글 화면에서 하고, 이 앱은 구글 비밀번호를 보지
+# 않습니다."
+#~ msgid ""
+#~ "구글 주소록을 연결하려면 처음 한 번 구글 클라우드 콘솔(console.cloud.google.com)에서:\n"
+#~ "1. 위쪽 프로젝트 고르기 → [새 프로젝트] 로 프로젝트를 하나 만듭니다.\n"
+#~ "2. 왼쪽 메뉴 'API 및 서비스 → 라이브러리' 에서 'People API' 를 검색해 [사용] 을 누릅니다(처음 보이는 '사용 설정된 API' 목록에는 켜기 전이라 없습니다). 명함 그림을 드라이브에 올리려면 'Google Drive API' 도 같은 방법으로.\n"
+#~ "3. 'Google 인증 플랫폼'(예전 이름 'OAuth 동의 화면')에서 앱 이름·지원 메일을 적고, 대상은 본인만 쓰는 '개인 모드' 를 고릅니다(없으면 '외부' 로 두고 테스트 사용자에 본인 메일을 넣습니다 — 이때는 7일마다 다시 로그인).\n"
+#~ "4. '클라이언트'(또는 '사용자 인증 정보 → OAuth 클라이언트 ID 만들기') 에서 애플리케이션 유형 '데스크톱 앱' 으로 만듭니다.\n"
+#~ "5. 나온 클라이언트 ID·보안 비밀을 여기 붙여 넣고 [구글 계정 연결] 을 누릅니다.\n"
+#~ "로그인은 구글 화면에서 하고, 이 앱은 구글 비밀번호를 보지 않습니다."
+#~ msgstr ""
+#~ "To connect Google Contacts, once in the Google Cloud console (console.cloud.google.com):\n"
+#~ "1. Use the project picker at the top → [New project] to create a project.\n"
+#~ "2. In the left menu 'APIs & Services → Library', search for 'People API' and press [Enable] (it is not in the first 'Enabled APIs' list until you enable it). To upload card images to Drive, enable 'Google Drive API' the same way.\n"
+#~ "3. In 'Google Auth Platform' (formerly 'OAuth consent screen'), enter the app name and support email, and choose 'personal mode' (your account only) as the audience (if it is not offered, choose 'External' and add your own email as a test user — then you must sign in again every 7 days).\n"
+#~ "4. Under 'Clients' (or 'Credentials → Create OAuth client ID'), create one with application type 'Desktop app'.\n"
+#~ "5. Paste the client ID and secret here and press [Connect Google account].\n"
+#~ "You sign in on Google's page; this app never sees your Google password."
 
-#: viewer/widgets/bizcard_find_dialog.py
-msgid "사진 있음"
-msgstr "With photo"
+#~ msgid "이름 바꾸기"
+#~ msgstr "Rename"
 
-#: viewer/widgets/bizcard_find_dialog.py
-msgid "사진 없음"
-msgstr "Without photo"
+#~ msgid "할 일이 없습니다."
+#~ msgstr "There are no to-dos."
 
-#: viewer/widgets/bizcard_find_dialog.py
-msgid "'최근' 기록을 모두 지웁니다 — 되돌릴 수 없습니다(명함은 그대로)."
-msgstr "Clears all 'Recent' entries — this cannot be undone (the cards stay)."
+#~ msgid "할 일 {n}개를 엑셀로 썼습니다."
+#~ msgstr "Wrote {n} to-dos to Excel."
 
-#: viewer/widgets/bizcard_settings_dialog.py
-msgid "명함 환경설정"
-msgstr "Business card settings"
+#~ msgid "명함 그림 떼기"
+#~ msgstr "Detach card image"
 
-#: viewer/widgets/bizcard_settings_dialog.py
-msgid "비우면 브라우저의 기본 구글 계정"
-msgstr "Leave empty for the browser's default Google account"
+#~ msgid "고른 명함들에 해시태그를 붙이거나 뗍니다 — 정리본 파일에도 같이, 찾기 칸에서 #낱말로 찾습니다"
+#~ msgstr "Add or remove hashtags on the selected cards — also on the card image files; search with #word"
 
-#: viewer/widgets/bizcard_settings_dialog.py
-msgid "'최근' 항목 제한"
-msgstr "'Recent' limit"
+#~ msgid "주소록 vCard(.vcf) 가져오기·내보내기 — 구글 주소록·리멤버"
+#~ msgstr "Import or export contacts as vCard (.vcf) — Google Contacts, Remember"
 
-#: viewer/widgets/bizcard_settings_dialog.py
-msgid "20개"
-msgstr "20 items"
+#~ msgid "명함 사진 지우기"
+#~ msgstr "Delete card pictures"
 
-#: viewer/widgets/bizcard_settings_dialog.py
-msgid "개수 직접"
-msgstr "Custom count"
+#~ msgid "합치기 적용"
+#~ msgstr "Apply Merge"
 
-#: viewer/widgets/bizcard_settings_dialog.py
-msgid "2주"
-msgstr "2 weeks"
+#~ msgid "해시태그 설정"
+#~ msgstr "Set Hashtags"
 
-#: viewer/widgets/bizcard_settings_dialog.py
-msgid "기간 직접"
-msgstr "Custom period"
+#~ msgid "반영"
+#~ msgstr "Apply"
 
-#: viewer/widgets/bizcard_settings_dialog.py
-msgid "넘는 기록은 지웁니다(명함은 그대로)."
-msgstr "Older entries are removed (the cards stay)."
+#~ msgid "이 기록을 지웁니다 — 되돌릴 수 없습니다."
+#~ msgstr "This entry will be deleted — this cannot be undone."
 
-#: viewer/widgets/bizcard_settings_dialog.py
-msgid "칸을 고치면 메모 맨 위에 날짜와 고친 칸 이름을 적기"
-msgstr "When a field is changed, note the date and the changed fields at the top of the memo"
+#~ msgid "구글 드라이브 공간을 비운 뒤 다시 싱크해 [적용] 하면 못 올린 것만 다시 올립니다(미리보기에 '지난번 못 올림')."
+#~ msgstr "Free up Google Drive space, then sync again and press [Apply] — only the items that failed are uploaded again (marked 'failed last time' in the preview)."
 
-#: viewer/widgets/bizcard_settings_dialog.py
-msgid "예: [2026-11-21 수정] 휴대폰·메일 — 옛 값은 적지 않습니다"
-msgstr "e.g. [2026-11-21 edited] Mobile·Email — old values are not recorded"
+#~ msgid "(주소록에서 가져온 명함 — 그림 없음)"
+#~ msgstr "(Imported from contacts — no card image)"
 
-#: viewer/widgets/bizcard_settings_dialog.py
-msgid "메모를 쓰기 시작하면 맨 앞에 오늘 날짜"
-msgstr "Put today's date first when starting to write a memo"
+#~ msgid "외 {n}명"
+#~ msgstr "and {n} more"
 
-#: viewer/widgets/bizcard_settings_dialog.py
-msgid "메모가 비었거나 맨 앞에서 쓸 때 — 넣은 날짜는 지워도 됩니다"
-msgstr "When the memo is empty or you type at the very start — you can delete the inserted date"
-
-#: viewer/widgets/bizcard_settings_dialog.py
-msgid "받는 칸:"
-msgstr "Address field:"
-
-#: viewer/widgets/bizcard_settings_dialog.py
-msgid "Gmail 보낼 계정:"
-msgstr "Gmail sender account:"
-
-#: viewer/widgets/bizcard_settings_dialog.py
-msgid "개"
-msgstr "items"
-
-#: viewer/widgets/bizcard_settings_dialog.py
-msgid "일"
-msgstr "days"
-
-#: viewer/widgets/settings_dialog.py
-msgid "그 밖의 명함 설정(전화번호 꼴·'최근' 제한)은 명함찾기 창 오른쪽 위 톱니(명함 환경설정)에서 바꿉니다."
-msgstr "Other business card settings (phone number format, 'Recent' limit) are in the gear (Business card settings) at the top right of Find Business Card."
-
-#: viewer/bizcard/gsync_auth.py
-msgid "로그인이 끝났습니다 — 이 창을 닫고 PolyCardex 로 돌아가세요."
-msgstr "Sign-in is complete — close this window and return to PolyCardex."
-
-#: viewer/widgets/bizcard_find_dialog.py viewer/widgets/bizcard_gsync_dialog.py
-msgid "구글 주소록과 싱크"
-msgstr "Sync with Google Contacts"
-
-#: viewer/widgets/bizcard_find_dialog.py
-msgid "먼저 명함 환경설정(톱니)의 '구글 주소록' 에서 구글 계정을 연결하세요."
-msgstr "First connect your Google account under 'Google Contacts' in the card settings (gear)."
-
-#: viewer/widgets/bizcard_gsync_dialog.py
-msgid "구글에서 가져옴(새 명함)"
-msgstr "From Google (new cards)"
-
-#: viewer/widgets/bizcard_gsync_dialog.py
-msgid "구글로 보냄(새 연락처)"
-msgstr "To Google (new contacts)"
-
-#: viewer/widgets/bizcard_gsync_dialog.py
-msgid "명함을 구글 값으로 고침"
-msgstr "Update cards from Google"
-
-#: viewer/widgets/bizcard_gsync_dialog.py
-msgid "구글을 명함 값으로 고침"
-msgstr "Update Google from cards"
-
-#: viewer/widgets/bizcard_gsync_dialog.py
-msgid "구글에서 지워짐 — 명함도 지울까요"
-msgstr "Deleted in Google — delete the card too?"
-
-#: viewer/widgets/bizcard_gsync_dialog.py
-msgid "명함에서 지워짐 — 구글도 지울까요"
-msgstr "Deleted in cards — delete in Google too?"
-
-#: viewer/widgets/bizcard_gsync_dialog.py
-msgid "인물 사진을 연락처 사진으로"
-msgstr "Person photo → contact photo"
-
-#: viewer/widgets/bizcard_gsync_dialog.py
-msgid "연락처 사진을 인물 사진으로"
-msgstr "Contact photo → person photo"
-
-#: viewer/widgets/bizcard_gsync_dialog.py
-msgid "명함 그림을 드라이브에"
-msgstr "Card images → Drive"
-
-#: viewer/widgets/bizcard_gsync_dialog.py
-msgid "같은 사람으로 짝지음(값 같음)"
-msgstr "Paired as the same person (same values)"
-
-#: viewer/widgets/bizcard_gsync_dialog.py
-msgid "구글 주소록을 받는 중…"
-msgstr "Fetching Google Contacts…"
-
-#: viewer/widgets/bizcard_gsync_dialog.py
-msgid "반영"
-msgstr "Apply"
-
-#: viewer/widgets/bizcard_gsync_dialog.py
-msgid "구글 주소록과 명함이 같습니다 — 바꿀 것이 없습니다."
-msgstr "Google Contacts and the cards match — nothing to change."
-
-#: viewer/widgets/bizcard_gsync_dialog.py
-#, python-brace-format
-msgid "구글에 연결하지 못했습니다({err}). 명함 환경설정에서 연결을 확인하세요."
-msgstr "Could not connect to Google ({err}). Check the connection in the card settings."
-
-#: viewer/widgets/bizcard_gsync_dialog.py
-#, python-brace-format
-msgid "바뀔 것 {n}건 — 줄을 골라 [반영] 을 누르면 바뀝니다(지워진 것은 처음에 '남김')."
-msgstr "{n} changes — choose rows and press [Apply] (deletions start as 'keep')."
-
-#: viewer/widgets/bizcard_gsync_dialog.py
-#, python-brace-format
-msgid "{ok}건 반영, {bad}건은 하지 못했습니다(다음 싱크에서 다시 보입니다)."
-msgstr "{ok} applied, {bad} failed (they will show again on the next sync)."
-
-#: viewer/widgets/bizcard_settings_dialog.py
-msgid ""
-"구글 주소록 연결 — 처음 한 번, 구글 클라우드 콘솔(console.cloud.google.com)에서:\n"
-"\n"
-"1. 프로젝트 만들기: 위쪽 프로젝트 고르기 → [새 프로젝트].\n"
-"2. People API 켜기: 왼쪽 'API 및 서비스 → 라이브러리' 에서 'People API' 를 검색해 [사용](처음 보이는 '사용 설정된 API' 목록에는 켜기 전이라 없습니다). 명함 그림을 드라이브에 올리려면 'Google Drive API' 도 같은 방법으로.\n"
-"3. 'Google 인증 플랫폼' 시작하기: 앱 이름(예: PolyCardex)·사용자 지원 이메일·연락처 이메일에 본인 Gmail. 대상은 '외부'(개인 Gmail 은 '내부' 를 고를 수 없습니다). 로고·홈페이지·개인정보처리방침·도메인은 비워 둡니다(로고를 올리면 구글 검증 제출이 필요해집니다).\n"
-"4. 테스트 사용자: 'Google 인증 플랫폼 → 대상 → 테스트 사용자 → [+ Add users]' 에 로그인할 본인 Gmail 을 넣습니다(빠뜨리면 로그인 때 '403 오류: access_denied — 앱은 현재 테스트 중' 이 뜹니다). 테스트 상태에서는 7일마다 다시 연결해야 합니다.\n"
-"5. 클라이언트 만들기: 'Google 인증 플랫폼 → 클라이언트 → [클라이언트 만들기]' → 애플리케이션 유형 '데스크톱 앱', 이름(예: PolyCardex), 'AI 기반 에이전트에 이 클라이언트 사용' 은 체크하지 않음 → [만들기] → 나온 클라이언트 ID·보안 비밀을 복사합니다.\n"
-"\n"
-"그다음 이 창에서:\n"
-"6. 클라이언트 ID·보안 비밀을 붙여 넣고 [구글 계정 연결] → 브라우저에서 4번에 넣은 계정을 고르고, 'Google 에서 확인하지 않은 앱' 이 뜨면 [계속] → 주소록(드라이브) 권한에 체크 → [계속]. 위쪽에 '연결됨 — (메일)' 이 보이면 [확인] 으로 닫습니다.\n"
-"7. 싱크: 명함찾기 [주소록] → [구글 주소록과 싱크] → 미리보기에서 바꿀 줄을 고르고 [반영]. 처음에는 몇 줄만 골라 시험해 보세요.\n"
-"\n"
-"콘솔에서 바꾼 설정은 반영되는 데 몇 분 걸릴 수 있습니다. 로그인은 구글 화면에서 하고, 이 앱은 구글 비밀번호를 보지 않습니다. 7일이 지나 '연결 안 됨' 이 되면 [구글 계정 연결] 만 다시 누르면 됩니다."
-msgstr ""
-"Connecting Google Contacts — once, in the Google Cloud console (console.cloud.google.com):\n"
-"\n"
-"1. Create a project: project picker at the top → [New project].\n"
-"2. Enable the People API: in the left menu 'APIs & Services → Library', search for 'People API' and press [Enable] (it is not in the first 'Enabled APIs' list until you enable it). To upload card images to Drive, enable 'Google Drive API' the same way.\n"
-"3. Get started with 'Google Auth Platform': app name (e.g. PolyCardex), user support email and contact email = your Gmail. Audience: 'External' (a personal Gmail account cannot choose 'Internal'). Leave the logo, homepage, privacy policy and domains empty (uploading a logo requires submitting the app for Google verification).\n"
-"4. Test users: 'Google Auth Platform → Audience → Test users → [+ Add users]' and add the Gmail you will sign in with (without it, sign-in shows 'Error 403: access_denied — the app is currently being tested'). In testing status you must reconnect every 7 days.\n"
-"5. Create a client: 'Google Auth Platform → Clients → [Create client]' → application type 'Desktop app', a name (e.g. PolyCardex), leave 'Use this client for AI-based agents' unchecked → [Create] → copy the client ID and secret.\n"
-"\n"
-"Then in this window:\n"
-"6. Paste the client ID and secret and press [Connect Google account] → in the browser choose the account from step 4; if 'Google hasn't verified this app' appears press [Continue] → tick the contacts (and Drive) permissions → [Continue]. When 'Connected — (email)' shows at the top, close with [OK].\n"
-"7. Sync: Find Business Card [Contacts] → [Sync with Google Contacts] → choose rows in the preview and press [Apply]. Try a few rows first.\n"
-"\n"
-"Changes in the console can take a few minutes to apply. You sign in on Google's page; this app never sees your Google password. When it shows 'Not connected' after 7 days, just press [Connect Google account] again."
-
-#: viewer/widgets/bizcard_settings_dialog.py
-msgid "구글 주소록"
-msgstr "Google Contacts"
-
-#: viewer/widgets/bizcard_settings_dialog.py
-msgid "구글 클라우드 '개인 모드' 프로젝트의 데스크톱 앱 클라이언트 ID"
-msgstr "Desktop app client ID of your Google Cloud 'personal mode' project"
-
-#: viewer/widgets/bizcard_settings_dialog.py
-msgid "클라이언트 ID:"
-msgstr "Client ID:"
-
-#: viewer/widgets/bizcard_settings_dialog.py
-msgid "클라이언트 보안 비밀:"
-msgstr "Client secret:"
-
-#: viewer/widgets/bizcard_settings_dialog.py
-msgid "구글 계정 연결"
-msgstr "Connect Google account"
-
-#: viewer/widgets/bizcard_settings_dialog.py
-msgid "연결 끊기"
-msgstr "Disconnect"
-
-#: viewer/widgets/bizcard_settings_dialog.py
-msgid "구글에 연결 권한 철회를 요청하고, 이 PC 에 보관한 토큰과 짝 기록을 지웁니다"
-msgstr "Asks Google to revoke access and deletes the token and pairing records kept on this PC"
-
-#: viewer/widgets/bizcard_settings_dialog.py
-msgid "인물 사진도 연락처 사진으로 주고받기"
-msgstr "Also sync person photos as contact photos"
-
-#: viewer/widgets/bizcard_settings_dialog.py
-msgid "명함 그림을 구글 드라이브에 원본으로 올리고 연락처에 링크"
-msgstr "Upload card images to Google Drive at full size and link them in the contact"
-
-#: viewer/widgets/bizcard_settings_dialog.py
-msgid "켜면 명함의 글 칸(과 고른 사진)을 구글 People·Drive API 로만 주고받습니다. 반영 전에는 늘 미리보기를 거칩니다."
-msgstr "When on, card text fields (and the chosen photos) are exchanged only with the Google People and Drive APIs. Changes always go through a preview first."
-
-#: viewer/widgets/bizcard_settings_dialog.py
-msgid "브라우저에서 구글 로그인을 마치세요…"
-msgstr "Finish signing in to Google in the browser…"
-
-#: viewer/widgets/bizcard_settings_dialog.py
-msgid "드라이브 폴더:"
-msgstr "Drive folder:"
-
-#: viewer/widgets/bizcard_settings_dialog.py
-msgid "클라이언트 ID 를 넣으세요 — [도움말] 에 만드는 차례가 있습니다."
-msgstr "Enter a client ID — [Help] shows how to create one."
-
-#: viewer/widgets/bizcard_settings_dialog.py
-msgid "이 PC 에서 비밀값을 잠글 수 없어 보안 비밀은 저장하지 않습니다(이번 연결에만 씁니다)."
-msgstr "This PC cannot encrypt secrets, so the client secret is not saved (used for this connection only)."
-
-#: viewer/widgets/bizcard_settings_dialog.py
-msgid "연결됨"
-msgstr "Connected"
-
-#: viewer/widgets/bizcard_settings_dialog.py
-msgid "연결 안 됨"
-msgstr "Not connected"
-
-#: viewer/widgets/bizcard_settings_dialog.py
-#, python-brace-format
-msgid "연결됨 — {email}"
-msgstr "Connected — {email}"
-
-#: viewer/widgets/bizcard_settings_dialog.py
-#, python-brace-format
-msgid "구글 계정을 연결하지 못했습니다({err})."
-msgstr "Could not connect the Google account ({err})."
-
-#: viewer/widgets/bizcard_find_dialog.py
-msgid "메뉴"
-msgstr "Menu"
-
-#: viewer/widgets/bizcard_find_dialog.py
-msgid "탭 이름"
-msgstr "Tab name"
-
-#: viewer/widgets/bizcard_find_dialog.py
-msgid "주요 항목 수정"
-msgstr "Edit Details"
-
-#: viewer/widgets/bizcard_find_dialog.py
-msgid "카톡 친구추가 방지"
-msgstr "Block KakaoTalk auto-friend"
-
-#: viewer/widgets/bizcard_find_dialog.py
-msgid "카톡 친구추가 방지 해제"
-msgstr "Unblock KakaoTalk auto-friend"
-
-#: viewer/widgets/bizcard_find_dialog.py
-msgid "할 일 내보내기"
-msgstr "Export To-dos"
-
-#: viewer/widgets/bizcard_find_dialog.py
-msgid "명단 내보내기"
-msgstr "Export List"
-
-#: viewer/widgets/bizcard_gsync_dialog.py
-msgid "카톡 친구추가 방지 바꿈(구글 이름 앞 #)"
-msgstr "KakaoTalk auto-friend block changed (# before the Google name)"
-
-#: viewer/widgets/bizcard_gsync_dialog.py
-msgid "카톡 친구추가 방지 표시를 구글 이름대로"
-msgstr "Match KakaoTalk auto-friend block to the Google name"
-
-#: viewer/widgets/bizcard_settings_dialog.py
-msgid "구글에 새로 보낼 때 카톡 친구추가 방지(이름 앞 #)"
-msgstr "Block KakaoTalk auto-friend for contacts newly sent to Google (# before the name)"
-
-#: viewer/widgets/bizcard_settings_dialog.py
-msgid "휴대폰이 구글 주소록을 받아도 카카오톡이 자동 친구로 넣지 않게 — 이미 구글에 있는 연락처는 그대로"
-msgstr "So KakaoTalk does not auto-add them as friends when your phone syncs Google Contacts — contacts already in Google are left as they are"
-
-#: viewer/widgets/bizcard_gsync_dialog.py
-msgid "명함 합치기로 남은 구글 연락처 — 구글에서 지울까요"
-msgstr "Google contacts left over after merging cards — delete them from Google?"
-
-#: viewer/widgets/bizcard_gsync_dialog.py
-msgid "구글 주소록이 바뀝니다 — [반영] 전에 contacts.google.com → 내보내기로 백업해 두기를 권합니다."
-msgstr "Your Google Contacts will change — we recommend backing them up first via contacts.google.com → Export before [Apply]."
-
-#: viewer/widgets/bizcard_gsync_dialog.py
-msgid "구글에 이미 있을 수 있음"
-msgstr "may already be in Google"
-
-#: viewer/widgets/bizcard_gsync_dialog.py
-msgid "(없음)"
-msgstr "(none)"
-
-#: viewer/widgets/bizcard_dupe_dialog.py
-#, python-brace-format
-msgid "명함 DB 를 쓰지 못했습니다({err})."
-msgstr "Could not write the business card database ({err})."
-
-#: viewer/widgets/bizcard_find_dialog.py
-msgid "명함 환경설정 — 명함 폴더·전화번호·'최근' 제한·메일 보내기·메모·구글 주소록"
-msgstr "Business card settings — card folder, phone numbers, 'Recent' limit, sending mail, memo, Google Contacts"
-
-#: viewer/widgets/bizcard_find_dialog.py
-msgid "한글·영어 = 이름 글자, 명함 있음·없음 = 명함 그림(없음 = 주소록에서 들인 명함), 사진 있음·없음 = 인물 사진 — 체크로 여러 개(같은 묶음은 또는, 묶음끼리는 그리고)"
-msgstr "Korean/English = letters in the name, With/Without card = card image (without = imported from contacts), With/Without photo = portrait photo — check several (OR within a group, AND across groups)"
-
-#: viewer/widgets/bizcard_find_dialog.py
-msgid "해시태그 설정"
-msgstr "Set Hashtags"
-
-#: viewer/widgets/bizcard_dupe_dialog.py
-#, python-brace-format
-msgid "묶인 휴대폰: {n}"
-msgstr "Matched mobile: {n}"
-
-#: viewer/widgets/bizcard_find_dialog.py
-#, python-brace-format
-msgid "전화번호 종류를 바로잡았습니다 — 명함 {n}장(010 은 휴대폰, 그 밖은 일반 전화, 옛 011·016~019 번호는 메모로). 바꾸기 전 명함 DB 는 같은 폴더 'bizcard.db.kinds_bak' 에 두었습니다."
-msgstr "Corrected phone number types — {n} cards (010 = mobile, others = phone, old 011/016–019 numbers moved to the memo). The card database before the change is kept as 'bizcard.db.kinds_bak' in the same folder."
-
-#: viewer/widgets/bizcard_dupe_dialog.py
-msgid "명함 그림 떼기"
-msgstr "Detach card image"
-
-#: viewer/widgets/bizcard_dupe_dialog.py
-#, python-brace-format
-msgid "'{n}' 에 붙은 명함 그림(정리본 앞·뒷면)을 휴지통으로 보내고 그림 없는 명함으로 둡니다 — 연락처·메모는 그대로, 원본 스캔은 남아 명함 관리에서 다시 읽을 수 있습니다."
-msgstr "Moves the card image attached to '{n}' (tidied front and back) to the Recycle Bin and keeps it as a card without an image — contacts and memo stay, and the original scan remains so it can be read again in Card Manager."
-
-#: viewer/widgets/bizcard_dupe_dialog.py
-msgid "체크한 칸 비우기"
-msgstr "Clear checked fields"
-
-#: viewer/widgets/bizcard_dupe_dialog.py
-msgid "앞에 체크한 칸을 한꺼번에 비웁니다 — [저장] 해야 명함에 반영됩니다"
-msgstr "Clears all checked fields at once — the card changes only when you click [Save]"
-
-#: viewer/widgets/bizcard_gsync_dialog.py
-msgid "라벨·해시태그 맞춤"
-msgstr "Match labels and hashtags"
-
-#: viewer/widgets/bizcard_gsync_dialog.py
-msgid "고른 목록에서 뺀 구글 라벨 — 지울까요(연락처는 그대로)"
-msgstr "Google labels removed from the chosen list — delete them? (contacts stay)"
-
-#: viewer/widgets/bizcard_gsync_dialog.py
-msgid "명함 기준으로 올리기"
-msgstr "Upload with cards as the source"
-
-#: viewer/widgets/bizcard_gsync_dialog.py
-msgid "명함 값이 이깁니다 — 구글에서 지워진 사람은 새 연락처로 다시 만들고, 구글 → 명함으로 고치거나 가져오는 줄은 만들지 않습니다"
-msgstr "Card values win — people deleted in Google are created again as new contacts, and no rows are made to update or import cards from Google"
-
-#: viewer/widgets/bizcard_settings_dialog.py
-msgid "체크한 해시태그만 구글 연락처 라벨과 맞춥니다 — 명함에 붙이면 라벨에 넣고, 구글에서 라벨을 떼면 해시태그도 뗍니다"
-msgstr "Only checked hashtags are matched with Google contact labels — adding one to a card puts the contact in the label, and removing the label in Google removes the hashtag"
-
-#: viewer/widgets/bizcard_settings_dialog.py
-msgid "구글 라벨로 올릴 해시태그:"
-msgstr "Hashtags to sync as Google labels:"
-
-#: viewer/widgets/bizcard_gsync_dialog.py
-msgid "구글에서 지운 값 — 명함에서도 지울까요(안 고르면 구글로 다시)"
-msgstr "Values deleted in Google — delete them from the card too? (if not chosen, they go back to Google)"
-
-#: viewer/widgets/tag_apply_dialog.py
-msgid "모두에 붙이기"
-msgstr "Add to all"
-
-#: viewer/widgets/tag_apply_dialog.py
-msgid "이미 모두에 붙어 있음"
-msgstr "Already on all"
-
-#: viewer/widgets/tag_apply_dialog.py
-msgid "이 태그를 대상 파일 모두에 붙입니다(Enter) — 되돌리기 한 걸음"
-msgstr "Adds this tag to all target files (Enter) — one undo step"
-
-#: viewer/widgets/tag_apply_dialog.py
-msgid "일부 파일에만 붙어 있습니다 — 고르고 [적용] 하면 나머지에도 붙입니다"
-msgstr "On some files only — select it and click [Apply] to add it to the rest"
-
-#: viewer/widgets/bizcard_dupe_dialog.py
-msgid "명함 사진 지우기"
-msgstr "Delete card pictures"
-
-#: viewer/widgets/bizcard_dupe_dialog.py
-msgid "지울 사진을 체크하세요 — 앞면만 지우면 뒷면이 앞면이 되고, 앞·뒷면을 모두 지우면 원본 스캔까지 휴지통으로 보냅니다."
-msgstr "Check the pictures to delete — deleting only the front makes the back the front; deleting both sides also sends the original scan to the Recycle Bin."
-
-#: viewer/widgets/bizcard_dupe_dialog.py
-msgid "명함 앞면"
-msgstr "Card front"
-
-#: viewer/widgets/bizcard_dupe_dialog.py
-msgid "명함 뒷면"
-msgstr "Card back"
-
-#: viewer/widgets/bizcard_dupe_dialog.py
-#, python-brace-format
-msgid "인물 사진 {n}"
-msgstr "Portrait photo {n}"
-
-#: viewer/widgets/bizcard_dupe_dialog.py
-#, python-brace-format
-msgid "고른 사진 {n}개를 휴지통으로 보냅니다."
-msgstr "Sends {n} selected pictures to the Recycle Bin."
-
-#: viewer/widgets/bizcard_find_dialog.py
-msgid "해시태그로 찾기 — 지금 목록의 해시태그 보기·고르기, 맨 아래 '해시태그 수정'"
-msgstr "Find by hashtag — view and pick the hashtags in the current list; 'Edit hashtags' at the bottom"
-
-#: viewer/widgets/bizcard_find_dialog.py
-#: viewer/widgets/bizcard_history_dialog.py
-msgid "변경 기록·되살리기"
-msgstr "Change history and restore"
-
-#: viewer/widgets/bizcard_find_dialog.py
-msgid "(이 목록의 명함에 해시태그 없음)"
-msgstr "(No hashtags on the cards in this list)"
-
-#: viewer/widgets/bizcard_find_dialog.py
-msgid "찾기 비우기"
-msgstr "Clear search"
-
-#: viewer/widgets/bizcard_find_dialog.py
-#, python-brace-format
-msgid "외 {n}명"
-msgstr "and {n} more"
-
-#: viewer/widgets/bizcard_gsync_dialog.py
-msgid "명함에서 지운 인물 사진 — 구글 연락처 사진도 지울까요"
-msgstr "Portrait photos deleted from the card — delete the Google contact photo too?"
-
-#: viewer/widgets/bizcard_history_dialog.py
-msgid "싱크"
-msgstr "Sync"
-
-#: viewer/widgets/bizcard_history_dialog.py
-msgid "합치기"
-msgstr "Merge"
-
-#: viewer/widgets/bizcard_history_dialog.py
-msgid "번호 종류"
-msgstr "Number type"
-
-#: viewer/widgets/bizcard_history_dialog.py
-msgid "되살리기"
-msgstr "Restore"
-
-#: viewer/widgets/bizcard_history_dialog.py
-msgid "체크한 명함을 기간이 시작되기 전 모습으로 되살립니다 — 되살리기도 기록에 남아 되돌릴 수 있습니다"
-msgstr "Restores the checked cards to how they were before the period — restoring is also recorded, so it can be undone"
-
-#: viewer/widgets/bizcard_history_dialog.py
-msgid "지운 것·고친 것"
-msgstr "Deleted and changed"
-
-#: viewer/widgets/bizcard_history_dialog.py
-msgid "지운 것만"
-msgstr "Deleted only"
-
-#: viewer/widgets/bizcard_history_dialog.py
-msgid "고친 것만"
-msgstr "Changed only"
-
-#: viewer/widgets/bizcard_history_dialog.py
-msgid "때"
-msgstr "When"
-
-#: viewer/widgets/bizcard_history_dialog.py
-msgid "되살리지 못했습니다 — 명함 DB 를 다른 곳에서 쓰고 있는지 확인하세요."
-msgstr "Could not restore — check whether the card database is in use elsewhere."
-
-#: viewer/widgets/bizcard_history_dialog.py
-#, python-brace-format
-msgid "바뀐 명함 {n}장 — 되살릴 값은 그 기간이 시작되기 전 모습입니다. 지운 그림 명함의 그림 파일은 휴지통에서 되살리세요."
-msgstr "{n} changed cards — values are restored to how they were before the period. Restore image files of deleted cards from the Recycle Bin."
-
-#: viewer/widgets/bizcard_history_dialog.py
-msgid "고침"
-msgstr "Changed"
-
-#: viewer/widgets/bizcard_history_dialog.py
-msgid "그 뒤 또 바뀜"
-msgstr "Changed again later"
-
-#: viewer/widgets/bizcard_history_dialog.py
-#, python-brace-format
-msgid "명함 {n}장을 되살렸습니다."
-msgstr "Restored {n} cards."
-
-#: viewer/widgets/bizcard_dupe_dialog.py
-msgid "명함 사진 삭제"
-msgstr "Delete card pictures"
-
-#: viewer/widgets/bizcard_find_dialog.py
-#, python-brace-format
-msgid "전화번호 종류를 바로잡지 못했습니다({err}) — 명함은 그대로입니다."
-msgstr "Could not correct the phone number types ({err}) — the cards are unchanged."
-
-#: viewer/widgets/bizcard_find_dialog.py
-msgid "다음에 명함찾기를 열 때 다시 해 봅니다."
-msgstr "It will try again the next time Find Business Card opens."
-
-#: viewer/widgets/bizcard_find_dialog.py
-#, python-brace-format
-msgid "{n}번 실패해 더는 저절로 하지 않습니다."
-msgstr "Failed {n} times, so it will no longer run automatically."
-
-#: viewer/widgets/bizcard_gsync_dialog.py
-msgid "구글 주소록이 바뀝니다 — [적용] 전에 contacts.google.com → 내보내기로 백업해 두기를 권합니다."
-msgstr "Your Google Contacts will change — we recommend backing them up first via contacts.google.com → Export before [Apply]."
-
-#: viewer/widgets/bizcard_gsync_dialog.py
-#, python-brace-format
-msgid "바뀔 것 {n}건 — 줄을 골라 [적용] 을 누르면 바뀝니다(지워진 것은 처음에 '남김')."
-msgstr "{n} changes — choose rows and press [Apply] (deletions start as 'keep')."
-
-#: viewer/widgets/bizcard_gsync_dialog.py
-#, python-brace-format
-msgid "{ok}건 적용, {bad}건은 하지 못했습니다(다음 싱크에서 다시 보입니다)."
-msgstr "{ok} applied, {bad} failed (they will show again on the next sync)."
-
-#: viewer/widgets/bizcard_history_dialog.py
-#, python-brace-format
-msgid "{n}건을 되살렸습니다."
-msgstr "Restored {n} items."
-
-#: viewer/widgets/bizcard_history_dialog.py
-#, python-brace-format
-msgid "{m}건은 되살리지 못했습니다(할 일 탭이 지워졌음)."
-msgstr "{m} could not be restored (their to-do tab was deleted)."
-
-#: viewer/widgets/bizcard_history_dialog.py
-msgid "할 일 기록"
-msgstr "To-do record"
-
-# | 서비스 → 라이브러리' 에서 'People API' 를 검색해 [사용](처음 보이는 '사용 설정된 API' 목록에는 켜기 전이라
-# | 없습니다). 명함 그림을 드라이브에 올리려면 'Google Drive API' 도 같은 방법으로.\n" "3. 'Google 인증
-# | 플랫폼' 시작하기: 앱 이름(예: PolyCardex)·사용자 지원 이메일·연락처 이메일에 본인 Gmail. 대상은 '외부'(개인
-# | Gmail 은 '내부' 를 고를 수 없습니다). 로고·홈페이지·개인정보처리방침·도메인은 비워 둡니다(로고를 올리면 구글 검증 제출이
-# | 필요해집니다).\n" "4. 테스트 사용자: 'Google 인증 플랫폼 → 대상 → 테스트 사용자 → [+ Add users]' 에
-# | 로그인할 본인 Gmail 을 넣습니다(빠뜨리면 로그인 때 '403 오류: access_denied — 앱은 현재 테스트 중' 이
-# | 뜹니다). 테스트 상태에서는 7일마다 다시 연결해야 합니다.\n" "5. 클라이언트 만들기: 'Google 인증 플랫폼 → 클라이언트
-# →
-# | [클라이언트 만들기]' → 애플리케이션 유형 '데스크톱 앱', 이름(예: PolyCardex), 'AI 기반 에이전트에 이 클라이언트
-# | 사용' 은 체크하지 않음 → [만들기] → 나온 클라이언트 ID·보안 비밀을 복사합니다.\n" "\n" "그다음 이 창에서:\n"
-# "6.
-# | 클라이언트 ID·보안 비밀을 붙여 넣고 [구글 계정 연결] → 브라우저에서 4번에 넣은 계정을 고르고, 'Google 에서 확인하지
-# 않은
-# | 앱' 이 뜨면 [계속] → 주소록(드라이브) 권한에 체크 → [계속]. 위쪽에 '연결됨 — (메일)' 이 보이면 [확인] 으로
-# | 닫습니다.\n" "7. 싱크: 명함찾기 [주소록] → [구글 주소록과 싱크] → 미리보기에서 바꿀 줄을 고르고 [반영]. 처음에는 몇
-# | 줄만 골라 시험해 보세요.\n" "\n" "콘솔에서 바꾼 설정은 반영되는 데 몇 분 걸릴 수 있습니다. 로그인은 구글 화면에서 하고,
-# 이
-# | 앱은 구글 비밀번호를 보지 않습니다. 7일이 지나 '연결 안 됨' 이 되면 [구글 계정 연결] 만 다시 누르면 됩니다."
-#: viewer/widgets/bizcard_settings_dialog.py
-msgid ""
-"구글 주소록 연결 — 처음 한 번, 구글 클라우드 콘솔(console.cloud.google.com)에서:\n"
-"\n"
-"1. 프로젝트 만들기: 위쪽 프로젝트 고르기 → [새 프로젝트].\n"
-"2. People API 켜기: 왼쪽 'API 및 서비스 → 라이브러리' 에서 'People API' 를 검색해 [사용](처음 보이는 '사용 설정된 API' 목록에는 켜기 전이라 없습니다). 명함 그림을 드라이브에 올리려면 'Google Drive API' 도 같은 방법으로.\n"
-"3. 'Google 인증 플랫폼' 시작하기: 앱 이름(예: PolyCardex)·사용자 지원 이메일·연락처 이메일에 본인 Gmail. 대상은 '외부'(개인 Gmail 은 '내부' 를 고를 수 없습니다). 로고·홈페이지·개인정보처리방침·도메인은 비워 둡니다(로고를 올리면 구글 검증 제출이 필요해집니다).\n"
-"4. 테스트 사용자: 'Google 인증 플랫폼 → 대상 → 테스트 사용자 → [+ Add users]' 에 로그인할 본인 Gmail 을 넣습니다(빠뜨리면 로그인 때 '403 오류: access_denied — 앱은 현재 테스트 중' 이 뜹니다). 테스트 상태에서는 7일마다 다시 연결해야 합니다.\n"
-"5. 클라이언트 만들기: 'Google 인증 플랫폼 → 클라이언트 → [클라이언트 만들기]' → 애플리케이션 유형 '데스크톱 앱', 이름(예: PolyCardex), 'AI 기반 에이전트에 이 클라이언트 사용' 은 체크하지 않음 → [만들기] → 나온 클라이언트 ID·보안 비밀을 복사합니다.\n"
-"\n"
-"그다음 이 창에서:\n"
-"6. 클라이언트 ID·보안 비밀을 붙여 넣고 [구글 계정 연결] → 브라우저에서 4번에 넣은 계정을 고르고, 'Google 에서 확인하지 않은 앱' 이 뜨면 [계속] → 주소록(드라이브) 권한에 체크 → [계속]. 위쪽에 '연결됨 — (메일)' 이 보이면 [확인] 으로 닫습니다.\n"
-"7. 싱크: 명함찾기 ≡ 메뉴 → 주소록 → 구글 주소록과 싱크 → 미리보기에서 바꿀 줄을 고르고 [적용]. 처음에는 몇 줄만 골라 시험해 보세요.\n"
-"\n"
-"콘솔에서 바꾼 설정은 반영되는 데 몇 분 걸릴 수 있습니다. 로그인은 구글 화면에서 하고, 이 앱은 구글 비밀번호를 보지 않습니다. 7일이 지나 '연결 안 됨' 이 되면 [구글 계정 연결] 만 다시 누르면 됩니다."
-msgstr ""
-"Connecting Google Contacts — once, in the Google Cloud console (console.cloud.google.com):\n"
-"\n"
-"1. Create a project: project picker at the top → [New project].\n"
-"2. Enable the People API: in the left menu 'APIs & Services → Library', search for 'People API' and press [Enable] (it is not in the first 'Enabled APIs' list until you enable it). To upload card images to Drive, enable 'Google Drive API' the same way.\n"
-"3. Get started with 'Google Auth Platform': app name (e.g. PolyCardex), user support email and contact email = your Gmail. Audience: 'External' (a personal Gmail account cannot choose 'Internal'). Leave the logo, homepage, privacy policy and domains empty (uploading a logo requires submitting the app for Google verification).\n"
-"4. Test users: 'Google Auth Platform → Audience → Test users → [+ Add users]' and add the Gmail you will sign in with (without it, sign-in shows 'Error 403: access_denied — the app is currently being tested'). In testing status you must reconnect every 7 days.\n"
-"5. Create a client: 'Google Auth Platform → Clients → [Create client]' → application type 'Desktop app', a name (e.g. PolyCardex), leave 'Use this client for AI-based agents' unchecked → [Create] → copy the client ID and secret.\n"
-"\n"
-"Then in this window:\n"
-"6. Paste the client ID and secret and press [Connect Google account] → in the browser choose the account from step 4; if 'Google hasn't verified this app' appears press [Continue] → tick the contacts (and Drive) permissions → [Continue]. When 'Connected — (email)' shows at the top, close with [OK].\n"
-"7. Sync: Find Business Card ≡ menu → Contacts → Sync with Google Contacts → choose rows in the preview and press [Apply]. Try a few rows first.\n"
-"\n"
-"Changes in the console can take a few minutes to apply. You sign in on Google's page; this app never sees your Google password. When it shows 'Not connected' after 7 days, just press [Connect Google account] again."
-
-# | 거칩니다."
-#: viewer/widgets/bizcard_settings_dialog.py
-msgid "켜면 명함의 글 칸(과 고른 사진)을 구글 People·Drive API 로만 주고받습니다. 적용 전에는 늘 미리보기를 거칩니다."
-msgstr "When on, card text fields (and the chosen photos) are exchanged only with the Google People and Drive APIs. Changes always go through a preview before [Apply]."
-
-#: viewer/widgets/bizcard_todo_panel.py
-msgid "이 기록을 지웁니다 — 지운 기록은 ≡ 메뉴 '주소록 ▸ 변경 기록·되살리기' 에서 되살릴 수 있습니다."
-msgstr "Delete this record? Deleted records can be restored from ≡ menu 'Contacts ▸ Change history and restore'."
-
-#: viewer/widgets/bizcard_find_dialog.py
-msgid "사진 올리기를 멈춥니다 — 남은 것은 다음에 명함찾기를 열 때 이어서 올립니다"
-msgstr "Stop uploading photos — the rest will continue the next time Find Business Card opens"
-
-#: viewer/widgets/bizcard_find_dialog.py
-msgid "구글에 사진 올리는 중…"
-msgstr "Uploading photos to Google…"
-
-#: viewer/widgets/bizcard_find_dialog.py
-msgid "멈추는 중… (지금 사람까지 올리고 멈춥니다)"
-msgstr "Stopping… (finishing the current person first)"
-
-#: viewer/widgets/bizcard_find_dialog.py
-#, python-brace-format
-msgid "구글에 사진 올리는 중 {i}/{n}"
-msgstr "Uploading photos to Google {i}/{n}"
-
-#: viewer/widgets/bizcard_gsync_dialog.py
-msgid "명함 그림·인물 사진을 드라이브에"
-msgstr "Card images and portrait photos to Drive"
-
-#: viewer/widgets/bizcard_gsync_dialog.py
-#, python-brace-format
-msgid "드라이브 저장 공간 부족 {n}건"
-msgstr "Google Drive storage full: {n}"
-
-#: viewer/widgets/bizcard_gsync_dialog.py
-#, python-brace-format
-msgid "권한 없음 {n}건"
-msgstr "No permission: {n}"
-
-#: viewer/widgets/bizcard_gsync_dialog.py
-#, python-brace-format
-msgid "구글 한도 초과 {n}건"
-msgstr "Google rate limit exceeded: {n}"
-
-#: viewer/widgets/bizcard_gsync_dialog.py
-#, python-brace-format
-msgid "연결 안 됨 {n}건"
-msgstr "No connection: {n}"
-
-#: viewer/widgets/bizcard_gsync_dialog.py
-#, python-brace-format
-msgid "그 밖 {n}건"
-msgstr "Other: {n}"
-
-#: viewer/widgets/bizcard_gsync_dialog.py
-msgid "구글 드라이브 공간을 비운 뒤 명함찾기를 다시 열면 남은 사진·명함 그림을 이어서 올립니다."
-msgstr "Free up Google Drive space, then open Find Business Card again — the remaining photos and card images will continue uploading."
-
-#: viewer/widgets/bizcard_gsync_dialog.py
-#, python-brace-format
-msgid "까닭: {list}"
-msgstr "Reasons: {list}"
-
-#: viewer/widgets/bizcard_gsync_dialog.py
-#, python-brace-format
-msgid "남은 {n}건은 다음에 명함찾기를 열 때 이어서 올립니다."
-msgstr "The remaining {n} will continue the next time Find Business Card opens."
-
-#: viewer/widgets/bizcard_gsync_dialog.py
-msgid "새 연락처와 함께"
-msgstr "with the new contact"
-
-#: viewer/widgets/bizcard_gsync_dialog.py
-msgid "지난번 못 올림"
-msgstr "failed last time"
-
-#: viewer/widgets/bizcard_gsync_dialog.py
-#, python-brace-format
-msgid "글 자료 {n}건을 적용했습니다. 사진·명함 그림 {m}건은 명함찾기 아래 줄에서 이어 올립니다 — 창을 닫아도 다음에 열 때 이어서 올립니다."
-msgstr "Applied {n} text changes. {m} photos and card images are now uploading (shown at the bottom of Find Business Card) — if you close it, uploading continues the next time it opens."
-
-#: viewer/widgets/bizcard_settings_dialog.py
-msgid "명함 그림·인물 사진을 구글 드라이브에 올리고 연락처에 링크(앞면 = 웹사이트, 뒷면·사진 = 메모)"
-msgstr "Upload card images and portrait photos to Google Drive and link them in the contact (front = website, back and photos = notes)"
-
-#: viewer/widgets/bizcard_gsync_dialog.py
-msgid "# 바로잡기 — 예전 구글 연락처의 이름 앞 # 뗌"
-msgstr "Fix # — remove the # before names of contacts that were already in Google"
-
-#: viewer/widgets/bizcard_gsync_dialog.py
-msgid "구글에서 가져온 명함"
-msgstr "card imported from Google"
-
-#: viewer/widgets/bizcard_gsync_dialog.py
-msgid "구글 이름을 따른 표시"
-msgstr "mark taken from the Google name"
-
-#: viewer/widgets/bizcard_gsync_dialog.py
-msgid "예전 구글 연락처와 짝"
-msgstr "paired with an existing Google contact"
-
-#: viewer/widgets/bizcard_gsync_dialog.py
-msgid "같은 휴대폰이 예전 구글 연락처에"
-msgstr "same mobile as an existing Google contact"
-
-#: viewer/widgets/bizcard_gsync_dialog.py
-msgid "직접 정한 표시"
-msgstr "set by you"
-
-#: viewer/widgets/bizcard_gsync_dialog.py
-msgid "설정에서 끔"
-msgstr "turned off in settings"
-
-#: viewer/widgets/bizcard_gsync_dialog.py
-msgid "지난 싱크의 표시"
-msgstr "mark from the last sync"
-
-#: viewer/widgets/bizcard_gsync_dialog.py
-msgid "# 붙임"
-msgstr "adds #"
-
-#: viewer/widgets/bizcard_gsync_dialog.py
-#, python-brace-format
-msgid "# 없음 — {why}"
-msgstr "no # — {why}"
-
-#: viewer/widgets/bizcard_dupe_dialog.py
-msgid "이름·메일 같음(확정)"
-msgstr "Same name and email (confirmed)"
-
-#: viewer/widgets/bizcard_find_dialog.py
-msgid "명함 자료 내보내기(zip)"
-msgstr "Export business card data (zip)"
-
-#: viewer/widgets/bizcard_find_dialog.py
-msgid "명함 자료 불러오기(zip)"
-msgstr "Import business card data (zip)"
-
-#: viewer/widgets/bizcard_find_dialog.py
-msgid "명함 자료"
-msgstr "Business card data"
-
-#: viewer/widgets/bizcard_find_dialog.py
-msgid "명함 자료를 zip 으로 저장하는 중…"
-msgstr "Saving business card data to zip…"
-
-#: viewer/widgets/bizcard_find_dialog.py
-msgid "명함 자료를 불러오는 중…"
-msgstr "Importing business card data…"
-
-#: viewer/widgets/bizcard_find_dialog.py
-msgid ""
-"이 PC 의 명함 자료를 어떻게 할까요?\n"
-"\n"
-"바꾸기 — 지금 명함 DB·그림을 먼저 zip 으로 백업한 뒤 불러온 것으로 통째로 바꿉니다.\n"
-"합치기 — 지금 명함에 없는 것만 더하고, 끝나면 중복 검토를 엽니다."
-msgstr ""
-"What should happen to the business card data on this PC?\n"
-"\n"
-"Replace — back up the current card database and images to a zip first, then replace everything with the imported data.\n"
-"Merge — add only cards that are not here yet, then open Duplicate review."
-
-#: viewer/widgets/bizcard_find_dialog.py
-msgid "그림을 풀 명함 폴더를 고르세요"
-msgstr "Choose the business card folder to put the images in"
-
-#: viewer/widgets/bizcard_find_dialog.py
-#, python-brace-format
-msgid "명함 {n}장·그림 {m}개를 불러왔습니다."
-msgstr "Imported {n} cards and {m} images."
-
-#: viewer/widgets/bizcard_find_dialog.py
-#, python-brace-format
-msgid "명함 {n}장·그림 {m}개를 zip 으로 저장했습니다. 개인정보가 든 파일이니 옮긴 뒤 지우거나 안전한 곳에 두세요 — 다른 PC 에서 ≡ 메뉴 '주소록 ▸ 명함 자료 불러오기(zip)' 로 엽니다(구글은 그 PC 에서 다시 연결)."
-msgstr "Saved {n} cards and {m} images to a zip. It contains personal information — delete it or keep it somewhere safe after moving it. On the other PC, open it with ≡ menu 'Contacts ▸ Import business card data (zip)' (reconnect Google on that PC)."
-
-#: viewer/widgets/bizcard_find_dialog.py
-#, python-brace-format
-msgid "내보내지 못했습니다({err})."
-msgstr "Could not export ({err})."
-
-#: viewer/widgets/bizcard_find_dialog.py
-msgid "PolyCardex 명함 자료 zip 이 아닙니다"
-msgstr "this is not a PolyCardex business card zip"
-
-#: viewer/widgets/bizcard_find_dialog.py
-msgid "더 새 프로그램이 만든 zip 입니다 — 프로그램을 먼저 업데이트하세요"
-msgstr "the zip was made by a newer version — update the program first"
-
-#: viewer/widgets/bizcard_find_dialog.py
-#, python-brace-format
-msgid "불러오지 못했습니다 — {why}. 지금 자료는 그대로입니다."
-msgstr "Could not import — {why}. Your current data is unchanged."
-
-#: viewer/widgets/bizcard_find_dialog.py
-#, python-brace-format
-msgid "바꾸기 전 자료는 '{p}' 에 백업했습니다."
-msgstr "The data from before the replacement was backed up to '{p}'."
-
-#: viewer/widgets/bizcard_find_dialog.py
-msgid "#해시태그 — 빈칸으로 나눔"
-msgstr "#hashtags — separate with spaces"
-
-#: viewer/widgets/bizcard_find_dialog.py
-msgid "불러오다 멈췄습니다 — 일부만 바뀌었을 수 있습니다."
-msgstr "Import stopped partway — some data may have changed."
-
-#: viewer/widgets/bizcard_find_dialog.py
-#, python-brace-format
-msgid "바꾸기 전 자료는 '{p}' 에 있습니다 — 그 zip 을 '바꾸기' 로 불러오면 되돌아갑니다."
-msgstr "The data from before is in '{p}' — import that zip with 'Replace' to go back."
-
-#: viewer/widgets/bizcard_history_dialog.py
-msgid "되살리기도 기록에 남아 이 창에서 되돌릴 수 있습니다."
-msgstr "Restores are recorded too, so you can undo them in this window."

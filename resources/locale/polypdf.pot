@@ -17475,3 +17475,7 @@ msgstr ""
 #, python-brace-format
 msgid "# 없음 — {why}"
 msgstr ""
+
+#: viewer/widgets/bizcard_dupe_dialog.py
+msgid "이름·메일 같음(확정)"
+msgstr ""

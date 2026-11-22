@@ -23,7 +23,7 @@ from viewer.bizcard import vcard as V
 ROLE = Qt.ItemDataRole.UserRole
 THUMB = 96                          # 명함 그림 썸네일 줄(고른 묶음의 그림 명함 앞·뒷면, §5.24.8 '명함 그림')
 SRC_LABEL = {"card": tr_noop("명함"), "remember": tr_noop("리멤버"), "google": tr_noop("구글"), "contact": tr_noop("주소록")}
-WHY_LABEL = {"phone": tr_noop("같은 번호"), "mail": tr_noop("같은 메일"), "typo": tr_noop("번호 오타?"),
+WHY_LABEL = {"phone": tr_noop("같은 번호"), "namemail": tr_noop("이름·메일 같음(확정)"), "mail": tr_noop("같은 메일"), "typo": tr_noop("번호 오타?"),
              "namecomp": tr_noop("이름·회사 같음")}
 SHOW = (("name", tr_noop("이름")), ("company", tr_noop("회사")), ("dept", tr_noop("부서")), ("title", tr_noop("직함")),
         ("phones", tr_noop("전화")), ("emails", tr_noop("메일")), ("urls", tr_noop("누리집")), ("address", tr_noop("주소")),

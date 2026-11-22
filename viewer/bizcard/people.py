@@ -1164,13 +1164,19 @@ def same_person_ids(store, card_id: int) -> list:
 DUPE_SOURCES = ("card", "remember", "google", "contact")   # 명함(그림) · 리멤버 · 구글 · 출처 모름 주소록
 DUPE_ORDER_KEY = "dupe_order"
 HOLD_DIR = "병합 보관"            # 합쳐 지운 그림 명함 파일 — 정리 폴더 옆(인물 폴더와 같은 자리), 다음 합치기 때 휴지통
-WHY_SURE = ("phone", "mail")
-_WHY_RANK = {"phone": 0, "mail": 1, "typo": 2, "namecomp": 3}
+WHY_SURE = ("phone", "namemail", "mail")
+_WHY_RANK = {"phone": 0, "namemail": 1, "mail": 2, "typo": 3, "namecomp": 4}   # namemail = 성명+메일 같음, 확정(261120-74)
 _ONE = ("name", "company", "dept", "title", "address")
 
 
 def _nname(s) -> str:
     return re.sub(r"\s+", "", str(s or "")).lower()
+
+
+def _pname(s) -> str:
+    """성명 비교 꼴(성명+메일 확정, 261120-74) — 앞 '#'(카톡 표시)·괄호 속 글(직함 등)·빈칸·대소문자 무시."""
+    t = re.sub(r"[(（\[][^)）\]]*[)）\]]", "", str(s or "")).lstrip().lstrip("#")
+    return _nname(t)
 
 
 MOBILE_PREFIX = ("010", "011", "016", "017", "018", "019")
@@ -1272,8 +1278,8 @@ def dupe_groups(store, order=None) -> list:
         if a == b:
             return
         ra, rb = find(par, a), find(par, b)
-        if ra != rb and why != "phone" and cm.get(ra) and cm.get(rb) and not _mobiles_near(cm[ra], cm[rb]):
-            return                                          # 휴대폰이 서로 다르면 다른 사람 — 이름·회사·메일이 같아도
+        if ra != rb and why not in ("phone", "namemail") and cm.get(ra) and cm.get(rb) and not _mobiles_near(cm[ra], cm[rb]):
+            return                                          # 휴대폰이 서로 다르면 다른 사람 — 이름·회사·메일이 같아도(성명+메일은 확정 — 아래 ⑤)
         if ra != rb:
             par[ra] = rb
             cm[rb] = cm.get(rb, set()) | cm.pop(ra, set())
@@ -1313,6 +1319,15 @@ def dupe_groups(store, order=None) -> list:
                 hit = next((x for x in ka for y in _mobile_keys(b) if mobile_typo(x, y)), "")
                 if hit:
                     link(a["id"], b["id"], "typo", hit)
+    for same in mails.values():                             # ⑤ 성명+메일 같음 = 확정 동일인 — 휴대폰이 달라도(261120-74, 사용자 결정 261122)
+        by_pn = {}
+        for c in same:
+            pn = _pname(c.get("name"))
+            if pn:
+                by_pn.setdefault(pn, []).append(c)
+        for grp in by_pn.values():
+            for b in grp[1:]:
+                link(grp[0]["id"], b["id"], "namemail")
     for same in mails.values():
         for i, a in enumerate(same):
             for b in same[i + 1:]:

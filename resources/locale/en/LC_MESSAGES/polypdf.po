@@ -19171,3 +19171,7 @@ msgstr "adds #"
 #, python-brace-format
 msgid "# 없음 — {why}"
 msgstr "no # — {why}"
+
+#: viewer/widgets/bizcard_dupe_dialog.py
+msgid "이름·메일 같음(확정)"
+msgstr "Same name and email (confirmed)"

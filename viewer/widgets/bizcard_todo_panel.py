@@ -111,12 +111,16 @@ class TodoPanel(QFrame):
         self.rows = []
         self.setObjectName("bizTodoPanel")
         self.setFrameShape(QFrame.Shape.StyledPanel)
-        self.setFixedHeight(TODO_PANEL_H)                  # 위 띠가 창 높이를 더 가져가지 않게(목록·세부가 줄지 않게)
-        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        # 높이: 바라는 높이 TODO_PANEL_H(위 띠가 창 높이를 더 가져가지 않게), 위 띠가 더 높으면 그만큼 채운다 — 위·아래 끝이
+        # 왼쪽 탭 줄 위 끝·사람 칸 아래 끝과 늘 같다(§5.24.10 '배치' 줄 맞춤, 261120-75 — 종전 고정 높이는 가운데 놓여 3px 씩 어긋났다)
+        self.setMinimumHeight(TODO_PANEL_H)
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
         v = QVBoxLayout(self)
         v.setContentsMargins(6, 4, 6, 4)
         v.setSpacing(4)
-        head = QHBoxLayout()
+        self.head_w = QWidget()                             # 머리 줄 — 높이는 탭 줄에 맞춤(set_head_height, 261120-75)
+        head = QHBoxLayout(self.head_w)
+        head.setContentsMargins(0, 0, 0, 0)
         self.btn_prev = QToolButton()
         self.btn_prev.setArrowType(Qt.ArrowType.LeftArrow)
         self.btn_prev.setToolTip(tr("이전 기록"))
@@ -137,7 +141,7 @@ class TodoPanel(QFrame):
         head.addWidget(self.lbl_made)
         head.addWidget(self.lbl_pos)
         head.addWidget(self.btn_next)
-        v.addLayout(head)
+        v.addWidget(self.head_w)
         self.scroll = QScrollArea()
         self.scroll.setWidgetResizable(True)
         self.scroll.setFrameShape(QFrame.Shape.NoFrame)
@@ -169,6 +173,17 @@ class TodoPanel(QFrame):
         self.btn_del.clicked.connect(lambda _c=False: self.delete())
         self.ed_tags.textEdited.connect(lambda _t: self._dirty())
         self.dirty = False
+
+    def sizeHint(self):
+        from PyQt6.QtCore import QSize
+        return QSize(super().sizeHint().width(), TODO_PANEL_H)
+
+    def set_head_height(self, h: int) -> None:
+        """내용 칸 위 끝이 왼쪽 사람 칸 위 끝과 맞게 — h = 탭 줄 위 끝 → 사람 칸 위 끝 거리(§5.24.10 '배치', 261120-75)."""
+        m = self.layout().contentsMargins()
+        want = max(self.head_w.minimumSizeHint().height(), h - m.top() - self.layout().spacing() - self.frameWidth())
+        if self.head_w.height() != want or self.head_w.minimumHeight() != want:
+            self.head_w.setFixedHeight(want)
 
     # ── 채우기 ──
     def period(self):

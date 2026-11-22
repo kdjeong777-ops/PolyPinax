@@ -2,7 +2,7 @@
 """명함찾기 아래 줄·'#' 풀다운 (명함 SOT §5.24.1 '아래 줄'·'# 풀다운'·'≡ 메뉴', 261120-66) — 가짜 명함·임시 DB 만(§2.1).
 
 A 아래 단추 줄 없음 — 종전 단추 다섯 항목은 ≡ 메뉴에(주소록은 하위 메뉴), 명함 보기는 그림 없는 명함이면 흐림
-B 고른 명단 — 표에서 실제로 고른 명함들의 '이름 #태그' (#명함 은 빼고), 하나만 고르면 그 사람만
+B (261120-75 에 없앰 — 해시태그는 세부 칸, test_bizcard_layout_261122)
 C '#' 풀다운 — 단추 글 '#', 속성(옵션)·주제(체크)·개수, #명함 없음, 체크 = 찾기 칸 #태그(목록이 그만큼), 단추 '#n',
   둘째 체크 = 그리고, 풀면 빠짐, 맨 아래 '찾기 비우기'·'해시태그 수정'
 """
@@ -78,29 +78,8 @@ try:
     en = {x.text(): x.isEnabled() for x in acts}
     chk(en.get("명함 보기") is False and en.get("새 명함 입력") is True, "A 그림 없는 명함 — 명함 보기 흐림", str(en))
 
-    # ── B ──
-    print("\n=== B. 고른 명단 ===")
-    lbl = getattr(fd, "lbl_picked", None)
-    m = fd.table.model()
+    # ── B ── 고른 명단은 261120-75 에 없앰(해시태그는 세부 칸 — test_bizcard_layout_261122)
 
-    def click_row(r, mod=Qt.KeyboardModifier.NoModifier):
-        rect = fd.table.visualRect(m.index(r, 0))
-        QTest.mouseClick(fd.table.viewport(), Qt.MouseButton.LeftButton, mod, rect.center())
-
-    ra, rb = fd.row_of_id(a), fd.row_of_id(b)
-    click_row(ra)
-    pump(lambda: lbl is not None and "가짜일" in lbl.text(), timeout=2)
-    t1 = lbl.text() if lbl else ""
-    chk(lbl is not None and lbl.isVisible() and "가짜일" in t1 and "#가짜사" in t1 and "#명함" not in t1 and "가짜이" not in t1,
-        "B 하나 고르면 그 사람 '이름 #태그'(#명함 빼고)", repr(t1))
-    click_row(rb, Qt.KeyboardModifier.ControlModifier)
-    pump(lambda: lbl is not None and "가짜이" in lbl.text(), timeout=2)
-    t2 = lbl.text() if lbl else ""
-    chk("가짜일" in t2 and "가짜이" in t2 and "#골프" in t2 and "Fake Three" not in t2, "B Ctrl 로 둘 고르면 둘 다", repr(t2))
-    chk(lbl is not None and lbl.mapTo(fd, lbl.rect().topLeft()).y() > fd.table.mapTo(fd, fd.table.rect().bottomLeft()).y() - 2,
-        "B 명단은 목록 표 아래")
-
-    # ── C ──
     print("\n=== C. '#' 풀다운 ===")
     bt = fd.btn_tags
     chk(bt.text() == "#" and bt.menu() is not None, "C 찾기 칸 옆 단추 '#' + 풀다운", repr(bt.text()))

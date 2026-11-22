@@ -31,6 +31,8 @@ from viewer.widgets.page_dots import PageDots   # 쪽 점 표시(디자인 SOT �
 C_NAME, C_COMP, C_TITLE, C_PHONE, C_MAIL, C_DATE = range(6)   # 전화·메일 열(§5.9 '결과', 사용자 지시 261119)
 ROLE = Qt.ItemDataRole.UserRole
 FAV_ICON = 56                       # 즐겨찾기 사람 칸 그림(카톡 꼴 둥근 네모)
+LIST_ROW_H = 28                     # 목록 표 줄 높이 — 원형 얼굴이 보이게 조금 키움(§5.24.1 '목록 표 얼굴', 261120-76)
+FACE_TIP = 96                       # 목록 얼굴 풍선(크게 보기) 한 변
 FAV_ROWS = 2                        # 즐겨찾기 줄 최대 높이(줄 수) — 넘치면 그 칸 안에서 굴림
 PHOTO_ICON = 72                     # 인물 사진 썸네일 줄(큰 화면은 그 위 — §5.24 사진창)
 DETAIL_BG = {                        # 세부내용 카드·목록 표 — 띠(머리말)·띠 글·테두리 / 본문 / 메모 / 고른 줄 — 회색 톤(디자인 SOT §2.5 '명함 세부 카드', 261120-4)
@@ -41,7 +43,6 @@ DETAIL_BG = {                        # 세부내용 카드·목록 표 — 띠(�
 }
 DETAIL_W = 330                     # 처음 너비 — 세부 칸(§5.24 '처음 너비': 목록은 네 열 최소 폭, 나머지는 사진창)
 FIND_DELAY_MS = 250
-PICKED_LINES = 2                   # 아래 줄 고른 명단 높이(줄 수, §5.24.1 '아래 줄', 261120-66)
 RECENT = -1                         # '최근' 탭의 tabData(명함 DB 의 탭 id 와 겹치지 않음, §5.24.2)
 FAV_KEY_MS = 120                    # 사람 칸을 키보드로 넘길 때 — 멈춘 뒤 마지막 사람만 그린다(§5.24.2)
 RECENT_MS = 3000                    # 세부 칸에 이만큼 넘게 보이면 '최근' 에 넣는다(D27)
@@ -158,6 +159,9 @@ class _CardModel(QAbstractTableModel):
         self._rows = []
         self._disp = []
         self._at = {}
+        self.face_px = {}                                    # 명함 id → 원형 얼굴(§5.24.1 '목록 표 얼굴', 261120-76)
+        self.face_tip = {}                                   # 명함 id → 캐시 그림 경로(풍선)
+        self.want_face = None                                # 없는 얼굴을 부탁할 곳(창이 배경에서 만든다)
 
     @staticmethod
     def _cells(c):
@@ -215,6 +219,16 @@ class _CardModel(QAbstractTableModel):
             return self._rows[r]["id"]
         if role == Qt.ItemDataRole.FontRole and c == C_NAME:
             return _bold_font()                     # 이름은 굵게(§5.24.1 '이름 굵게', 사용자 지시 261119)
+        if role == Qt.ItemDataRole.DecorationRole and c == C_NAME:   # 원형 얼굴(261120-76) — 없으면 배경에 부탁
+            cid = self._rows[r]["id"]
+            px = self.face_px.get(cid)
+            if px is None and callable(self.want_face):
+                self.want_face(cid)
+            return px
+        if role == Qt.ItemDataRole.ToolTipRole and c == C_NAME and self._rows[r]["id"] in self.face_tip:
+            from PyQt6.QtCore import QUrl
+            return '<img src="%s" width="%d" height="%d">' % (QUrl.fromLocalFile(self.face_tip[self._rows[r]["id"]]).toString(),
+                                                             FACE_TIP, FACE_TIP)
         return None
 
     def headerData(self, section, orientation, role=Qt.ItemDataRole.DisplayRole):
@@ -430,6 +444,57 @@ class PhotoWorker(QObject):
         self.finished.emit()
 
 
+class _FaceWorker(QObject):
+    """목록 표 얼굴(배경, §5.24.1 '목록 표 얼굴', 261120-76) — [(명함 id, 명함, 명함 폴더)] → one(명함 id, 캐시 그림 경로|'')."""
+    one = pyqtSignal(int, str)
+    finished = pyqtSignal()
+
+    def __init__(self, jobs):
+        super().__init__()
+        self._jobs = list(jobs)
+
+    def run(self):
+        from viewer.bizcard import face_thumb as FT
+        for cid, card, folder in self._jobs:
+            tp = ""
+            try:
+                path, from_card = FT.source(card, folder)
+                tp = FT.thumb(path, from_card) if path else ""
+            except Exception:
+                tp = ""
+            self.one.emit(cid, tp)
+        self.finished.emit()
+
+
+def _circle(img, name: str, d: int) -> QPixmap:
+    """원형 얼굴 — 그림이 없으면 옅은 바탕에 첫 글자(즐겨찾기 빈 그림과 같은 색)."""
+    from viewer import theme as _theme
+    dpr = 2
+    pm = QPixmap(d * dpr, d * dpr)
+    pm.setDevicePixelRatio(dpr)
+    pm.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pm)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    path = QPainterPath()
+    path.addEllipse(QRectF(0, 0, d, d))
+    p.setClipPath(path)
+    if img is not None and not img.isNull():
+        sc = img.scaled(d * dpr, d * dpr, Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation)
+        sc.setDevicePixelRatio(dpr)
+        p.drawImage(QRectF(0, 0, d, d), sc)
+    else:
+        bg, fg = FAV_COLORS[bool(_theme.is_dark())]
+        p.fillRect(0, 0, d, d, QColor(bg))
+        f = QFont()
+        f.setPixelSize(max(8, int(d * 0.5)))
+        f.setBold(True)
+        p.setFont(f)
+        p.setPen(QColor(fg))
+        p.drawText(QRectF(0, 0, d, d), Qt.AlignmentFlag.AlignCenter, (name or "?").strip()[:1])
+    p.end()
+    return pm
+
+
 class FavIconWorker(QObject):
     """즐겨찾기 그림 읽기(배경) — (세대, 명함 id, 그림). 세대가 바뀌면 부르는 쪽이 버린다."""
     one = pyqtSignal(int, int, QImage)
@@ -440,9 +505,11 @@ class FavIconWorker(QObject):
         self._gen, self._jobs = gen, list(jobs)
 
     def run(self):
+        from viewer.bizcard import face_thumb as FT
         for cid, path, from_card in self._jobs:
             try:
-                im = _fav_image(path, from_card)
+                tp = FT.thumb(path, from_card)                # 얼굴 썸네일(§5.24.2 '즐겨찾기 줄', 261120-76) — 캐시
+                im = QImage(tp) if tp else _fav_image(path, from_card)
             except Exception:
                 im = QImage()
             if not im.isNull():
@@ -1128,6 +1195,10 @@ class BizcardFindDialog(QDialog):
         self.table.setDragEnabled(True)
         self.table.setDragDropMode(QAbstractItemView.DragDropMode.DragOnly)
         self.table.verticalHeader().setVisible(False)
+        self.table.verticalHeader().setDefaultSectionSize(LIST_ROW_H)   # 원형 얼굴이 보이게(§5.24.1 '목록 표 얼굴', 261120-76)
+        self.table.setIconSize(QSize(LIST_ROW_H - 4, LIST_ROW_H - 4))
+        self.table.model().want_face = self._want_face
+        self._face_queue, self._face_asked, self._face_busy = [], set(), False
         self.table.setAlternatingRowColors(True)            # 줄 번갈아 색·세로 선 없음(§5.24.1 '목록 표 꾸밈')
         self.table.setShowGrid(False)
         hh = self.table.horizontalHeader()
@@ -1215,10 +1286,11 @@ class BizcardFindDialog(QDialog):
         self._memo_view = 0                                # 메모 칸을 명함 값으로 새로 채울 때마다 +1 — 날짜는 한 보기에 한 번
         self.ed_memo.textChanged.connect(lambda: setattr(self, "_memo_view", self._memo_view + 1) if self._loading else None)
         rv.addWidget(self.ed_memo, 1)
-        self.lbl_file = QLabel("")
-        self.lbl_file.setWordWrap(True)
-        self.lbl_file.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        rv.addWidget(self.lbl_file)
+        # 세부 해시태그(§5.24.1 '세부 해시태그', 261120-75) — 종전 파일 이름·'(주소록에서…)' 글 자리. 이름 없이 '#태그', 고치면 [저장]
+        self.ed_tags = QLineEdit()
+        self.ed_tags.setPlaceholderText(tr("#해시태그 — 빈칸으로 나눔"))
+        self.ed_tags.textEdited.connect(lambda _t: self._set_dirty(True))
+        rv.addWidget(self.ed_tags)
         dv.addWidget(self.detail_box, 1)
         self._detail_css = ""
         self._style_detail()
@@ -1346,14 +1418,7 @@ class BizcardFindDialog(QDialog):
         self.act_new_card = QAction(tr("새 명함 입력"), self)   # 맨 앞(§5.24.1 '새 명함 입력', 261120-15)
         self.act_new_card.setToolTip(tr("새 명함이나 새 인물 정보를 손으로 넣습니다 — 명함 그림·인물 사진도 함께"))
         self.act_new_card.triggered.connect(lambda _c=False: self.new_card())
-        # 고른 명단(§5.24.1 '아래 줄', 261120-66) — 고른 명함들의 '이름 #태그', 두 줄 높이 고정(넘치면 '외 n명'), 올리면 전체
-        self.lbl_picked = QLabel("")
-        self.lbl_picked.setWordWrap(True)
-        self.lbl_picked.setTextFormat(Qt.TextFormat.PlainText)
-        self.lbl_picked.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
-        self.lbl_picked.setFixedHeight(self.lbl_picked.fontMetrics().lineSpacing() * PICKED_LINES + 4)
-        self.lbl_picked.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
-        bot.addWidget(self.lbl_picked, 1)              # 단추 없음 — [닫기]도 없음(제목 줄 X·Alt+F4·Esc·≡ 메뉴 '종료', 261120-38)
+        # 아래 줄 = 진행 글 왼쪽 정렬(§5.24.1 '아래 줄', 261120-75 — 종전 고른 명단 자리, 해시태그는 세부 칸으로). 단추·[닫기] 없음
         # 구글 싱크 2단계 — 사진·드라이브 올리는 중(§5.29 '단계', 261120-71). 돌 때만 보인다
         self.lbl_media = QLabel("")
         self.lbl_media.setVisible(False)
@@ -1363,8 +1428,9 @@ class BizcardFindDialog(QDialog):
         self.btn_media_stop.clicked.connect(lambda _c=False: self.stop_media())
         bot.addWidget(self.lbl_media)
         bot.addWidget(self.btn_media_stop)
+        bot.addStretch(1)
+        self.lbl_media.setFixedHeight(self.lbl_media.fontMetrics().lineSpacing() + 6)
         self.media_busy = False
-        self.table.selectionModel().selectionChanged.connect(lambda *_a: self._update_picked())
         v.addLayout(bot)
         for b in self.findChildren(QPushButton):      # Enter 가 '#' 등을 누르지 않게 — 기본 단추 없음(사용자 보고 261119)
             b.setAutoDefault(False)
@@ -1907,31 +1973,6 @@ class BizcardFindDialog(QDialog):
             self._load(c)
 
     # ── 한 명함 ──
-    def _update_picked(self):
-        """고른 명단(§5.24.1 '아래 줄', 261120-66) — 표에서 고른 명함들(없으면 지금 명함)의 '이름 #태그'(앱이 붙인 #명함 빼고)를
-        ' · ' 로 잇는다. 두 줄에 넘치면 들어가는 데까지 + '외 n명', 올리면 전체(줄마다 한 사람, 많으면 앞 200명)."""
-        lbl = getattr(self, "lbl_picked", None)
-        if lbl is None:
-            return
-        cards = self.selected_cards() or ([self._card] if self._card else [])
-        parts = []
-        for c in cards:
-            tags = ["#" + str(t) for t in (c.get("tags") or []) if str(t).strip() and str(t) != "명함"]
-            parts.append(" ".join([str(c.get("name") or c.get("company") or "").strip() or "-"] + tags))
-        fm = lbl.fontMetrics()
-        room = max(120, lbl.width() - 8) * PICKED_LINES * 0.9      # 줄바꿈 자리 여유
-        text = ""
-        for i, p in enumerate(parts):
-            cand = p if not text else text + " · " + p
-            rest = len(parts) - i - 1
-            tail = (" " + tr("외 {n}명").format(n=rest)) if rest else ""
-            if text and fm.horizontalAdvance(cand + tail) > room:
-                text += " " + tr("외 {n}명").format(n=len(parts) - i)
-                break
-            text = cand
-        lbl.setText(text)
-        lbl.setToolTip("\n".join(parts[:200]) if len(parts) > 1 or text != (parts[0] if parts else "") else "")
-
     def _list_tag_counts(self) -> dict:
         """'#' 풀다운 개수 — 지금 목록 명함의 DB 태그(찾기 칸 `#낱말` 이 보는 것), 앱이 모든 명함에 붙이는 `#명함` 빼고."""
         counts, names = {}, {}
@@ -1970,17 +2011,16 @@ class BizcardFindDialog(QDialog):
             self._fill_extra_rows(card)                    # 추가 메일·전화·누리집 줄(261120-35)
             self.ed_memo.setPlainText((card or {}).get("memo") or "")
             self.ed_memo.setEnabled(card is not None)
-            if card and V.is_contact(card):
-                self.lbl_file.setText(tr("(주소록에서 가져온 명함 — 그림 없음)"))
-            else:
-                self.lbl_file.setText(os.path.basename(card["front"]) if card else "")
+            self._tags0 = [str(t) for t in (card or {}).get("tags") or [] if str(t).strip() and str(t) != "명함"]
+            self.ed_tags.setText(" ".join("#" + t for t in self._tags0))
+            self.ed_tags.setEnabled(card is not None)
+            self.ed_tags.setToolTip(os.path.basename(card["front"]) if card and not V.is_contact(card) else "")
             has_back = bool(card and card.get("back") and os.path.exists(card["back"]))
             self.dots.set_state(2 if has_back else 1, 0)
         finally:
             self._loading = False
         self._set_dirty(False)
         self._enable_card_buttons(card is not None)
-        self._update_picked()
         self._show_card()
         self._fill_photos()
         self._recent_id = card["id"] if card else None     # RECENT_MS 넘게 보이면 '최근' 에(D27)
@@ -2077,6 +2117,12 @@ class BizcardFindDialog(QDialog):
             self.photos.clear()
             c = self._card
             pf = self._photo_front()
+            if c:                                          # 사진이 바뀌었으면 목록 얼굴을 다시(§5.24.1 '목록 표 얼굴', 261120-76)
+                sig = tuple(P.person_photos(pf)) if pf else ()
+                sigs = self.__dict__.setdefault("_photo_sigs", {})
+                if c["id"] in sigs and sigs[c["id"]] != sig:
+                    self._face_forget(c["id"])
+                sigs[c["id"]] = sig
             if pf:
                 cur = None
                 for p in P.person_photos(pf):
@@ -2137,19 +2183,26 @@ class BizcardFindDialog(QDialog):
         QTimer.singleShot(0, self._show_card)
         QTimer.singleShot(0, self._fav_fit)
         QTimer.singleShot(0, self._sync_todo_width)
-        QTimer.singleShot(0, self._update_picked)
 
     # ── 할 일 칸 (§5.24.10, 261120-34) ──
     def _sync_todo_width(self):
         """할 일 칸 폭 = 사진창 폭 — 그래서 위 띠의 칸 경계가 아래 띠(세부내용 | 사진창)와 맞는다."""
         if getattr(self, "todo_panel", None) is not None and self.photo_split.width() > 0:
             self.todo_panel.setFixedWidth(self.photo_split.width())
+        tp = getattr(self, "todo_panel", None)
+        if tp is not None and tp.isVisible() and self.fav.height() > 0:   # 줄 맞춤(§5.24.10 '배치', 261120-75)
+            from PyQt6.QtCore import QPoint
+            band = self.top_band
+            t0 = self.fav_tabs.mapTo(band, QPoint(0, 0)).y()
+            f0 = self.fav.mapTo(band, QPoint(0, 0)).y()
+            tp.set_head_height(f0 - t0)
 
     def _todo_show(self, gid):
         """할 일 탭이면 칸에 그 기록, 아니면 칸을 숨기고 사람 칸이 위 띠 끝까지(사용자 지시)."""
         on = self.todo_panel.set_group(gid) if gid not in (None, RECENT) else self.todo_panel.set_group(None)
         self.todo_panel.setVisible(bool(on))
         self._sync_todo_width()
+        QTimer.singleShot(0, self._sync_todo_width)        # 배치가 끝난 뒤 한 번 더 — 줄 맞춤(261120-75)
         QTimer.singleShot(0, self._fav_fit)
 
     def _style_detail(self):
@@ -2381,6 +2434,7 @@ class BizcardFindDialog(QDialog):
                 self.ed_memo.setPlainText(fields["memo"])
             finally:
                 self._loading = False
+        self._save_tags(c["id"])                          # 세부 해시태그 칸(§5.24.1 '세부 해시태그', 261120-75)
         self._dirty = False
         self.btn_save.setEnabled(False)
         self._card = dict(c, **fields)
@@ -2388,6 +2442,27 @@ class BizcardFindDialog(QDialog):
         self.refresh()
         self._fav_fill()
         return True
+
+    def _save_tags(self, cid) -> None:
+        """세부 해시태그 칸 — 불러올 때와 견줘 더한 태그·뗀 태그를 명함 DB·정리본 파일 태그에 같이(`해시태그 수정` 창과 같은 길)."""
+        from viewer.tag_store import normalize_tags
+        new = [t for t in normalize_tags(self.ed_tags.text()) if t != "명함"]
+        old = list(getattr(self, "_tags0", []) or [])
+        added = [t for t in new if t not in old]
+        removed = [t for t in old if t not in new]
+        if not added and not removed:
+            return
+        c = P.card_by_id(self._store(), cid)
+        if not c:
+            return
+        P.retag_cards(self._store(), [c], added, removed)
+        store = self._tagstore()
+        for f in (c.get("front"), c.get("back")):
+            if f and os.path.exists(f):
+                f = os.path.realpath(f)
+                cur = [t for t in (store.get_manual(f) or []) if t not in removed]
+                store.set(f, list(dict.fromkeys(cur + added)))
+        self._tags0 = new
 
     def rename_card_files(self, c, name: str, company: str, log=None):
         """이름·회사가 바뀌면 정리본·뒷면·인물 사진 이름을 `성명_회사명` 으로(한 길) — 반환 (새 앞면, 새 뒷면), 실패면 None.
@@ -3149,6 +3224,64 @@ class BizcardFindDialog(QDialog):
             w.one.connect(self._fav_icon)
             keep = getattr(self._mw, "_thread_keep", None)
             run_in_thread(w, keep if isinstance(keep, list) else _KEEP)
+
+    # ── 목록 표 얼굴(§5.24.1 '목록 표 얼굴', 261120-76) ──
+    def _want_face(self, cid):
+        if cid in self._face_asked:
+            return
+        self._face_asked.add(cid)
+        self._face_queue.append(cid)
+        QTimer.singleShot(0, self._face_kick)
+
+    def _face_kick(self):
+        if self._face_busy or not self._face_queue:
+            return
+        folder = self._bizcard_folder()
+        jobs = []
+        while self._face_queue and len(jobs) < 40:
+            cid = self._face_queue.pop(0)
+            c = self._by_id.get(cid) if hasattr(self, "_by_id") else None
+            if c is not None:
+                jobs.append((cid, dict(c), folder))
+        if not jobs:
+            return
+        from viewer.workers import run_in_thread
+        self._face_busy = True
+        w = _FaceWorker(jobs)
+        w.one.connect(self._face_one)
+        w.finished.connect(self._face_done)
+        keep = getattr(self._mw, "_thread_keep", None)
+        run_in_thread(w, keep if isinstance(keep, list) else _KEEP)
+        self._face_worker = w
+
+    def _face_one(self, cid, path):
+        m = self.table.model()
+        c = self._by_id.get(cid) if hasattr(self, "_by_id") else None
+        name = (c or {}).get("name") or ""
+        m.face_px[cid] = _circle(QImage(path) if path else None, name, LIST_ROW_H - 4)
+        if path:
+            m.face_tip[cid] = path
+        else:
+            m.face_tip.pop(cid, None)
+        r = m.row_of_id(cid)
+        if r >= 0:
+            ix = m.index(r, C_NAME)
+            m.dataChanged.emit(ix, ix, [Qt.ItemDataRole.DecorationRole])
+
+    def _face_done(self):
+        self._face_busy = False
+        QTimer.singleShot(0, self._face_kick)
+
+    def _face_forget(self, cid):
+        """그 명함의 사진이 바뀜 — 목록 얼굴을 다시 만들게."""
+        m = self.table.model()
+        m.face_px.pop(cid, None)
+        m.face_tip.pop(cid, None)
+        self._face_asked.discard(cid)
+        r = m.row_of_id(cid)
+        if r >= 0:
+            ix = m.index(r, C_NAME)
+            m.dataChanged.emit(ix, ix, [Qt.ItemDataRole.DecorationRole])
 
     def _fav_icon(self, gen, cid, img):
         if gen != self._fav_gen:

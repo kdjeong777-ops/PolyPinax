@@ -34,8 +34,8 @@ class TagFilterMenu(QObject):
         self.menu = QMenu(button)
         self.menu.aboutToShow.connect(self.rebuild)
         button.setText("#")
-        button.setFixedWidth(28)
         button.setMenu(self.menu)
+        button.setFixedWidth(button.fontMetrics().horizontalAdvance("#99") + 24)   # 글 + 메뉴 화살표(종전 28px 는 화살표가 '#' 를 가렸다, 261120-75)
 
     # ── 찾기 칸 토큰 ──
     def active(self) -> list:

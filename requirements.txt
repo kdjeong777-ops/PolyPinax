@@ -46,3 +46,5 @@ winrt-Windows.Media.Ocr>=3.2 ; sys_platform == "win32"
 winrt-Windows.Graphics.Imaging>=3.2 ; sys_platform == "win32"
 winrt-Windows.Globalization>=3.2 ; sys_platform == "win32"
 winrt-Windows.Foundation.Collections>=3.2 ; sys_platform == "win32"
+# 명함 얼굴 썸네일 — Windows 내장 얼굴 찾기(명함 SOT §5.24.2 '즐겨찾기 줄', 261120-76), 없으면 중요 부분 크롭
+winrt-Windows.Media.FaceAnalysis>=3.2 ; sys_platform == "win32"

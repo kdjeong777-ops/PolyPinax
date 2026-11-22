@@ -19244,3 +19244,7 @@ msgstr "Could not import — {why}. Your current data is unchanged."
 #, python-brace-format
 msgid "바꾸기 전 자료는 '{p}' 에 백업했습니다."
 msgstr "The data from before the replacement was backed up to '{p}'."
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "#해시태그 — 빈칸으로 나눔"
+msgstr "#hashtags — separate with spaces"

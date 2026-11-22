@@ -84,7 +84,8 @@ OSS = (
                                                 "winrt-Windows.Security.Cryptography",
                                                 "winrt-Windows.Storage.Streams", "winrt-Windows.Media.Ocr",
                                                 "winrt-Windows.Graphics.Imaging", "winrt-Windows.Globalization",
-                                                "winrt-Windows.Foundation.Collections")),
+                                                "winrt-Windows.Foundation.Collections",
+                                                "winrt-Windows.Media.FaceAnalysis")),
 )
 
 

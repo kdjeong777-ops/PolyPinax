@@ -19130,3 +19130,44 @@ msgstr "Applied {n} text changes. {m} photos and card images are now uploading (
 #: viewer/widgets/bizcard_settings_dialog.py
 msgid "명함 그림·인물 사진을 구글 드라이브에 올리고 연락처에 링크(앞면 = 웹사이트, 뒷면·사진 = 메모)"
 msgstr "Upload card images and portrait photos to Google Drive and link them in the contact (front = website, back and photos = notes)"
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+msgid "# 바로잡기 — 예전 구글 연락처의 이름 앞 # 뗌"
+msgstr "Fix # — remove the # before names of contacts that were already in Google"
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+msgid "구글에서 가져온 명함"
+msgstr "card imported from Google"
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+msgid "구글 이름을 따른 표시"
+msgstr "mark taken from the Google name"
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+msgid "예전 구글 연락처와 짝"
+msgstr "paired with an existing Google contact"
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+msgid "같은 휴대폰이 예전 구글 연락처에"
+msgstr "same mobile as an existing Google contact"
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+msgid "직접 정한 표시"
+msgstr "set by you"
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+msgid "설정에서 끔"
+msgstr "turned off in settings"
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+msgid "지난 싱크의 표시"
+msgstr "mark from the last sync"
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+msgid "# 붙임"
+msgstr "adds #"
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+#, python-brace-format
+msgid "# 없음 — {why}"
+msgstr "no # — {why}"

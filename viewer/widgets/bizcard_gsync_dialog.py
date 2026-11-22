@@ -21,6 +21,7 @@ KIND_LABELS = {G.NEW_CARD: tr_noop("구글에서 가져옴(새 명함)"), G.NEW_
                G.PHOTO_UP: tr_noop("인물 사진을 연락처 사진으로"), G.PHOTO_DOWN: tr_noop("연락처 사진을 인물 사진으로"),
                G.DRIVE_UP: tr_noop("명함 그림·인물 사진을 드라이브에"), "link": tr_noop("같은 사람으로 짝지음(값 같음)"),
                G.KAKAO_UP: tr_noop("카톡 친구추가 방지 바꿈(구글 이름 앞 #)"),
+               G.KAKAO_FIX: tr_noop("# 바로잡기 — 예전 구글 연락처의 이름 앞 # 뗌"),
                G.KAKAO_DOWN: tr_noop("카톡 친구추가 방지 표시를 구글 이름대로"),
                G.GONE_VALUE: tr_noop("구글에서 지운 값 — 명함에서도 지울까요(안 고르면 구글로 다시)"),
                G.PHOTO_GONE: tr_noop("명함에서 지운 인물 사진 — 구글 연락처 사진도 지울까요"),
@@ -151,6 +152,9 @@ class ApplyWorker(QObject):
             self.finished.emit()
 
 
+KAKAO_WHY = {"google_src": tr_noop("구글에서 가져온 명함"), "google_name": tr_noop("구글 이름을 따른 표시"),
+             "linked": tr_noop("예전 구글 연락처와 짝"), "same_mobile": tr_noop("같은 휴대폰이 예전 구글 연락처에"),
+             "user": tr_noop("직접 정한 표시"), "off": tr_noop("설정에서 끔"), "auto": tr_noop("지난 싱크의 표시")}
 WHY_LABELS = {"quota": tr_noop("드라이브 저장 공간 부족 {n}건"), "auth": tr_noop("권한 없음 {n}건"),
               "limit": tr_noop("구글 한도 초과 {n}건"), "net": tr_noop("연결 안 됨 {n}건"), "other": tr_noop("그 밖 {n}건")}
 
@@ -255,6 +259,11 @@ class GSyncDialog(QDialog):
                     txt += "  — " + r["txt"].replace("구글 ", tr("구글") + " ", 1).replace("해시태그 ", tr("해시태그") + " ", 1)
                 if r.get("maybe_dup"):
                     txt += "  — " + tr("구글에 이미 있을 수 있음")
+                if r["kind"] in (G.NEW_GOOGLE, G.KAKAO_FIX) and r.get("kakao_why"):   # '#' 까닭(§5.29 '카톡', 261120-72)
+                    if r.get("kakao"):
+                        txt += "  — " + tr("# 붙임")
+                    else:
+                        txt += "  — " + tr("# 없음 — {why}").format(why=tr(KAKAO_WHY.get(r["kakao_why"], KAKAO_WHY["off"])))
                 sd = r.get("side") or ""
                 if sd:                                            # 드라이브 줄 — 무엇을 올리는지(§5.29 '드라이브')
                     txt += "  — " + (tr("명함 앞면") if sd == "front" else tr("명함 뒷면") if sd == "back"

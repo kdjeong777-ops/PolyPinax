@@ -55,6 +55,8 @@ def kr_digits(num: str):
     d = digits(t)
     if t.startswith("+"):
         return ("0" + d[2:].lstrip("0")) if d.startswith("82") else None
+    if d.startswith("0082") and len(d) >= 13:                 # 국제 전화 꼴 0082(261120-72)
+        return "0" + d[4:].lstrip("0")
     if d.startswith("82") and len(d) >= 11:
         return "0" + d[2:].lstrip("0")
     if not d.startswith("0") and len(d) == 10 and d[:2] in ("10", "11", "16", "17", "18", "19"):

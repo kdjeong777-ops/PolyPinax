@@ -31,6 +31,8 @@ DEFAULT_PHOTO = "default"                       # 구글 사진의 기본 실루
 # 계획 줄 갈래
 NEW_CARD, NEW_GOOGLE, TO_CARD, TO_GOOGLE, GONE_GOOGLE, GONE_CARD, PHOTO_UP, PHOTO_DOWN, DRIVE_UP = (
     "new_card", "new_google", "to_card", "to_google", "gone_google", "gone_card", "photo_up", "photo_down", "drive_up")
+KAKAO_FROM_GOOGLE = -1.0                        # kakao_block.set_at — 구글 이름의 '#' 를 받아 적은 표시(0 = 싱크가 올리며 적은 자동, > 0 = 사람이 직접, 261120-72)
+KAKAO_FIX = "kakao_fix"                          # 싱크가 자동으로 붙인 '#' 가 구글 흔적 규칙과 어긋남 → 바로잡기(§5.29 '카톡', 261120-72)
 KAKAO_UP, KAKAO_DOWN = "kakao_up", "kakao_down"     # 카톡 친구추가 방지(구글 이름 앞 '#') 바꿈 → 구글 · 구글 이름대로 표시 맞춤
 MERGED_GOOGLE = "merged_google"                 # 명함 합치기로 남지 못한 짝의 구글 연락처 — 지울까요(§5.29 '명함 합치기와 짝', 261120-46)
 PHOTO_GONE = "photo_gone"                       # 명함에서 인물 사진을 모두 지운 짝 — 구글 연락처 사진도 지울까요(처음 꺼짐, 261120-65)
@@ -38,7 +40,7 @@ PHOTO_GONE_KEY = "gsync_photo_gone"             # meta — 그런 명함 id 들
 GONE_VALUE = "gone_value"                       # 구글에서만 빠진 칸 값 — 명함에서도 지울까요(처음 꺼짐, 안 고르면 구글로 다시, 261120-62)
 LABELS, LABEL_GONE = "labels", "label_gone"     # 고른 해시태그 ↔ 구글 라벨 맞춤 · 고른 목록에서 뺀 라벨 — 지울까요(§5.29 '라벨', 261120-61)
 KINDS = (NEW_CARD, NEW_GOOGLE, TO_CARD, GONE_VALUE, TO_GOOGLE, GONE_GOOGLE, GONE_CARD, MERGED_GOOGLE, PHOTO_UP, PHOTO_DOWN, DRIVE_UP,
-         KAKAO_UP, KAKAO_DOWN, LABELS, LABEL_GONE, PHOTO_GONE)
+         KAKAO_UP, KAKAO_FIX, KAKAO_DOWN, LABELS, LABEL_GONE, PHOTO_GONE)
 OPT_LABELS = "gsync_label_tags"                  # meta — 구글 라벨로 올릴 해시태그(명함 환경설정)
 OPT_LABELS_OFF = "gsync_label_off"               # meta — 환경설정에서 끈 것(구글 라벨이어도 다시 넣지 않음)
 META_LABEL_GROUPS = "gsync_label_groups"         # meta — 앱이 쓴 라벨 {이름: contactGroups/…}
@@ -46,7 +48,7 @@ OPT_KAKAO_NEW = "gsync_kakao_new"               # meta — 구글에 새로 보�
 KAKAO_MARK = "#"
 DEFAULT_ON = {k: k not in (GONE_GOOGLE, GONE_CARD, LABEL_GONE, GONE_VALUE, PHOTO_GONE) for k in KINDS}
 UNLINK_IF_KEPT = (GONE_GOOGLE, GONE_CARD, MERGED_GOOGLE)   # 체크하지 않으면(남김) 짝만 풀림(§5.29 '지운 것', 261120-62)    # 지워짐은 기본 '남김'(§5.29 '지운 것'), 합쳐져 남음은 켬(사용자 결정 261121)
-GOOGLE_WRITES = (NEW_GOOGLE, TO_GOOGLE, GONE_CARD, MERGED_GOOGLE, KAKAO_UP, PHOTO_UP, DRIVE_UP, LABELS, LABEL_GONE, PHOTO_GONE)
+GOOGLE_WRITES = (NEW_GOOGLE, TO_GOOGLE, GONE_CARD, MERGED_GOOGLE, KAKAO_UP, KAKAO_FIX, PHOTO_UP, DRIVE_UP, LABELS, LABEL_GONE, PHOTO_GONE)
 
 
 def photo_gone_ids(store) -> set:
@@ -130,6 +132,15 @@ def kakao_set(store, card_ids, on: bool, set_at=None) -> int:
     return len(list(card_ids))
 
 
+def _kakao_keep(store, cid: int, on: bool) -> None:
+    """구글에 올린 뒤 표시 적기 — 사람이 직접 정한 같은 표시(set_at > 0)는 그대로 두고(직접 정한 것임을 잃지 않게),
+    아니면 싱크의 자동 표시(set_at 0)로(§5.29 '카톡' 차례, 261120-72)."""
+    row = kakao_rows(store).get(int(cid))
+    if row is not None and row[1] > 0 and bool(row[0]) == bool(on):
+        return
+    kakao_set(store, [cid], on, set_at=0.0)
+
+
 def kakao_new_default(store) -> bool:
     v = store.meta_get(OPT_KAKAO_NEW, None)
     return True if v is None else bool(v)
@@ -155,7 +166,19 @@ def merge_links(store, keeper: int, drops) -> None:
         if d in lk and d != moved:
             store.con.execute("UPDATE google_link SET merged=? WHERE card_id=?", (keeper, d))
     store.con.execute("UPDATE google_link SET front=(SELECT front FROM cards WHERE id=?) WHERE card_id=?", (keeper, keeper))
-    if keeper not in kb:
+    # '#' 표시 차례(§5.29 '카톡', 261120-72): 남는 명함의 직접 표시 → 지워지는 명함의 직접 표시 → 지워지는 명함의 구글 흔적(# 없음) → 자동 표시
+    src = _google_src_ids(store)
+    user_drop = next((d for d in ([moved] if moved is not None else []) + drops if d in kb and kb[d][1] > 0), None)
+    if keeper in kb and kb[keeper][1] > 0:
+        pass
+    elif user_drop is not None:
+        b, t = kb[user_drop]
+        store.con.execute("INSERT INTO kakao_block(card_id, block, set_at) VALUES(?,?,?) ON CONFLICT(card_id) "
+                          "DO UPDATE SET block=excluded.block, set_at=excluded.set_at", (keeper, int(b), t))
+    elif any(d in src or (d in kb and kb[d][1] <= 0 and not kb[d][0]) or (d in lk and d not in kb) for d in drops):
+        store.con.execute("INSERT INTO kakao_block(card_id, block, set_at) VALUES(?,0,0) ON CONFLICT(card_id) "
+                          "DO UPDATE SET block=0, set_at=0", (keeper,))
+    elif keeper not in kb:
         k_src = moved if moved in kb else next((d for d in drops if d in kb), None)
         if k_src is not None:
             b, t = kb[k_src]
@@ -397,14 +420,32 @@ def plan(store, people: list, folder: str = "", photos: bool = False, drive: boo
             pairs.append((c, p, l))
     free_cards = [c for c in cards if c["id"] not in lk] + regone
     from_google = _google_src_ids(store)
-    known_mob = {k for c in cards if c["id"] in known for k in P._mobile_keys(c)}
+    # '#' 판정 차례(§5.29 '카톡', 261120-72): ① 직접 정한 표시 ② 구글 흔적 → # 없이 ③ 싱크가 적은 자동 표시 ④ 기본값
+    auto_false = {cid for cid, (b, t) in kb.items() if t <= 0 and not b}
+    linked_nokb = {cid for cid in lk if cid > 0 and cid not in kb}
+    ev0 = from_google | auto_false | linked_nokb
+    ev_mob = {k for c in cards if c["id"] in ev0 for k in P._mobile_keys(c)}
+
+    def kakao_reason(c):
+        cid, row = c["id"], kb.get(c["id"])
+        if row is not None and row[1] > 0:
+            return bool(row[0]), "user"
+        if row is not None and (row[1] < 0 or (row[0] and cid in from_google and str(c.get("front") or "").startswith("contact:"))):
+            return bool(row[0]), "google_name"                 # 구글 이름의 '#' 를 받아 적은 표시(옛 기록 — 구글에서 가져온 그림 없는 명함)
+        if cid in from_google:
+            return False, "google_src"
+        if cid in auto_false:
+            return False, "google_name"
+        if cid in linked_nokb:
+            return False, "linked"
+        if set(P._mobile_keys(c)) & ev_mob:
+            return False, "same_mobile"
+        if row is not None:
+            return bool(row[0]), "auto"
+        return new_k, ("new" if new_k else "off")
 
     def new_kakao(c):
-        if c["id"] in kb:
-            return kb[c["id"]][0]                          # 사람마다 표시가 먼저
-        if c["id"] in known or set(P._mobile_keys(c)) & known_mob:
-            return False                                   # 예전 구글에 있던 사람은 # 없이(사용자 결정 261121)
-        return new_k
+        return kakao_reason(c)[0]
     free_people = [p for p in people if p["resourceName"] not in rn_linked]
     m = match(free_cards, free_people)
     use_labels = groups is not None
@@ -425,7 +466,7 @@ def plan(store, people: list, folder: str = "", photos: bool = False, drive: boo
             pairs.append((c, by_rn[m[c["id"]]], {"rn": m[c["id"]], "synced": 0.0, "photo_sig": "", "drive": {}, "new": True}))
         else:
             rows.append({"kind": NEW_GOOGLE, "card_id": c["id"], "rn": "", "name": c.get("name") or "",
-                         "kakao": new_kakao(c),                                     # 새로 보낼 때는 기본 친구추가 방지
+                         "kakao": new_kakao(c), "kakao_why": kakao_reason(c)[1],    # 새로 보낼 때는 기본 친구추가 방지(까닭은 미리보기에)
                          "maybe_dup": c["id"] in from_google and not card_first,    # 구글 vCard 로 가져온 명함 — 구글에 이미 있을 수 있음
                          "labels": [ch[k] for k in _keys(c.get("tags"))]})
             if photos and first_photo(c, folder):            # 새 연락처도 같은 [적용] 에서 사진·드라이브(261120-70)
@@ -444,7 +485,13 @@ def plan(store, people: list, folder: str = "", photos: bool = False, drive: boo
         g_k = pv["kakao"]
         row = kb.get(c["id"])
         c_k = g_k if row is None else row[0]                 # 표시가 없으면 구글 이름대로(이미 있는 연락처는 그대로)
-        if row is None and g_k:
+        want, why = kakao_reason(c)
+        if row is not None and row[1] == 0 and bool(row[0]) == g_k and want != g_k:
+            # 싱크가 자동으로 붙인 '#' 가 구글 흔적 규칙과 어긋남 — '# 바로잡기'(구글 이름이 자동 표시 그대로일 때만, 261120-72)
+            rows.append({"kind": KAKAO_FIX, "card_id": c["id"], "rn": p["resourceName"], "name": c.get("name") or "",
+                         "kakao": want, "kakao_why": why, "etag": p.get("etag") or ""})
+            c_k = want
+        elif row is None and g_k:
             if not card_first:
                 rows.append({"kind": KAKAO_DOWN, "card_id": c["id"], "rn": p["resourceName"], "name": c.get("name") or "", "kakao": True})
         elif row is not None and row[0] != g_k:
@@ -621,7 +668,7 @@ def _apply(store, api, rows: list, folder: str = "", drive_folder: str = DRIVE_F
             if len(made) != len(chunk):
                 continue
             for c, r, pp in zip(cards, chunk, made):
-                kakao_set(store, [c["id"]], bool(r.get("kakao")), set_at=0.0)
+                _kakao_keep(store, c["id"], bool(r.get("kakao")))
                 for name in r.get("labels") or []:
                     label_add.setdefault(name, []).append(pp["resourceName"])
                 _link_put(store, c["id"], pp["resourceName"], pp.get("etag") or "", labels=list(r.get("labels") or []))
@@ -682,7 +729,7 @@ def _apply(store, api, rows: list, folder: str = "", drive_folder: str = DRIVE_F
                     p = _fetch(api, r["rn"], by_rn)
                 v = person_values(p)
                 cid = P._insert_contact(store, v, ["명함", TAG])
-                kakao_set(store, [cid], v.get("kakao", False), set_at=0.0)
+                kakao_set(store, [cid], v.get("kakao", False), set_at=KAKAO_FROM_GOOGLE)   # 구글 이름을 따름
                 P._set_srcs(store, cid, [x for x in P._SCALARS if (v.get(x) or "").strip()], SRC)
                 if r.get("tags_add"):                         # 고른 라벨만 해시태그로(§5.29 '라벨')
                     cc = P.card_by_id(store, cid)
@@ -691,7 +738,7 @@ def _apply(store, api, rows: list, folder: str = "", drive_folder: str = DRIVE_F
             elif k == NEW_GOOGLE:
                 c = P.card_by_id(store, r["card_id"])
                 p = api.create(card_person(c, kakao=bool(r.get("kakao"))))
-                kakao_set(store, [c["id"]], bool(r.get("kakao")), set_at=0.0)
+                _kakao_keep(store, c["id"], bool(r.get("kakao")))
                 for name in r.get("labels") or []:               # 새 연락처도 고른 해시태그의 라벨을 — 라벨마다 한 번에(§5.29 '라벨')
                     label_add.setdefault(name, []).append(p["resourceName"])
                 by_rn[p["resourceName"]] = p
@@ -713,15 +760,15 @@ def _apply(store, api, rows: list, folder: str = "", drive_folder: str = DRIVE_F
                 c = P.card_by_id(store, r["card_id"])
                 p = api.update(r["rn"], card_person(c, r.get("etag") or "", kakao=bool(r.get("kakao"))))
                 _link_put(store, c["id"], r["rn"], p.get("etag") or "")
-            elif k == KAKAO_UP:
+            elif k in (KAKAO_UP, KAKAO_FIX):
                 c = P.card_by_id(store, r["card_id"])
                 p = _fetch(api, r["rn"], by_rn)
                 p2 = api.update(r["rn"], card_person(c, p.get("etag") or "", kakao=bool(r.get("kakao"))))
                 by_rn[r["rn"]] = p2
-                kakao_set(store, [c["id"]], bool(r.get("kakao")), set_at=0.0)
+                _kakao_keep(store, c["id"], bool(r.get("kakao")))
                 _link_put(store, c["id"], r["rn"], p2.get("etag") or "")
             elif k == KAKAO_DOWN:
-                kakao_set(store, [r["card_id"]], bool(r.get("kakao")), set_at=0.0)
+                kakao_set(store, [r["card_id"]], bool(r.get("kakao")), set_at=KAKAO_FROM_GOOGLE)   # 구글 이름을 따름
             elif k == "link":
                 _link_put(store, r["card_id"], r["rn"], r.get("etag") or "", labels=list(r.get("labels") or []))
             elif k == LABELS:                                    # 고른 해시태그 ↔ 구글 라벨(§5.29 '라벨', 261120-61)

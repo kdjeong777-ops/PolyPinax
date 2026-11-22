@@ -17,7 +17,9 @@ DETECT_MAX = 1024             # 얼굴 찾기에 넣는 그림 긴 변(빠르게
 HEAD_ROOM = 0.35              # 얼굴 상자 위로 더하는 여백(상자 높이 비율)
 FACE_PAD = 1.7                # 얼굴 상자 → 정사각 한 변(얼굴 상자 긴 변의 배수)
 _detector = None
-_no_detector = False
+_no_detector = False          # 이 PC 엔 얼굴 찾기가 없음(가져오기 실패·지원 안 함) — 이 실행 내내 끔
+_errors = 0                   # 그림 한 장의 일시 오류 — 연달아 ERR_MAX 번이면 끔(261120-78 — 한 번에 끄지 않음)
+ERR_MAX = 5
 
 
 def cache_dir() -> Path:
@@ -58,7 +60,7 @@ def cached(path, from_card=False) -> str:
 
 def faces(img) -> list:
     """윈도우 얼굴 찾기 — [(x, y, w, h)](그림 좌표). 못 쓰면 []."""
-    global _detector, _no_detector
+    global _detector, _no_detector, _errors
     if _no_detector:
         return []
     try:
@@ -69,6 +71,10 @@ def faces(img) -> list:
         if not FaceDetector.is_supported:
             _no_detector = True
             return []
+    except Exception:                                     # 이 PC 엔 없음 — 이 실행 내내 끔
+        _no_detector = True
+        return []
+    try:
         g = img.convert("L")
         scale = 1.0
         if max(g.size) > DETECT_MAX:
@@ -86,9 +92,12 @@ def faces(img) -> list:
                 _detector = await FaceDetector.create_async()
             return await _detector.detect_faces_async(bmp)
         res = asyncio.run(_go())                         # 배경 스레드(돌고 있는 이벤트 루프 없음)
+        _errors = 0
         return [(f.face_box.x / scale, f.face_box.y / scale, f.face_box.width / scale, f.face_box.height / scale) for f in res]
-    except Exception:
-        _no_detector = True
+    except Exception:                                     # 그 그림만의 일시 오류 — 이번 그림은 중요 부분으로, 연달아 많으면 끔
+        _errors += 1
+        if _errors >= ERR_MAX:
+            _no_detector = True
         return []
 
 
@@ -146,6 +155,30 @@ def crop(path, from_card=False):
         fs = faces(im)
         box = face_box(im, fs) if fs else salient_box(im)
     return im.crop(box).resize((SIZE, SIZE), Image.LANCZOS)
+
+
+def prune(store, folder) -> int:
+    """지금 명함들이 쓰지 않는 얼굴 캐시를 지운다(개인정보 — 지운 명함의 얼굴이 남지 않게, 261120-78). 반환 = 지운 수."""
+    keep = set()
+    for r in store.con.execute("SELECT * FROM cards").fetchall():
+        try:
+            path, from_card = source(store._row(r), folder)
+            if path:
+                keep.add(_key(path, from_card) + ".jpg")
+        except OSError:
+            pass
+    n = 0
+    try:
+        for p in cache_dir().iterdir():
+            if p.name not in keep:
+                try:
+                    p.unlink()
+                    n += 1
+                except OSError:
+                    pass
+    except OSError:
+        pass
+    return n
 
 
 def thumb(path, from_card=False) -> str:

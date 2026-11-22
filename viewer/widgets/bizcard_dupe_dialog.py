@@ -142,7 +142,7 @@ class CardEditDialog(QDialog):
 
 
 class PicturePickDialog(QDialog):
-    """'명함 사진 지우기'(§5.24.8, 261120-65) — 그 명함의 앞면·뒷면·인물 사진을 썸네일로, 체크한 것만 지운다."""
+    """'명함 사진 삭제'(§5.24.8, 261120-65·-69) — 그 명함의 앞면·뒷면·인물 사진을 썸네일로, 체크한 것만 지운다."""
 
     def __init__(self, card, photos, parent=None):
         super().__init__(parent)
@@ -346,7 +346,8 @@ class BizcardDupeDialog(QDialog):
         self.btn_undo.clicked.connect(lambda _c=False: self.undo())
         b_close = QPushButton(tr("닫기"))
         b_close.clicked.connect(lambda _c=False: self.accept())
-        for b in (self.btn_apply, self.btn_undo, b_close):
+        bot.insertWidget(0, self.btn_undo)                    # 되돌리기는 왼쪽에 떼고 [적용][닫기]는 오른쪽 끝(디자인 SOT §2.7, 261120-78)
+        for b in (self.btn_apply, b_close):
             bot.addWidget(b)
         v.addLayout(bot)
         for b in self.findChildren(QPushButton):          # Enter 가 칸 고치기를 마치지 않고 단추를 누르지 않게 — 아래 줄을 붙인
@@ -687,7 +688,7 @@ class BizcardDupeDialog(QDialog):
         return ok
 
     def delete_pictures(self, cid, ask: bool = True) -> bool:
-        """'명함 사진 지우기'(§5.24.8, 261120-65) — 창에서 고른 앞면·뒷면·인물 사진만 휴지통으로, 지운 뒤 다시 묶는다."""
+        """'명함 사진 삭제'(§5.24.8, 261120-65·-69) — 창에서 고른 앞면·뒷면·인물 사진만 휴지통으로, 지운 뒤 다시 묶는다."""
         c = P.card_by_id(self.fd._store(), cid)
         if not c or self.working:
             return False

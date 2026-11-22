@@ -19248,3 +19248,16 @@ msgstr "The data from before the replacement was backed up to '{p}'."
 #: viewer/widgets/bizcard_find_dialog.py
 msgid "#해시태그 — 빈칸으로 나눔"
 msgstr "#hashtags — separate with spaces"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "불러오다 멈췄습니다 — 일부만 바뀌었을 수 있습니다."
+msgstr "Import stopped partway — some data may have changed."
+
+#: viewer/widgets/bizcard_find_dialog.py
+#, python-brace-format
+msgid "바꾸기 전 자료는 '{p}' 에 있습니다 — 그 zip 을 '바꾸기' 로 불러오면 되돌아갑니다."
+msgstr "The data from before is in '{p}' — import that zip with 'Replace' to go back."
+
+#: viewer/widgets/bizcard_history_dialog.py
+msgid "되살리기도 기록에 남아 이 창에서 되돌릴 수 있습니다."
+msgstr "Restores are recorded too, so you can undo them in this window."

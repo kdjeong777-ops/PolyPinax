@@ -127,6 +127,7 @@ class HistoryDialog(QDialog):
         v.addWidget(self.lbl)
         self.tree = QTreeWidget()
         self.tree.setHeaderLabels([tr("명함"), tr("종류"), tr("때"), tr("출처"), ""])
+        self.tree.itemChanged.connect(lambda *_a: self._apply_enabled())   # 체크 0개면 [적용] 꺼짐(디자인 SOT §2.7, 261120-78)
         v.addWidget(self.tree, 1)
         brow = QHBoxLayout()
         brow.addStretch(1)
@@ -203,8 +204,11 @@ class HistoryDialog(QDialog):
             self.tree.addTopLevelItem(it)
         self.tree.resizeColumnToContents(0)
         self.lbl.setText(tr("바뀐 명함 {n}장 — 되살릴 값은 그 기간이 시작되기 전 모습입니다. 지운 그림 명함의 그림 파일은 휴지통에서 되살리세요.").format(
-            n=len(self.items)))
-        self.btn_restore.setEnabled(bool(self.items))
+            n=len(self.items)) + "\n" + tr("되살리기도 기록에 남아 이 창에서 되돌릴 수 있습니다."))
+        self._apply_enabled()
+
+    def _apply_enabled(self):
+        self.btn_restore.setEnabled(not self.busy and bool(self.chosen()))
 
     def chosen(self) -> list:
         out = []

@@ -23,14 +23,17 @@ VERSION = 1
 OUTSIDE = "가져온 명함"                             # 명함 폴더 밖에 있던 정리본·인물 사진을 모으는 자리(그 아래 정리·인물)
 DROP_META = ("gsync_client_secret", "gsync_media_queue", "gsync_failed")   # 그 PC 의 비밀·일 — 담지 않는다
 PATH_COLS = ("front", "back", "src_key")
+BACKUP_KEEP = 3                                    # 바꾸기 전 백업 zip — 최근 이만큼만 남기고 예전 것은 휴지통(261120-78, 사용자 결정)
+BACKUP_GLOB = "명함 백업_*.zip"
 
 
 class ArchiveError(Exception):
-    """zip 을 쓸 수 없음 — what = 'format'|'version'|'schema'|'empty'|'folder'."""
+    """zip 을 쓸 수 없음 — what = 'format'|'version'|'schema'|'empty'|'folder'|'partial'(도중에 멈춤 — backup = 바꾸기 전 백업)."""
 
-    def __init__(self, what: str):
+    def __init__(self, what: str, backup: str = ""):
         super().__init__(what)
         self.what = what
+        self.backup = backup
 
 
 def _norm(p) -> str:
@@ -123,6 +126,28 @@ def export_zip(db_path, folder: str, out_zip, progress=None) -> dict:
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+def _safe_rel(arc) -> str:
+    """zip 안 이름 → 명함 폴더 기준 상대 경로. 'files/' 로 시작하지 않거나 '..'·절대 경로·드라이브가 있으면 ArchiveError('format')
+    — 만든 zip 하나로 명함 폴더 밖에 쓰지 못하게(zip slip, 261120-78)."""
+    a = str(arc or "")
+    if not a.startswith("files/") or "\\" in a:
+        raise ArchiveError("format")
+    rel = a[len("files/"):]
+    parts = rel.split("/")
+    if not rel or rel.startswith("/") or ":" in rel or any(x in ("", ".", "..") for x in parts):
+        raise ArchiveError("format")
+    return rel.replace("/", os.sep)
+
+
+def _inside(folder, rel) -> Path:
+    """명함 폴더 안의 실제 경로 — resolve 뒤에도 폴더 안이 아니면 ArchiveError('format')."""
+    base = Path(folder).resolve()
+    dst = (base / rel).resolve()
+    if dst != base and base not in dst.parents:
+        raise ArchiveError("format")
+    return dst
+
+
 def read_manifest(zip_path) -> dict:
     """판 확인 — 꼴이 다르거나 판·스키마가 이 프로그램보다 크면 ArchiveError."""
     from viewer.bizcard.store import SCHEMA_VER
@@ -138,12 +163,19 @@ def read_manifest(zip_path) -> dict:
         raise ArchiveError("version")
     if int(man.get("schema") or 0) > SCHEMA_VER:
         raise ArchiveError("schema")
+    mp = man.get("map") or {}
+    if not isinstance(mp, dict):
+        raise ArchiveError("format")
+    for arc in mp.values():                               # 이름을 모두 먼저 본다 — 하나라도 위험하면 아무것도 풀지 않음
+        _safe_rel(arc)
+        if arc not in names:
+            raise ArchiveError("format")
     return man
 
 
 def _rebase_db(dbp, man: dict, folder: str) -> dict:
     """사본 DB 의 경로 칸을 새 명함 폴더로 — {옛 경로(소문자): 새 경로(소문자)}."""
-    new = {old: os.path.normcase(os.path.join(folder, arc[len("files/"):].replace("/", os.sep))) for old, arc in man.get("map", {}).items()}
+    new = {old: os.path.normcase(str(_inside(folder, _safe_rel(arc)))) for old, arc in man.get("map", {}).items()}
     oldf = man.get("folder") or ""
     con = dbutil.connect(str(dbp), row_factory=False)
     try:
@@ -172,7 +204,7 @@ def _extract(z, man: dict, folder: str, only=None, overwrite=True, progress=None
     n = 0
     arcs = [a for a in man.get("map", {}).values() if only is None or a in only]
     for i, arc in enumerate(arcs):
-        dst = Path(folder) / arc[len("files/"):]
+        dst = _inside(folder, _safe_rel(arc))
         if dst.exists() and not overwrite:
             continue
         dst.parent.mkdir(parents=True, exist_ok=True)
@@ -205,19 +237,45 @@ def import_zip(zip_path, db_path, folder: str, mode: str = "replace", backup_dir
                     bpath = bdir / ("명함 백업_%s.zip" % time.strftime("%y%m%d-%H%M%S"))
                     export_zip(db_path, folder, bpath)
                     backup = str(bpath)
+                    prune_backups(bdir)
                 if progress:
                     progress(1, total)
-                nf = _extract(z, man, folder, progress=progress, base=1, total=total)
-                _copy_db(dbp, db_path)                       # 열린 파일을 바꿔치지 않고 백업 API 로 내용을 덮는다
+                try:
+                    nf = _extract(z, man, folder, progress=progress, base=1, total=total)
+                    _copy_db(dbp, db_path)                   # 열린 파일을 바꿔치지 않고 백업 API 로 내용을 덮는다
+                except Exception:
+                    raise ArchiveError("partial", backup)     # 도중에 멈춤 — 그림 일부가 바뀌었을 수 있다(백업은 있음)
                 con = dbutil.connect(str(db_path), row_factory=False)
                 n = con.execute("SELECT COUNT(*) FROM cards").fetchone()[0]
                 con.close()
                 if progress:
                     progress(total, total)
                 return {"cards": n, "files": nf, "backup": backup, "new_ids": []}
-            return _merge(z, man, dbp, db_path, folder, new, progress, total)
+            try:
+                return _merge(z, man, dbp, db_path, folder, new, progress, total)
+            except ArchiveError:
+                raise
+            except Exception:
+                raise ArchiveError("partial")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
+
+
+def prune_backups(bdir, keep: int = BACKUP_KEEP) -> int:
+    """바꾸기 전 백업 zip — 최근 keep 개만 남기고 예전 것은 휴지통으로(없으면 그대로). 반환 = 보낸 수."""
+    try:
+        files = sorted(Path(bdir).glob(BACKUP_GLOB), key=lambda p: p.stat().st_mtime, reverse=True)
+    except OSError:
+        return 0
+    n = 0
+    for p in files[keep:]:
+        try:
+            from send2trash import send2trash
+            send2trash(str(p))
+            n += 1
+        except Exception:
+            pass
+    return n
 
 
 def _merge(z, man, dbp, db_path, folder, new, progress, total) -> dict:
@@ -229,6 +287,9 @@ def _merge(z, man, dbp, db_path, folder, new, progress, total) -> dict:
     st = BizcardStore(db_path)
     new_ids, need = [], set()
     try:
+        from viewer.bizcard import people as _P, gsync as _G
+        _P.src_init(st)
+        _G.init(st)
         have = {os.path.normcase(str(r[0])) for r in st.con.execute("SELECT front FROM cards") if r[0]}
         have |= {os.path.normcase(str(r[0])) for r in st.con.execute("SELECT src_key FROM cards") if r[0]}
         cols = [r[1] for r in st.con.execute("PRAGMA main.table_info(cards)")]
@@ -245,6 +306,18 @@ def _merge(z, man, dbp, db_path, folder, new, progress, total) -> dict:
             st.con.execute("INSERT INTO cards_fts(rowid, body) VALUES(?,?)", (nid, st._body(fresh)))
             new_ids.append(nid)
             have.add(f)
+            # 칸 출처·카톡 표시도 새 id 로(261120-78 — '#' 판정의 구글 흔적·'구글에 이미 있을 수 있음' 을 잃지 않게). 구글 짝은 옮기지 않음
+            for tbl in ("contact_src", "kakao_block"):
+                try:
+                    rows_ = src.execute("SELECT * FROM %s WHERE card_id=?" % tbl, (d["id"],)).fetchall()
+                except sqlite3.OperationalError:
+                    continue
+                dcols = [r[1] for r in st.con.execute("PRAGMA main.table_info(%s)" % tbl)]
+                for rr in rows_:
+                    vals = {k: rr[k] for k in rr.keys() if k in dcols}
+                    vals["card_id"] = nid
+                    st.con.execute("INSERT OR REPLACE INTO %s(%s) VALUES(%s)" % (tbl, ", ".join('"%s"' % k for k in vals), ", ".join("?" * len(vals))),
+                                   list(vals.values()))
             for c in ("front", "back"):
                 old = inv.get(os.path.normcase(str(d.get(c) or "")))
                 if old in arc_of:

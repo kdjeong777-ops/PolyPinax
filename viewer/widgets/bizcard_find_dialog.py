@@ -49,6 +49,7 @@ RECENT_MS = 3000                    # 세부 칸에 이만큼 넘게 보이면 '
 FAV_COLORS = {False: ("#cfe2f6", "#4a6f96"), True: ("#2b3a4b", "#9cc0e6")}   # 사진도 명함도 없을 때 (바탕, 첫 글자) — 키 = 다크(디자인 SOT §2.5 '즐겨찾기 빈 그림')
 KINDS_FAIL_KEY = "phone_kinds_fail"             # 번호 종류 바로잡기 실패 수 — 이만큼 쌓이면 더는 저절로 하지 않음(§5.11, 261120-68)
 KINDS_FAIL_MAX = 3
+FACE_PRUNE_KEY = "faces_pruned"                 # meta — 얼굴 캐시를 정리한 때(하루 한 번, 261120-78)
 IMG_FILTER = " ".join("*" + e for e in R.IMG_EXTS)
 # 칸(키, 화면 이름) — 전화는 종류마다 첫 번호만 고친다(나머지는 그대로 둔다)
 FIELDS = (("name", tr_noop("이름")), ("company", tr_noop("회사")), ("dept", tr_noop("부서")), ("title", tr_noop("직함")), ("cell", tr_noop("휴대폰")), ("work", tr_noop("전화")),
@@ -608,6 +609,7 @@ class _ArchiveWorker(QObject):
             res = self._fn(lambda i, n: self.progressed.emit(i, n))
         except Exception as e:                            # noqa: BLE001 — 메인에서 알린다(값은 싣지 않음)
             err = getattr(e, "what", "") or type(e).__name__
+            res = {"backup": getattr(e, "backup", "")}
         self.done.emit(res, err)
         self.finished.emit()
 
@@ -618,9 +620,9 @@ class _StoreChoresWorker(QObject):
     done = pyqtSignal(int, str)
     finished = pyqtSignal()
 
-    def __init__(self, db, kinds: bool):
+    def __init__(self, db, kinds: bool, folder: str = ""):
         super().__init__()
-        self._db, self._kinds = db, kinds
+        self._db, self._kinds, self._folder = db, kinds, folder
 
     def run(self):
         n, err, st = 0, "", None
@@ -630,6 +632,14 @@ class _StoreChoresWorker(QObject):
             st = BizcardStore(self._db)
             try:
                 H.maybe_prune(st)
+            except Exception:
+                pass
+            try:                                          # 얼굴 캐시 — 지금 명함이 안 쓰는 것을 하루 한 번 지움(261120-78)
+                import time as _t
+                from viewer.bizcard import face_thumb as FT
+                if _t.time() - float(st.meta_get(FACE_PRUNE_KEY, 0) or 0) > 86400:
+                    FT.prune(st, self._folder)
+                    st.meta_set(FACE_PRUNE_KEY, _t.time())
             except Exception:
                 pass
             if self._kinds:
@@ -1586,6 +1596,12 @@ class BizcardFindDialog(QDialog):
     def _media_done(self, res):
         from viewer.widgets.bizcard_gsync_dialog import fail_text
         self.media_busy, self._media_worker = False, None
+        pend, self._pending_import = getattr(self, "_pending_import", None), None
+        if pend is not None:                               # 불러오기가 기다리던 중 — 알림 없이 바로 이어서(261120-78)
+            self.lbl_media.setVisible(False)
+            self.btn_media_stop.setVisible(False)
+            QTimer.singleShot(0, pend)
+            return
         self.lbl_media.setVisible(False)
         self.btn_media_stop.setVisible(False)
         if res.get("stopped") == "quota" or (res.get("reasons") or {}):
@@ -1671,7 +1687,10 @@ class BizcardFindDialog(QDialog):
             if not folder:
                 return None
             self._set_bizcard_folder(folder)
-        self.stop_media()                                  # 사진 올리기는 멈춘다(§5.29 '단계')
+        if self.media_busy:                                # 사진 올리기는 멈추고, 그 일꾼이 끝난 뒤에 시작(쓰기 잠금·옛 id, 261120-78)
+            self.stop_media()
+            self._pending_import = lambda: self.import_archive(path=path, mode=mode, folder=folder)
+            return None
         db = self._store().path
         if self._st is not None:                           # 불러오는 동안 이 창의 DB 연결은 닫는다
             self._st.close()
@@ -1681,6 +1700,13 @@ class BizcardFindDialog(QDialog):
             self.archive_result = res
             self._init_store_bits()
             self.refresh()
+            if err == "partial":                           # 도중에 멈춤 — 실제 상태대로(261120-78)
+                bk = (res or {}).get("backup") or ""
+                msg = tr("불러오다 멈췄습니다 — 일부만 바뀌었을 수 있습니다.")
+                if bk:
+                    msg += " " + tr("바꾸기 전 자료는 '{p}' 에 있습니다 — 그 zip 을 '바꾸기' 로 불러오면 되돌아갑니다.").format(p=bk)
+                QMessageBox.warning(self, tr("명함 자료"), msg)
+                return
             if err:
                 why = {"format": tr("PolyCardex 명함 자료 zip 이 아닙니다"), "version": tr("더 새 프로그램이 만든 zip 입니다 — 프로그램을 먼저 업데이트하세요"),
                        "schema": tr("더 새 프로그램이 만든 zip 입니다 — 프로그램을 먼저 업데이트하세요")}.get(err, err)
@@ -1797,7 +1823,7 @@ class BizcardFindDialog(QDialog):
         # 변경 기록 정리(§5.30)와 번호 종류 바로잡기(처음 한 번, 실패 세 번이면 그만 — §5.11) — 배경 한 일꾼(261120-55·-68)
         kinds = not st.meta_get(P.KINDS_FIXED_KEY, None) and (st.meta_get(KINDS_FAIL_KEY, 0) or 0) < KINDS_FAIL_MAX
         from viewer.workers import run_in_thread
-        w = _StoreChoresWorker(st.path, kinds)
+        w = _StoreChoresWorker(st.path, kinds, self._bizcard_folder())
         w.done.connect(self._kinds_fixed)
         keep = getattr(self._mw, "_thread_keep", None)
         run_in_thread(w, keep if isinstance(keep, list) else _KEEP)
@@ -3542,7 +3568,7 @@ class BizcardFindDialog(QDialog):
         m.exec(self.photos.mapToGlobal(pos))
 
     def delete_card_pictures(self, c, picks) -> bool:
-        """'명함 사진 지우기'(§5.24.8, 261120-65) — picks = 'front'·'back'·인물 사진 경로. 인물 사진 먼저(남은 것 이름 차례대로),
+        """'명함 사진 삭제'(§5.24.8, 261120-65·-69) — picks = 'front'·'back'·인물 사진 경로. 인물 사진 먼저(남은 것 이름 차례대로),
         앞·뒷면을 모두(또는 뒷면 없는 앞면) 지우면 그림 떼기(원본 스캔까지), 앞면만이면 뒷면을 앞면 이름으로 올림, 뒷면만이면 뒷면 칸을 비움."""
         from viewer.widgets.bizcard_import_dialog import trash_paths
         st = self._store()
@@ -3915,6 +3941,8 @@ class BizcardFindDialog(QDialog):
             e.ignore()
             return
         self.stop_media()                                # 사진 올리기 — 지금 사람까지 하고 멈춤(남은 것은 다음에 열 때)
+        self._face_queue.clear()                         # 목록 얼굴 대기열 비움(응답성 SOT §4.4 '_FaceWorker', 261120-78)
+        self._face_asked.clear()
         self._fav_gen += 1                               # 늦게 오는 그림은 버림
         if self._st is not None:
             self._st.close()

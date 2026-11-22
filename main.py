@@ -88,9 +88,15 @@ if __name__ == "__main__" and len(sys.argv) >= 3 and sys.argv[1] == "--selftest"
         import sherpa_onnx as _so
         _so.OfflineTtsConfig()
         _sherpa = "sherpa %s" % getattr(_so, "__version__", "?")
+        # 261120-78(릴리스 SOT §5): Windows 내장 OCR·얼굴 찾기(PyWinRT) — 빌드 묶음에 winrt 하위 모듈이 빠지면 여기서 실패한다
+        #   (명함 얼굴 썸네일·보조 OCR 은 오류를 삼켜 조용히 빠지므로 빌드본에서 먼저 잡는다)
+        from winrt.windows.media.faceanalysis import FaceDetector as _FDt   # noqa: F401
+        from winrt.windows.media.ocr import OcrEngine as _OEn               # noqa: F401
+        from winrt.windows.graphics.imaging import SoftwareBitmap as _SBm   # noqa: F401
+        _winrt = "winrt face=%s" % bool(_FDt.is_supported)
         with open(_out, "w", encoding="utf-8") as _f:
-            _f.write("ok %s pymupdf %s %s %s %s %s\n" % (_ver, _fz.VersionBind, _heif, _qimg, _sherpa,
-                                                      "text" if "selftest" in _txt else "notext"))
+            _f.write("ok %s pymupdf %s %s %s %s %s %s\n" % (_ver, _fz.VersionBind, _heif, _qimg, _sherpa, _winrt,
+                                                         "text" if "selftest" in _txt else "notext"))
         os._exit(0)
     except BaseException:
         import traceback as _tb

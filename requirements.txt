@@ -36,15 +36,16 @@ anthropic>=0.40          # 260621-P0: PDF 번역·요약(Claude API)
 pyHanko[opentype]>=0.29
 cryptography>=43        # 디지털 ID(RSA 3072·자체 서명 인증서·PBES2-AES256 .pfx), Hello 보관(HKDF·AES-GCM), 공동인증서 SEED(decrepit, 보안 SOT §3.8)
 # Windows Hello 로 인증서 비밀번호 잠가 보관(보안 SOT §6.1) — Windows 전용
-winrt-runtime>=2.0 ; sys_platform == "win32"
-winrt-Windows.Foundation>=2.0 ; sys_platform == "win32"
-winrt-Windows.Security.Credentials>=2.0 ; sys_platform == "win32"
-winrt-Windows.Security.Cryptography>=2.0 ; sys_platform == "win32"
-winrt-Windows.Storage.Streams>=2.0 ; sys_platform == "win32"
+# 261120-78(릴리스 SOT §14.2 판 고정): winrt 하위 패키지는 winrt-runtime 과 판이 같아야 한다 — 4.x 가 섞이면 깨짐(개발 venv 에서 겪음)
+winrt-runtime==3.2.1 ; sys_platform == "win32"
+winrt-Windows.Foundation==3.2.1 ; sys_platform == "win32"
+winrt-Windows.Security.Credentials==3.2.1 ; sys_platform == "win32"
+winrt-Windows.Security.Cryptography==3.2.1 ; sys_platform == "win32"
+winrt-Windows.Storage.Streams==3.2.1 ; sys_platform == "win32"
 # 명함 인식의 보조 OCR 엔진 — Windows 내장 OCR(단어학습 SOT §14.25), 없으면 Tesseract 만
-winrt-Windows.Media.Ocr>=3.2 ; sys_platform == "win32"
-winrt-Windows.Graphics.Imaging>=3.2 ; sys_platform == "win32"
-winrt-Windows.Globalization>=3.2 ; sys_platform == "win32"
-winrt-Windows.Foundation.Collections>=3.2 ; sys_platform == "win32"
+winrt-Windows.Media.Ocr==3.2.1 ; sys_platform == "win32"
+winrt-Windows.Graphics.Imaging==3.2.1 ; sys_platform == "win32"
+winrt-Windows.Globalization==3.2.1 ; sys_platform == "win32"
+winrt-Windows.Foundation.Collections==3.2.1 ; sys_platform == "win32"
 # 명함 얼굴 썸네일 — Windows 내장 얼굴 찾기(명함 SOT §5.24.2 '즐겨찾기 줄', 261120-76), 없으면 중요 부분 크롭
-winrt-Windows.Media.FaceAnalysis>=3.2 ; sys_platform == "win32"
+winrt-Windows.Media.FaceAnalysis==3.2.1 ; sys_platform == "win32"

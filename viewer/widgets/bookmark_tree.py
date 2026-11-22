@@ -2224,10 +2224,6 @@ class BookmarkTree(QWidget):
         """§5.1 체크 해제 = 토큰 제거(진실은 검색박스 텍스트)."""
         self._tag_filter.remove(tag)
 
-    def _pick_one_tag(self, tag: str, on: bool, group):
-        """261114-14(검색 SOT §5.1): 형식·속성 묶음은 하나만 — 공용 위젯 한 곳(261120-69)."""
-        self._tag_filter.pick_one(tag, on, group)
-
     def set_format(self, paths, fmt) -> list:
         """261114-2(태그 SOT §5.3.2): 문서 종류 바꾸기 — 자동 종류는 거절, fmt 는 직접 태그(None = 종류 없음)."""
         if self._tags is None:

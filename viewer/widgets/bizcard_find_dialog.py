@@ -525,6 +525,26 @@ class _LineSplitter(QSplitter):
         return _LineHandle(self.orientation(), self)
 
 
+class _ArchiveWorker(QObject):
+    """명함 자료 옮기기 zip(§5.31, 261120-73) — fn(progress) 하나를 배경에서. progressed(i, n) · done(결과, 오류 갈래)."""
+    progressed = pyqtSignal(int, int)
+    done = pyqtSignal(object, str)
+    finished = pyqtSignal()
+
+    def __init__(self, fn):
+        super().__init__()
+        self._fn = fn
+
+    def run(self):
+        res, err = None, ""
+        try:
+            res = self._fn(lambda i, n: self.progressed.emit(i, n))
+        except Exception as e:                            # noqa: BLE001 — 메인에서 알린다(값은 싣지 않음)
+            err = getattr(e, "what", "") or type(e).__name__
+        self.done.emit(res, err)
+        self.finished.emit()
+
+
 class _StoreChoresWorker(QObject):
     """명함찾기를 열 때 한 번 — 변경 기록 정리(§5.30 '보존', 하루 한 번)와 이미 있는 DB 의 번호 종류 바로잡기(§5.11, kinds 일 때만).
     배경, 자기 연결(응답성 SOT §4.4, 261120-55·-68). done(바꾼 수 — 안 했으면 0, 실패면 -1, 까닭)."""
@@ -1313,6 +1333,9 @@ class BizcardFindDialog(QDialog):
         _menu_act(bm, tr("구글 주소록과 싱크"), lambda: self.open_gsync())     # 261120-36(§5.29) — 구글 계정 연결은 명함 환경설정
         bm.addSeparator()
         _menu_act(bm, tr("변경 기록·되살리기"), lambda: self.open_history())   # §5.30(261120-64)
+        bm.addSeparator()
+        _menu_act(bm, tr("명함 자료 내보내기(zip)"), lambda: self.export_archive())    # 다른 PC 로 옮기기(§5.31, 261120-73)
+        _menu_act(bm, tr("명함 자료 불러오기(zip)"), lambda: self.import_archive())
         self.act_manage = QAction(tr("명함 관리"), self)    # 메뉴 '명함 관리' 와 같은 길 — 본 뷰어 안에서만(§5.24.1 '≡ 메뉴')
         self.act_manage.setToolTip(tr("명함 폴더의 확인 표 창(명함 관리)을 엽니다"))
         self.act_manage.triggered.connect(lambda _c=False: self.open_manage())
@@ -1503,6 +1526,122 @@ class BizcardFindDialog(QDialog):
             QMessageBox.warning(self, tr("구글 주소록과 싱크"), fail_text(res))
         if res.get("done") and not self._dirty:
             self.refresh()                                     # 링크가 누리집·메모에 들어갔다
+
+    # ── 명함 자료 옮기기 zip(§5.31, 261120-73) ──
+    def _archive_run(self, title, fn, then):
+        from PyQt6.QtWidgets import QProgressDialog
+        from viewer.workers import run_in_thread
+        if getattr(self, "archive_busy", False):
+            return None
+        self.archive_busy = True
+        prog = QProgressDialog(title, None, 0, 0, self)
+        prog.setWindowTitle(tr("명함 자료"))
+        prog.setWindowModality(Qt.WindowModality.WindowModal)
+        prog.setMinimumDuration(300)
+        prog.setCancelButton(None)
+        self.archive_prog = prog
+        w = _ArchiveWorker(fn)
+        w.progressed.connect(lambda i, n: (prog.setMaximum(n), prog.setValue(i)))
+
+        def _done(res, err):
+            self.archive_busy = False
+            prog.close()
+            then(res, err)
+        w.done.connect(_done)
+        keep = getattr(self._mw, "_thread_keep", None)
+        run_in_thread(w, keep if isinstance(keep, list) else _KEEP)
+        self._archive_worker = w
+        return w
+
+    def export_archive(self, path=None):
+        """≡ 주소록 '명함 자료 내보내기(zip)' — DB 일관된 사본·정리본·인물 사진(원본 스캔·로그인 비밀 빼고)."""
+        from viewer.bizcard import archive as AR
+        if self._dirty and not self._ask_save():
+            return None
+        if path is None:
+            from PyQt6.QtWidgets import QFileDialog
+            import time as _t
+            name = "PolyCardex_%s.zip" % _t.strftime("%y%m%d")
+            path, _f = QFileDialog.getSaveFileName(self, tr("명함 자료 내보내기(zip)"), name, "zip (*.zip)")
+            if not path:
+                return None
+        db, folder = self._store().path, self._bizcard_folder()
+
+        def then(res, err):
+            self.archive_result = res
+            if err:
+                QMessageBox.warning(self, tr("명함 자료"), tr("내보내지 못했습니다({err}).").format(err=err))
+                return
+            QMessageBox.information(self, tr("명함 자료"), tr(
+                "명함 {n}장·그림 {m}개를 zip 으로 저장했습니다. 개인정보가 든 파일이니 옮긴 뒤 지우거나 안전한 곳에 두세요 — "
+                "다른 PC 에서 ≡ 메뉴 '주소록 ▸ 명함 자료 불러오기(zip)' 로 엽니다(구글은 그 PC 에서 다시 연결).").format(n=res["cards"], m=res["files"]))
+        return self._archive_run(tr("명함 자료를 zip 으로 저장하는 중…"), lambda pr: AR.export_zip(db, folder, path, progress=pr), then)
+
+    def import_archive(self, path=None, mode=None, folder=None):
+        """≡ 주소록 '명함 자료 불러오기(zip)' — 바꾸기(지금 것 백업 뒤 교체) 또는 합치기(없는 명함만, 뒤에 중복 검토)."""
+        from viewer.bizcard import archive as AR
+        if self._dirty and not self._ask_save():
+            return None
+        from PyQt6.QtWidgets import QFileDialog
+        if path is None:
+            path, _f = QFileDialog.getOpenFileName(self, tr("명함 자료 불러오기(zip)"), "", "zip (*.zip)")
+            if not path:
+                return None
+        if mode is None:
+            box = QMessageBox(self)
+            box.setWindowTitle(tr("명함 자료 불러오기(zip)"))
+            box.setText(tr("이 PC 의 명함 자료를 어떻게 할까요?\n\n바꾸기 — 지금 명함 DB·그림을 먼저 zip 으로 백업한 뒤 불러온 것으로 통째로 바꿉니다.\n"
+                           "합치기 — 지금 명함에 없는 것만 더하고, 끝나면 중복 검토를 엽니다."))
+            b_rep = box.addButton(tr("바꾸기"), QMessageBox.ButtonRole.AcceptRole)
+            b_mer = box.addButton(tr("합치기"), QMessageBox.ButtonRole.AcceptRole)
+            box.addButton(tr("취소"), QMessageBox.ButtonRole.RejectRole)
+            box.exec()
+            mode = "replace" if box.clickedButton() is b_rep else "merge" if box.clickedButton() is b_mer else None
+            if mode is None:
+                return None
+        folder = folder or self._bizcard_folder()
+        if not folder:                                     # 이 PC 에 명함 폴더가 없다 — 고르게 하고 환경설정에 적는다
+            folder = QFileDialog.getExistingDirectory(self, tr("그림을 풀 명함 폴더를 고르세요"), "")
+            if not folder:
+                return None
+            self._set_bizcard_folder(folder)
+        self.stop_media()                                  # 사진 올리기는 멈춘다(§5.29 '단계')
+        db = self._store().path
+        if self._st is not None:                           # 불러오는 동안 이 창의 DB 연결은 닫는다
+            self._st.close()
+            self._st = None
+
+        def then(res, err):
+            self.archive_result = res
+            self._init_store_bits()
+            self.refresh()
+            if err:
+                why = {"format": tr("PolyCardex 명함 자료 zip 이 아닙니다"), "version": tr("더 새 프로그램이 만든 zip 입니다 — 프로그램을 먼저 업데이트하세요"),
+                       "schema": tr("더 새 프로그램이 만든 zip 입니다 — 프로그램을 먼저 업데이트하세요")}.get(err, err)
+                QMessageBox.warning(self, tr("명함 자료"), tr("불러오지 못했습니다 — {why}. 지금 자료는 그대로입니다.").format(why=why))
+                return
+            msg = tr("명함 {n}장·그림 {m}개를 불러왔습니다.").format(n=res["cards"], m=res["files"])
+            if res.get("backup"):
+                msg += "\n" + tr("바꾸기 전 자료는 '{p}' 에 백업했습니다.").format(p=res["backup"])
+            QMessageBox.information(self, tr("명함 자료"), msg)
+            if mode == "merge" and res.get("new_ids"):
+                self.open_dupes(exec_=False)
+        return self._archive_run(tr("명함 자료를 불러오는 중…"),
+                                 lambda pr: AR.import_zip(path, db, folder, mode=mode, progress=pr), then)
+
+    def _set_bizcard_folder(self, folder):
+        """명함 폴더를 환경설정에 적는다(본 뷰어 안이면 본 뷰어 기억도) — 명함 환경설정 [바꾸기] 와 같은 자리."""
+        from viewer import settings_store
+        prefs = getattr(self._mw, "_prefs", None)
+        if isinstance(prefs, dict) and callable(getattr(self._mw, "_save_settings_now", None)):
+            pic = prefs.get("picture")
+            if not isinstance(pic, dict):
+                pic = prefs["picture"] = {}
+            pic["bizcard_folder"] = folder
+            self._mw._save_settings_now()
+        else:
+            settings_store.set_picture_prefs({"bizcard_folder": folder})
+        self._bz_folder = folder
 
     def open_history(self, exec_: bool = True):
         """[주소록] '변경 기록·되살리기'(명함 SOT §5.30) — 창을 닫으면 목록을 다시."""

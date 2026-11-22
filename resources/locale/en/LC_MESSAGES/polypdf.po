@@ -19175,3 +19175,72 @@ msgstr "no # — {why}"
 #: viewer/widgets/bizcard_dupe_dialog.py
 msgid "이름·메일 같음(확정)"
 msgstr "Same name and email (confirmed)"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "명함 자료 내보내기(zip)"
+msgstr "Export business card data (zip)"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "명함 자료 불러오기(zip)"
+msgstr "Import business card data (zip)"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "명함 자료"
+msgstr "Business card data"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "명함 자료를 zip 으로 저장하는 중…"
+msgstr "Saving business card data to zip…"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "명함 자료를 불러오는 중…"
+msgstr "Importing business card data…"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid ""
+"이 PC 의 명함 자료를 어떻게 할까요?\n"
+"\n"
+"바꾸기 — 지금 명함 DB·그림을 먼저 zip 으로 백업한 뒤 불러온 것으로 통째로 바꿉니다.\n"
+"합치기 — 지금 명함에 없는 것만 더하고, 끝나면 중복 검토를 엽니다."
+msgstr ""
+"What should happen to the business card data on this PC?\n"
+"\n"
+"Replace — back up the current card database and images to a zip first, then replace everything with the imported data.\n"
+"Merge — add only cards that are not here yet, then open Duplicate review."
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "그림을 풀 명함 폴더를 고르세요"
+msgstr "Choose the business card folder to put the images in"
+
+#: viewer/widgets/bizcard_find_dialog.py
+#, python-brace-format
+msgid "명함 {n}장·그림 {m}개를 불러왔습니다."
+msgstr "Imported {n} cards and {m} images."
+
+#: viewer/widgets/bizcard_find_dialog.py
+#, python-brace-format
+msgid "명함 {n}장·그림 {m}개를 zip 으로 저장했습니다. 개인정보가 든 파일이니 옮긴 뒤 지우거나 안전한 곳에 두세요 — 다른 PC 에서 ≡ 메뉴 '주소록 ▸ 명함 자료 불러오기(zip)' 로 엽니다(구글은 그 PC 에서 다시 연결)."
+msgstr "Saved {n} cards and {m} images to a zip. It contains personal information — delete it or keep it somewhere safe after moving it. On the other PC, open it with ≡ menu 'Contacts ▸ Import business card data (zip)' (reconnect Google on that PC)."
+
+#: viewer/widgets/bizcard_find_dialog.py
+#, python-brace-format
+msgid "내보내지 못했습니다({err})."
+msgstr "Could not export ({err})."
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "PolyCardex 명함 자료 zip 이 아닙니다"
+msgstr "this is not a PolyCardex business card zip"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "더 새 프로그램이 만든 zip 입니다 — 프로그램을 먼저 업데이트하세요"
+msgstr "the zip was made by a newer version — update the program first"
+
+#: viewer/widgets/bizcard_find_dialog.py
+#, python-brace-format
+msgid "불러오지 못했습니다 — {why}. 지금 자료는 그대로입니다."
+msgstr "Could not import — {why}. Your current data is unchanged."
+
+#: viewer/widgets/bizcard_find_dialog.py
+#, python-brace-format
+msgid "바꾸기 전 자료는 '{p}' 에 백업했습니다."
+msgstr "The data from before the replacement was backed up to '{p}'."

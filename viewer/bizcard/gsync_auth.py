@@ -18,6 +18,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+from viewer.i18n import tr
+
 from viewer.bizcard.gsync_api import HTTP_TIMEOUT     # 요청 시간 상한은 한 곳(gsync_api)
 
 # 서버 주소 — 검사는 이 PC 안의 가짜 서버로 바꿔 끼운다(§5.29 '서버 주소')
@@ -171,7 +173,6 @@ def login(cid: str, secret: str, drive: bool = False, open_url=None, timeout: fl
             if q.get("state", [""])[0] == state and ("code" in q or "error" in q):
                 got["code"] = q.get("code", [""])[0]
                 got["error"] = q.get("error", [""])[0]
-                from viewer.i18n import tr
                 msg = tr("로그인이 끝났습니다 — 이 창을 닫고 PolyCardex 로 돌아가세요.")
             else:
                 msg = "..."

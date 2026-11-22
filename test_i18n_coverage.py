@@ -48,6 +48,8 @@ DATA = {
     "viewer/bizcard/multisplit.py",              # 명함 SOT §5.26: 나눈 원본 폴더 '다중 원본'·잘라낸 파일 이름 낱말 '명함' — 저장 데이터(파일·폴더 이름)
     "viewer/bizcard/gsync.py",                   # 261120-36(명함 SOT §5.29): 태그 값 #명함·#구글·드라이브 폴더 이름 — 저장 데이터(구글에 만드는 폴더 이름)
     "viewer/bizcard/people.py",                  # 명함 SOT §5.9(P4): 인물 사진 폴더 이름 '인물' — 저장 데이터(정리 폴더 이름과 같은 꼴)
+    "viewer/bizcard/archive.py",                 # 261120-73(명함 SOT §5.31): zip 안 폴더 '가져온 명함'·백업 파일 이름 '명함 백업_…' — 저장 데이터(파일·폴더 이름)
+    "viewer/bizcard/phone.py",                   # 261120-55(명함 SOT §5.11): 메모 줄 머리 '예전 휴대폰' — 명함 데이터(줄 머리 글은 번역하지 않음)
     "viewer/bizcard/apply.py", "viewer/bizcard/importer.py",   # 261117-8(명함 SOT §5.10): 태그 값 #명함·뒷면 파일 꼬리·정리 폴더 이름 — 저장 데이터(사진 태그 값과 같은 꼴)               # 261117-2(명함 SOT §5.2.1): 성씨·직함·법인 꼴 사전과 태그 값(한글·영어) — 명함 글을 가르는 데이터, 화면 문구 아님
 }
 _FONTS = {"맑은 고딕", "굴림", "바탕", "돋움"}
@@ -70,7 +72,9 @@ ALLOW = {
     # 장치 이름 짐작(실제 장치 이름과 맞춰 본다)
     "viewer/recorder.py": {"마이크", "믹스", "스테레오 믹스"},
     # 내부 키(값) — 표시할 때만 tr(값)
-    "viewer/widgets/bookmark_tree.py": {"주제", "형식", "속성"},          # 261113-10: 축 이름(태그 데이터 키 — 머리글만 tr)
+    "viewer/widgets/tag_filter_menu.py": {"주제"},                       # 261113-10 → 261120-69: 축 이름(태그 데이터 키 — 머리글만 tr), 공용 '#' 풀다운으로 옮김
+    "viewer/widgets/bizcard_find_dialog.py": {"형식"},                    # 261120-69: 명함 '#' 풀다운이 숨길 축 이름(태그 데이터 키)
+    "viewer/widgets/bizcard_gsync_dialog.py": {"구글 ", "해시태그 "},     # 261120-61: 라벨 줄 데이터 글(gsync 가 만든 '구글 +라벨') 치환 열쇠 — 보이는 글은 tr
     "viewer/widgets/tag_apply_dialog.py": {"한글", "영어", "스캔문서", "텍스트문서"},   # 261114-2: 자동 해시태그 속성 이름(태그 데이터, 다국어 SOT §5)
     "viewer/vocab_marks.py": {"초급", "중급", "고급", "전문용어"},   # 261107-33: 밑줄 색 표의 키 = study.db 단어 수준 값(데이터 키, 화면 문구 아님)
     "viewer/widgets/main_view.py": {"본문", "쪽 맞춤", "2장 맞춤", "폭 맞춤", "수동 맞춤", "수동",

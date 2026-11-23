@@ -14,13 +14,59 @@
   - **대기 상한은 부르는 쪽이 정한다.** UI 스레드는 `BUSY_MS_UI`, 워커는 `BUSY_MS_BG`.
   - **손상만 재생성한다.** `OperationalError`("database is locked")도 `DatabaseError` 의
     하위라, 문구를 보지 않고 지우면 **잠깐 잠긴 것만으로 색인·사전을 통째로 잃는다**.
+  - **끝내기 직전 WAL 을 비운다**(261122-3) — 앱은 `os._exit` 로 끝나 연결을 닫지 않는다. 이 프로세스가 쓰기로 연
+    DB 마다 `checkpoint_all()`(main.py)이 새 연결로 `wal_checkpoint(TRUNCATE)` — 묵은 -wal 이 남아 다음 실행·다른
+    프로세스에 얹히지 않게(명함 DB 손상 261123).
 """
 from __future__ import annotations
 
+import os
 import sqlite3
+import threading
+import time
 from pathlib import Path
 
-__all__ = ["BUSY_MS_UI", "BUSY_MS_BG", "connect", "tune", "is_corrupt_error"]
+__all__ = ["BUSY_MS_UI", "BUSY_MS_BG", "connect", "tune", "is_corrupt_error", "checkpoint_all"]
+
+_WAL_PATHS: set = set()          # 이 프로세스가 쓰기로 연 DB 경로(끝낼 때 비울 것)
+_WAL_LOCK = threading.Lock()
+EXIT_BUDGET_S = 3.0              # 끝낼 때 비우기 전체 시간 상한(창은 이미 닫힌 뒤 — 프로세스가 늦게 끝나는 것만)
+EXIT_BUSY_MS = 500               # DB 하나당 잠금 대기 상한
+
+
+def register_wal(path) -> None:
+    """`connect` 밖에서 WAL 로 쓰는 DB(ATTACH 한 것 — user_dict.db·보류 study 등)도 끝낼 때 비우게 적어 둔다."""
+    try:
+        with _WAL_LOCK:
+            _WAL_PATHS.add(os.path.abspath(str(path)))
+    except Exception:
+        pass
+
+
+def checkpoint_all(budget_s: float = EXIT_BUDGET_S, busy_ms: int = EXIT_BUSY_MS) -> int:
+    """끝내기 직전(메인, 창이 닫힌 뒤) — 이 프로세스가 쓰기로 연 DB 마다 새 연결로 `wal_checkpoint(TRUNCATE)`.
+    다른 연결이 읽는 중이면 그 DB 는 대기 상한 뒤 건너뛴다. 반환 = 비운 DB 수."""
+    t0 = time.monotonic()
+    with _WAL_LOCK:
+        paths = sorted(_WAL_PATHS)
+    n = 0
+    for p in paths:
+        if time.monotonic() - t0 > budget_s:
+            break
+        if not os.path.exists(p + "-wal"):
+            continue
+        try:
+            c = sqlite3.connect(p, timeout=busy_ms / 1000.0)
+            try:
+                c.execute("PRAGMA busy_timeout = %d" % int(busy_ms))
+                r = c.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
+                if r is not None and r[0] == 0:
+                    n += 1
+            finally:
+                c.close()
+        except Exception:
+            continue
+    return n
 
 BUSY_MS_UI = 200        # UI 스레드: 잠깐이라도 기다리지 않는다(못 읽으면 '모름')
 BUSY_MS_BG = 30000      # 워커: 얼마든 기다려도 좋다(사용자를 막지 않는다)
@@ -80,6 +126,11 @@ def connect(db_path, busy_ms: int = BUSY_MS_BG,
     if row_factory:
         conn.row_factory = sqlite3.Row
     tune(conn, busy_ms)
+    try:
+        with _WAL_LOCK:
+            _WAL_PATHS.add(os.path.abspath(str(p)))   # 끝낼 때 WAL 비울 것(checkpoint_all) — resolve 는 디스크를 봐서 쓰지 않음
+    except Exception:
+        pass
     return conn
 
 

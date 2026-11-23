@@ -196,6 +196,7 @@ class StudyStore:
             self.conn.execute("PRAGMA p.journal_mode = WAL")
         except Exception:
             pass
+        _dbutil.register_wal(pp)                        # 261122-3: 끝낼 때 WAL 비움(dbutil.checkpoint_all)
         self.conn.executescript(_PENDING_SCHEMA.format(p="p."))
         # 읽기는 TEMP VIEW(이름이 같아 main 표를 가린다) — 보류 ▶ 저장본
         hide_main = "m.file_key NOT IN (SELECT file_key FROM p.cleared)"

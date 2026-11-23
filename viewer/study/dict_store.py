@@ -168,6 +168,7 @@ class DictStore:
             self.conn.execute("PRAGMA u.journal_mode = WAL")
         except Exception:
             pass
+        _dbutil.register_wal(self.user_db_path)        # 261122-3: 끝낼 때 WAL 비움(dbutil.checkpoint_all)
         self.conn.executescript("""
             CREATE TABLE IF NOT EXISTS u.dict_entry(
                 entry_id   INTEGER PRIMARY KEY AUTOINCREMENT,

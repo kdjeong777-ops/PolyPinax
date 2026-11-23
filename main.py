@@ -605,7 +605,9 @@ def main():
     app = QApplication(sys.argv)
     _portable_note = _setup_portable()   # 261009-22(마스터 §14.9): 넘기기 통로 이름(open_gather)을 정하기 **전에**
     if bizcard:
-        sys.exit(_run_bizcard(app))
+        _rc = _run_bizcard(app)
+        _close_dbs()                                 # 261122-3: 명함 프로그램도 끝내기 전에 WAL 비움
+        sys.exit(_rc)
 
     # 260915-3(마스터 §4.9, 사용자 지시): 탐색기에서 PDF 여러 개를 골라 열면 Windows 가 파일마다
     #   따로 실행한다 → 먼저 뜬 실행(대표)에게 파일을 넘기고 이 실행은 창 없이 끝난다.
@@ -787,18 +789,29 @@ def main():
         bg_write.flush()
     except Exception:
         pass
-    try:
-        # 261122-1 덧붙임(명함 SOT §5.7): 명함 DB 연결을 닫으며 WAL 을 비운다 — `os._exit` 는 연결을 닫지 않아 묵은 -wal 이 남는다
-        if "viewer.bizcard.store" in sys.modules:
-            sys.modules["viewer.bizcard.store"].close_all()
-    except Exception:
-        pass
+    _close_dbs()
     try:
         sys.stdout.flush()
         sys.stderr.flush()
     except Exception:
         pass
     os._exit(code)
+
+
+def _close_dbs() -> None:
+    """끝내기 직전 SQLite WAL 비우기(응답성 SOT §4 ⑤ '끝낼 때 WAL 을 비운다', 261122-1 덧붙임·-3) — `os._exit` 는 연결을 닫지 않아
+    묵은 -wal 이 남는다. 명함 DB 연결은 닫고(WAL 비움), 이 프로세스가 쓰기로 연 모든 DB(index.db·study.db·dict.db·photo_index.db …)는
+    새 연결로 `wal_checkpoint(TRUNCATE)`(`dbutil.checkpoint_all`, 시간 상한)."""
+    try:
+        if "viewer.bizcard.store" in sys.modules:
+            sys.modules["viewer.bizcard.store"].close_all()
+    except Exception:
+        pass
+    try:
+        from viewer import dbutil
+        dbutil.checkpoint_all()
+    except Exception:
+        pass
 
 
 if __name__ == "__main__":

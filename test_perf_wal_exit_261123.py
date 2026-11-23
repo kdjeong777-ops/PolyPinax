@@ -76,6 +76,21 @@ try:
     chk(el < 3.5, "B 읽기를 쥔 DB 가 있어도 시간 상한 안에 끝남", "%.2fs" % el)
     c.close()
 
+    print("\n=== D 명함 연결 닫기는 기다리지 않음(261122-9) ===")
+    from viewer.bizcard.store import BizcardStore
+    db3 = os.path.join(d, "bz_busy.db")
+    bg = BizcardStore(db3)                                        # 배경 일꾼의 연결(대기 30초)
+    bg.meta_set("x", "가짜")                                      # WAL 에 쓴 것이 있게
+    holder = sqlite3.connect(db3)
+    holder.execute("BEGIN")
+    holder.execute("SELECT count(*) FROM meta").fetchone()       # 다른 연결이 읽기를 쥔 채(TRUNCATE 는 이것이 끝나길 기다린다)
+    t0 = time.monotonic()
+    bg.close()
+    el = time.monotonic() - t0
+    holder.rollback()
+    holder.close()
+    chk(el < 1.0, "D 다른 연결이 읽기를 쥐고 있으면 WAL 비우기를 건너뛰고 바로 닫음(종전엔 대기 30초를 다 채움)", "%.2fs" % el)
+
     print("\n=== C 시작 막기가 보는 폴더 = DB 가 있는 폴더 ===")
     from PyQt6.QtCore import QCoreApplication, QStandardPaths
     from viewer import pkg_guard as G, branding as B

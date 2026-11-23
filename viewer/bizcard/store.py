@@ -81,6 +81,8 @@ class BizcardStore:
         명함 DB 손상 261123: 보조 파일이 두 벌로 갈라졌을 때 남은 묵은 WAL 이 다음 실행에 다시 얹혔다). 다른 연결이 쓰는 중이면 건너뜀."""
         _OPEN.discard(self)
         try:
+            # 기다리지 않는다 — 대기 시간(배경 연결 30초)을 다 채워 닫은 뒤의 일(결과 알림)이 늦었다(261122-9). 바쁘면 이번엔 건너뜀
+            self.con.execute("PRAGMA busy_timeout = 0")
             self.con.execute("PRAGMA wal_checkpoint(TRUNCATE)")
         except Exception:
             pass

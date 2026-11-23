@@ -52,7 +52,9 @@ class _RosterWorker(QObject):
     def run(self):
         gen, db, mode, text, vcf_path, persons, show_new = self._a
         out = {"mode": mode, "cards": [], "groups": [], "persons": persons, "error": ""}
+        stage = "db"
         try:
+            import sqlite3
             from viewer.bizcard.store import BizcardStore
             st = BizcardStore(db)
             try:
@@ -60,9 +62,11 @@ class _RosterWorker(QObject):
             finally:
                 st.close()
             if mode == "vcf":
+                stage = "vcf"
                 if persons is None and vcf_path:
                     persons = RS.read_vcf(vcf_path)
                     out["persons"] = persons
+                stage = "compare"
                 groups = RS.vcf_compare(cards, persons or [], show_new=show_new)
                 out["groups"] = [g for g in groups if RS.text_match(g["person"], text)
                                  or any(RS.text_match(s["card"], text) for s in g["subs"])]
@@ -71,7 +75,11 @@ class _RosterWorker(QObject):
                     cards = RS.multi_mobile(cards)
                 out["cards"] = [c for c in cards if RS.text_match(c, text)]
         except Exception as e:                  # noqa: BLE001 — 메인에서 알린다(글·경로는 싣지 않음)
-            out["error"] = type(e).__name__
+            # 어느 단계인지·SQLite 오류 글(명함 글 없음)까지 — 사용자 보고 261123 'DatabaseError' 만으로는 까닭을 몰랐다
+            detail = str(e)[:120] if isinstance(e, sqlite3.Error) else ""
+            out["error"] = "%s · %s%s" % (stage, type(e).__name__, (": " + detail) if detail else "")
+            import traceback
+            traceback.print_exc()                # 코드 줄만(명함 글 없음) — 개발 실행 창에
         self.done.emit(gen, out)
         self.finished.emit()
 

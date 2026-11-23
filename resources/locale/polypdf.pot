@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-11-23 22:06+0900\n"
+"POT-Creation-Date: 2026-11-23 23:51+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -8739,10 +8739,6 @@ msgid "(인물 사진 없음 — 끌어 놓거나 [사진 추가])"
 msgstr ""
 
 #: viewer/widgets/bizcard_find_dialog.py
-msgid "수정"
-msgstr ""
-
-#: viewer/widgets/bizcard_find_dialog.py
 #, python-brace-format
 msgid "세부 칸에서 {s}초 넘게 본 명함 — 저절로 들어오고, 빼기만 합니다"
 msgstr ""
@@ -8817,6 +8813,10 @@ msgid "'{tab}' {n}명"
 msgstr ""
 
 #: viewer/widgets/bizcard_find_dialog.py
+msgid "수정"
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
 msgid "파일 이름을 바꾸지 못했습니다 — 다른 프로그램이 열고 있는지 확인하세요."
 msgstr ""
 
@@ -8872,6 +8872,10 @@ msgstr ""
 #: viewer/widgets/bizcard_find_dialog.py
 #, python-brace-format
 msgid "{n}번 실패해 더는 저절로 하지 않습니다."
+msgstr ""
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "명함 DB 에 저장하지 못했습니다 — 바꾼 파일 이름은 되돌렸습니다."
 msgstr ""
 
 #: viewer/widgets/bizcard_find_dialog.py
@@ -9557,6 +9561,16 @@ msgid "인물 사진 {n}개를 넣지 못했습니다."
 msgstr ""
 
 #: viewer/widgets/bizcard_roster_dialog.py
+#, python-brace-format
+msgid "이름 같음 {n}장"
+msgstr ""
+
+#: viewer/widgets/bizcard_roster_dialog.py
+#, python-brace-format
+msgid "010 같음 {n}장"
+msgstr ""
+
+#: viewer/widgets/bizcard_roster_dialog.py
 msgid "잘못 합쳐짐?"
 msgstr ""
 
@@ -9574,6 +9588,10 @@ msgstr ""
 
 #: viewer/widgets/bizcard_roster_dialog.py
 msgid "010 둘 이상"
+msgstr ""
+
+#: viewer/widgets/bizcard_roster_dialog.py
+msgid "명함 3장 이상"
 msgstr ""
 
 #: viewer/widgets/bizcard_roster_dialog.py
@@ -9675,6 +9693,10 @@ msgstr ""
 #: viewer/widgets/bizcard_roster_dialog.py
 #, python-brace-format
 msgid "010 {n}개"
+msgstr ""
+
+#: viewer/widgets/bizcard_roster_dialog.py
+msgid "이미 추가한 사람입니다 — 다시 추가하지 않습니다."
 msgstr ""
 
 #: viewer/widgets/bizcard_roster_dialog.py

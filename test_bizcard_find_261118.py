@@ -1009,8 +1009,10 @@ try:
     nm = lambda rows: sorted(c["name"] for c in rows)
     chk(got and "Jane Fakeperson" in nm(got["en"]) and "Zed Nobody" in nm(got["en"]) and not any(hz(c) for c in got["en"])
         and got["ko"] and all(hz(c) for c in got["ko"]) and len(got["ko"]) + len(got["en"]) <= len(got["all"])
-        and all(str(c["front"]).startswith("contact:") for c in got["nocard"]) and "Jane Fakeperson" in nm(got["nocard"])
-        and not any(str(c["front"]).startswith("contact:") for c in got["card"])
+        # 명함 없음 = 그림 없는 주소록 명함 + 그림 파일을 잃은 명함(261122-5), 명함 있음 = 그림 파일이 실제로 있는 것
+        and all(str(c["front"]).startswith("contact:") or not os.path.exists(c["front"]) for c in got["nocard"])
+        and "Jane Fakeperson" in nm(got["nocard"]) and "Zed Nobody" in nm(got["nocard"])
+        and all(not str(c["front"]).startswith("contact:") and os.path.exists(c["front"]) for c in got["card"])
         and len(got["card"]) + len(got["nocard"]) == len(got["all"]) and dlg.lbl_count.text() == "%d장" % len(got["nocard"]),
         "I21 한글·영어 = 이름 글자, 명함 있음·없음 = 그림(주소록 명함은 없음)", str({k: len(v) for k, v in got.items()}))
     # Enter — 세부 칸을 고치다 Enter 를 눌러도 [해시태그] 창이 뜨지 않음
@@ -1125,6 +1127,7 @@ try:
     def _rows_px():
         """목록 표에서 고르지 않은 두 줄(짝·홀)의 빈 자리 색 — 직함 칸 오른쪽 끝 안쪽."""
         dlg.table.clearSelection()
+        dlg.table.scrollToTop()                      # 고른 명함 줄로 내려가 있을 수 있다 — 2·3 줄이 보이게
         pump(timeout=0.1)
         img = dlg.table.viewport().grab().toImage()
         out = []

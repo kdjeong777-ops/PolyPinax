@@ -170,6 +170,20 @@ class Api:
             return fs[0]["id"]
         return self._json("POST", DRIVE_BASE + "/drive/v3/files?fields=id", {"name": name, "mimeType": FOLDER_MIME})["id"]
 
+    def list_folder(self, folder_id: str) -> list:
+        """폴더 안 파일 [{id, name, md5Checksum}] — 지난번 올린 기록이 없는 파일을 다시 올리지 않게(명함 SOT §5.29 '드라이브', 261122-6)."""
+        out, token = [], ""
+        q = "'%s' in parents and trashed = false" % folder_id.replace("'", "\\'")
+        while True:
+            args = {"q": q, "fields": "nextPageToken, files(id, name, md5Checksum)", "pageSize": 1000}
+            if token:
+                args["pageToken"] = token
+            d = self._json("GET", DRIVE_BASE + "/drive/v3/files?" + urllib.parse.urlencode(args))
+            out += d.get("files") or []
+            token = d.get("nextPageToken") or ""
+            if not token:
+                return out
+
     def upload(self, path: str, name: str, folder_id: str, file_id: str = "") -> str:
         """파일 올리기(있으면 내용만 바꿈) — 반환 = 파일 id."""
         with open(path, "rb") as f:

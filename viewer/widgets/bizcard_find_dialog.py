@@ -1915,7 +1915,8 @@ class BizcardFindDialog(QDialog):
                 if "kakao" in ks:                       # 카톡 친구추가 방지(§5.29)
                     from viewer.bizcard import gsync as G
                     bl = G.blocked_ids(self._store())
-                rows = [c for c in rows if P.kinds_ok(c, ks, ph, bl)]
+                cd = P.card_ids(rows) if {"card", "nocard"} & set(ks) else None   # 그림 파일이 실제로 있나(261122-5)
+                rows = [c for c in rows if P.kinds_ok(c, ks, ph, bl, cd)]
         self._rows = rows
         self._by_id = {c["id"]: c for c in self._rows}
         for c in rows:                                     # 알려진 태그 — '#' 풀다운이 칸 토큰을 (0) 으로 남길지(검색창 SOT §5.1)
@@ -1964,11 +1965,25 @@ class BizcardFindDialog(QDialog):
     def _on_current(self, r, _c, pr, _pc):
         if self._loading or r == pr:
             return
-        if self._dirty and not self._ask_save():
-            self._loading = True
-            self.table.setCurrentCell(pr, 0)
-            self._loading = False
-            return
+        target = self._card_at(r)                          # 누른 명함 — 줄 번호가 아니라 id 로 따라간다
+        if self._dirty:
+            if not self._ask_save():
+                self._loading = True
+                self.table.setCurrentCell(pr, 0)
+                self._loading = False
+                return
+            # 저장이 목록을 다시 읽고 다시 정렬했다(이름을 바꾸면 줄 차례가 바뀜) — 같은 줄 번호는 다른 명함일 수 있다.
+            # 종전엔 그 줄의 다른 명함을 열어, 다음 고침이 엉뚱한 명함에 저장되었다(261122-5, 사용자 보고 '본화면에서 수정이 잘 안돼')
+            if target is not None:
+                r2 = self.row_of_id(target["id"])
+                if r2 >= 0:
+                    self._loading = True
+                    self.table.setCurrentCell(r2, 0)
+                    self._loading = False
+                    self._load(self._card_at(r2))
+                else:                                      # 거르기 밖으로 빠졌으면 DB 의 지금 값으로
+                    self._load(P.card_by_id(self._store(), target["id"]))
+                return
         self._load(self._card_at(r))
 
     def _on_clicked(self, r):
@@ -2003,8 +2018,17 @@ class BizcardFindDialog(QDialog):
             self._loading = False
             self.table.scrollToItem(self.table.item(r, 0))
             if self._card is None or self._card["id"] != cid:
-                if self._dirty and not self._ask_save():
-                    return
+                if self._dirty:
+                    if not self._ask_save():
+                        return
+                    r = self.row_of_id(cid)                # 저장이 다시 정렬했을 수 있다 — id 로 다시 찾는다(261122-5)
+                    if r < 0:
+                        self._load(P.card_by_id(self._store(), cid))
+                        return
+                    self._loading = True
+                    self.table.setCurrentCell(r, 0)
+                    self.table.selectRow(r)
+                    self._loading = False
                 self._load(self._card_at(r))
             return
         if self._card is not None and self._card["id"] == cid:
@@ -2410,24 +2434,39 @@ class BizcardFindDialog(QDialog):
         st = self._store()
         # 앱이 붙인 것만 바꾼다(언어는 다시 하나로 — D25) — 회사명이 바뀌는 모든 길이 같은 `auto_retag`(261120-53)
         new_tags, old_auto = P.auto_retag(list(c.get("tags") or []), [c], new["name"], new["company"])
-        got = self.rename_card_files(c, new["name"], new["company"])
+        moved = []
+        got = self.rename_card_files(c, new["name"], new["company"], log=moved)
         if got is None:
             return None
         nf, nb = got
         fields = dict(new, front=nf, back=nb, tags=new_tags)
-        # 수정일·메모 기록(§5.24.1 '수정일'·§5.9 '메모 기록', 261120-25·-26) — 메모 밖 칸이 바뀌었을 때만
-        keys = P.changed_keys(c, new)
-        if keys:
-            P.edited_init(st)
-            fields["edited"] = _today()
-            if P.memo_opt(st, P.MEMO_LOG_KEY):
-                labels = dict({k: tr(lb) for k, lb in FIELDS})
-                fields["memo"] = P.memo_with_log(fields.get("memo") or "", _today(), [labels.get(k, k) for k in keys],
-                                                 tr("수정"))
-        P.update_card(st, c["id"], fields)
-        P.forget_srcs(st, c["id"], [k for k in ("name", "company", "dept", "title", "address", "memo")
-                                    if (new.get(k) or "") != (c.get(k) or "")])   # 손으로 고친 칸 — 주소록이 덮어쓰지 않게(D24)
-        self._retag([x for x in (nf, nb) if x and os.path.exists(x)], old_auto, new_tags)
+        try:
+            # 수정일·메모 기록(§5.24.1 '수정일'·§5.9 '메모 기록', 261120-25·-26) — 메모 밖 칸이 바뀌었을 때만
+            keys = P.changed_keys(c, new)
+            if keys:
+                P.edited_init(st)
+                fields["edited"] = _today()
+                if P.memo_opt(st, P.MEMO_LOG_KEY):
+                    labels = dict({k: tr(lb) for k, lb in FIELDS})
+                    fields["memo"] = P.memo_with_log(fields.get("memo") or "", _today(), [labels.get(k, k) for k in keys],
+                                                     tr("수정"))
+            P.update_card(st, c["id"], fields)
+            P.forget_srcs(st, c["id"], [k for k in ("name", "company", "dept", "title", "address", "memo")
+                                        if (new.get(k) or "") != (c.get(k) or "")])   # 손으로 고친 칸 — 주소록이 덮어쓰지 않게(D24)
+        except Exception as e:                         # DB 고침 실패 — DB·파일 이름을 되돌리고 알린다(§5.9 '저장', 261122-5)
+            try:
+                st.con.rollback()
+            except Exception:
+                pass
+            for src, dst in reversed(moved):
+                self._rename(dst, src, quiet=True)
+            QMessageBox.warning(self, tr("명함찾기"), tr("명함 DB 에 저장하지 못했습니다 — 바꾼 파일 이름은 되돌렸습니다.")
+                                + "\n" + type(e).__name__)
+            return None
+        try:
+            self._retag([x for x in (nf, nb) if x and os.path.exists(x)], old_auto, new_tags)
+        except Exception as e:                         # 파일 태그만 못 맞춤 — 명함 저장은 된 것(되풀이 묻지 않게)
+            print("[bizcard] retag failed:", type(e).__name__)
         return fields
 
     def _memo_date_before_typing(self):
@@ -2531,7 +2570,9 @@ class BizcardFindDialog(QDialog):
             front = P._real(front)
             folder = Path(front).parent
             same = folder / want
-            p = same if os.path.normcase(str(same)) == os.path.normcase(front) else unique_path(folder, want, set())
+            # 다른 명함 행이 가진 경로도 피한다 — 파일이 없어진 묵은 행과 겹치면 DB 의 같은 앞면 금지로 저장이 실패했다(261122-5)
+            taken = P.taken_paths(self._store(), c.get("id"))
+            p = same if os.path.normcase(str(same)) == os.path.normcase(front) else unique_path(folder, want, taken)
             photos = P.person_photos(front)
             if not self._rename(front, str(p)):
                 return None
@@ -2539,7 +2580,7 @@ class BizcardFindDialog(QDialog):
             nf = str(p)
             if back and os.path.exists(back):
                 back = P._real(back)
-                pb = unique_path(folder, p.stem + BACK_SUFFIX + os.path.splitext(back)[1], set())
+                pb = unique_path(folder, p.stem + BACK_SUFFIX + os.path.splitext(back)[1], taken)
                 if self._rename(back, str(pb)):
                     nb = str(pb)
                     log is not None and log.append((back, str(pb)))

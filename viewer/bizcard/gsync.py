@@ -857,6 +857,41 @@ def media_left(store) -> int:
     return len(store.meta_get(QUEUE_KEY, []) or [])
 
 
+def _md5(path) -> str:
+    try:
+        with open(path, "rb") as f:
+            return hashlib.md5(f.read()).hexdigest()
+    except OSError:
+        return ""
+
+
+def _folder_listing(api, folder_id) -> dict:
+    """드라이브 폴더 파일을 이름(소문자)으로 — 읽을 수 없으면(옛 가짜 api·권한) 빈 것(그러면 종전처럼 새로 올림)."""
+    fn = getattr(api, "list_folder", None)
+    out = {}
+    if fn is None:
+        return out
+    try:
+        for f in fn(folder_id) or []:
+            out.setdefault(str(f.get("name") or "").lower(), []).append(f)
+    except Exception as e:                                   # noqa: BLE001 — 못 읽어도 올리기는 한다
+        print("[bizcard] drive list failed:", _why(e))
+    return out
+
+
+def _reuse(listing: dict, name: str, path: str, taken=()):
+    """같은 이름의 드라이브 파일 — 반환 (파일 id, 내용이 같음). 내용(md5)이 같은 것을 먼저, 없으면 이름만 같은 첫 파일(내용만 바꿈),
+    같은 이름이 없으면 ('', False) = 새로 올림(§5.29 '드라이브', 261122-6)."""
+    cands = [f for f in listing.get(name.lower()) or [] if f.get("id") not in taken]   # 다른 면이 쓰는 파일은 빼고
+    if not cands:
+        return "", False
+    md5 = _md5(path)
+    for f in cands:
+        if md5 and f.get("md5Checksum") == md5:
+            return f["id"], True
+    return cands[0]["id"], False
+
+
 def _photo_bytes(path) -> bytes:
     """연락처 사진 — 긴 변 PHOTO_MAX_PX 로 줄인 JPG 바이트(구글이 어차피 작게 보관, 261120-71)."""
     from PIL import Image, ImageOps
@@ -882,6 +917,8 @@ def run_media(store, api, folder: str = "", drive_folder: str = DRIVE_FOLDER_DEF
     reasons = {}
     total = media_left(store)
     by_rn, folder_id, stopped = {}, "", ""
+    listing = None                                           # 드라이브 폴더 파일 {이름 소문자: [{id, md5Checksum}]} — 처음 필요할 때 한 번
+    claimed = set()                                          # 이번에 쓴 파일 id — 이름이 같은 다른 면(앞면·인물 사진)이 가져가지 않게
     fails = set(store.meta_get(FAILED_KEY, []) or [])
     count = 0
     while True:
@@ -919,7 +956,19 @@ def run_media(store, api, folder: str = "", drive_folder: str = DRIVE_FOLDER_DEF
                     tmp = _shrunk(it["path"])
                     try:
                         name = os.path.splitext(os.path.basename(it["path"]))[0] + ".jpg"
-                        fid = api.upload(tmp, name, folder_id, (dr.get(it["side"]) or {}).get("id", ""))
+                        fid = (dr.get(it["side"]) or {}).get("id", "")
+                        if not fid:                                   # 올린 기록 없음 — 폴더에 같은 파일이 있으면 그것을(261122-6)
+                            if listing is None:
+                                listing = _folder_listing(api, folder_id)
+                            taken = claimed | {(v or {}).get("id") for v in dr.values()}
+                            fid, same = _reuse(listing, name, tmp, taken)
+                        else:
+                            same = False
+                        if not same:
+                            fid = api.upload(tmp, name, folder_id, fid)
+                            if listing is not None:
+                                listing.setdefault(name.lower(), []).insert(0, {"id": fid, "md5Checksum": _md5(tmp)})
+                        claimed.add(fid)
                     finally:
                         os.unlink(tmp)
                     dr[it["side"]] = {"id": fid, "sig": _sig(it["path"])}

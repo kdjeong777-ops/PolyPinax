@@ -22,7 +22,8 @@ from viewer.bizcard import vcard as V
 
 ROLE = Qt.ItemDataRole.UserRole
 THUMB = 96
-VIEWS = (("all", tr_noop("전체")), ("multi", tr_noop("010 둘 이상")), ("vcf", tr_noop("vcf 비교")))
+VIEWS = (("all", tr_noop("전체")), ("multi", tr_noop("010 둘 이상")), ("many", tr_noop("명함 3장 이상")), ("vcf", tr_noop("vcf 비교")))
+MANY_WHY = {"name": tr_noop("이름 같음 {n}장"), "010": tr_noop("010 같음 {n}장")}   # '명함 3장 이상' 이유 칸(§5.32, 261122-5)
 KIND_LABEL = {RS.MERGED: tr_noop("잘못 합쳐짐?"), RS.RENAMED: tr_noop("이름 바뀜?"), RS.NEW: tr_noop("새 사람"),
               RS.SAME_NAME: tr_noop("같은 이름·번호 다름")}
 _KEEP = []
@@ -87,6 +88,10 @@ class _RosterWorker(QObject):
             else:
                 if mode == "multi":
                     cards = RS.multi_mobile(cards)
+                elif mode == "many":                      # 같은 사람 명함 3장 이상(261122-5) — 묶음끼리 모아
+                    many = RS.many_cards(cards)
+                    out["why"] = {c["id"]: (k, n) for c, k, n in many}
+                    cards = [c for c, _k, _n in many]
                 out["cards"] = [c for c in cards if RS.text_match(c, text)]
         except Exception as e:                  # noqa: BLE001 — 메인에서 알린다(글·경로는 싣지 않음)
             # 어느 단계인지·SQLite 오류 글(명함 글 없음)까지 — 사용자 보고 261123 'DatabaseError' 만으로는 까닭을 몰랐다
@@ -275,10 +280,11 @@ class RosterDialog(QDialog):
         self._gen, self.loading = 0, False
         self._img_gen, self.imgs_pending = 0, 0
         # vcf 작업 목록(고정)·사람이 정한 체크 — 명함 DB meta 에 남겨 다시 열면 이어서(§5.32 '작업 목록', 261122-4)
-        self.frozen, self.checks = None, {}
+        self.frozen, self.checks, self.added = None, {}, {}
         saved = self.fd._store().meta_get(RS.META_KEY) or {}
         if isinstance(saved, dict) and saved.get("groups") is not None:
             self.vcf_path, self.frozen, self.checks = saved.get("path") or "", saved["groups"], dict(saved.get("checks") or {})
+            self.added = dict(saved.get("added") or {})     # [추가] 한 vcf 사람 줄 {gi: 새 명단 id}(261122-7)
         self.undo_stack, self.redo_stack = [], []      # 창 안 작업 단위 되돌리기(§5.32 '되돌리기', 261122-4)
         self._filling = False
         v = QVBoxLayout(self)
@@ -401,7 +407,9 @@ class RosterDialog(QDialog):
         if not path:
             return False
         self.vcf_path, self.persons = path, None
-        self.frozen, self.checks = None, {}                  # 새 vcf — 새 작업 목록
+        # 같은 파일이어도 다시 읽으면 옛 작업 목록을 버리고 지금 DB 로 새로 비교(261122-7 — 고친 것이 잘 됐는지 보려고).
+        # 창만 다시 열면 이어서(meta, 261122-4). 되돌리기 쌓임은 그대로(DB 되돌림은 목록과 상관없이 맞다)
+        self.frozen, self.checks, self.added = None, {}, {}
         if self.view() != "vcf":
             self.set_view("vcf")
         else:
@@ -412,14 +420,15 @@ class RosterDialog(QDialog):
         """[새로 비교] — vcf 를 다시 읽어 처음부터(작업 목록·체크를 지움)."""
         if not self.vcf_path:
             return False
-        self.persons, self.frozen, self.checks = None, None, {}
+        self.persons, self.frozen, self.checks, self.added = None, None, {}, {}
         self.reload()
         return True
 
     def _save_state(self):
         """작업 목록·체크를 명함 DB meta 에(다시 열면 이어서) — 작은 JSON 한 줄."""
         try:
-            self.fd._store().meta_set(RS.META_KEY, {"path": self.vcf_path, "groups": self.frozen, "checks": self.checks})
+            self.fd._store().meta_set(RS.META_KEY, {"path": self.vcf_path, "groups": self.frozen, "checks": self.checks,
+                                                    "added": self.added})
         except Exception:
             pass
 
@@ -451,9 +460,14 @@ class RosterDialog(QDialog):
         if out.get("persons") is not None:
             self.persons = out["persons"]
         if out.get("frozen") is not None:                   # 새로 고정한 작업 목록
-            self.frozen, self.checks = out["frozen"], {}
+            self.frozen, self.checks, self.added = out["frozen"], {}, {}
             self._save_state()
         self.cards, self.groups = out["cards"], out["groups"]
+        self._prune_added()
+        for g in self.groups or []:                         # [추가] 한 줄은 저절로 체크(261122-7)
+            if str(g.get("gi")) in self.added:
+                g["auto"] = True
+        self.why = out.get("why") or {}
         self.fill()
 
     def _card_item(self, c, why="", data=None):
@@ -522,8 +536,14 @@ class RosterDialog(QDialog):
                     self.select_person(cur[1])
         else:
             why = tr("010 {n}개") if self.view() == "multi" else ""
+            many = getattr(self, "why", {}) if self.view() == "many" else {}
             for c in self.cards:
-                self.tree.addTopLevelItem(self._card_item(c, why.format(n=len(P.mobiles_010(c))) if why else ""))
+                if c["id"] in many:
+                    k, n = many[c["id"]]
+                    w = tr(MANY_WHY[k]).format(n=n)
+                else:
+                    w = why.format(n=len(P.mobiles_010(c))) if why else ""
+                self.tree.addTopLevelItem(self._card_item(c, w))
             self.lbl.setText(tr("명단 {n}명").format(n=len(self.cards)))
         for i in range(self.tree.columnCount()):
             self.tree.resizeColumnToContents(i)
@@ -858,16 +878,35 @@ class RosterDialog(QDialog):
 
     def add(self) -> int:
         """vcf 사람 줄 [추가] — 그림 없는 명함으로(주소록 가져오기와 같은 `apply_import`)."""
-        person, _g = self.current_person()
+        person, g = self.current_person()
         d = self._sel()
         if person is None or not d or d[0] != "vcf":
             return 0
-        n = self._record([], lambda: P.apply_import(self.fd._store(), [dict(person)]))
+        # 같은 사람이 두 번 생기지 않게(261122-7) — 이 줄에서 이미 [추가] 했거나, 그 이름이고 그 010 번호를 모두 가진 명단이 이미 있으면
+        st = self.fd._store()
+        self._prune_added()
+        if str(g["gi"]) in self.added or RS.person_resolved(g, RS.all_cards(st)):
+            QMessageBox.information(self, tr("명단 관리"), tr("이미 추가한 사람입니다 — 다시 추가하지 않습니다."))
+            return 0
+        before = {c["id"] for c in RS.all_cards(st)}
+        n = self._record([], lambda: P.apply_import(st, [dict(person)]))
         if n:
+            new = sorted({c["id"] for c in RS.all_cards(st)} - before)
+            self.added[str(g["gi"])] = new[0] if new else 0
+            self._save_state()
             if not getattr(self.fd, "_dirty", False):
                 self.fd.refresh()
             self._after()
         return n
+
+    def _prune_added(self):
+        """되돌리기로 없어진 추가는 잊는다(다시 [추가] 할 수 있게)."""
+        st = self.fd._store()
+        gone = [k for k, cid in self.added.items() if cid and P.card_by_id(st, cid) is None]
+        for k in gone:
+            self.added.pop(k, None)
+        if gone:
+            self._save_state()
 
     def vcf_numbers(self) -> bool:
         """'같은 이름·번호 다름' 줄 [vcf 번호로] — 010 번호(종류 무관)를 vcf 의 것으로, 010 아닌 번호는 그대로(`store_card_edit` 한 길)."""

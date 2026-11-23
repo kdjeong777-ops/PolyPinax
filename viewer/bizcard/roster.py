@@ -22,6 +22,37 @@ def multi_mobile(cards) -> list:
     return [c for c in cards if len(P.mobiles_010(c)) >= 2]
 
 
+MANY_MIN = 3                 # '명함 3장 이상'(§5.32, 261122-5)
+
+
+def many_cards(cards, least: int = MANY_MIN) -> list:
+    """같은 사람으로 보이는 명단이 least 장 이상인 것만(§5.32 '명함 3장 이상') — 이름(`_pname`)이 같은 명단이 least 장 이상이거나
+    같은 010 번호를 가진 명단이 least 장 이상. 반환 = [(명단, 'name'|'010', 장 수)] — 묶음끼리 모아(묶음 이름 차례), 명단 하나는 한 번
+    (이름·010 둘 다 걸리면 장 수가 큰 쪽)."""
+    groups = {}
+    for c in cards:
+        pn = P._pname(c.get("name"))
+        if pn:
+            groups.setdefault(("name", pn), []).append(c)
+        for k in P.mobiles_010(c):
+            groups.setdefault(("010", k), []).append(c)
+    best = {}                                 # 명단 id → (장 수, 갈래, 묶음 열쇠)
+    for (kind, key), members in groups.items():
+        if len(members) < least:
+            continue
+        for c in members:
+            cur = best.get(c["id"])
+            if cur is None or len(members) > cur[0]:
+                best[c["id"]] = (len(members), kind, key)
+    by_id = {c["id"]: c for c in cards}
+    gkey = {}                                 # 묶음 → 이름 차례 열쇠(그 묶음 첫 이름)
+    for cid, (_n, kind, key) in best.items():
+        nm = str(by_id[cid].get("name") or "")
+        gkey[(kind, key)] = min(gkey.get((kind, key), nm), nm)
+    order = sorted(best, key=lambda cid: (gkey[best[cid][1:]], best[cid][1:], str(by_id[cid].get("name") or ""), cid))
+    return [(by_id[cid], best[cid][1], best[cid][0]) for cid in order]
+
+
 def text_match(card: dict, text: str) -> bool:
     """찾기 칸 — 이름·회사·번호(숫자만으로도)·메일 글자."""
     t = (text or "").strip().lower()

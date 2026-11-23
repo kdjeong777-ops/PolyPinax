@@ -89,13 +89,35 @@ def photo_ids(cards, folder="") -> set:
         if Path(pf).stem.lower() in listing[d]:
             out.add(c["id"])
     return out
+
+
+def card_ids(cards) -> set:
+    """명함 그림(앞면) 파일이 실제로 있는 명함 id — 폴더마다 한 번만 읽는다(§5.24.1 '구분', 261122-5: 경로는 있는데 파일이 없는
+    명함이 '명함 있음' 에 섞였다). 그림 없는 주소록 명함(D22)은 넣지 않는다."""
+    from viewer.bizcard.vcard import is_contact
+    listing, out = {}, set()
+    for c in cards:
+        f = str(c.get("front") or "")
+        if not f or is_contact(c):
+            continue
+        d = os.path.normcase(os.path.dirname(os.path.abspath(f)))
+        if d not in listing:
+            try:
+                listing[d] = {os.path.normcase(n) for n in os.listdir(d)}
+            except OSError:
+                listing[d] = set()
+        if os.path.normcase(os.path.basename(f)) in listing[d]:
+            out.add(c["id"])
+    return out
+
+
 _HANGUL = re.compile(r"[가-힣ㄱ-ㆎ]")
 _LATIN = re.compile(r"[A-Za-z]")
 
 
-def kind_ok(card: dict, kind: str, photos=None, blocked=None) -> bool:
-    """구분 — 'ko' = 이름에 한글, 'en' = 이름이 영어(로마자, 한글 없음), 'card' = 명함 그림 있음, 'nocard' = 그림 없는 주소록 명함,
-    'photo'·'nophoto' = 인물 사진 있음·없음(photos = `photo_ids` 결과)."""
+def kind_ok(card: dict, kind: str, photos=None, blocked=None, cards=None) -> bool:
+    """구분 — 'ko' = 이름에 한글, 'en' = 이름이 영어(로마자, 한글 없음), 'card' = 명함 그림 파일이 있음, 'nocard' = 그 밖(그림 없는
+    주소록 명함·파일을 잃은 명함), 'photo'·'nophoto' = 인물 사진 있음·없음(photos = `photo_ids`, cards = `card_ids` 결과 — 없으면 이 명함만 본다)."""
     if kind == "kakao":                               # 카톡 친구추가 방지 표시(blocked = gsync.blocked_ids)
         return card.get("id") in (blocked or set())
     if kind in ("photo", "nophoto"):
@@ -107,8 +129,9 @@ def kind_ok(card: dict, kind: str, photos=None, blocked=None) -> bool:
             return kind == "ko"
         return kind == "en" and bool(_LATIN.search(name))
     if kind in ("card", "nocard"):
-        from viewer.bizcard.vcard import is_contact
-        has = bool(card.get("front")) and not is_contact(card)      # 그림 없는 주소록 명함(D22)은 '명함 없음'
+        if cards is None:
+            cards = card_ids([card])
+        has = card.get("id") in cards                  # 그림 없는 주소록 명함(D22)·파일을 잃은 명함은 '명함 없음'(261122-5)
         return has if kind == "card" else not has
     return True
 
@@ -121,14 +144,14 @@ def norm_kinds(kinds) -> list:
     return ["all"] if not out or "all" in out else out
 
 
-def kinds_ok(card: dict, kinds, photos=None, blocked=None) -> bool:
+def kinds_ok(card: dict, kinds, photos=None, blocked=None, cards=None) -> bool:
     """구분 여러 개 — 같은 묶음(`KIND_GROUPS`) 안은 또는, 묶음끼리는 그리고(사용자 결정 261121, §5.24.1 '구분')."""
     ks = norm_kinds(kinds)
     if ks == ["all"]:
         return True
     for grp in KIND_GROUPS:
         mine = [k for k in ks if k in grp]
-        if mine and not any(kind_ok(card, k, photos, blocked) for k in mine):
+        if mine and not any(kind_ok(card, k, photos, blocked, cards) for k in mine):
             return False
     return True
 
@@ -367,6 +390,16 @@ def fix_kinds_all(store, backup_path: str = "") -> int:
 
 def card_by_id(store, card_id: int):
     return store._row(store.con.execute("SELECT * FROM cards WHERE id=?", (card_id,)).fetchone())
+
+
+def taken_paths(store, except_id=None) -> set:
+    """다른 명함 행이 가진 앞면·뒷면 경로(`os.path.normcase` 꼴 — `apply.unique_path` 의 taken) — 새 정리본 이름이 파일이 없어진
+    묵은 행과 겹쳐 DB 의 같은 앞면 금지에 걸리지 않게(§5.9 '저장', 261122-5)."""
+    out = set()
+    for cid, f, b in store.con.execute("SELECT id, front, back FROM cards"):
+        if cid != except_id:
+            out.update(os.path.normcase(str(x)) for x in (f, b) if x)
+    return out
 
 
 # ── 체크한 칸 복사 (§5.24, D21 '항목: 값' 줄) ──

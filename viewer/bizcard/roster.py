@@ -75,6 +75,36 @@ def vcf_compare(cards, persons, show_new: bool = False) -> list:
     return out
 
 
+META_KEY = "roster_vcf"      # 명함 DB meta — vcf 경로·고정한 작업 목록·사람이 정한 체크(261122-4)
+_PERSON_KEYS = ("name", "company", "dept", "title", "phones", "emails")
+
+
+def freeze(groups) -> list:
+    """`vcf_compare` 결과 → 고정한 작업 목록(JSON 으로 남김) — 하위는 명함 id·종류·겹친 번호·그때 이름만."""
+    return [{"person": {k: g["person"].get(k) for k in _PERSON_KEYS}, "keys": list(g["keys"]), "kind": g["kind"],
+             "subs": [{"id": s["card"]["id"], "kind": s["kind"], "key": s["key"], "name": s["card"].get("name") or ""}
+                      for s in g["subs"]]} for g in groups]
+
+
+def person_resolved(g, cards) -> bool:
+    """대표 줄 해결 — 그 이름이고 그 010 번호를 모두 가진 명단이 있음."""
+    pn, keys = P._pname(g["person"].get("name")), set(g["keys"])
+    return any(P._pname(c.get("name")) == pn and keys <= set(P.mobiles_010(c)) for c in cards)
+
+
+def sub_resolved(g, sub, card) -> bool:
+    """하위 줄 해결 — 지운 명단이거나, 종류마다: 잘못 합쳐짐? = vcf 번호가 빠짐, 이름 바뀜? = 이름이 vcf 이름이 되거나 번호가 빠짐,
+    같은 이름·번호 다름 = 010 번호가 vcf 와 같아짐."""
+    if card is None:
+        return True
+    keys, m = set(g["keys"]), set(P.mobiles_010(card))
+    if sub["kind"] == SAME_NAME:
+        return m == keys
+    if sub["kind"] == RENAMED and P._pname(card.get("name")) == P._pname(g["person"].get("name")):
+        return True
+    return not (keys & m)
+
+
 def read_vcf(path: str) -> list:
     """vcf 파일 → 사람들(읽기만). 글자판은 UTF-8, 안 되면 cp949."""
     from viewer.bizcard.vcard import people_from_vcf

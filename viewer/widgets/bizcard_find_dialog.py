@@ -2557,11 +2557,13 @@ class BizcardFindDialog(QDialog):
             err = bt._rename_bg(src, dst, tr("명함 이름 바꾸기"))
             if err is None:
                 bt._after_rename(None, Path(src), Path(dst))
+                self._log_move(src, dst)
                 return True
         else:
             from viewer.pathutil import rename_when_free
             try:
                 rename_when_free(src, dst, wait_s=0)
+                self._log_move(src, dst)
                 return True
             except Exception as e:
                 err = e
@@ -2569,6 +2571,36 @@ class BizcardFindDialog(QDialog):
             QMessageBox.warning(self, tr("명함찾기"), tr("파일 이름을 바꾸지 못했습니다 — 다른 프로그램이 열고 있는지 확인하세요.")
                                 + "\n" + type(err).__name__)
         return False
+
+    def _log_move(self, src, dst):
+        """명단 관리 되돌리기(§5.32, 261122-4) — `move_log` 가 켜져 있으면 옮긴 파일을 적는다."""
+        log = getattr(self, "move_log", None)
+        if log is not None:
+            log.append((str(src), str(dst)))
+
+    def _trash(self, paths) -> list:
+        """지우는 파일 — 앱 한 길 `trash_paths`(휴지통). 명단 관리가 되돌릴 수 있게 `hold_on` 을 켜 두면 휴지통 대신
+        `병합 보관` 폴더로 옮긴다(창을 닫을 때 휴지통으로, §5.32 '되돌리기'). 반환 = 못 옮긴 파일."""
+        if not getattr(self, "hold_on", False):
+            from viewer.widgets.bizcard_import_dialog import trash_paths
+            return trash_paths(self, self._mw, list(paths))
+        failed = []
+        for p in paths:
+            if not os.path.exists(p):
+                continue
+            hd = P.hold_dir(p)
+            try:
+                hd.mkdir(parents=True, exist_ok=True)
+            except OSError:
+                failed.append(p)
+                continue
+            stem, ext = os.path.splitext(os.path.basename(p))
+            dst, k = hd / os.path.basename(p), 2
+            while dst.exists():
+                dst, k = hd / ("%s (%d)%s" % (stem, k, ext)), k + 1
+            if not self._rename(p, str(dst), quiet=True):
+                failed.append(p)
+        return failed
 
     def _retag(self, paths, old_auto, new_tags):
         """해시태그(§5.5) — 옛 자동 태그(#회사 등)를 새 것으로, 사람이 붙인 다른 태그는 둔다. 앱의 태그 저장소 하나로."""
@@ -3569,8 +3601,7 @@ class BizcardFindDialog(QDialog):
         if ask and QMessageBox.question(self, tr("인물 사진"), tr("인물 사진 {n}개를 휴지통으로 보냅니다.").format(n=len(paths))) \
                 != QMessageBox.StandardButton.Yes:
             return 0
-        from viewer.widgets.bizcard_import_dialog import trash_paths
-        failed = trash_paths(self, self._mw, list(paths))
+        failed = self._trash(list(paths))
         rest = [p for p in self.photo_paths() if p not in paths or p in failed]
         self.apply_photo_order([p for p in rest if os.path.exists(p)])
         return len([p for p in paths if p not in failed])
@@ -3590,7 +3621,6 @@ class BizcardFindDialog(QDialog):
     def delete_card_pictures(self, c, picks) -> bool:
         """'명함 사진 삭제'(§5.24.8, 261120-65·-69) — picks = 'front'·'back'·인물 사진 경로. 인물 사진 먼저(남은 것 이름 차례대로),
         앞·뒷면을 모두(또는 뒷면 없는 앞면) 지우면 그림 떼기(원본 스캔까지), 앞면만이면 뒷면을 앞면 이름으로 올림, 뒷면만이면 뒷면 칸을 비움."""
-        from viewer.widgets.bizcard_import_dialog import trash_paths
         st = self._store()
         photos = [p for p in picks if p not in ("front", "back")]
         if photos:
@@ -3611,13 +3641,13 @@ class BizcardFindDialog(QDialog):
             return self.detach_card_image(P.card_by_id(st, c["id"]) or c, originals=True)
         if "front" in picks:
             f, b = P._real(front), P._real(back)
-            if trash_paths(self, self._mw, [f]):
+            if self._trash([f]):
                 return False
             if not self._rename(b, f, quiet=True):           # 뒷면을 앞면 이름으로 — 인물 사진은 그대로 짝
                 return False
             P.update_card(st, c["id"], {"back": ""})
         elif "back" in picks and has_back:
-            if trash_paths(self, self._mw, [P._real(back)]):
+            if self._trash([P._real(back)]):
                 return False
             P.update_card(st, c["id"], {"back": ""})
         self.refresh()
@@ -3627,13 +3657,12 @@ class BizcardFindDialog(QDialog):
         """명함 그림 떼기(§5.24.8 '그림 떼기') — 정리본 앞·뒷면을 휴지통(앱 한 길), 명함은 그림 없는 명함(`contact:…`)으로,
         인물 사진은 그림 없는 명함 자리로 옮긴다. 원본 스캔·인식 기록 열쇠(src_key)는 떼어 명함 읽기가 새 명함으로 다시 읽게."""
         import uuid
-        from viewer.widgets.bizcard_import_dialog import trash_paths
         outs = [P._real(x) for x in (c.get("front"), c.get("back")) if x and os.path.exists(P._real(x))]
         if originals:                                        # 원본 스캔도(사용자 결정 261121, 261120-65)
             outs += [p for p in P.card_files(c, self._bizcard_folder())[0] if os.path.exists(p) and p not in outs]
         old_pf = self._photo_front(c)
         photos = P.person_photos(old_pf) if old_pf else []
-        failed = trash_paths(self, self._mw, outs) if outs else []
+        failed = self._trash(outs) if outs else []
         if failed:
             return False
         st = self._store()
@@ -3669,9 +3698,8 @@ class BizcardFindDialog(QDialog):
                 tr("명함 {n}장을 지웁니다 — 원본 파일까지 휴지통으로 보냅니다(원본 {f}개·정리본 {o}개·인물 사진 {p}개). 인식 기록도 지웁니다.").format(
                     n=len(cards), f=n_o, o=n_c, p=n_p)) != QMessageBox.StandardButton.Yes:
             return 0
-        from viewer.widgets.bizcard_import_dialog import trash_paths
         targets = list(dict.fromkeys(p for f in files.values() for grp in f for p in grp))
-        failed = trash_paths(self, self._mw, targets)
+        failed = self._trash(targets)
         st = self._store()
         gone = 0
         for c in cards:

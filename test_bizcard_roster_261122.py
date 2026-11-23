@@ -145,7 +145,7 @@ try:
     chk(vcf.read_bytes() == vcf_bytes and not list(FOLD.rglob("*.vcf")), "B vcf 는 읽기만(바꾸지 않음·명함 폴더에 복사 안 함)")
 
     print("\n=== D 나누기 ===")
-    gi = next(i for i, g in enumerate(rd.groups) if g["person"]["name"] == "가짜을")
+    gi = next(g["gi"] for g in rd.groups if g["person"]["name"] == "가짜을")
     rd.select_card(m, gi=gi)
     d = rd.tree.currentItem().data(0, 0x0100)
     chk(d[0] == "card" and d[1] == m and rd.btn_split.isEnabled(), "D 잘못 합쳐짐? 줄을 고르면 [나누기] 켜짐")
@@ -178,7 +178,9 @@ try:
     srcs = {row[0] for row in st2.con.execute("SELECT src FROM card_history WHERE card_id=?", (m,))}
     chk("split" in srcs, "D 변경 기록 출처 'split'", str(srcs))
     pump(lambda: not rd.loading, timeout=10)
-    chk(not any(g["person"]["name"] == "가짜을" for g in rd.groups), "D 나눈 뒤 다시 읽음 — '을' 은 이제 명단에 있어 안 냄")
+    g_e = next((g for g in rd.groups if g["person"]["name"] == "가짜을"), None)
+    chk(g_e is not None and g_e["auto"] and all(x["auto"] for x in g_e["subs"]),
+        "D 나눈 뒤에도 '을' 줄은 남고(작업 목록 고정, 261122-4) 대표·하위 모두 해결로", str(g_e and (g_e["auto"], [x["auto"] for x in g_e["subs"]])))
 
     print("\n=== E vcf 이름으로 ===")
     rd.select_card(r)
@@ -200,7 +202,7 @@ try:
     print("\n=== F 추가 ===")
     rd.chk_new.setChecked(True)
     pump(lambda: not rd.loading and any(g["person"]["name"] == "가짜무" for g in rd.groups), timeout=10)
-    gi_n = next(i for i, g in enumerate(rd.groups) if g["person"]["name"] == "가짜무")
+    gi_n = next(g["gi"] for g in rd.groups if g["person"]["name"] == "가짜무")
     rd.select_person(gi_n)
     chk(rd.btn_add.isEnabled() and not rd.btn_split.isEnabled(), "F vcf 사람 줄 — [추가] 켜짐·[나누기] 꺼짐")
     rd.add()

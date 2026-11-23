@@ -1595,6 +1595,76 @@ def restore_merge(store, bak_path, ids) -> int:
     return n
 
 
+_SNAP_SIDE = ("contact_src", "google_link", "kakao_block", "fav_members", "recent")
+
+
+def snapshot(store, ids) -> dict:
+    """명단들의 DB 모습(명단 관리 되돌리기, §5.32, 261122-4) — 명함 행(없으면 None)·곁 표 줄·다른 사람 기억 짝. 견줄 수 있는 값만."""
+    con = store.con
+    ids = sorted({int(i) for i in ids})
+    out = {"cards": {}, "side": {}, "not_same": []}
+    for i in ids:
+        r = con.execute("SELECT * FROM cards WHERE id=?", (i,)).fetchone()
+        out["cards"][i] = dict(r) if r is not None else None
+    if not ids:
+        return out
+    q = ",".join("?" * len(ids))
+    for t in _SNAP_SIDE:
+        try:
+            cols = [r[1] for r in con.execute("PRAGMA table_info(%s)" % t)]
+            if not cols:
+                continue
+            rows = [tuple(r) for r in con.execute("SELECT * FROM %s WHERE card_id IN (%s) ORDER BY rowid" % (t, q), ids)]
+            out["side"][t] = (cols, rows)
+        except sqlite3.OperationalError:
+            continue
+    out["not_same"] = sorted(p for p in not_same_pairs(store) if p[0] in ids or p[1] in ids)
+    return out
+
+
+def restore_snapshot(store, snap) -> None:
+    """`snapshot` 모습으로 — 그 명단들의 명함 행·찾기 색인·곁 표·다른 사람 기억을 바꿔 넣는다(없던 명단은 지움). 변경 기록 출처 restore."""
+    from viewer.bizcard import history as H
+    con = store.con
+    ids = sorted(snap["cards"])
+    if not ids:
+        return
+    q = ",".join("?" * len(ids))
+    live = [r[1] for r in con.execute("PRAGMA table_info(cards)")]
+    with H.source(store, "restore"):
+        for i in ids:
+            con.execute("DELETE FROM cards WHERE id=?", (i,))
+            con.execute("DELETE FROM cards_fts WHERE rowid=?", (i,))
+        for i in ids:
+            row = snap["cards"][i]
+            if row is None:
+                continue
+            cols = [c for c in live if c in row]
+            con.execute("INSERT INTO cards(%s) VALUES(%s)" % (", ".join('"%s"' % c for c in cols), ",".join("?" * len(cols))),
+                        [row[c] for c in cols])
+            fresh = store._row(con.execute("SELECT * FROM cards WHERE id=?", (i,)).fetchone())
+            con.execute("INSERT INTO cards_fts(rowid, body) VALUES(?,?)", (i, store._body(fresh)))
+        for t, (cols, rows) in snap["side"].items():
+            try:
+                if t == "google_link":                       # 짝(resource_name)은 하나뿐 — 같은 짝을 다른 명단이 쥐었으면 먼저 뗌
+                    rn_i = cols.index("resource_name")
+                    for r in rows:
+                        con.execute("DELETE FROM google_link WHERE resource_name=?", (r[rn_i],))
+                con.execute("DELETE FROM %s WHERE card_id IN (%s)" % (t, q), ids)
+                if rows:
+                    con.executemany("INSERT OR REPLACE INTO %s(%s) VALUES(%s)" % (t, ", ".join(cols), ",".join("?" * len(cols))), rows)
+            except sqlite3.OperationalError:
+                continue
+        try:
+            con.execute("DELETE FROM not_same WHERE a IN (%s) OR b IN (%s)" % (q, q), ids + ids)
+        except sqlite3.OperationalError:
+            pass
+        if snap["not_same"]:
+            not_same_init(store)
+            con.executemany("INSERT OR IGNORE INTO not_same(a, b) VALUES(?,?)", snap["not_same"])
+    con.commit()
+
+
 def split_card(store, cid: int, phones=(), emails=(), fields=None, image=None) -> int:
     """명단 나누기(§5.32, 261122-1) — 명함 cid 에서 phones(번호 — 숫자로 견줌)·emails 를 떼어 새 사람으로. 반환 = 새 id.
     fields = 새 사람의 {name, company, dept, title}. image = (새 앞면, 새 뒷면) — 그림을 새 사람에게(파일은 부르는 쪽이 이미 옮김):

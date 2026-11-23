@@ -45,13 +45,13 @@ class _RosterWorker(QObject):
     done = pyqtSignal(int, object)
     finished = pyqtSignal()
 
-    def __init__(self, gen, db, mode, text, vcf_path, persons, show_new):
+    def __init__(self, gen, db, mode, text, vcf_path, persons, show_new, frozen=None):
         super().__init__()
-        self._a = (gen, db, mode, text, vcf_path, persons, show_new)
+        self._a = (gen, db, mode, text, vcf_path, persons, show_new, frozen)
 
     def run(self):
-        gen, db, mode, text, vcf_path, persons, show_new = self._a
-        out = {"mode": mode, "cards": [], "groups": [], "persons": persons, "error": ""}
+        gen, db, mode, text, vcf_path, persons, show_new, frozen = self._a
+        out = {"mode": mode, "cards": [], "groups": [], "persons": persons, "error": "", "frozen": None}
         stage = "db"
         try:
             import sqlite3
@@ -62,14 +62,28 @@ class _RosterWorker(QObject):
             finally:
                 st.close()
             if mode == "vcf":
-                stage = "vcf"
-                if persons is None and vcf_path:
-                    persons = RS.read_vcf(vcf_path)
-                    out["persons"] = persons
-                stage = "compare"
-                groups = RS.vcf_compare(cards, persons or [], show_new=show_new)
-                out["groups"] = [g for g in groups if RS.text_match(g["person"], text)
-                                 or any(RS.text_match(s["card"], text) for s in g["subs"])]
+                if frozen is None:                       # 처음(또는 [새로 비교]) — 한 번 견줘 작업 목록으로 고정(261122-4)
+                    stage = "vcf"
+                    if persons is None and vcf_path:
+                        persons = RS.read_vcf(vcf_path)
+                        out["persons"] = persons
+                    stage = "compare"
+                    frozen = RS.freeze(RS.vcf_compare(cards, persons or [], show_new=True))
+                    out["frozen"] = frozen
+                stage = "status"
+                by_id = {c["id"]: c for c in cards}
+                groups = []
+                for gi, g in enumerate(frozen):           # 고정한 목록 그대로 — 줄은 사라지지 않고 상태만(지운 명단은 '(지움)')
+                    subs = []
+                    for s in g["subs"]:
+                        c = by_id.get(s["id"])
+                        subs.append({"card": c if c is not None else {"id": s["id"], "name": s.get("name") or "", "phones": [],
+                                                                       "emails": [], "front": "contact:gone", "_gone": True},
+                                     "kind": s["kind"], "key": s.get("key") or "", "auto": RS.sub_resolved(g, s, c)})
+                    groups.append({"gi": gi, "person": g["person"], "keys": g["keys"], "kind": g["kind"], "subs": subs,
+                                   "auto": RS.person_resolved(g, cards)})
+                out["groups"] = [g for g in groups if (show_new or g["kind"] != RS.NEW)
+                                 and (RS.text_match(g["person"], text) or any(RS.text_match(s["card"], text) for s in g["subs"]))]
             else:
                 if mode == "multi":
                     cards = RS.multi_mobile(cards)
@@ -260,6 +274,13 @@ class RosterDialog(QDialog):
         self.cards, self.groups = [], []
         self._gen, self.loading = 0, False
         self._img_gen, self.imgs_pending = 0, 0
+        # vcf 작업 목록(고정)·사람이 정한 체크 — 명함 DB meta 에 남겨 다시 열면 이어서(§5.32 '작업 목록', 261122-4)
+        self.frozen, self.checks = None, {}
+        saved = self.fd._store().meta_get(RS.META_KEY) or {}
+        if isinstance(saved, dict) and saved.get("groups") is not None:
+            self.vcf_path, self.frozen, self.checks = saved.get("path") or "", saved["groups"], dict(saved.get("checks") or {})
+        self.undo_stack, self.redo_stack = [], []      # 창 안 작업 단위 되돌리기(§5.32 '되돌리기', 261122-4)
+        self._filling = False
         v = QVBoxLayout(self)
         top = QHBoxLayout()
         self.cmb_view = QComboBox()
@@ -275,6 +296,10 @@ class RosterDialog(QDialog):
         self.btn_vcf.setToolTip(tr("휴대폰 주소록 등에서 내보낸 vcf 와 견줍니다 — 파일은 읽기만 합니다"))
         self.btn_vcf.clicked.connect(lambda _c=False: self.open_vcf())
         top.addWidget(self.btn_vcf)
+        self.btn_recompare = QPushButton(tr("새로 비교"))
+        self.btn_recompare.setToolTip(tr("vcf 를 다시 읽어 처음부터 견줍니다 — 지금 작업 목록과 체크는 지웁니다"))
+        self.btn_recompare.clicked.connect(lambda _c=False: self.recompare())
+        top.addWidget(self.btn_recompare)
         self.chk_new = QCheckBox(tr("번호 없는 새 사람도 보기"))
         self.chk_new.toggled.connect(lambda _on: self.reload())
         top.addWidget(self.chk_new)
@@ -285,6 +310,8 @@ class RosterDialog(QDialog):
         self.tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.tree.customContextMenuRequested.connect(self._menu)
         self.tree.currentItemChanged.connect(lambda cur, _p: (self._enable(), self._preview()))
+        self.tree.itemChanged.connect(self._checked)
+        self.tree.itemDoubleClicked.connect(self._double)        # 하위 줄 두 번 누름 = 고치기(261122-4)
         split.addWidget(self.tree)
         # 오른쪽 = 위 큰 그림(칸에 맞춰) + 아래 썸네일 한 줄 — 중복 검토 '명함 그림' 과 같은 꼴(사용자 보고 261123 '명함이 너무 작게')
         pw = QWidget()
@@ -318,6 +345,12 @@ class RosterDialog(QDialog):
         self.lbl_help.setWordWrap(True)
         v.addWidget(self.lbl_help)
         bot = QHBoxLayout()
+        self.btn_undo = QPushButton(tr("되돌리기"))           # 되돌리기 단추는 왼쪽 끝(디자인 SOT §2.7)
+        self.btn_undo.clicked.connect(lambda _c=False: self.undo())
+        self.btn_redo = QPushButton(tr("다시 실행"))
+        self.btn_redo.clicked.connect(lambda _c=False: self.redo())
+        bot.addWidget(self.btn_undo)
+        bot.addWidget(self.btn_redo)
         self.lbl = QLabel()
         bot.addWidget(self.lbl, 1)
         self.btn_edit = QPushButton(tr("고치기"))
@@ -359,6 +392,7 @@ class RosterDialog(QDialog):
         vcf = self.view() == "vcf"
         self.btn_vcf.setVisible(vcf)
         self.chk_new.setVisible(vcf)
+        self.btn_recompare.setVisible(vcf)
         self.reload()
 
     def open_vcf(self, path=None) -> bool:
@@ -367,11 +401,27 @@ class RosterDialog(QDialog):
         if not path:
             return False
         self.vcf_path, self.persons = path, None
+        self.frozen, self.checks = None, {}                  # 새 vcf — 새 작업 목록
         if self.view() != "vcf":
             self.set_view("vcf")
         else:
             self.reload()
         return True
+
+    def recompare(self) -> bool:
+        """[새로 비교] — vcf 를 다시 읽어 처음부터(작업 목록·체크를 지움)."""
+        if not self.vcf_path:
+            return False
+        self.persons, self.frozen, self.checks = None, None, {}
+        self.reload()
+        return True
+
+    def _save_state(self):
+        """작업 목록·체크를 명함 DB meta 에(다시 열면 이어서) — 작은 JSON 한 줄."""
+        try:
+            self.fd._store().meta_set(RS.META_KEY, {"path": self.vcf_path, "groups": self.frozen, "checks": self.checks})
+        except Exception:
+            pass
 
     def reload(self):
         from viewer.workers import run_in_thread
@@ -385,7 +435,7 @@ class RosterDialog(QDialog):
         self.loading = True
         self.lbl.setText(tr("읽는 중…"))
         w = _RosterWorker(self._gen, str(self.fd._store().path), self.view(), self.ed_find.text(), self.vcf_path, self.persons,
-                          self.chk_new.isChecked())
+                          self.chk_new.isChecked(), self.frozen)
         w.done.connect(self._loaded)
         keep = getattr(self.fd._mw, "_thread_keep", None) if self.fd._mw is not None else None
         run_in_thread(w, keep if isinstance(keep, list) else _KEEP)
@@ -400,6 +450,9 @@ class RosterDialog(QDialog):
             return
         if out.get("persons") is not None:
             self.persons = out["persons"]
+        if out.get("frozen") is not None:                   # 새로 고정한 작업 목록
+            self.frozen, self.checks = out["frozen"], {}
+            self._save_state()
         self.cards, self.groups = out["cards"], out["groups"]
         self.fill()
 
@@ -409,12 +462,42 @@ class RosterDialog(QDialog):
         it.setData(0, ROLE, data or ("card", c["id"]))
         return it
 
+    @staticmethod
+    def line_key(d) -> str:
+        """줄 열쇠 — 대표 'p:묶음', 하위 'c:묶음:명함 id'(체크를 남기는 열쇠)."""
+        return ("p:%d" % d[1]) if d[0] == "vcf" else ("c:%d:%d" % (d[2], d[1]))
+
+    def is_checked(self, d, auto: bool) -> bool:
+        return bool(self.checks.get(self.line_key(d), auto))
+
+    def _paint(self, it, on: bool):
+        """해결된(체크한) 줄은 회색 글 — 고칠 수는 있다."""
+        col = self.palette().placeholderText() if on else self.palette().text()
+        for i in range(self.tree.columnCount()):
+            it.setForeground(i, col)
+
+    def _set_check(self, it, d, auto):
+        on = self.is_checked(d, auto)
+        it.setFlags(it.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+        it.setCheckState(0, Qt.CheckState.Checked if on else Qt.CheckState.Unchecked)
+        it.setData(0, ROLE + 1, auto)
+        self._paint(it, on)
+
     def fill(self):
         from viewer.bizcard import phone as PH
+        self._filling = True
+        try:
+            self._fill(PH)
+        finally:
+            self._filling = False
+        self._enable()
+
+    def _fill(self, PH):
+        cur = self._sel()
         self.tree.clear()
         if self.view() == "vcf":
-            for gi, g in enumerate(self.groups):
-                p = g["person"]
+            for g in self.groups:
+                gi, p = g["gi"], g["person"]
                 top = QTreeWidgetItem([p.get("name") or "", p.get("company") or "", ", ".join(PH.format_kr(k) or k for k in g["keys"]),
                                        "", ", ".join(p.get("emails") or []), "", tr("vcf") if g["kind"] != RS.NEW else tr(KIND_LABEL[RS.NEW])])
                 top.setData(0, ROLE, ("vcf", gi))
@@ -422,10 +505,21 @@ class RosterDialog(QDialog):
                 f.setBold(True)
                 top.setFont(0, f)
                 self.tree.addTopLevelItem(top)
+                self._set_check(top, ("vcf", gi), g["auto"])
                 for s in g["subs"]:
-                    top.addChild(self._card_item(s["card"], tr(KIND_LABEL[s["kind"]]), ("card", s["card"]["id"], gi, s["kind"])))
+                    c = s["card"]
+                    why = tr(KIND_LABEL[s["kind"]]) + ("" if not c.get("_gone") else " · " + tr("(지움)"))
+                    it = self._card_item(c, why, ("card", c["id"], gi, s["kind"]))
+                    top.addChild(it)
+                    self._set_check(it, ("card", c["id"], gi, s["kind"]), s["auto"])
                 top.setExpanded(True)
-            self.lbl.setText(tr("vcf 사람 {n}명").format(n=len(self.groups)))
+            done = sum(1 for g in self.groups if self.is_checked(("vcf", g["gi"]), g["auto"]))
+            self.lbl.setText(tr("vcf 사람 {n}명 · 대표 해결 {d}명").format(n=len(self.groups), d=done))
+            if cur:
+                if cur[0] == "card" and len(cur) > 2:
+                    self.select_card(cur[1], gi=cur[2])
+                elif cur[0] == "vcf":
+                    self.select_person(cur[1])
         else:
             why = tr("010 {n}개") if self.view() == "multi" else ""
             for c in self.cards:
@@ -452,9 +546,37 @@ class RosterDialog(QDialog):
         if not d:
             return None, None
         gi = d[1] if d[0] == "vcf" else (d[2] if len(d) > 2 else None)
-        if gi is None or gi >= len(self.groups):
+        g = next((x for x in self.groups if x.get("gi") == gi), None) if gi is not None else None
+        if g is None:
             return None, None
-        return self.groups[gi]["person"], self.groups[gi]
+        return g["person"], g
+
+    def _checked(self, it, col):
+        """사람이 체크를 켜거나 끄면 그것이 이긴다(저절로 체크와 다를 때만 남김) — 회색도 따라."""
+        if self._filling or col != 0:
+            return
+        d = it.data(0, ROLE)
+        if not d or self.view() != "vcf":
+            return
+        on = it.checkState(0) == Qt.CheckState.Checked
+        auto = bool(it.data(0, ROLE + 1))
+        k = self.line_key(d)
+        if on == auto:
+            self.checks.pop(k, None)
+        else:
+            self.checks[k] = on
+        self._save_state()
+        self._filling = True
+        try:
+            self._paint(it, on)
+        finally:
+            self._filling = False
+
+    def _double(self, it, _col):
+        d = it.data(0, ROLE) if it is not None else None
+        if d and d[0] == "card":
+            self.tree.setCurrentItem(it)
+            self.edit()
 
     def select_card(self, cid, gi=None) -> bool:
         """그 명함 줄을 고른다(검사·되돌아오기). gi = vcf 묶음 번호(한 명단이 여러 vcf 사람 아래에 있을 때)."""
@@ -487,6 +609,9 @@ class RosterDialog(QDialog):
         self.btn_rename.setEnabled(card and len(d) > 3 and d[3] == RS.RENAMED)
         self.btn_nums.setVisible(self.view() == "vcf")
         self.btn_nums.setEnabled(card and len(d) > 3 and d[3] == RS.SAME_NAME)
+        self.btn_undo.setEnabled(bool(self.undo_stack))
+        self.btn_redo.setEnabled(bool(self.redo_stack))
+        self.btn_recompare.setEnabled(bool(self.vcf_path))
 
     def _preview(self):
         """고른 명단의 명함 앞·뒷면·인물 사진 — 썸네일 줄, 첫 그림(앞면)을 크게(배경 읽기 — 중복 검토와 같은 `_ImgWorker`)."""
@@ -580,6 +705,80 @@ class RosterDialog(QDialog):
     def _after(self, cid=None):
         self.reload()
 
+    # 되돌리기·다시 실행(§5.32 '되돌리기', 261122-4) — 일마다 앞뒤 DB 모습 + 그 일이 옮긴 파일
+    def _record(self, ids, fn):
+        """fn 을 하면서 관련 명단의 앞뒤 모습과 옮긴 파일을 적는다(지우는 파일은 휴지통 대신 `병합 보관` 으로). 반환 = fn 의 결과."""
+        st = self.fd._store()
+        top = st.con.execute("SELECT COALESCE(max(id), 0) FROM cards").fetchone()[0]
+        ids = {int(i) for i in ids}
+        before = P.snapshot(st, ids)
+        self.fd.move_log, self.fd.hold_on = [], True
+        try:
+            res = fn()
+        finally:
+            moves = list(self.fd.move_log or [])
+            self.fd.move_log, self.fd.hold_on = None, False
+        new_ids = {r[0] for r in st.con.execute("SELECT id FROM cards WHERE id > ?", (top,))}
+        for i in new_ids:
+            before["cards"].setdefault(i, None)            # 새로 생긴 명단 — 되돌리면 지움
+        after = P.snapshot(st, ids | new_ids)
+        if moves or before["cards"] != after["cards"] or before["side"] != after["side"] or before["not_same"] != after["not_same"]:
+            self.undo_stack.append({"moves": moves, "before": before, "after": after})
+            self.redo_stack.clear()
+        return res
+
+    def _replay(self, moves, back: bool):
+        for a, b in (reversed(moves) if back else moves):
+            src, dst = (b, a) if back else (a, b)
+            if os.path.exists(src) and not os.path.exists(dst):
+                try:
+                    Path(dst).parent.mkdir(parents=True, exist_ok=True)
+                except OSError:
+                    pass
+                self.fd._rename(src, dst, quiet=True)
+
+    def undo(self) -> bool:
+        """[되돌리기] — 마지막 일: 옮긴 파일을 거꾸로, 관련 명단을 앞 모습으로."""
+        if not self.undo_stack:
+            return False
+        rec = self.undo_stack.pop()
+        self._replay(rec["moves"], back=True)
+        P.restore_snapshot(self.fd._store(), rec["before"])
+        self.redo_stack.append(rec)
+        self._refresh_fd()
+        self._after()
+        return True
+
+    def redo(self) -> bool:
+        """[다시 실행] — 되돌린 일을 다시: 파일을 다시 옮기고 관련 명단을 뒤 모습으로."""
+        if not self.redo_stack:
+            return False
+        rec = self.redo_stack.pop()
+        self._replay(rec["moves"], back=False)
+        P.restore_snapshot(self.fd._store(), rec["after"])
+        self.undo_stack.append(rec)
+        self._refresh_fd()
+        self._after()
+        return True
+
+    def _refresh_fd(self):
+        if not getattr(self.fd, "_dirty", False):
+            self.fd._card = None
+            self.fd.refresh()
+
+    def held_files(self) -> list:
+        """되돌릴 수 있게 `병합 보관` 에 둔 파일 중 아직 있는 것(창을 닫을 때 휴지통으로)."""
+        return [b for rec in self.undo_stack for _a, b in rec["moves"] if Path(b).parent.name == P.HOLD_DIR and os.path.exists(b)]
+
+    def done(self, r):
+        held = self.held_files()
+        if held:
+            from viewer.widgets.bizcard_import_dialog import trash_paths
+            trash_paths(self, self.fd._mw, held)
+        self.undo_stack.clear()
+        self.redo_stack.clear()
+        super().done(r)
+
     def edit(self, dlg=None) -> bool:
         from viewer.widgets.bizcard_dupe_dialog import CardEditDialog
         c = self.current_card()
@@ -589,7 +788,8 @@ class RosterDialog(QDialog):
             dlg = CardEditDialog(c, self)
             if dlg.exec() != QDialog.DialogCode.Accepted:
                 return False
-        if self.fd.store_card_edit(c, dlg.values()) is None:
+        vals = dlg.values()
+        if not self._record([c["id"]], lambda: self.fd.store_card_edit(c, vals) is not None):
             return False
         self._after()
         return True
@@ -604,7 +804,7 @@ class RosterDialog(QDialog):
             preset = {"name": person.get("name") or "", "company": person.get("company") or "",
                       "dept": person.get("dept") or "", "title": person.get("title") or "", "keys": g["keys"]}
         preset = self._preset(c, preset)
-        nid = run_split(self, self.fd, c["id"], preset=preset, dlg=dlg)
+        nid = self._record([c["id"]], lambda: run_split(self, self.fd, c["id"], preset=preset, dlg=dlg))
         if nid:
             self._after()
         return nid
@@ -636,10 +836,14 @@ class RosterDialog(QDialog):
         dlg = PicturePickDialog(c, P.person_photos(pf) if pf else [], self)
         if dlg.exec() != QDialog.DialogCode.Accepted or not dlg.picks():
             return False
-        if QMessageBox.question(self, tr("명단 관리"), tr("고른 사진 {n}개를 휴지통으로 보냅니다.").format(n=len(dlg.picks()))) \
-                != QMessageBox.StandardButton.Yes:
+        return self.delete_picks(c, dlg.picks())
+
+    def delete_picks(self, c, picks, ask: bool = True) -> bool:
+        """고른 사진만 지움(검사도 이 길) — 이 창을 닫기 전에는 [되돌리기] 로 되살린다."""
+        if ask and QMessageBox.question(self, tr("명단 관리"), tr("고른 사진 {n}개를 지웁니다 — 이 창을 닫기 전에는 [되돌리기] 로 "
+                                                                "되살릴 수 있습니다.").format(n=len(picks))) != QMessageBox.StandardButton.Yes:
             return False
-        ok = self.fd.delete_card_pictures(c, dlg.picks())
+        ok = self._record([c["id"]], lambda: self.fd.delete_card_pictures(c, picks))
         self._after()
         return ok
 
@@ -647,7 +851,7 @@ class RosterDialog(QDialog):
         c = self.current_card()
         if not c:
             return 0
-        n = self.fd.delete_cards([c], ask=ask)
+        n = self._record([c["id"]], lambda: self.fd.delete_cards([c], ask=ask))
         if n:
             self._after()
         return n
@@ -658,7 +862,7 @@ class RosterDialog(QDialog):
         d = self._sel()
         if person is None or not d or d[0] != "vcf":
             return 0
-        n = P.apply_import(self.fd._store(), [dict(person)])
+        n = self._record([], lambda: P.apply_import(self.fd._store(), [dict(person)]))
         if n:
             if not getattr(self.fd, "_dirty", False):
                 self.fd.refresh()
@@ -677,7 +881,7 @@ class RosterDialog(QDialog):
         new = {k: c.get(k) for k in ("name", "company", "dept", "title", "address", "memo", "emails", "urls")}
         new = {k: (v if v is not None else ([] if k in ("emails", "urls") else "")) for k, v in new.items()}
         new["phones"] = [("cell", PH.format_kr(k) or k) for k in g["keys"]] + keep
-        if self.fd.store_card_edit(c, new) is None:
+        if not self._record([c["id"]], lambda: self.fd.store_card_edit(c, new) is not None):
             return False
         if not getattr(self.fd, "_dirty", False):
             self.fd.refresh()
@@ -693,7 +897,7 @@ class RosterDialog(QDialog):
         new = {k: c.get(k) for k in ("company", "dept", "title", "address", "memo", "phones", "emails", "urls")}
         new = {k: (v if v is not None else ([] if k in ("phones", "emails", "urls") else "")) for k, v in new.items()}
         new["name"] = person["name"].strip()
-        if self.fd.store_card_edit(c, new) is None:
+        if not self._record([c["id"]], lambda: self.fd.store_card_edit(c, new) is not None):
             return False
         if not getattr(self.fd, "_dirty", False):
             self.fd.refresh()

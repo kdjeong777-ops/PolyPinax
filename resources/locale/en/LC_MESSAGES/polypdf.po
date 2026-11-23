@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-23 21:07+0900\n"
+"POT-Creation-Date: 2026-11-23 22:06+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -696,6 +696,7 @@ msgid "다른 PolyPinax 창"
 msgstr "Other PolyPinax windows"
 
 #: viewer/app.py viewer/photo_controller.py
+#: viewer/widgets/bizcard_roster_dialog.py
 msgid "되돌리기"
 msgstr "Undo"
 
@@ -8388,7 +8389,6 @@ msgid "'{n}' 에 붙은 명함 그림(정리본 앞·뒷면)을 휴지통으로 
 msgstr "Moves the card images attached to '{n}' (cleaned front and back) to the Recycle Bin and keeps it as a card without images — contacts and memo stay, and the original scan remains so you can read it again in Read Cards."
 
 #: viewer/widgets/bizcard_dupe_dialog.py
-#: viewer/widgets/bizcard_roster_dialog.py
 #, python-brace-format
 msgid "고른 사진 {n}개를 휴지통으로 보냅니다."
 msgstr "Sends {n} selected pictures to the Recycle Bin."
@@ -9855,12 +9855,24 @@ msgid "휴대폰 주소록 등에서 내보낸 vcf 와 견줍니다 — 파일�
 msgstr "Compares with a vcf exported from your phone's contacts etc. — the file is only read"
 
 #: viewer/widgets/bizcard_roster_dialog.py
+msgid "새로 비교"
+msgstr "Compare again"
+
+#: viewer/widgets/bizcard_roster_dialog.py
+msgid "vcf 를 다시 읽어 처음부터 견줍니다 — 지금 작업 목록과 체크는 지웁니다"
+msgstr "Reads the vcf again and compares from the start — the current work list and checks are cleared"
+
+#: viewer/widgets/bizcard_roster_dialog.py
 msgid "번호 없는 새 사람도 보기"
 msgstr "Also show new people without matching numbers"
 
 #: viewer/widgets/bizcard_roster_dialog.py
 msgid "바로잡는 차례: ① 잘못 합쳐지기 전에 구글 주소록에서 내보내 둔 vcf 를 [vcf 비교] 로 열어 그것을 바른 기준으로 나누기·vcf 번호로·vcf 이름으로 ② 변경 기록이 남은 합치기는 주소록 ▸ 변경 기록·되살리기에서 출처 '합치기' 로 되살릴 수도 ③ 그 뒤 구글 주소록과 싱크 미리보기 [적용] 으로 구글·휴대폰에 올립니다."
 msgstr "How to fix: ① open the vcf you exported from Google Contacts before the wrong merges with [Compare vcf] and, taking it as correct, use Split·Use vcf numbers·Use vcf name ② merges with change history can also be restored in Contacts ▸ Change history·Restore with source 'Merge' ③ then press [Apply] in the Google Contacts sync preview to update Google and your phone."
+
+#: viewer/widgets/bizcard_roster_dialog.py
+msgid "다시 실행"
+msgstr "Redo"
 
 #: viewer/widgets/bizcard_roster_dialog.py
 msgid "고른 번호·메일·명함 그림·인물 사진을 새 사람으로 떼어 냅니다"
@@ -9954,8 +9966,8 @@ msgstr "Couldn't read ({err})."
 
 #: viewer/widgets/bizcard_roster_dialog.py
 #, python-brace-format
-msgid "vcf 사람 {n}명"
-msgstr "{n} vcf people"
+msgid "vcf 사람 {n}명 · 대표 해결 {d}명"
+msgstr "{n} vcf people · {d} resolved"
 
 #: viewer/widgets/bizcard_roster_dialog.py
 #, python-brace-format
@@ -9965,6 +9977,15 @@ msgstr "{n} entries"
 #: viewer/widgets/bizcard_roster_dialog.py
 msgid "vcf"
 msgstr "vcf"
+
+#: viewer/widgets/bizcard_roster_dialog.py
+#, python-brace-format
+msgid "고른 사진 {n}개를 지웁니다 — 이 창을 닫기 전에는 [되돌리기] 로 되살릴 수 있습니다."
+msgstr "Delete the {n} selected photo(s) — until you close this window you can bring them back with [Undo]."
+
+#: viewer/widgets/bizcard_roster_dialog.py
+msgid "(지움)"
+msgstr "(deleted)"
 
 # | 서비스 → 라이브러리' 에서 'People API' 를 검색해 [사용](처음 보이는 '사용 설정된 API' 목록에는 켜기 전이라
 # | 없습니다). 명함 그림을 드라이브에 올리려면 'Google Drive API' 도 같은 방법으로.\n" "3. 'Google 인증

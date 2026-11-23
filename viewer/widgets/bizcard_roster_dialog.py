@@ -13,7 +13,7 @@ from PyQt6.QtCore import Qt, QSize, QObject, pyqtSignal
 from PyQt6.QtGui import QIcon, QPixmap
 from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QListView, QPushButton,
     QSplitter, QTreeWidget, QTreeWidgetItem, QMessageBox, QMenu, QComboBox, QLineEdit, QCheckBox, QFileDialog, QFormLayout,
-    QDialogButtonBox)
+    QDialogButtonBox, QWidget)
 
 from viewer.i18n import tr, tr_noop
 from viewer.bizcard import people as P
@@ -286,14 +286,31 @@ class RosterDialog(QDialog):
         self.tree.customContextMenuRequested.connect(self._menu)
         self.tree.currentItemChanged.connect(lambda cur, _p: (self._enable(), self._preview()))
         split.addWidget(self.tree)
+        # 오른쪽 = 위 큰 그림(칸에 맞춰) + 아래 썸네일 한 줄 — 중복 검토 '명함 그림' 과 같은 꼴(사용자 보고 261123 '명함이 너무 작게')
+        pw = QWidget()
+        pv = QVBoxLayout(pw)
+        pv.setContentsMargins(0, 0, 0, 0)
+        self.big = QLabel(tr("(명함 그림 없음)"))
+        self.big.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.big.setMinimumSize(200, 140)
+        self.big_path = ""
+        self._big_gen = 0
         self.thumbs = QListWidget()
         self.thumbs.setViewMode(QListView.ViewMode.IconMode)
+        self.thumbs.setFlow(QListView.Flow.LeftToRight)
+        self.thumbs.setWrapping(False)
         self.thumbs.setMovement(QListView.Movement.Static)
-        self.thumbs.setIconSize(QSize(THUMB * 2, THUMB * 2))
-        self.thumbs.setGridSize(QSize(THUMB * 2 + 16, THUMB * 2 + 28))
-        split.addWidget(self.thumbs)
+        self.thumbs.setIconSize(QSize(THUMB, THUMB))
+        self.thumbs.setGridSize(QSize(THUMB + 12, THUMB + 12))
+        self.thumbs.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.thumbs.setFixedHeight(THUMB + 16 + self.thumbs.horizontalScrollBar().sizeHint().height())
+        self.thumbs.currentItemChanged.connect(lambda cur, _p: self._show_big(cur.data(ROLE) if cur else ""))
+        pv.addWidget(self.big, 1)
+        pv.addWidget(self.thumbs)
+        split.addWidget(pw)
         split.setStretchFactor(0, 3)
-        split.setStretchFactor(1, 1)
+        split.setStretchFactor(1, 2)
+        split.setSizes([640, 440])
         v.addWidget(split, 1)
         self.lbl_help = QLabel(tr("바로잡는 차례: ① 잘못 합쳐지기 전에 구글 주소록에서 내보내 둔 vcf 를 [vcf 비교] 로 열어 그것을 바른 기준으로 "
                                   "나누기·vcf 번호로·vcf 이름으로 ② 변경 기록이 남은 합치기는 주소록 ▸ 변경 기록·되살리기에서 출처 '합치기' 로 되살릴 수도 "
@@ -472,37 +489,71 @@ class RosterDialog(QDialog):
         self.btn_nums.setEnabled(card and len(d) > 3 and d[3] == RS.SAME_NAME)
 
     def _preview(self):
-        """고른 명단의 명함 앞·뒷면·인물 사진 썸네일(배경 읽기 — 중복 검토와 같은 `_ImgWorker`)."""
-        from viewer.widgets.bizcard_dupe_dialog import _ImgWorker
-        from viewer.workers import run_in_thread
+        """고른 명단의 명함 앞·뒷면·인물 사진 — 썸네일 줄, 첫 그림(앞면)을 크게(배경 읽기 — 중복 검토와 같은 `_ImgWorker`)."""
+        self.thumbs.blockSignals(True)
         self.thumbs.clear()
+        self.thumbs.blockSignals(False)
         self._img_gen += 1
         c = self.current_card()
-        if not c:
-            return
         paths = []
-        if not V.is_contact(c):
-            paths += [P._real(x) for x in (c.get("front"), c.get("back")) if x and os.path.exists(P._real(x))]
-        pf = self.fd._photo_front(c)
-        paths += P.person_photos(pf) if pf else []
+        if c:
+            if not V.is_contact(c):
+                paths += [P._real(x) for x in (c.get("front"), c.get("back")) if x and os.path.exists(P._real(x))]
+            pf = self.fd._photo_front(c)
+            paths += P.person_photos(pf) if pf else []
         jobs = []
+        self.thumbs.blockSignals(True)
         for p in paths:
-            it = QListWidgetItem(os.path.basename(p))
+            it = QListWidgetItem("")
             it.setData(ROLE, p)
-            jobs.append((self.thumbs.count(), p, THUMB * 2, THUMB * 2))
+            it.setToolTip(os.path.basename(p))
+            jobs.append((self.thumbs.count(), p, THUMB, THUMB))
             self.thumbs.addItem(it)
-        if jobs:
-            w = _ImgWorker(self._img_gen, None, jobs)
-            w.one.connect(self._img_ready)
-            self.imgs_pending += len(jobs)
-            keep = getattr(self.fd._mw, "_thread_keep", None) if self.fd._mw is not None else None
-            run_in_thread(w, keep if isinstance(keep, list) else _KEEP)
+        if self.thumbs.count():
+            self.thumbs.setCurrentRow(0)
+        self.thumbs.blockSignals(False)
+        self._load(jobs)
+        self._show_big(paths[0] if paths else "")
 
-    def _img_ready(self, gen, _big, i, path, img):
+    def _load(self, jobs, big=None):
+        from viewer.widgets.bizcard_dupe_dialog import _ImgWorker
+        from viewer.workers import run_in_thread
+        if not jobs:
+            return
+        w = _ImgWorker(self._img_gen, big, jobs)
+        w.one.connect(self._img_ready)
+        self.imgs_pending += len(jobs)
+        keep = getattr(self.fd._mw, "_thread_keep", None) if self.fd._mw is not None else None
+        run_in_thread(w, keep if isinstance(keep, list) else _KEEP)
+
+    def _show_big(self, path):
+        """큰 그림 — 칸 크기에 맞춰 줄여 읽기(배경). 그림이 없으면 글."""
+        self.big_path = path or ""
+        self._big_gen += 1
+        if not path:
+            self.big.setPixmap(QPixmap())
+            self.big.setText(tr("(명함 그림 없음)"))
+            return
+        self._load([(-1, path, max(200, self.big.width()), max(140, self.big.height()))], big=self._big_gen)
+
+    def _img_ready(self, gen, big, i, path, img):
         self.imgs_pending = max(0, self.imgs_pending - 1)
+        if img.isNull():
+            return
+        if i < 0:
+            if big == self._big_gen and path == self.big_path:
+                self.big.setPixmap(QPixmap.fromImage(img).scaled(max(200, self.big.width()), max(140, self.big.height()),
+                                   Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+            return
         it = self.thumbs.item(i) if gen == self._img_gen else None
-        if it is not None and it.data(ROLE) == path and not img.isNull():
-            it.setIcon(QIcon(QPixmap.fromImage(img)))
+        if it is not None and it.data(ROLE) == path:
+            it.setIcon(QIcon(QPixmap.fromImage(img).scaled(THUMB, THUMB, Qt.AspectRatioMode.KeepAspectRatio,
+                                                            Qt.TransformationMode.SmoothTransformation)))
+
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        if getattr(self, "big_path", ""):
+            self._show_big(self.big_path)             # 창 크기를 바꾸면 큰 그림도 칸에 맞춰 다시
 
     def _menu(self, pos):
         it = self.tree.itemAt(pos)

@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-23 20:10+0900\n"
+"POT-Creation-Date: 2026-11-23 20:50+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -8207,6 +8207,7 @@ msgid "값을 두 번 눌러 고치면 그 값으로 합칩니다 — 전화·�
 msgstr "Double-click a value to edit it; the merge uses your value — separate phones, emails and websites with commas"
 
 #: viewer/widgets/bizcard_dupe_dialog.py
+#: viewer/widgets/bizcard_roster_dialog.py
 msgid "(명함 그림 없음)"
 msgstr "(no card image)"
 

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-11-23 20:10+0900\n"
+"POT-Creation-Date: 2026-11-23 20:50+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -7956,6 +7956,7 @@ msgid "값을 두 번 눌러 고치면 그 값으로 합칩니다 — 전화·�
 msgstr ""
 
 #: viewer/widgets/bizcard_dupe_dialog.py
+#: viewer/widgets/bizcard_roster_dialog.py
 msgid "(명함 그림 없음)"
 msgstr ""
 

@@ -211,6 +211,13 @@ try:
     rd.set_view("multi")
     pump(lambda: not rd.loading and rd.view() == "multi", timeout=10)
     rd.select_card(img)
+    pump(lambda: rd.big.pixmap() is not None and not rd.big.pixmap().isNull(), timeout=5)
+    bw = rd.big.pixmap().width() if rd.big.pixmap() is not None else 0
+    chk(bw > 2 * 96 and rd.thumbs.count() == 2 and rd.big_path == P._real(P.card_by_id(fd._store(), img)["front"]),
+        "H 오른쪽 — 앞면을 칸에 맞춰 크게(종전 썸네일 192px 보다 큼)·아래 썸네일 줄(앞면·인물 사진)", str((bw, rd.thumbs.count())))
+    rd.thumbs.setCurrentRow(1)
+    pump(lambda: rd.big_path.endswith(".jpg") and rd.big_path != P._real(P.card_by_id(fd._store(), img)["front"]), timeout=3)
+    chk(rd.big_path != P._real(P.card_by_id(fd._store(), img)["front"]), "H 썸네일을 고르면 그 그림을 크게")
     sd = rd.split_dialog()
     sd.eds["name"].setText("가짜기")
     sd.eds["company"].setText("가짜사")

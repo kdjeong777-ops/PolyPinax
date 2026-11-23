@@ -13,7 +13,7 @@ import uuid
 
 KEEP_DAYS = 180                                   # 보존(사용자 결정 261121)
 PRUNE_KEY = "history_pruned"
-SOURCES = ("edit", "sync", "merge", "kinds", "restore")
+SOURCES = ("edit", "sync", "merge", "kinds", "split", "restore")   # split = 명단 나누기(§5.32, 261122-1)
 _IGNORE = ("updated", "edited", "created", "top1")   # 이것만 바뀐 것은 남기지 않는다
 NOTE = "note"                                     # 지운 할 일 기록(§5.30 '할 일 기록', 261120-69) — card_id 칸 = 기록 id
 

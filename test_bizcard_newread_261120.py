@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 """새 명함 입력의 [사진에서 읽기] (명함 SOT §5.24.1 '사진에서 읽기', 261120-31) — 가짜 명함만 쓴다(명함 SOT §2.1).
 
-A. 명함 관리 [새 명함 입력] → [사진에서 읽기] 를 실제로 눌러 사진 둘을 고르면: 명함 폴더 맨 위에 복사(같은 이름은 ' (2)'), 원본 그대로,
-   창이 닫히고 명함 관리에 '입력한 명함만' 이 보이며 켜진 채, 보이는 줄은 넣은 사진 둘뿐, 새 줄이 읽히고 명함 DB 에는 아직 넣지 않는다
+A. 명함 읽기 [새 명함 입력] → [사진에서 읽기] 를 실제로 눌러 사진 둘을 고르면: 명함 폴더 맨 위에 복사(같은 이름은 ' (2)'), 원본 그대로,
+   창이 닫히고 명함 읽기에 '입력한 명함만' 이 보이며 켜진 채, 보이는 줄은 넣은 사진 둘뿐, 새 줄이 읽히고 명함 DB 에는 아직 넣지 않는다
    (확인 표 [적용] 전), 필터를 끄면 원래 줄도 보인다
 B. 칸에 글을 적어 두었으면 '입력한 칸은 저장하지 않습니다' 를 묻고, [아니요]면 복사하지 않는다
 C. 다중 명함을 나누면 잘라낸 사진도 '입력한 명함만' 안에 든다
-D. 명함찾기 [새 명함 입력] → [사진에서 읽기] 는 호스트의 명함 관리(명함 폴더)를 열어 같은 필터로 읽는다
+D. 명함찾기 [새 명함 입력] → [사진에서 읽기] 는 호스트의 명함 읽기(명함 폴더)를 열어 같은 필터로 읽는다
 """
 import os, sys, time, tempfile, shutil
 os.environ["QT_QPA_PLATFORM"] = "offscreen"          # 검사 작성 SOT §14.7
@@ -84,10 +84,10 @@ QFileDialog.getOpenFileNames = staticmethod(lambda *a, **k: (list(picked), ""))
 
 try:
     # ── A ──
-    print("=== A. 명함 관리 → 사진에서 읽기 ===")
+    print("=== A. 명함 읽기 → 사진에서 읽기 ===")
     imp = BD.BizcardImportDialog(str(G), None, db=DB)
     imp.show()
-    chk(pump(lambda: imp._worker is not None and imp._worker.done_event.is_set(), timeout=30), "A 명함 관리가 처음 두 장을 읽음")
+    chk(pump(lambda: imp._worker is not None and imp._worker.done_event.is_set(), timeout=30), "A 명함 읽기가 처음 두 장을 읽음")
     n0 = imp.table.rowCount()
     dlg = imp.new_manual(exec_=False)
     pump(timeout=0.3)
@@ -100,7 +100,7 @@ try:
     chk("마바산업_박가짜_1.jpg" in copied and "가나상사_홍길동_1 (2).jpg" in copied
         and all(os.path.exists(p) for p in picked), "A 명함 폴더 맨 위에 복사(같은 이름은 ' (2)'), 원본 그대로", str(copied))
     chk(pump(lambda: imp.table.rowCount() == n0 + 2 and imp._worker.done_event.is_set(), timeout=30),
-        "A 명함 관리에 새 줄 둘이 더해져 읽힘", str(imp.table.rowCount()))
+        "A 명함 읽기에 새 줄 둘이 더해져 읽힘", str(imp.table.rowCount()))
     vis = [os.path.basename(imp._items[r].front) for r in range(imp.table.rowCount()) if not imp.table.isRowHidden(r)]
     chk(imp.chk_sent.isVisible() and imp.chk_sent.isChecked() and sorted(vis) == ["가나상사_홍길동_1 (2).jpg", "마바산업_박가짜_1.jpg"],
         "A '입력한 명함만' 이 켜진 채 넣은 사진 둘만 보임", str(vis))
@@ -158,7 +158,7 @@ try:
     nd = fd.new_card(exec_=False)
     pump(timeout=0.3)
     QTest.mouseClick(nd.btn_read, Qt.MouseButton.LeftButton)
-    chk(pump(lambda: getattr(host, "_bizcard_dlg", None) is not None, timeout=15), "D 명함 관리(명함 폴더)가 열림")
+    chk(pump(lambda: getattr(host, "_bizcard_dlg", None) is not None, timeout=15), "D 명함 읽기(명함 폴더)가 열림")
     imp3 = host._bizcard_dlg
     ok3 = imp3 is not None and pump(lambda: imp3.table.rowCount() == 2 and imp3._worker is not None
                                     and imp3._worker.done_event.is_set(), timeout=30)

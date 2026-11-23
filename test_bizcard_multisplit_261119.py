@@ -4,7 +4,7 @@
 실제 MainWindow 로(오프스크린, 실제 설정·데이터 폴더를 쓰지 않는다 — 검사 작성 SOT §14.7.2).
 A. 찾기 — 어두운 바닥에 흰 명함 셋(기울기 포함)·붙은 둘·한 장·꽉 찬 명함·바닥 닿은 띠
 B. 자르기·파일 — `<원본> 명함 01.jpg`, 원본은 `다중 원본`
-C. 명함 관리 창 — 열면 배경에서 세고 확인 창, 테두리 빼기(Delete)·그리기(끌기) 실제 이벤트, 나눠 읽기,
+C. 명함 읽기 창 — 열면 배경에서 세고 확인 창, 테두리 빼기(Delete)·그리기(끌기) 실제 이벤트, 나눠 읽기,
    이미 한 장으로 들어간 명함은 휴지통·DB 에서 지움, '나누지 않음' 은 다시 묻지 않음, [다중 명함 나누기] 단추
 """
 import os, sys, tempfile, time, shutil
@@ -126,7 +126,7 @@ try:
     chk(M.split_file(F / "single_b.jpg") == [] and (F / "single_b.jpg").exists(), "B 한 장 사진은 건드리지 않음")
     chk(M.candidates(FB) == [], "B 잘라낸 것은 다시 세지 않음")
 
-    print("\n=== C. 명함 관리 창 ===")
+    print("\n=== C. 명함 읽기 창 ===")
     from viewer.bizcard import recognize as R, store as S, people as P, apply as AP
     def fake_recognize(path, ui_lang="ko"):
         time.sleep(0.02)

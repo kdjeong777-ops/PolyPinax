@@ -75,12 +75,13 @@ try:
     fd.show()
     pump(lambda: fd.table.rowCount() >= 2)
     dd = fd.open_dupes(exec_=False)
-    pump(lambda: bool(dd.groups))
-    chk(len(dd.groups) == 1, "(전제) 대표의 숨은 둘째 휴대폰으로 '같은 번호' 한 묶음", str(len(dd.groups)))
+    pump(lambda: bool(dd.suspects))
+    chk(len(dd.suspects) == 1 and not dd.groups, "(전제) 대표의 숨은 둘째 휴대폰 — 010 둘 이상·이름 다름이라 '잘못 합쳐짐 의심'(261122-1)",
+        str((len(dd.suspects), len(dd.groups))))
 
     # ── A ──
     print("=== A. 숨은 번호까지 고치기 ===")
-    gi = 0
+    gi = None                                             # 잘못 합쳐짐 의심 줄(묶음 밖) — 같은 '명함 고치기'
     rc = P.card_by_id(fd._store(), rep)
     ed = DD.CardEditDialog(rc, dd)
     texts = [(g, k, e.text()) for g, k, e in getattr(ed, "extra_eds", [])]
@@ -94,7 +95,7 @@ try:
     after = P.card_by_id(fd._store(), rep)
     chk([n for _k, n in after["phones"]] == ["010-0000-1000"] and after["emails"] == ["a@example.com", "b@example.com"],
         "A 비운 둘째 휴대폰만 지움(나머지 그대로)", str((after["phones"], after["emails"])))
-    chk(dd.groups == [], "A 고친 뒤 다시 묶어 그 번호로 이어졌던 명함은 빠짐", str(len(dd.groups)))
+    chk(dd.groups == [] and dd.suspects == [], "A 고친 뒤 다시 묶어 그 번호로 이어졌던 명함은 빠짐(의심도 사라짐)", str(len(dd.suspects)))
 
     # ── C ── 체크한 칸 한꺼번에 비우기(실제 클릭)
     print("\n=== C. 체크한 칸 비우기 ===")

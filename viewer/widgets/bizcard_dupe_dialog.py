@@ -23,8 +23,9 @@ from viewer.bizcard import vcard as V
 ROLE = Qt.ItemDataRole.UserRole
 THUMB = 96                          # 명함 그림 썸네일 줄(고른 묶음의 그림 명함 앞·뒷면, §5.24.8 '명함 그림')
 SRC_LABEL = {"card": tr_noop("명함"), "remember": tr_noop("리멤버"), "google": tr_noop("구글"), "contact": tr_noop("주소록")}
-WHY_LABEL = {"phone": tr_noop("같은 번호"), "namemail": tr_noop("이름·메일 같음(확정)"), "mail": tr_noop("같은 메일"), "typo": tr_noop("번호 오타?"),
-             "namecomp": tr_noop("이름·회사 같음")}
+WHY_LABEL = {"phone": tr_noop("같은 번호"), "phone_name": tr_noop("같은 번호·이름 다름 — 확인"), "namemail": tr_noop("이름·메일 같음(확정)"),
+             "mail": tr_noop("같은 메일"), "typo": tr_noop("번호 오타?"), "namecomp": tr_noop("이름·회사 같음")}
+SUS = "sus"                         # '적용 전' 나무의 잘못 합쳐짐 의심 줄 표시(줄 자료 = (SUS, 의심 번호, 명함 id), §5.24.8, 261122-1)
 SHOW = (("name", tr_noop("이름")), ("company", tr_noop("회사")), ("dept", tr_noop("부서")), ("title", tr_noop("직함")),
         ("phones", tr_noop("전화")), ("emails", tr_noop("메일")), ("urls", tr_noop("누리집")), ("address", tr_noop("주소")),
         ("memo", tr_noop("메모")))
@@ -232,6 +233,46 @@ def _copy_db(src, dst) -> None:
         a.close()
 
 
+class MergeCheckDialog(QDialog):
+    """합친 뒤 확인(§5.24.8, 261122-1) — 합친 결과 010 번호가 둘 이상이 된 명단, 체크한 묶음만 되돌린다."""
+
+    def __init__(self, rows, parent=None):
+        super().__init__(parent)
+        from PyQt6.QtWidgets import QDialogButtonBox
+        from viewer.bizcard import phone as PH
+        self.setWindowTitle(tr("합친 뒤 확인"))
+        v = QVBoxLayout(self)
+        lbl = QLabel(tr("합친 결과 010 번호가 둘 이상이 된 명단입니다 — 다른 사람이 섞였으면 체크하고 [선택한 합치기 되돌리기] 를 누르세요."))
+        lbl.setWordWrap(True)
+        v.addWidget(lbl)
+        self.tree = QTreeWidget()
+        self.tree.setHeaderLabels([tr("합친 명함"), tr("010 번호")])
+        self.tree.setRootIsDecorated(False)
+        for r in rows:
+            it = QTreeWidgetItem([" + ".join(n for n in r["names"] if n), ", ".join(PH.format_kr(k) or k for k in r["nums"])])
+            it.setData(0, ROLE, r["keeper"])
+            it.setFlags(it.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            it.setCheckState(0, Qt.CheckState.Unchecked)
+            self.tree.addTopLevelItem(it)
+        self.tree.resizeColumnToContents(0)
+        self.tree.itemChanged.connect(lambda *_a: self.btn_undo.setEnabled(bool(self.picked())))
+        v.addWidget(self.tree, 1)
+        bb = QDialogButtonBox()
+        self.btn_undo = bb.addButton(tr("선택한 합치기 되돌리기"), QDialogButtonBox.ButtonRole.AcceptRole)
+        self.btn_undo.setEnabled(False)
+        b_c = bb.addButton(tr("닫기"), QDialogButtonBox.ButtonRole.RejectRole)
+        for b in (self.btn_undo, b_c):
+            b.setAutoDefault(False)
+        bb.accepted.connect(self.accept)
+        bb.rejected.connect(self.reject)
+        v.addWidget(bb)
+        self.resize(560, 320)
+
+    def picked(self) -> list:
+        return [self.tree.topLevelItem(i).data(0, ROLE) for i in range(self.tree.topLevelItemCount())
+                if self.tree.topLevelItem(i).checkState(0) == Qt.CheckState.Checked]
+
+
 def _unique(folder: Path, name: str) -> Path:
     p, k = folder / name, 2
     stem, ext = os.path.splitext(name)
@@ -246,7 +287,7 @@ class BizcardDupeDialog(QDialog):
         self.fd = find_dlg
         self.setWindowTitle(tr("중복 검토"))
         self.resize(1100, 640)
-        # 크게 보기(사용자 지시 261119) — 명함 관리 창과 같이 최대화 단추 + F11 전체 화면(Esc 로 돌아옴)
+        # 크게 보기(사용자 지시 261119) — 명함 읽기 창과 같이 최대화 단추 + F11 전체 화면(Esc 로 돌아옴)
         self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowMaximizeButtonHint | Qt.WindowType.WindowMinimizeButtonHint)
         from PyQt6.QtGui import QShortcut, QKeySequence
         QShortcut(QKeySequence("F11"), self, activated=self.toggle_full)
@@ -374,6 +415,7 @@ class BizcardDupeDialog(QDialog):
 
     def reload(self):
         self.groups = P.dupe_groups(self.fd._store(), self.order_keys())
+        self.suspects = P.merge_suspects(self.fd._store())     # 잘못 합쳐짐 의심(§5.24.8, 261122-1) — 합치지 않고 고치게
         self.rep, self.chk, self.gchk, self.edits = {}, {}, {}, {}
         for gi, g in enumerate(self.groups):
             rep = g["cards"][0]["id"]
@@ -432,10 +474,37 @@ class BizcardDupeDialog(QDialog):
                     it.setCheckState(0, Qt.CheckState.Checked if self.chk[(gi, c["id"])] else Qt.CheckState.Unchecked)
                     top.addChild(it)
             top.setExpanded(True)
+        self._fill_suspects()
         for i in range(self.before.columnCount()):
             self.before.resizeColumnToContents(i)
         self._busy = False
         self.fill_after()
+
+    def _fill_suspects(self):
+        """'잘못 합쳐짐 의심' 갈래(§5.24.8, 261122-1) — 010 이 적은 사람(기준) 아래 010 둘 이상 명단. 체크 없음, [적용] 은 합치지 않는다."""
+        from viewer.bizcard import phone as PH
+        st = self.fd._store()
+        for si, e in enumerate(getattr(self, "suspects", []) or []):
+            b = e["base"]
+            top = QTreeWidgetItem([b.get("name") or "", b.get("company") or "", _phone(b), ", ".join(b.get("emails") or []),
+                                   tr(SRC_LABEL[P.card_source(st, b)]), tr("잘못 합쳐짐 의심")])
+            top.setData(0, ROLE, (SUS, si, b["id"]))
+            top.setToolTip(5, tr("이 사람의 휴대폰이 010 번호가 둘 이상인 다른 이름의 명단에도 있습니다 — 합치지 않고 고쳐서 바로잡으세요"))
+            self.before.addTopLevelItem(top)
+            for s_ in e["subs"]:
+                it = QTreeWidgetItem([s_.get("name") or "", s_.get("company") or "", _phone(s_), ", ".join(s_.get("emails") or []),
+                                      tr(SRC_LABEL[P.card_source(st, s_)]),
+                                      tr("번호 겹침 — 010 {n}개").format(n=len(P.mobiles_010(s_)))])
+                it.setData(0, ROLE, (SUS, si, s_["id"]))
+                k = e["key"].get(s_["id"]) or ""
+                it.setToolTip(5, tr("겹친 휴대폰: {n}").format(n=PH.format_kr(k) or k))
+                top.addChild(it)
+            top.setExpanded(True)
+
+    def suspect_items(self) -> list:
+        """'잘못 합쳐짐 의심' 맨 위 줄들(검사가 찾는다)."""
+        return [self.before.topLevelItem(i) for i in range(self.before.topLevelItemCount())
+                if (self.before.topLevelItem(i).data(0, ROLE) or (None,))[0] == SUS]
 
     def fill_after(self):
         self._busy = True
@@ -460,6 +529,13 @@ class BizcardDupeDialog(QDialog):
             n_g += 1
             n_d += len(p["drop"])
             top.setText(0, p["fields"]["name"])
+            n10 = len(P.plan_010(p))
+            if n10 >= 2:                                   # 010 경고(§5.24.8, 261122-1) — 다른 사람이 섞였을 수 있음
+                top.setText(0, tr("{name} — 010 {n}개").format(name=p["fields"]["name"], n=n10))
+                top.setToolTip(0, tr("합치면 010 번호가 {n}개 — 다른 사람이 섞이지 않았는지 확인하세요").format(n=n10))
+                f0 = top.font(0)
+                f0.setBold(True)
+                top.setFont(0, f0)
             top.setText(1, p["fields"]["company"])
             top.setText(2, tr(SRC_LABEL[g["src"][p["keeper"]]]))
             mine = self.edits.get(gi) or {}
@@ -522,7 +598,10 @@ class BizcardDupeDialog(QDialog):
     def _checked(self, it, col):
         if self._busy or col != 0:
             return
-        gi, cid = it.data(0, ROLE)
+        d = it.data(0, ROLE)
+        if not d or d[0] == SUS:
+            return
+        gi, cid = d
         on = it.checkState(0) == Qt.CheckState.Checked
         if cid == self.rep[gi]:
             self.gchk[gi] = on
@@ -535,7 +614,9 @@ class BizcardDupeDialog(QDialog):
             return
         while cur.parent() is not None:
             cur = cur.parent()
-        gi = cur.data(0, ROLE)[0]
+        gi = (cur.data(0, ROLE) or (None,))[0]
+        if not isinstance(gi, int):
+            return                                       # 잘못 합쳐짐 의심 줄 — '적용 후' 짝 없음
         top = other.topLevelItem(gi)
         if top is not None and other.currentItem() is not top and (other.currentItem() is None
                                                                    or self._top_gi(other.currentItem()) != gi):
@@ -550,13 +631,19 @@ class BizcardDupeDialog(QDialog):
         if cur is None:
             self._show_big("")
             return
-        gi, cid = cur.data(0, ROLE)
-        if not isinstance(cid, int) or cid not in {c["id"] for c in self.groups[gi]["cards"]}:
-            p = self.plan(gi)
-            cid = p["keeper"] if p else self.rep[gi]
+        d = cur.data(0, ROLE)
+        if d and d[0] == SUS:                            # 잘못 합쳐짐 의심 — 기준과 아래 명단의 그림
+            e = self.suspects[d[1]]
+            cards, cid = [e["base"]] + list(e["subs"]), d[2]
+        else:
+            gi, cid = d
+            if not isinstance(cid, int) or cid not in {c["id"] for c in self.groups[gi]["cards"]}:
+                p = self.plan(gi)
+                cid = p["keeper"] if p else self.rep[gi]
+            cards = self.group_cards_all(gi)
         pick, jobs = None, []
         self.thumbs.blockSignals(True)
-        for c in self.group_cards_all(gi):
+        for c in cards:
             if V.is_contact(c):
                 continue
             for side in (c.get("front"), c.get("back")):
@@ -643,7 +730,19 @@ class BizcardDupeDialog(QDialog):
         it = self.before.itemAt(pos)
         if it is None:
             return
-        gi, cid = it.data(0, ROLE)
+        d = it.data(0, ROLE)
+        if d and d[0] == SUS:                            # 잘못 합쳐짐 의심 — 고치기·사진 삭제·나누기(§5.24.8, 261122-1)
+            cid = d[2]
+            m = QMenu(self)
+            m.addAction(tr("명함 고치기"), lambda: self.edit_card(None, cid))
+            c = P.card_by_id(self.fd._store(), cid)
+            if c is not None and (not V.is_contact(c) or self.fd._photo_front(c) and P.person_photos(self.fd._photo_front(c))):
+                m.addAction(tr("명함 사진 삭제"), lambda: self.delete_pictures(cid))
+            m.addAction(tr("나누기"), lambda: self.split(cid))
+            self._last_menu = m
+            m.exec(self.before.viewport().mapToGlobal(pos))
+            return
+        gi, cid = d
         m = QMenu(self)
         if it.parent() is not None:
             m.addAction(tr("대표로"), lambda: self.set_rep(gi, cid))
@@ -657,8 +756,10 @@ class BizcardDupeDialog(QDialog):
     def edit_card(self, gi, cid, dlg=None) -> bool:
         """'적용 전' 명함 하나를 고쳐 명함 DB 에 — 명함찾기 [저장] 과 같은 길(`store_card_edit`). 묶음은 그대로, 그 줄·합친 결과만 새로.
         dlg = 검사용(이미 값을 넣은 CardEditDialog — 실행하지 않고 그 값으로)."""
-        g = self.groups[gi]
-        c = next((x for x in g["cards"] if x["id"] == cid), None)
+        if gi is None:                                   # 잘못 합쳐짐 의심 줄(묶음 밖)
+            c = P.card_by_id(self.fd._store(), cid)
+        else:
+            c = next((x for x in self.groups[gi]["cards"] if x["id"] == cid), None)
         if c is None:
             return False
         if dlg is None:
@@ -673,15 +774,25 @@ class BizcardDupeDialog(QDialog):
             self.fd.refresh()                            # 명함찾기 목록도 고친 값으로(보던 고침이 있으면 건드리지 않음)
         return True
 
+    def split(self, cid, dlg=None) -> int:
+        """'나누기'(§5.32, 261122-1) — 명단 관리와 같은 길(`run_split`), 나눈 뒤 다시 묶는다. 반환 = 새 id(안 했으면 0)."""
+        from viewer.widgets.bizcard_roster_dialog import run_split
+        if self.working:
+            return 0
+        nid = run_split(self, self.fd, cid, dlg=dlg)
+        if nid:
+            self.reload()
+        return nid
+
     def detach_image(self, cid, ask: bool = True) -> bool:
         """'명함 그림 떼기'(§5.24.8, 사용자 결정 261121) — 잘못 붙은 다른 사람의 명함 그림만 뗀다: 정리본 앞·뒷면을 휴지통으로,
-        이 명함은 그림 없는 명함(연락처·메모·태그 그대로), 인물 사진은 새 자리로 옮김. 원본 스캔은 그대로라 명함 관리에서 다시 읽을 수 있다."""
+        이 명함은 그림 없는 명함(연락처·메모·태그 그대로), 인물 사진은 새 자리로 옮김. 원본 스캔은 그대로라 명함 읽기에서 다시 읽을 수 있다."""
         c = P.card_by_id(self.fd._store(), cid)
         if not c or V.is_contact(c) or self.working:
             return False
         if ask and QMessageBox.question(self, tr("중복 검토"), tr(
                 "'{n}' 에 붙은 명함 그림(정리본 앞·뒷면)을 휴지통으로 보내고 그림 없는 명함으로 둡니다 — 연락처·메모는 그대로, "
-                "원본 스캔은 남아 명함 관리에서 다시 읽을 수 있습니다.").format(n=c.get("name") or "")) != QMessageBox.StandardButton.Yes:
+                "원본 스캔은 남아 명함 읽기에서 다시 읽을 수 있습니다.").format(n=c.get("name") or "")) != QMessageBox.StandardButton.Yes:
             return False
         ok = self.fd.detach_card_image(c, originals=True)   # 앞·뒷면 모두 — 원본 스캔도(사용자 결정 261121, 261120-65)
         self.reload()
@@ -803,7 +914,7 @@ class BizcardDupeDialog(QDialog):
         run_in_thread(w, keep if isinstance(keep, list) else _KEEP)
 
     def _multi_split_done(self, out):
-        """나눴으면 예전 한 장짜리 명함은 지우고(정리본·인물 사진 휴지통, D31) 묶음을 다시 — 잘라낸 것은 명함 관리로 읽는다."""
+        """나눴으면 예전 한 장짜리 명함은 지우고(정리본·인물 사진 휴지통, D31) 묶음을 다시 — 잘라낸 것은 명함 읽기로 읽는다."""
         st = self.fd._store()
         self.multi_split = {p: made for p, made in out.items() if made}
         moves = list(getattr(self._split_worker, "moved", []))
@@ -837,11 +948,11 @@ class BizcardDupeDialog(QDialog):
         if folders and self.fd._mw is not None and hasattr(self.fd._mw, "_action_bizcard_import") and (
                 not self._multi_ask or QMessageBox.question(
                     self, tr("다중 명함 찾기"),
-                    tr("명함 {n}장으로 나눴습니다 — 명함 관리를 열어 읽을까요?").format(
+                    tr("명함 {n}장으로 나눴습니다 — 명함 읽기를 열어 읽을까요?").format(
                         n=sum(len(v) for v in self.multi_split.values()))) == QMessageBox.StandardButton.Yes):
             from PyQt6.QtCore import QTimer
             mw, f = self.fd._mw, folders[0]
-            self.accept()                              # 이 창(모달)을 닫아야 명함 관리 창을 쓸 수 있다
+            self.accept()                              # 이 창(모달)을 닫아야 명함 읽기 창을 쓸 수 있다
             QTimer.singleShot(0, lambda: mw._action_bizcard_import(f))
 
     # ── 적용·되돌리기 ──
@@ -850,10 +961,13 @@ class BizcardDupeDialog(QDialog):
         if not plans:
             return 0
         n_d = sum(len(p["drop"]) for _gi, p in plans)
-        if ask and QMessageBox.question(
-                self, tr("중복 검토"),
-                tr("묶음 {n}개를 합칩니다 — 대표가 아닌 명함 {d}장은 지웁니다(그림 파일은 '병합 보관' 폴더로). [마지막 합치기 되돌리기] 로 되돌릴 수 있습니다.").format(
-                    n=len(plans), d=n_d)) != QMessageBox.StandardButton.Yes:
+        n_w = sum(1 for _gi, p in plans if len(P.plan_010(p)) >= 2)     # 010 경고(§5.24.8, 261122-1)
+        msg = tr("묶음 {n}개를 합칩니다 — 대표가 아닌 명함 {d}장은 지웁니다(그림 파일은 '병합 보관' 폴더로). [마지막 합치기 되돌리기] 로 되돌릴 수 있습니다.").format(
+            n=len(plans), d=n_d)
+        if n_w:
+            msg += "\n\n" + tr("합치면 010 번호가 둘 이상 되는 묶음이 {n}개 있습니다 — 다른 사람이 섞이지 않았는지 확인하세요.").format(n=n_w)
+        self.last_confirm = msg
+        if ask and QMessageBox.question(self, tr("중복 검토"), msg) != QMessageBox.StandardButton.Yes:
             return 0
         if self.working:
             return 0
@@ -866,9 +980,15 @@ class BizcardDupeDialog(QDialog):
     def _apply(self, st, plans, ask) -> None:
         dbp = st.path
         moves, failed, jobs = [], 0, []
+        groups_log, self.merge_check = {}, []
         for gi, p in plans:
             byid = {c["id"]: c for c in self.groups[gi]["cards"]}
             keeper = byid[p["keeper"]]
+            start = len(moves)
+            ids = [p["keeper"]] + list(p["drop"])
+            if max(len(P.mobiles_010(byid[i])) for i in ids) <= 1 and len(P.plan_010(p)) >= 2:   # 합친 뒤 확인(261122-1)
+                self.merge_check.append({"keeper": p["keeper"], "ids": ids, "nums": P.plan_010(p),
+                                         "names": [byid[i].get("name") or "" for i in ids]})
             if p["photo_from"] is not None:                   # 남길 행에 인물 사진이 없으면 옮긴다
                 for ph in P.person_photos(P._real(byid[p["photo_from"]]["front"])):
                     to = str(P.next_photo_path(keeper["front"]))
@@ -898,6 +1018,7 @@ class BizcardDupeDialog(QDialog):
                     else:
                         failed += 1
             jobs.append((p, extra))
+            groups_log[str(p["keeper"])] = {"ids": ids, "moves": moves[start:]}   # 묶음별 옮김 — 고른 묶음만 되돌리기
             nf = extra.get("front") or keeper["front"]
             nb = extra.get("back", keeper.get("back") or "")
             paths = [x for x in (nf, nb) if x and os.path.exists(x)]
@@ -916,7 +1037,7 @@ class BizcardDupeDialog(QDialog):
             finally:
                 s2.close()
             with open(log, "w", encoding="utf-8") as fp:
-                json.dump({"moves": moves}, fp, ensure_ascii=False)
+                json.dump({"moves": moves, "groups": groups_log}, fp, ensure_ascii=False)
         self.last_failed = failed
         self._bg(write, lambda _r: self._applied(failed, ask))
 
@@ -925,6 +1046,50 @@ class BizcardDupeDialog(QDialog):
         if failed and ask:
             QMessageBox.warning(self, tr("중복 검토"), tr("파일 {n}개를 옮기지 못했습니다 — 다른 프로그램이 열고 있는지 확인하세요.").format(n=failed))
         self.reload()
+        if self.merge_check:                             # 합친 결과 010 둘 이상이 새로 생김 — 목록·고른 묶음 되돌리기(261122-1)
+            dlg = MergeCheckDialog(self.merge_check, self)
+            self.check_dlg = dlg                         # 검사가 찾는다
+            dlg.accepted.connect(lambda: self.undo_groups(dlg.picked()))
+            dlg.open()                                   # 지역 루프 없이(응답성 SOT §6)
+
+    def undo_groups(self, keepers) -> bool:
+        """합친 뒤 확인 [선택한 합치기 되돌리기] — 그 묶음만: 파일 옮김을 거꾸로(메인, 앱 이름 바꾸기 한 길), DB 는 백업 행으로(배경)."""
+        if self.working or not keepers or not (self.log_path.exists() and self.bak.exists()):
+            return False
+        try:
+            log_ = json.load(open(self.log_path, encoding="utf-8"))
+        except (OSError, ValueError):
+            return False
+        groups = log_.get("groups") or {}
+        ids = []
+        for k in keepers:
+            g = groups.pop(str(k), None)
+            if not g:
+                continue
+            ids += g.get("ids") or []
+            for a, b in reversed(g.get("moves") or []):
+                if os.path.exists(b) and not os.path.exists(a):
+                    try:
+                        Path(a).parent.mkdir(parents=True, exist_ok=True)
+                    except OSError:
+                        pass
+                    self.fd._rename(b, a, quiet=True)
+        if not ids:
+            return False
+        dbp, bak, log = self.fd._store().path, self.bak, self.log_path
+        log_["groups"] = groups
+
+        def restore():                                        # 백업 행 → 명함 DB — 배경, 자기 연결로
+            from viewer.bizcard.store import BizcardStore
+            s2 = BizcardStore(dbp)
+            try:
+                P.restore_merge(s2, bak, ids)
+            finally:
+                s2.close()
+            with open(log, "w", encoding="utf-8") as fp:
+                json.dump(log_, fp, ensure_ascii=False)
+        self._bg(restore, lambda _r: (self._bg_end(), self.reload()))
+        return True
 
     def _drop_old_hold(self):
         """앞 합치기의 '병합 보관' 파일은 휴지통으로, 앞 백업·기록은 지운다(되돌리기는 하나만)."""

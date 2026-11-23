@@ -986,7 +986,7 @@ def photo_renames(front, ordered) -> list:
     return out
 
 
-# ── 지울 파일 (§5.24 D18 — 명함 관리 [삭제] 와 같은 것 + 인물 사진) ──
+# ── 지울 파일 (§5.24 D18 — 명함 읽기 [삭제] 와 같은 것 + 인물 사진) ──
 def card_files(card: dict, folder=None) -> tuple:
     """(원본 [앞·뒤·PDF], 정리본 [앞·뒤], 인물 사진) — 있는 파일만, 실제 경로. 원본은 원천 폴더를 다시 훑어 찾는다.
     folder = 명함 폴더(그림 없는 주소록 명함의 인물 사진 자리 — `photo_front`)."""
@@ -1105,7 +1105,7 @@ MANUAL_TAG = "직접입력"
 
 def add_new_card(store, fields: dict, folder: str = "", front_img: str = "", back_img: str = "", photos=()) -> tuple:
     """손으로 넣은 명함 한 장 — 반환 (새 id, 인물 사진 실패 수).
-    앞면 그림이 없으면 그림 없는 명함(`contact:`), 있으면 명함 관리 [적용]과 같은 길(`apply_cards`)로 `<folder>\\정리\\성명_회사명.jpg`.
+    앞면 그림이 없으면 그림 없는 명함(`contact:`), 있으면 명함 읽기 [적용]과 같은 길(`apply_cards`)로 `<folder>\\정리\\성명_회사명.jpg`.
     fields = {name, company, dept, title, address, phones, emails, urls, memo}. 인물 사진은 `photo_front` 자리에 JPG(EXIF 뺌)."""
     from viewer.bizcard import apply as AP
     tags = list(dict.fromkeys(AP.tags_for({"name": fields.get("name") or "", "company": fields.get("company") or "",
@@ -1164,8 +1164,9 @@ def same_person_ids(store, card_id: int) -> list:
 DUPE_SOURCES = ("card", "remember", "google", "contact")   # 명함(그림) · 리멤버 · 구글 · 출처 모름 주소록
 DUPE_ORDER_KEY = "dupe_order"
 HOLD_DIR = "병합 보관"            # 합쳐 지운 그림 명함 파일 — 정리 폴더 옆(인물 폴더와 같은 자리), 다음 합치기 때 휴지통
-WHY_SURE = ("phone", "namemail", "mail")
-_WHY_RANK = {"phone": 0, "namemail": 1, "mail": 2, "typo": 3, "namecomp": 4}   # namemail = 성명+메일 같음, 확정(261120-74)
+WHY_SURE = ("phone", "phone_name", "namemail", "mail")
+# namemail = 성명+메일 같음, 확정(261120-74) · phone_name = 같은 휴대폰·이름 다름·010 하나씩 — 확인(261122-1)
+_WHY_RANK = {"phone": 0, "phone_name": 1, "namemail": 2, "mail": 3, "typo": 4, "namecomp": 5}
 _ONE = ("name", "company", "dept", "title", "address")
 
 
@@ -1221,6 +1222,74 @@ def _mobiles_near(A, B) -> bool:
     return any(x == y or mobile_typo(x, y) for x in A for y in B)
 
 
+def mobiles_010(card) -> list:
+    """010 번호 열쇠(같은 번호는 한 번, 차례 지킴) — 잘못 합쳐짐 판단·명단 관리 '010 둘 이상'·vcf 비교(§5.24.8·§5.32, 261122-1).
+    번호 종류(휴대폰·일반 전화·팩스·종류 없음)는 가리지 않고 숫자가 010 이면(+82 10·0082 10 꼴도) 모두(사용자 지시 261122)."""
+    from viewer.bizcard import phone as PH
+    out = []
+    for x in card.get("phones") or []:
+        d = PH.kr_digits(x[-1] if isinstance(x, (list, tuple)) else x)
+        if d and d.startswith("010") and len(d) >= 10:
+            out.append(d)
+    return list(dict.fromkeys(out))
+
+
+def _names_differ(a, b) -> bool:
+    pa, pb = _pname(a.get("name")), _pname(b.get("name"))
+    return bool(pa and pb and pa != pb)
+
+
+# '다른 사람' 기억(§5.24.8, 261122-1) — 나누기로 떼어 낸 두 사람을 중복 검토가 다시 잇지 않게
+def not_same_init(store) -> None:
+    store.con.execute("CREATE TABLE IF NOT EXISTS not_same(a INTEGER, b INTEGER, PRIMARY KEY(a, b))")
+
+
+def not_same_pairs(store) -> set:
+    try:
+        return {(r[0], r[1]) for r in store.con.execute("SELECT a, b FROM not_same")}
+    except sqlite3.OperationalError:
+        return set()
+
+
+def mark_not_same(store, a: int, b: int, commit: bool = True) -> None:
+    not_same_init(store)
+    store.con.execute("INSERT OR IGNORE INTO not_same(a, b) VALUES(?,?)", (min(a, b), max(a, b)))
+    if commit:
+        store.con.commit()
+
+
+def merge_suspects(store, cards=None) -> list:
+    """잘못 합쳐짐 의심(§5.24.8, 261122-1) — 010 이 둘 이상인 명단의 번호 하나가 이름이 다른 명단의 번호와 같음.
+    [{base: 010 이 적은 쪽(하나인 사람), subs: [010 둘 이상 명단], key: {sub id: 겹친 번호}}] — 합치지 않고 고치게."""
+    if cards is None:
+        cards = [store._row(r) for r in store.con.execute("SELECT * FROM cards").fetchall()]
+    ns = not_same_pairs(store)
+    m010 = {c["id"]: mobiles_010(c) for c in cards}
+    by_key = {}
+    for c in cards:
+        for k in m010[c["id"]]:
+            by_key.setdefault(k, []).append(c)
+    out = {}
+    for k, same in by_key.items():
+        for i, x in enumerate(same):
+            for y in same[i + 1:]:
+                if not _names_differ(x, y) or (min(x["id"], y["id"]), max(x["id"], y["id"])) in ns:
+                    continue
+                base, sub = sorted((x, y), key=lambda c: (len(m010[c["id"]]), c["id"]))
+                if len(m010[sub["id"]]) < 2:
+                    continue                                # 둘 다 하나씩 — 중복 검토 '같은 번호·이름 다름' 쪽
+                e = out.setdefault(base["id"], {"base": base, "subs": [], "key": {}})
+                if sub["id"] not in e["key"]:
+                    e["subs"].append(sub)
+                    e["key"][sub["id"]] = k
+    return sorted(out.values(), key=lambda e: _nname(e["base"].get("name")))
+
+
+def plan_010(plan) -> list:
+    """합친 결과의 010 번호들 — 둘 이상이면 경고(§5.24.8 '010 경고')."""
+    return mobiles_010({"phones": (plan.get("fields") or {}).get("phones") or []})
+
+
 def dupe_order(store) -> list:
     got = [s for s in (store.meta_get(DUPE_ORDER_KEY) or []) if s in DUPE_SOURCES]
     return list(dict.fromkeys(got + [s for s in DUPE_SOURCES if s not in got]))
@@ -1264,7 +1333,10 @@ def dupe_groups(store, order=None) -> list:
     byid = {c["id"]: c for c in cards}
     par, spar, edges = {}, {}, {}
     mob = {c["id"]: set(_mobile_keys(c)) for c in cards}
+    m010 = {c["id"]: mobiles_010(c) for c in cards}
     cm = dict((k, set(v)) for k, v in mob.items())         # 묶음 뿌리 → 그 묶음의 휴대폰들
+    ns = not_same_pairs(store)                              # '다른 사람' 으로 기억한 짝(§5.24.8, 261122-1)
+    memb = {c["id"]: {c["id"]} for c in cards}              # 묶음 뿌리 → 그 묶음의 명함들(다른 사람 짝 걸침 보기)
 
     def find(p, x):
         while p.setdefault(x, x) != x:
@@ -1278,18 +1350,21 @@ def dupe_groups(store, order=None) -> list:
         if a == b:
             return
         ra, rb = find(par, a), find(par, b)
-        if ra != rb and why not in ("phone", "namemail") and cm.get(ra) and cm.get(rb) and not _mobiles_near(cm[ra], cm[rb]):
+        if ra != rb and why not in ("phone", "phone_name", "namemail") and cm.get(ra) and cm.get(rb) and not _mobiles_near(cm[ra], cm[rb]):
             return                                          # 휴대폰이 서로 다르면 다른 사람 — 이름·회사·메일이 같아도(성명+메일은 확정 — 아래 ⑤)
+        if ra != rb and ns and any((min(x, y), max(x, y)) in ns for x in memb.get(ra, {ra}) for y in memb.get(rb, {rb})):
+            return                                          # '다른 사람' 으로 기억한 짝이 두 묶음에 걸침 — 잇지 않음(261122-1)
         if ra != rb:
             par[ra] = rb
             cm[rb] = cm.get(rb, set()) | cm.pop(ra, set())
+            memb[rb] = memb.get(rb, {rb}) | memb.pop(ra, {ra})
         if why in WHY_SURE:
             spar[find(spar, a)] = find(spar, b)
         for x, y in ((a, b), (b, a)):
             old = edges.get(x, {}).get(y)
             if old is None or _WHY_RANK[why] < _WHY_RANK[old]:
                 edges.setdefault(x, {})[y] = why
-            if key and (x not in mkey or why == "phone"):
+            if key and (x not in mkey or why in ("phone", "phone_name")):
                 mkey[x] = key
 
     # ① 같은 휴대폰 = 같은 사람(이름이 달라도 — 이름을 잘못 읽었을 수 있다). 일반 전화·팩스는 여럿이 같이 써서 평가에서 뺀다
@@ -1300,9 +1375,15 @@ def dupe_groups(store, order=None) -> list:
             bucket.setdefault(k, []).append(c)
         for e in {str(e).strip().lower() for e in c.get("emails") or [] if str(e).strip()}:
             mails.setdefault(e, []).append(c)
-    for k, same in bucket.items():
-        for b in same[1:]:
-            link(same[0]["id"], b["id"], "phone", k)
+    for k, same in bucket.items():                          # ① 을 나눔(261122-1) — 이름이 다르면 010 하나씩일 때만 '확인', 둘 이상이면 의심 갈래로
+        for i, a in enumerate(same):
+            for b in same[i + 1:]:
+                if _names_differ(a, b):
+                    if len(m010[a["id"]]) >= 2 or len(m010[b["id"]]) >= 2:
+                        continue                            # 잘못 합쳐졌을 수 있음 — merge_suspects 가 따로(합치지 않음)
+                    link(a["id"], b["id"], "phone_name", k)
+                else:
+                    link(a["id"], b["id"], "phone", k)
     by_name, by_nc = {}, {}
     for c in cards:
         n = _nname(c.get("name"))
@@ -1460,6 +1541,99 @@ def _merge_db(store, plan, extra: dict = None) -> None:
             store.delete_src(r["src_key"])
         else:
             store.delete_card(cid)
+
+
+_MERGE_SIDE = ("contact_src", "google_link", "kakao_block", "fav_members", "recent")   # 명함 id 칸이 card_id 인 곁 표
+
+
+def restore_merge(store, bak_path, ids) -> int:
+    """합친 뒤 확인(§5.24.8, 261122-1) — 고른 묶음의 명함들(ids = 남은 명함 + 지운 명함)만 적용 전 백업 DB 의 행으로.
+    명함 행과 곁 표(칸 출처·구글 짝·카톡 표시·즐겨찾기·최근)를 백업 것으로 바꾼다. 파일 되돌리기는 부르는 쪽. 배경에서. 반환 = 되돌린 명함 수."""
+    from viewer.bizcard import history as H
+    ids = [int(i) for i in ids]
+    if not ids:
+        return 0
+    con = store.con
+    q = ",".join("?" * len(ids))
+    con.commit()                                            # ATTACH·DETACH 는 열린 쓰기 밖에서만
+    con.execute("ATTACH DATABASE ? AS bak", (str(bak_path),))
+    try:
+        cols = [r[1] for r in con.execute("PRAGMA bak.table_info(cards)")]
+        live = {r[1] for r in con.execute("PRAGMA main.table_info(cards)")}
+        cols = [c for c in cols if c in live]
+        n = 0
+        with H.source(store, "restore"):
+            rows = con.execute("SELECT %s FROM bak.cards WHERE id IN (%s)" % (", ".join('"%s"' % c for c in cols), q), ids).fetchall()
+            con.execute("DELETE FROM main.cards WHERE id IN (%s)" % q, ids)
+            con.execute("DELETE FROM main.cards_fts WHERE rowid IN (%s)" % q, ids)
+            for r in rows:
+                con.execute("INSERT INTO main.cards(%s) VALUES(%s)" % (", ".join('"%s"' % c for c in cols), ",".join("?" * len(cols))), list(r))
+                fresh = store._row(con.execute("SELECT * FROM main.cards WHERE id=?", (r[cols.index("id")],)).fetchone())
+                con.execute("INSERT INTO main.cards_fts(rowid, body) VALUES(?,?)", (fresh["id"], store._body(fresh)))
+                n += 1
+            for t in _MERGE_SIDE:
+                have = {r[0] for r in con.execute("SELECT name FROM bak.sqlite_master WHERE type='table'")}
+                if t not in have:
+                    continue
+                try:
+                    tc = [r[1] for r in con.execute("PRAGMA main.table_info(%s)" % t)]
+                    bc = {r[1] for r in con.execute("PRAGMA bak.table_info(%s)" % t)}
+                    tc = [c for c in tc if c in bc]
+                    if t == "google_link":                   # 지운 명함의 짝이 남은 명함으로 옮겨졌을 수 있다 — 같은 짝(resource_name)도 지움
+                        con.execute("DELETE FROM main.google_link WHERE resource_name IN (SELECT resource_name FROM bak.google_link "
+                                    "WHERE card_id IN (%s))" % q, ids)
+                    con.execute("DELETE FROM main.%s WHERE card_id IN (%s)" % (t, q), ids)
+                    con.execute("INSERT OR IGNORE INTO main.%s(%s) SELECT %s FROM bak.%s WHERE card_id IN (%s)"
+                                % (t, ", ".join(tc), ", ".join(tc), t, q), ids)
+                except sqlite3.OperationalError:
+                    continue                                # 그 표가 없는 DB(곁 표는 처음 쓸 때 만든다)
+        con.commit()
+    finally:
+        if con.in_transaction:
+            con.rollback()
+        con.execute("DETACH DATABASE bak")
+    return n
+
+
+def split_card(store, cid: int, phones=(), emails=(), fields=None, image=None) -> int:
+    """명단 나누기(§5.32, 261122-1) — 명함 cid 에서 phones(번호 — 숫자로 견줌)·emails 를 떼어 새 사람으로. 반환 = 새 id.
+    fields = 새 사람의 {name, company, dept, title}. image = (새 앞면, 새 뒷면) — 그림을 새 사람에게(파일은 부르는 쪽이 이미 옮김):
+    새 사람이 정리본·원본 열쇠를 갖고 남는 쪽은 그림 없는 명함. 뗀 칸의 주소록 출처는 새 사람에게도(구글 흔적 — §5.29 '카톡').
+    구글 짝은 남는 쪽에. 두 사람은 '다른 사람' 으로 기억. 변경 기록 출처 `split`."""
+    import uuid
+    from viewer.bizcard import history as H
+    from viewer.bizcard.apply import tags_for
+    from viewer.bizcard.vcard import CONTACT_PREFIX
+    c = card_by_id(store, cid)
+    if not c:
+        raise ValueError("no card")
+    f = dict(fields or {})
+    if not (f.get("name") or "").strip():
+        raise ValueError("no name")
+    dig = lambda n: re.sub(r"\D", "", str(n or ""))          # noqa: E731
+    take_p = {dig(n[-1] if isinstance(n, (list, tuple)) else n) for n in phones}
+    take_e = {str(e).strip().lower() for e in emails}
+    cur_p = [tuple(x) for x in c.get("phones") or []]
+    moved_p = [x for x in cur_p if dig(x[-1]) in take_p]
+    moved_e = [e for e in c.get("emails") or [] if str(e).strip().lower() in take_e]
+    srcs = field_srcs(store, cid)
+    src_init(store)
+    with H.source(store, "split"):
+        tags = list(dict.fromkeys(tags_for({"name": f["name"].strip(), "company": f.get("company") or "", "langs": []})))
+        nid = _insert_contact(store, {"name": f["name"].strip(), "company": f.get("company") or "", "dept": f.get("dept") or "",
+                                      "title": f.get("title") or "", "phones": moved_p, "emails": moved_e}, tags)
+        upd = {"phones": [x for x in cur_p if x not in moved_p], "emails": [e for e in c.get("emails") or [] if e not in moved_e]}
+        if image:
+            update_card(store, cid, {"front": CONTACT_PREFIX + uuid.uuid4().hex, "back": "", "src_key": "", "src_pdf": ""}, commit=False)
+            update_card(store, nid, {"front": image[0], "back": image[1] or "", "src_key": c.get("src_key") or "",
+                                     "src_pdf": c.get("src_pdf") or ""}, commit=False)
+        update_card(store, cid, upd, commit=False)
+        give = [k for k, got in (("phones", moved_p), ("emails", moved_e)) if got and srcs.get(k)]
+        for k in give:
+            _set_srcs(store, nid, [k], srcs[k])
+        mark_not_same(store, cid, nid, commit=False)
+    store.con.commit()
+    return nid
 
 
 def hold_dir(front) -> Path:

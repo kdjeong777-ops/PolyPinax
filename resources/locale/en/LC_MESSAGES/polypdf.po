@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-22 14:56+0900\n"
+"POT-Creation-Date: 2026-11-23 20:10+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -181,8 +181,9 @@ msgid "버전 v{version}"
 msgstr "Version v{version}"
 
 #: viewer/app.py viewer/widgets/bizcard_find_dialog.py
-#: viewer/widgets/crop_dialog.py viewer/widgets/read_aloud.py
-#: viewer/widgets/tag_apply_dialog.py viewer/widgets/thumbs_list.py
+#: viewer/widgets/bizcard_roster_dialog.py viewer/widgets/crop_dialog.py
+#: viewer/widgets/read_aloud.py viewer/widgets/tag_apply_dialog.py
+#: viewer/widgets/thumbs_list.py
 msgid "전체"
 msgstr "All"
 
@@ -563,6 +564,7 @@ msgstr "Bookmark Generation Stopped"
 #: viewer/widgets/bizcard_find_dialog.py viewer/widgets/bizcard_gsync_dialog.py
 #: viewer/widgets/bizcard_history_dialog.py
 #: viewer/widgets/bizcard_import_dialog.py
+#: viewer/widgets/bizcard_roster_dialog.py
 #: viewer/widgets/glossary_edit_dialog.py viewer/widgets/hyperlink_dialog.py
 #: viewer/widgets/image_tune_dialog.py viewer/widgets/stamp_dialog.py
 #: viewer/widgets/tag_apply_dialog.py viewer/widgets/translate_dialog.py
@@ -618,6 +620,7 @@ msgstr "Continue with Available Languages"
 #: viewer/sign_draft_controller.py viewer/study_controller.py
 #: viewer/update_controller.py viewer/widgets/bizcard_dupe_dialog.py
 #: viewer/widgets/bizcard_find_dialog.py viewer/widgets/bizcard_new_dialog.py
+#: viewer/widgets/bizcard_roster_dialog.py
 #: viewer/widgets/bizcard_settings_dialog.py viewer/widgets/bookmark_tree.py
 #: viewer/widgets/crop_dialog.py viewer/widgets/encrypt_dialog.py
 #: viewer/widgets/line_text_settings_dialog.py viewer/widgets/main_view.py
@@ -1617,8 +1620,8 @@ msgstr "Could not start the business card program."
 #: viewer/app.py viewer/bizcard/standalone.py
 #: viewer/widgets/bizcard_find_dialog.py
 #: viewer/widgets/bizcard_import_dialog.py viewer/widgets/bookmark_tree.py
-msgid "명함 관리"
-msgstr "Business Card Manager"
+msgid "명함 읽기"
+msgstr "Read Cards"
 
 #: viewer/app.py
 msgid "먼저 명함 그림이 있는 폴더를 여세요."
@@ -1761,8 +1764,8 @@ msgstr "Saved"
 msgid "지금 연 폴더·파일·검색어를 등록"
 msgstr "Save the current folder, file or search"
 
-#: viewer/app.py viewer/widgets/stamp_dialog.py
-#: viewer/widgets/tag_apply_dialog.py
+#: viewer/app.py viewer/widgets/bizcard_roster_dialog.py
+#: viewer/widgets/stamp_dialog.py viewer/widgets/tag_apply_dialog.py
 msgid "추가"
 msgstr "Add"
 
@@ -3560,6 +3563,7 @@ msgstr "Could not move to the Recycle Bin"
 #: viewer/widgets/bizcard_find_dialog.py
 #: viewer/widgets/bizcard_history_dialog.py
 #: viewer/widgets/bizcard_import_dialog.py
+#: viewer/widgets/bizcard_roster_dialog.py
 msgid "명함"
 msgstr "Business Cards"
 
@@ -3923,7 +3927,7 @@ msgstr "Adding page"
 msgid "표가 없습니다"
 msgstr "No tables found"
 
-#: viewer/doc_info.py
+#: viewer/doc_info.py viewer/widgets/bizcard_roster_dialog.py
 msgid "읽는 중…"
 msgstr "Reading…"
 
@@ -4040,8 +4044,8 @@ msgstr "{n} pages"
 msgid "앱 OCR 과 같음 {n}쪽"
 msgstr "same as app OCR: {n} page(s)"
 
-#: viewer/doc_info.py viewer/widgets/sign_dialogs.py
-#: viewer/widgets/stamp_dialog.py
+#: viewer/doc_info.py viewer/widgets/bizcard_roster_dialog.py
+#: viewer/widgets/sign_dialogs.py viewer/widgets/stamp_dialog.py
 msgid "고치기"
 msgstr "Edit"
 
@@ -6887,7 +6891,8 @@ msgstr "Remove all signature places of this file?"
 #: viewer/sign_draft_controller.py viewer/widgets/bizcard_dupe_dialog.py
 #: viewer/widgets/bizcard_find_dialog.py viewer/widgets/bizcard_gsync_dialog.py
 #: viewer/widgets/bizcard_history_dialog.py
-#: viewer/widgets/bizcard_import_dialog.py viewer/widgets/capture_settings.py
+#: viewer/widgets/bizcard_import_dialog.py
+#: viewer/widgets/bizcard_roster_dialog.py viewer/widgets/capture_settings.py
 #: viewer/widgets/image_to_pdf_dialog.py viewer/widgets/sign_dialogs.py
 #: viewer/widgets/stamp_dialog.py
 msgid "이름"
@@ -8077,6 +8082,10 @@ msgid "같은 번호"
 msgstr "Same number"
 
 #: viewer/widgets/bizcard_dupe_dialog.py
+msgid "같은 번호·이름 다름 — 확인"
+msgstr "Same number, different name — check"
+
+#: viewer/widgets/bizcard_dupe_dialog.py
 msgid "이름·메일 같음(확정)"
 msgstr "Same name and email (confirmed)"
 
@@ -8096,6 +8105,7 @@ msgstr "Same name and company"
 #: viewer/widgets/bizcard_gsync_dialog.py
 #: viewer/widgets/bizcard_history_dialog.py
 #: viewer/widgets/bizcard_import_dialog.py
+#: viewer/widgets/bizcard_roster_dialog.py
 msgid "회사"
 msgstr "Company"
 
@@ -8103,6 +8113,7 @@ msgstr "Company"
 #: viewer/widgets/bizcard_gsync_dialog.py
 #: viewer/widgets/bizcard_history_dialog.py
 #: viewer/widgets/bizcard_import_dialog.py
+#: viewer/widgets/bizcard_roster_dialog.py
 msgid "부서"
 msgstr "Department"
 
@@ -8110,6 +8121,7 @@ msgstr "Department"
 #: viewer/widgets/bizcard_gsync_dialog.py
 #: viewer/widgets/bizcard_history_dialog.py
 #: viewer/widgets/bizcard_import_dialog.py
+#: viewer/widgets/bizcard_roster_dialog.py
 msgid "직함"
 msgstr "Title"
 
@@ -8124,6 +8136,7 @@ msgstr "Phone"
 #: viewer/widgets/bizcard_gsync_dialog.py
 #: viewer/widgets/bizcard_history_dialog.py
 #: viewer/widgets/bizcard_import_dialog.py
+#: viewer/widgets/bizcard_roster_dialog.py
 msgid "메일"
 msgstr "Email"
 
@@ -8153,8 +8166,21 @@ msgid "앞에 체크한 칸을 한꺼번에 비웁니다 — [저장] 해야 명
 msgstr "Clears all checked fields at once — the card changes only when you click [Save]"
 
 #: viewer/widgets/bizcard_dupe_dialog.py
+#: viewer/widgets/bizcard_roster_dialog.py
 msgid "명함 사진 삭제"
 msgstr "Delete card pictures"
+
+#: viewer/widgets/bizcard_dupe_dialog.py
+msgid "합친 뒤 확인"
+msgstr "Check after merging"
+
+#: viewer/widgets/bizcard_dupe_dialog.py
+msgid "합친 결과 010 번호가 둘 이상이 된 명단입니다 — 다른 사람이 섞였으면 체크하고 [선택한 합치기 되돌리기] 를 누르세요."
+msgstr "These entries now have two or more 010 numbers after merging — if different people were mixed, check them and press [Undo selected merges]."
+
+#: viewer/widgets/bizcard_dupe_dialog.py
+msgid "선택한 합치기 되돌리기"
+msgstr "Undo selected merges"
 
 #: viewer/widgets/bizcard_dupe_dialog.py viewer/widgets/bizcard_find_dialog.py
 msgid "중복 검토"
@@ -8214,6 +8240,15 @@ msgid "명함 뒷면"
 msgstr "Card back"
 
 #: viewer/widgets/bizcard_dupe_dialog.py
+msgid "합친 명함"
+msgstr "Merged cards"
+
+#: viewer/widgets/bizcard_dupe_dialog.py
+#: viewer/widgets/bizcard_roster_dialog.py
+msgid "010 번호"
+msgstr "010 numbers"
+
+#: viewer/widgets/bizcard_dupe_dialog.py
 msgid "병합 우선순위(끌어 순서 바꾸기):"
 msgstr "Merge priority (drag to reorder):"
 
@@ -8228,6 +8263,7 @@ msgid "출처"
 msgstr "Source"
 
 #: viewer/widgets/bizcard_dupe_dialog.py
+#: viewer/widgets/bizcard_roster_dialog.py
 msgid "이유"
 msgstr "Reason"
 
@@ -8240,8 +8276,28 @@ msgid "칸"
 msgstr "Field"
 
 #: viewer/widgets/bizcard_dupe_dialog.py
+msgid "이 사람의 휴대폰이 010 번호가 둘 이상인 다른 이름의 명단에도 있습니다 — 합치지 않고 고쳐서 바로잡으세요"
+msgstr "This person's mobile is also in an entry with a different name that has two or more 010 numbers — don't merge; fix it instead"
+
+#: viewer/widgets/bizcard_dupe_dialog.py
+#: viewer/widgets/bizcard_history_dialog.py
+#: viewer/widgets/bizcard_multi_dialog.py
+#: viewer/widgets/bizcard_roster_dialog.py viewer/widgets/crop_dialog.py
+msgid "나누기"
+msgstr "Split"
+
+#: viewer/widgets/bizcard_dupe_dialog.py
 msgid "대표로"
 msgstr "Make Primary"
+
+#: viewer/widgets/bizcard_dupe_dialog.py
+#, python-brace-format
+msgid "묶음 {n}개를 합칩니다 — 대표가 아닌 명함 {d}장은 지웁니다(그림 파일은 '병합 보관' 폴더로). [마지막 합치기 되돌리기] 로 되돌릴 수 있습니다."
+msgstr "Merge {n} groups — {d} non-primary cards will be removed (their image files go to the merge-holding folder). You can undo with [Undo Last Merge]."
+
+#: viewer/widgets/bizcard_dupe_dialog.py
+msgid "잘못 합쳐짐 의심"
+msgstr "Possibly merged by mistake"
 
 #: viewer/widgets/bizcard_dupe_dialog.py
 msgid "(합치지 않음)"
@@ -8271,6 +8327,7 @@ msgid "마지막 합치기를 되돌립니다 — 옮긴 파일을 제자리로,
 msgstr "Undo the last merge — moved files go back and the card database returns to its state before the merge."
 
 #: viewer/widgets/bizcard_dupe_dialog.py viewer/widgets/bizcard_gsync_dialog.py
+#: viewer/widgets/bizcard_roster_dialog.py
 #, python-brace-format
 msgid "인물 사진 {n}"
 msgstr "Portrait photo {n}"
@@ -8278,6 +8335,11 @@ msgstr "Portrait photo {n}"
 #: viewer/widgets/bizcard_dupe_dialog.py
 msgid "대표"
 msgstr "Primary"
+
+#: viewer/widgets/bizcard_dupe_dialog.py
+#, python-brace-format
+msgid "합치면 010 번호가 둘 이상 되는 묶음이 {n}개 있습니다 — 다른 사람이 섞이지 않았는지 확인하세요."
+msgstr "{n} group(s) would end up with two or more 010 numbers — make sure different people are not mixed."
 
 #: viewer/widgets/bizcard_dupe_dialog.py
 #, python-brace-format
@@ -8290,15 +8352,32 @@ msgid "명함 DB 를 쓰지 못했습니다({err})."
 msgstr "Could not write the business card database ({err})."
 
 #: viewer/widgets/bizcard_dupe_dialog.py
-msgid "모두"
-msgstr "All"
+#, python-brace-format
+msgid "겹친 휴대폰: {n}"
+msgstr "Shared mobile: {n}"
 
 #: viewer/widgets/bizcard_dupe_dialog.py
 #, python-brace-format
-msgid "'{n}' 에 붙은 명함 그림(정리본 앞·뒷면)을 휴지통으로 보내고 그림 없는 명함으로 둡니다 — 연락처·메모는 그대로, 원본 스캔은 남아 명함 관리에서 다시 읽을 수 있습니다."
-msgstr "Moves the card image attached to '{n}' (tidied front and back) to the Recycle Bin and keeps it as a card without an image — contacts and memo stay, and the original scan remains so it can be read again in Card Manager."
+msgid "{name} — 010 {n}개"
+msgstr "{name} — {n} 010 numbers"
 
 #: viewer/widgets/bizcard_dupe_dialog.py
+#, python-brace-format
+msgid "합치면 010 번호가 {n}개 — 다른 사람이 섞이지 않았는지 확인하세요"
+msgstr "Merging gives {n} 010 numbers — make sure different people are not mixed"
+
+#: viewer/widgets/bizcard_dupe_dialog.py
+msgid "모두"
+msgstr "All"
+
+# | 원본 스캔은 남아 명함 관리에서 다시 읽을 수 있습니다."
+#: viewer/widgets/bizcard_dupe_dialog.py
+#, python-brace-format
+msgid "'{n}' 에 붙은 명함 그림(정리본 앞·뒷면)을 휴지통으로 보내고 그림 없는 명함으로 둡니다 — 연락처·메모는 그대로, 원본 스캔은 남아 명함 읽기에서 다시 읽을 수 있습니다."
+msgstr "Moves the card images attached to '{n}' (cleaned front and back) to the Recycle Bin and keeps it as a card without images — contacts and memo stay, and the original scan remains so you can read it again in Read Cards."
+
+#: viewer/widgets/bizcard_dupe_dialog.py
+#: viewer/widgets/bizcard_roster_dialog.py
 #, python-brace-format
 msgid "고른 사진 {n}개를 휴지통으로 보냅니다."
 msgstr "Sends {n} selected pictures to the Recycle Bin."
@@ -8310,18 +8389,18 @@ msgstr "Looking for multi-card photos {d} / {t}"
 
 #: viewer/widgets/bizcard_dupe_dialog.py
 #, python-brace-format
-msgid "묶음 {n}개를 합칩니다 — 대표가 아닌 명함 {d}장은 지웁니다(그림 파일은 '병합 보관' 폴더로). [마지막 합치기 되돌리기] 로 되돌릴 수 있습니다."
-msgstr "Merge {n} groups — {d} non-primary cards will be removed (their image files go to the merge-holding folder). You can undo with [Undo Last Merge]."
-
-#: viewer/widgets/bizcard_dupe_dialog.py
-#, python-brace-format
 msgid "묶인 휴대폰: {n}"
 msgstr "Matched mobile: {n}"
 
 #: viewer/widgets/bizcard_dupe_dialog.py
 #, python-brace-format
-msgid "명함 {n}장으로 나눴습니다 — 명함 관리를 열어 읽을까요?"
-msgstr "Split into {n} cards — open Manage Business Cards to read them?"
+msgid "번호 겹침 — 010 {n}개"
+msgstr "Shared number — {n} 010 numbers"
+
+#: viewer/widgets/bizcard_dupe_dialog.py
+#, python-brace-format
+msgid "명함 {n}장으로 나눴습니다 — 명함 읽기를 열어 읽을까요?"
+msgstr "Split into {n} cards — open Read Cards to read them?"
 
 #: viewer/widgets/bizcard_find_dialog.py
 #: viewer/widgets/bizcard_import_dialog.py
@@ -8470,8 +8549,17 @@ msgid "명함 자료 불러오기(zip)"
 msgstr "Import business card data (zip)"
 
 #: viewer/widgets/bizcard_find_dialog.py
-msgid "명함 폴더의 확인 표 창(명함 관리)을 엽니다"
-msgstr "Open the review table for the business card folder (Manage Business Cards)"
+msgid "명함 폴더의 명함 그림을 읽는 확인 표 창(명함 읽기)을 엽니다"
+msgstr "Opens the confirmation table that reads card images in the card folder (Read Cards)"
+
+#: viewer/widgets/bizcard_find_dialog.py
+#: viewer/widgets/bizcard_roster_dialog.py
+msgid "명단 관리"
+msgstr "Contact Manager"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "모든 명단을 보고 고칩니다 — 010 번호가 둘 이상인 명단, vcf 와 견주기, 잘못 합쳐진 명단 나누기"
+msgstr "View and fix every entry — entries with two or more 010 numbers, compare with a vcf, split entries merged by mistake"
 
 #: viewer/widgets/bizcard_find_dialog.py
 msgid "같은 사람으로 보이는 명함(같은 번호·메일, 번호 오타, 같은 이름·회사)을 묶어 우선순위대로 합칩니다"
@@ -9442,8 +9530,8 @@ msgid "전체 화면"
 msgstr "Full Screen"
 
 #: viewer/widgets/bizcard_import_dialog.py
-msgid "명함 관리 창을 화면 가득 — 다시 누르거나 F11·Esc 로 돌아옵니다"
-msgstr "Fill the screen with the Business Card Manager — click again or press F11/Esc to return"
+msgid "명함 읽기 창을 화면 가득 — 다시 누르거나 F11·Esc 로 돌아옵니다"
+msgstr "Read Cards window full screen — press again or F11/Esc to return"
 
 #: viewer/widgets/bizcard_import_dialog.py
 msgid "읽는 중 %v / %m"
@@ -9647,10 +9735,6 @@ msgid "테두리를 눌러 고른 뒤 Delete 로 빼고, 빈 곳을 끌어 새 �
 msgstr "Click a border and press Delete to remove it; drag on an empty area to draw a new border."
 
 #: viewer/widgets/bizcard_multi_dialog.py viewer/widgets/crop_dialog.py
-msgid "나누기"
-msgstr "Split"
-
-#: viewer/widgets/bizcard_multi_dialog.py viewer/widgets/crop_dialog.py
 msgid "나누지 않음"
 msgstr "Do not split"
 
@@ -9681,8 +9765,8 @@ msgid "사진에서 읽기"
 msgstr "Read from photos"
 
 #: viewer/widgets/bizcard_new_dialog.py
-msgid "명함 사진 여러 장(한 사진에 여러 장도)을 명함 폴더에 복사하고, 명함 관리에서 읽어 확인합니다(원본은 그대로)"
-msgstr "Copies several card photos (including several cards in one photo) to the card folder and reads them in Business Card Manager for checking (the originals stay)"
+msgid "명함 사진 여러 장(한 사진에 여러 장도)을 명함 폴더에 복사하고, 명함 읽기에서 읽어 확인합니다(원본은 그대로)"
+msgstr "Copies several card photos (also several cards in one photo) to the card folder and reads them in Read Cards (originals untouched)"
 
 #: viewer/widgets/bizcard_new_dialog.py viewer/widgets/settings_dialog.py
 msgid "고르기"
@@ -9705,8 +9789,8 @@ msgid "앞면"
 msgstr "Front"
 
 #: viewer/widgets/bizcard_new_dialog.py
-msgid "입력한 칸은 저장하지 않습니다 — 사진을 명함 관리에서 읽을까요?"
-msgstr "The fields you typed will not be saved — read the photos in Business Card Manager?"
+msgid "입력한 칸은 저장하지 않습니다 — 사진을 명함 읽기에서 읽을까요?"
+msgstr "The fields you entered won't be saved — read the photos in Read Cards?"
 
 #: viewer/widgets/bizcard_new_dialog.py
 #, python-brace-format
@@ -9722,6 +9806,154 @@ msgstr "Could not add the card ({err})."
 #, python-brace-format
 msgid "인물 사진 {n}개를 넣지 못했습니다."
 msgstr "Could not add {n} portrait photo(s)."
+
+#: viewer/widgets/bizcard_roster_dialog.py
+msgid "잘못 합쳐짐?"
+msgstr "Merged by mistake?"
+
+#: viewer/widgets/bizcard_roster_dialog.py
+msgid "이름 바뀜?"
+msgstr "Renamed?"
+
+#: viewer/widgets/bizcard_roster_dialog.py
+msgid "새 사람"
+msgstr "New person"
+
+#: viewer/widgets/bizcard_roster_dialog.py
+msgid "같은 이름·번호 다름"
+msgstr "Same name, different numbers"
+
+#: viewer/widgets/bizcard_roster_dialog.py
+msgid "010 둘 이상"
+msgstr "Two or more 010"
+
+#: viewer/widgets/bizcard_roster_dialog.py
+msgid "vcf 비교"
+msgstr "Compare vcf"
+
+#: viewer/widgets/bizcard_roster_dialog.py
+msgid "이름·회사·번호·메일로 거르기"
+msgstr "Filter by name, company, number or email"
+
+#: viewer/widgets/bizcard_roster_dialog.py
+msgid "vcf 열기…"
+msgstr "Open vcf…"
+
+#: viewer/widgets/bizcard_roster_dialog.py
+msgid "휴대폰 주소록 등에서 내보낸 vcf 와 견줍니다 — 파일은 읽기만 합니다"
+msgstr "Compares with a vcf exported from your phone's contacts etc. — the file is only read"
+
+#: viewer/widgets/bizcard_roster_dialog.py
+msgid "번호 없는 새 사람도 보기"
+msgstr "Also show new people without matching numbers"
+
+#: viewer/widgets/bizcard_roster_dialog.py
+msgid "바로잡는 차례: ① 잘못 합쳐지기 전에 구글 주소록에서 내보내 둔 vcf 를 [vcf 비교] 로 열어 그것을 바른 기준으로 나누기·vcf 번호로·vcf 이름으로 ② 변경 기록이 남은 합치기는 주소록 ▸ 변경 기록·되살리기에서 출처 '합치기' 로 되살릴 수도 ③ 그 뒤 구글 주소록과 싱크 미리보기 [적용] 으로 구글·휴대폰에 올립니다."
+msgstr "How to fix: ① open the vcf you exported from Google Contacts before the wrong merges with [Compare vcf] and, taking it as correct, use Split·Use vcf numbers·Use vcf name ② merges with change history can also be restored in Contacts ▸ Change history·Restore with source 'Merge' ③ then press [Apply] in the Google Contacts sync preview to update Google and your phone."
+
+#: viewer/widgets/bizcard_roster_dialog.py
+msgid "고른 번호·메일·명함 그림·인물 사진을 새 사람으로 떼어 냅니다"
+msgstr "Moves the chosen numbers, emails, card images and photos to a new person"
+
+#: viewer/widgets/bizcard_roster_dialog.py
+msgid "명단 삭제"
+msgstr "Delete entry"
+
+#: viewer/widgets/bizcard_roster_dialog.py
+msgid "vcf 의 이 사람을 명단에 더합니다(그림 없는 명함)"
+msgstr "Adds this vcf person to the list (card without images)"
+
+#: viewer/widgets/bizcard_roster_dialog.py
+msgid "vcf 이름으로"
+msgstr "Use vcf name"
+
+#: viewer/widgets/bizcard_roster_dialog.py
+msgid "이 명단의 이름을 vcf 의 이름으로 바꿉니다"
+msgstr "Renames this entry to the name in the vcf"
+
+#: viewer/widgets/bizcard_roster_dialog.py
+msgid "vcf 번호로"
+msgstr "Use vcf numbers"
+
+#: viewer/widgets/bizcard_roster_dialog.py
+msgid "이 명단의 010 번호를 vcf(예전 구글 백업)의 번호로 맞춥니다 — 뺄 번호가 다른 사람 것이면 [나누기] 로 새 사람에게 주세요"
+msgstr "Sets this entry's 010 numbers to those in the vcf (earlier Google backup) — if a removed number belongs to someone else, give it to a new person with [Split]"
+
+#: viewer/widgets/bizcard_roster_dialog.py
+msgid "새 사람에게 줄 것:"
+msgstr "Give to the new person:"
+
+#: viewer/widgets/bizcard_roster_dialog.py
+msgid "명함 그림(앞·뒷면)"
+msgstr "Card images (front and back)"
+
+#: viewer/widgets/bizcard_roster_dialog.py
+msgid "새 사람의 이름을 넣으세요."
+msgstr "Enter the new person's name."
+
+#: viewer/widgets/bizcard_roster_dialog.py
+msgid "새 사람에게 줄 것을 하나 이상 체크하세요."
+msgstr "Check at least one item to give to the new person."
+
+#: viewer/widgets/bizcard_roster_dialog.py
+msgid "다른 전화"
+msgstr "Other phones"
+
+#: viewer/widgets/bizcard_roster_dialog.py
+msgid "vcf 열기"
+msgstr "Open vcf"
+
+#: viewer/widgets/bizcard_roster_dialog.py
+msgid "vCard (*.vcf)"
+msgstr "vCard (*.vcf)"
+
+#: viewer/widgets/bizcard_roster_dialog.py
+msgid "[vcf 열기…] 로 견줄 vcf 를 고르세요."
+msgstr "Choose a vcf to compare with [Open vcf…]."
+
+#: viewer/widgets/bizcard_roster_dialog.py
+#, python-brace-format
+msgid "010 {n}개"
+msgstr "{n} 010 numbers"
+
+#: viewer/widgets/bizcard_roster_dialog.py
+#, python-brace-format
+msgid "'{n}' 에서 다른 사람의 것을 골라 새 사람으로 떼어 냅니다 — 뗀 번호·메일은 이 명단에서 빠집니다."
+msgstr "Pick what belongs to another person in '{n}' and move it to a new person — the moved numbers and emails are removed from this entry."
+
+#: viewer/widgets/bizcard_roster_dialog.py
+#, python-brace-format
+msgid "전화 {n}"
+msgstr "Phone {n}"
+
+#: viewer/widgets/bizcard_roster_dialog.py
+#, python-brace-format
+msgid "메일 {m}"
+msgstr "Email {m}"
+
+#: viewer/widgets/bizcard_roster_dialog.py
+#, python-brace-format
+msgid "나누지 못했습니다({err})."
+msgstr "Couldn't split ({err})."
+
+#: viewer/widgets/bizcard_roster_dialog.py
+#, python-brace-format
+msgid "읽지 못했습니다({err})."
+msgstr "Couldn't read ({err})."
+
+#: viewer/widgets/bizcard_roster_dialog.py
+#, python-brace-format
+msgid "vcf 사람 {n}명"
+msgstr "{n} vcf people"
+
+#: viewer/widgets/bizcard_roster_dialog.py
+#, python-brace-format
+msgid "명단 {n}명"
+msgstr "{n} entries"
+
+#: viewer/widgets/bizcard_roster_dialog.py
+msgid "vcf"
+msgstr "vcf"
 
 # | 서비스 → 라이브러리' 에서 'People API' 를 검색해 [사용](처음 보이는 '사용 설정된 API' 목록에는 켜기 전이라
 # | 없습니다). 명함 그림을 드라이브에 올리려면 'Google Drive API' 도 같은 방법으로.\n" "3. 'Google 인증
@@ -9780,8 +10012,8 @@ msgid "명함 폴더"
 msgstr "Business Card Folder"
 
 #: viewer/widgets/bizcard_settings_dialog.py viewer/widgets/settings_dialog.py
-msgid "지정하지 않음 — '명함 관리' 는 열린 폴더"
-msgstr "Not set — 'Business Card Manager' uses the open folder"
+msgid "지정하지 않음 — '명함 읽기' 는 열린 폴더"
+msgstr "Not set — 'Read Cards' uses the open folder"
 
 #: viewer/widgets/bizcard_settings_dialog.py viewer/widgets/settings_dialog.py
 msgid "다른 폴더로 이전"
@@ -14347,8 +14579,8 @@ msgid "사진 모드에서 발표보기(F5)로 연 슬라이드쇼가 이 간격
 msgstr "A slideshow opened with Presentation (F5) in photo mode moves to the next photo at this interval. 0 turns it off."
 
 #: viewer/widgets/settings_dialog.py
-msgid "명함 사진이 있는 폴더 — 도구 › 명함 › 명함 관리 가 이 폴더를 엽니다"
-msgstr "Folder with the business card images — Tools › Business Cards › Business Card Manager opens this folder"
+msgid "명함 사진이 있는 폴더 — 도구 › 명함 › 명함 읽기 가 이 폴더를 엽니다"
+msgstr "Folder with card photos — Tools › Cards › Read Cards opens this folder"
 
 #: viewer/widgets/settings_dialog.py
 msgid "지정 안 함"
@@ -19233,4 +19465,7 @@ msgstr "Getting Started"
 
 #~ msgid "외 {n}명"
 #~ msgstr "and {n} more"
+
+#~ msgid "바로잡는 차례: ① 변경 기록이 남은 합치기는 주소록 ▸ 변경 기록·되살리기에서 출처 '합치기' 로 되살립니다 ② 그보다 오래된 것은 '010 둘 이상' 이나 'vcf 비교' 에서 나누기·고치기 ③ 그 뒤 구글 주소록과 싱크로 구글·휴대폰에 올립니다."
+#~ msgstr "How to fix: ① merges with change history are restored in Contacts ▸ Change history·Restore with source 'Merge' ② older ones: Split·Fix in 'Two or more 010' or 'Compare vcf' ③ then sync with Google Contacts to update Google and your phone."
 

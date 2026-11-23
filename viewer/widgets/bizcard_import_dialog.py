@@ -1,4 +1,4 @@
-"""명함 관리 — 확인 표 창 (명함 SOT §5.10, P2 · D10·D11·D12 · §5.11 위치 지정·배우기, 261117-9).
+"""명함 읽기 — 확인 표 창 (명함 SOT §5.10, P2 · D10·D11·D12 · §5.11 위치 지정·배우기, 261117-9).
 
 왼쪽 표(이름·회사 후보 풀다운 + 직접 입력), 오른쪽 고른 명함 크게. 인식은 배경(`ImportWorker`), 고친 값은
 그때마다 `recog` 캐시에. [적용] 은 정리 폴더에 새 JPG(원본 그대로) — 배경 진행창(`_run_merge_job`).
@@ -176,7 +176,7 @@ def _first(phones, kinds):
 
 
 def trash_paths(parent, mw, targets) -> set:
-    """명함 지우기의 파일 쪽 — 한 길(261117-19 §5.20, 261117-4·-6 공용 — 책갈피창 `_trash_files` 와 같은 꼴). 명함 관리 [삭제]·
+    """명함 지우기의 파일 쪽 — 한 길(261117-19 §5.20, 261117-4·-6 공용 — 책갈피창 `_trash_files` 와 같은 꼴). 명함 읽기 [삭제]·
     명함찾기 목록 지우기(§5.24 D18)가 함께 쓴다. 열린 PDF 는 먼저 놓고 → 앱 `_trash_bg`(배경·`pathutil.trash_when_free` —
     잠깐 잡히면 다시) → 지운 것은 `fileOpCompleted(경로, "")`, 놓았는데 못 지운 것은 `(경로, 경로)`. 못 지운 것은 공용 문구로 알린다.
     반환 = 못 지운 경로들."""
@@ -236,7 +236,7 @@ class BizcardImportDialog(QDialog):
         self.last_region = None
         self._closing = False
         self._loading = False
-        self.setWindowTitle(tr("명함 관리"))
+        self.setWindowTitle(tr("명함 읽기"))
         # 261117-13(사용자 지시 '전체화면으로도'): 최대화 단추 + F11 전체 화면
         self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowMaximizeButtonHint | Qt.WindowType.WindowMinimizeButtonHint)
         from PyQt6.QtGui import QShortcut, QKeySequence
@@ -310,7 +310,7 @@ class BizcardImportDialog(QDialog):
         self.btn_del.clicked.connect(lambda _c=False: self.delete_selected())
         top.addWidget(self.btn_del)
         self.btn_full = QPushButton(tr("전체 화면"))
-        self.btn_full.setToolTip(tr("명함 관리 창을 화면 가득 — 다시 누르거나 F11·Esc 로 돌아옵니다"))
+        self.btn_full.setToolTip(tr("명함 읽기 창을 화면 가득 — 다시 누르거나 F11·Esc 로 돌아옵니다"))
         self.btn_full.clicked.connect(lambda _c=False: self.toggle_full())
         top.addWidget(self.btn_full)
         v.addLayout(top)
@@ -1326,7 +1326,7 @@ class BizcardImportDialog(QDialog):
                     pass
             val = got
         if not val:
-            QMessageBox.information(self, tr("명함 관리"), tr("그 자리에서 글자를 읽지 못했습니다 — 상자를 조금 넓혀 다시 그리세요."))
+            QMessageBox.information(self, tr("명함 읽기"), tr("그 자리에서 글자를 읽지 못했습니다 — 상자를 조금 넓혀 다시 그리세요."))
             return ""
         col = {"name": C_NAME, "company": C_COMP, "dept": C_DEPT, "title": C_TITLE, "cell": C_CELL, "tel": C_TEL, "email": C_MAIL}[fld]
         self.set_cell(r, col, val)
@@ -1480,7 +1480,7 @@ class BizcardImportDialog(QDialog):
     def _apply(self):
         rows = self.selected_rows()
         if not rows:
-            QMessageBox.information(self, tr("명함 관리"), tr("적용할 명함이 없습니다 — 이름이 있고 '적용' 이 체크된 줄만 만듭니다."))
+            QMessageBox.information(self, tr("명함 읽기"), tr("적용할 명함이 없습니다 — 이름이 있고 '적용' 이 체크된 줄만 만듭니다."))
             return
         out = Path(self.ed_out.text().strip() or (self._folder / OUT_DIR))
         from viewer.bizcard.apply import apply_cards, ApplyCancelled
@@ -1509,7 +1509,7 @@ class BizcardImportDialog(QDialog):
 
         runner = getattr(self._mw, "_run_merge_job", None)
         if runner is not None:
-            res = runner(job, tr("명함 관리"))
+            res = runner(job, tr("명함 읽기"))
         else:                                   # 앱 밖(검사) — 바로
             job(lambda d, t, l: True)
             res = {"ok": True}
@@ -1522,10 +1522,10 @@ class BizcardImportDialog(QDialog):
         self._load_learned()
         self._rescore_others()
         if done:
-            QMessageBox.information(self, tr("명함 관리"),
+            QMessageBox.information(self, tr("명함 읽기"),
                                     tr("명함 {n}장을 정리 폴더에 만들었습니다.\n{path}").format(n=len(done), path=str(out)))
         elif not res.get("ok"):
-            QMessageBox.warning(self, tr("명함 관리"), tr("정리본을 만들지 못했습니다."))
+            QMessageBox.warning(self, tr("명함 읽기"), tr("정리본을 만들지 못했습니다."))
         self.applied = done
 
     def _tag(self, done):

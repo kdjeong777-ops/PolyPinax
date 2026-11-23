@@ -174,7 +174,7 @@ def _first_ph(phones, kind) -> str:
 
 
 def db_overlay(res: dict, edit: dict, card: dict) -> dict:
-    """명함 관리 줄의 손 고침(edit)에 명함 DB 값을 얹는다 — 인식값과 다른 칸(또는 이미 고친 칸)은 DB 값으로(261117-15 '손으로 고친 칸'
+    """명함 읽기 줄의 손 고침(edit)에 명함 DB 값을 얹는다 — 인식값과 다른 칸(또는 이미 고친 칸)은 DB 값으로(261117-15 '손으로 고친 칸'
     과 같은 자리 — [다시 읽기] 도 지킨다). 다른 열쇠(on·keep_back·scanned·_ok)는 그대로."""
     def rec(k):
         if k == "cell":

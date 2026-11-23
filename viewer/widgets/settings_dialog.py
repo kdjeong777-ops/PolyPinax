@@ -886,13 +886,13 @@ class SettingsDialog(QDialog):
         row.addWidget(self.sp_slide_s)
         row.addStretch(1)
         pl.addLayout(row)
-        # 261117-10(명함 SOT §5.12, 사용자 지시): 명함 폴더 — '명함 관리…' 가 먼저 여는 폴더, 다른 폴더로 이전
+        # 261117-10(명함 SOT §5.12, 사용자 지시): 명함 폴더 — '명함 읽기…' 가 먼저 여는 폴더, 다른 폴더로 이전
         pl.addWidget(QLabel(tr("명함 폴더:")))
         row_bz = QHBoxLayout()
         self.ed_bizcard = QLineEdit(str(self._pic.get("bizcard_folder") or ""))
         self.ed_bizcard.setReadOnly(True)
-        self.ed_bizcard.setPlaceholderText(tr("지정하지 않음 — '명함 관리' 는 열린 폴더"))
-        self.ed_bizcard.setToolTip(tr("명함 사진이 있는 폴더 — 도구 › 명함 › 명함 관리 가 이 폴더를 엽니다"))
+        self.ed_bizcard.setPlaceholderText(tr("지정하지 않음 — '명함 읽기' 는 열린 폴더"))
+        self.ed_bizcard.setToolTip(tr("명함 사진이 있는 폴더 — 도구 › 명함 › 명함 읽기 가 이 폴더를 엽니다"))
         row_bz.addWidget(self.ed_bizcard, 1)
         b_bz = QPushButton(tr("고르기"))
         b_bz.clicked.connect(lambda _c=False: self._pick_bizcard())

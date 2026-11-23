@@ -4,7 +4,7 @@
 A. 이전 전 검사 — 같은 폴더·안쪽 폴더·없는 폴더·이름 겹침은 거절하고 아무것도 바꾸지 않는다
 B. 옮기기 — 새 자리가 없으면 한 번에, 빈 폴더면 파일마다, 하위 폴더(정리·인물·PDF)까지, 옛 빈 폴더는 지움
 C. 명함 DB — 사람 행·인식 캐시·학습 표본의 경로가 새 자리로, 옮긴 뒤에도 인식 캐시가 맞는다(다시 OCR 하지 않음)
-D. 앱 — 환경설정 '명함 폴더' 칸이 설정에 저장, '명함 관리…' 는 지정 폴더를 먼저(열린 폴더 아님),
+D. 앱 — 환경설정 '명함 폴더' 칸이 설정에 저장, '명함 읽기…' 는 지정 폴더를 먼저(열린 폴더 아님),
    '다른 폴더로 이전' 이 파일·설정·해시태그를 새 자리로
 """
 import os, sys, tempfile, shutil, time
@@ -154,7 +154,7 @@ try:
     R.recognize = lambda path, ui_lang="ko": R.CardResult(name="홍길동")
     mw._action_bizcard_import()
     bd = mw._bizcard_dlg
-    chk(str(bd._folder) == str(cards), "D '명함 관리…' 는 지정 폴더를 먼저(열린 폴더 아님)", str(bd._folder))
+    chk(str(bd._folder) == str(cards), "D '명함 읽기…' 는 지정 폴더를 먼저(열린 폴더 아님)", str(bd._folder))
     bd.close(); pump(timeout=0.5)
     tags = mw.bookmark_tree._tags
     tags.set(str(cards / "정리" / "홍길동_가.jpg"), ["명함", "가"])

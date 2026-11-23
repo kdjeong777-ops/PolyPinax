@@ -183,8 +183,8 @@ try:
     bd = getattr(fd, "act_dupe", None)
     fd.main_menu.aboutToShow.emit()
     mn = [a.text() for a in fd.main_menu.actions() if not a.isSeparator()]
-    chk(bd is not None and bd.text() == "중복 검토" and mn[1:4] == ["명함 관리", "중복 검토", "주소록"],
-        "C ≡ 메뉴 '중복 검토' 는 '명함 관리'·'주소록' 사이(아래 단추 줄은 261120-66 에 없앰)", str(mn))
+    chk(bd is not None and bd.text() == "중복 검토" and mn[1:5] == ["명함 읽기", "명단 관리", "중복 검토", "주소록"],
+        "C ≡ 메뉴 '중복 검토' 는 '명함 읽기'·'주소록' 사이(아래 단추 줄은 261120-66 에 없앰)", str(mn))
     from viewer.widgets import bizcard_dupe_dialog as DD
     DD.BizcardDupeDialog.exec = lambda self: self.show()           # 모달 대신 보이기만(검사)
     bd.trigger()
@@ -369,14 +369,14 @@ try:
     _btm._trash_fn = lambda: (lambda p: shutil.move(p, str(TRG / Path(p).name)))      # 시험용 휴지통
     d3 = fd.open_dupes(exec_=False)
     chk(d3 is not None and hasattr(d3, "btn_multi"), "G 중복 검토 창에 [다중 명함 찾기]")
-    QMessageBox.question = staticmethod(lambda *a, **k: QMessageBox.StandardButton.Yes)   # '명함 관리를 열어 읽을까요?' — 예
+    QMessageBox.question = staticmethod(lambda *a, **k: QMessageBox.StandardButton.Yes)   # '명함 읽기를 열어 읽을까요?' — 예
     QTest.mouseClick(d3.btn_multi, Qt.MouseButton.LeftButton)
     chk(pump(lambda: getattr(d3, "multi_dlg", None) is not None and d3.multi_dlg.isVisible(), timeout=20)
         and len(d3.multi_dlg.view.quads) == 3, "G 이미 들어간 명함의 원본을 세어 확인 창(테두리 셋)")
     if getattr(d3, "multi_dlg", None) is not None:
         QTest.mouseClick(d3.multi_dlg.btn_ok, Qt.MouseButton.LeftButton)
     chk(pump(lambda: getattr(d3, "multi_split", None) is not None and getattr(mw, "_bizcard_dlg", None) is not None, timeout=20),
-        "G 나눈 뒤 명함 관리를 그 폴더로 엶")
+        "G 나눈 뒤 명함 읽기를 그 폴더로 엶")
     st = S.BizcardStore()
     names_g = sorted(os.listdir(FG))
     chk(P.card_by_id(st, g_old["id"]) is None and not os.path.exists(g_out) and "g_1 명함 03.jpg" in names_g
@@ -386,7 +386,7 @@ try:
     imd = getattr(mw, "_bizcard_dlg", None)
     if imd is not None:
         pump(lambda: imd.bar.value() == 3 and not imd._pending, timeout=20)
-        chk(imd.table.rowCount() == 3, "G 명함 관리가 잘라낸 셋을 읽음", str(imd.table.rowCount()))
+        chk(imd.table.rowCount() == 3, "G 명함 읽기가 잘라낸 셋을 읽음", str(imd.table.rowCount()))
         imd.close()
         pump(timeout=0.3)
     d4 = fd.open_dupes(exec_=False)

@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 """새 명함 입력 창 (명함 SOT §5.24.1 '새 명함 입력', 261120-15).
 
-명함찾기 아래 줄 [새 명함 입력]·명함 관리 위 줄 [새 명함 입력] 이 같이 쓴다.
+명함찾기 아래 줄 [새 명함 입력]·명함 읽기 위 줄 [새 명함 입력] 이 같이 쓴다.
 칸(세부 칸과 같은 것) + 명함 그림 앞·뒷면 + 인물 사진 여러 장 → [저장] 이면 배경에서 `people.add_new_card`.
-앞면 그림이 없으면 그림 없는 명함(`contact:`), 있으면 명함 관리 [적용]과 같은 길(정리본 `성명_회사명`).
+앞면 그림이 없으면 그림 없는 명함(`contact:`), 있으면 명함 읽기 [적용]과 같은 길(정리본 `성명_회사명`).
 """
 from __future__ import annotations
 
@@ -99,7 +99,7 @@ class NewCardDialog(QDialog):
         self._db, self._folder = db, folder or ""
         self._img_filter = tr("그림") + " (%s)" % IMG_FILTER
         self.new_id, self.dupes, self.photo_bad, self.busy = 0, [], 0, False
-        self.read_files = []                           # [사진에서 읽기] 로 명함 폴더에 복사한 사진(부르는 쪽이 명함 관리로 넘긴다)
+        self.read_files = []                           # [사진에서 읽기] 로 명함 폴더에 복사한 사진(부르는 쪽이 명함 읽기로 넘긴다)
         self.front_img, self.back_img = "", ""
         self.setWindowTitle(tr("새 명함 입력"))
         self.resize(520, 720)
@@ -162,9 +162,9 @@ class NewCardDialog(QDialog):
             v.addWidget(note)
 
         brow = QHBoxLayout()
-        # 261120-31(§5.24.1 '사진에서 읽기'): 명함 사진 여러 장·다중 명함 사진 → 명함 폴더에 복사 → 명함 관리 확인 표에서 확인
+        # 261120-31(§5.24.1 '사진에서 읽기'): 명함 사진 여러 장·다중 명함 사진 → 명함 폴더에 복사 → 명함 읽기 확인 표에서 확인
         self.btn_read = QPushButton(tr("사진에서 읽기"))
-        self.btn_read.setToolTip(tr("명함 사진 여러 장(한 사진에 여러 장도)을 명함 폴더에 복사하고, 명함 관리에서 읽어 확인합니다(원본은 그대로)"))
+        self.btn_read.setToolTip(tr("명함 사진 여러 장(한 사진에 여러 장도)을 명함 폴더에 복사하고, 명함 읽기에서 읽어 확인합니다(원본은 그대로)"))
         self.btn_read.clicked.connect(lambda _c=False: self.pick_read())
         self.btn_read.setEnabled(has_folder)
         brow.addWidget(self.btn_read)
@@ -218,13 +218,13 @@ class NewCardDialog(QDialog):
         return self.read_photos(files)
 
     def read_photos(self, files) -> bool:
-        """사진들을 명함 폴더에 복사(배경)한 뒤 창을 닫는다 — 부르는 쪽이 `read_files` 를 명함 관리로 넘긴다."""
+        """사진들을 명함 폴더에 복사(배경)한 뒤 창을 닫는다 — 부르는 쪽이 `read_files` 를 명함 읽기로 넘긴다."""
         files = [f for f in files or [] if f and os.path.isfile(f)]
         if not files or self.busy or not self._folder:
             return False
         typed = any(ed.text().strip() for ed in self.eds.values()) or self.ed_memo.toPlainText().strip()
         if typed and QMessageBox.question(self, tr("사진에서 읽기"),
-                                          tr("입력한 칸은 저장하지 않습니다 — 사진을 명함 관리에서 읽을까요?")) \
+                                          tr("입력한 칸은 저장하지 않습니다 — 사진을 명함 읽기에서 읽을까요?")) \
                 != QMessageBox.StandardButton.Yes:
             return False
         from viewer.workers import run_in_thread

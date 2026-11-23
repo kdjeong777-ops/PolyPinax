@@ -6,8 +6,8 @@ B. 이름 앞 직위 — '시험실장 홍  길  동' → 이름 홍길동·직�
 C. 누리집·메일 도메인 → 직장 — www.seoul.go.kr 이고 회사 줄이 없으면 '서울시청', 아래 도메인도, 배운 표가 먼저, 개인 메일은 안 봄
 D. 다시 매기기 — 양식 상자 안의 후보가 1위로(OCR 없이), 배운 가중치를 쓰면 순위가 바뀜
 E. 가중치 배우기 — 표본이 모자라면 None, 충분하면 1위 정확도가 기본 이상, 표본에는 이름 글자가 없다
-F. 앱 — 명함 관리 창: 미리 보기 위치 지정이 그 자리만 읽어 이름 칸을 채우고 같은 회사 양식으로 기억(다른 줄 다시 매김),
-   [적용] 뒤 도메인 → 직장을 배움, 글자 '명함 관리'(명함찾기 단추 — 261117-56 에 도구 탭 메뉴는 없앰)
+F. 앱 — 명함 읽기 창: 미리 보기 위치 지정이 그 자리만 읽어 이름 칸을 채우고 같은 회사 양식으로 기억(다른 줄 다시 매김),
+   [적용] 뒤 도메인 → 직장을 배움, 글자 '명함 읽기'(명함찾기 단추 — 261117-56 에 도구 탭 메뉴는 없앰)
 G. 세로로 누운 명함 — 0도에서 연락처를 못 찾으면 돌려 읽는다(OCR, 없으면 SKIP)
 """
 import os, sys, tempfile, shutil, time, json
@@ -125,7 +125,7 @@ try:
         "E 표본에는 이름 글자가 없고 정답 하나")
 
     # ── F ──
-    print("\n=== F. 앱 — 명함 관리 창 ===")
+    print("\n=== F. 앱 — 명함 읽기 창 ===")
     from test_fixtures import KRFONT
     from viewer.study import ocr as O
     have_ocr = O.ensure_tesseract().get("ok") and KRFONT and "kor" in O.available_langs()
@@ -159,27 +159,27 @@ try:
     R.recognize = fake_recognize
     from viewer.app import MainWindow
     import modal_guard
-    modal_guard.install(label=lambda: "명함 관리", echo=False)
+    modal_guard.install(label=lambda: "명함 읽기", echo=False)
     QMessageBox.information = staticmethod(lambda *a, **k: QMessageBox.StandardButton.Ok)
     mw = MainWindow(); mw._skip_save_on_close = True
     mw.show(); pump(timeout=1.0)
     from PyQt6.QtGui import QAction
     acts = [a.text() for a in mw.findChildren(QAction) if "명함" in a.text()]
-    # 261117-56: 본 뷰어 도구 탭의 `명함 ▾` 는 없앴다 — '명함 관리' 는 명함찾기 아래 줄 단추(명함 SOT §5.24.1 '단추')
+    # 261117-56: 본 뷰어 도구 탭의 `명함 ▾` 는 없앴다 — '명함 읽기' 는 명함찾기 아래 줄 단추(명함 SOT §5.24.1 '단추')
     from viewer.widgets.bizcard_find_dialog import BizcardFindDialog as _BFD
     _fd = _BFD(mw)
-    chk(_fd.act_manage.text() == "명함 관리" and not any("들이기" in t for t in acts), "F 글자 '명함 관리'(명함찾기 단추, 옛 '들이기' 없음)",
+    chk(_fd.act_manage.text() == "명함 읽기" and not any("들이기" in t for t in acts), "F 글자 '명함 읽기'(명함찾기 단추, 옛 '들이기' 없음)",
         "%r %s" % (_fd.act_manage.text(), acts))
     _fd.close()
     mw._action_bizcard_import(str(F))
     dlg = mw._bizcard_dlg
-    chk(dlg.windowTitle() == "명함 관리", "F 창 제목 '명함 관리'", dlg.windowTitle())
+    chk(dlg.windowTitle() == "명함 읽기", "F 창 제목 '명함 읽기'", dlg.windowTitle())
     pump(lambda: dlg._worker is not None, timeout=5)
     reading = not dlg._worker.done_event.is_set()
     mw._action_bizcard_import(str(F))                                    # 261117-13: 두 번 눌러도 창은 하나(읽는 중이어도)
     from viewer.widgets.bizcard_import_dialog import BizcardImportDialog
     vis = [w for w in QApplication.topLevelWidgets() if isinstance(w, BizcardImportDialog) and w.isVisible()]
-    chk(mw._bizcard_dlg is dlg and len(vis) == 1, "F 명함 관리를 다시 눌러도 창은 하나(앞으로 가져옴)", str(len(vis)))
+    chk(mw._bizcard_dlg is dlg and len(vis) == 1, "F 명함 읽기를 다시 눌러도 창은 하나(앞으로 가져옴)", str(len(vis)))
     chk(pump(lambda: dlg.bar.value() == 2, timeout=30), "F 읽는 중에 다시 눌러도 읽기는 이어진다(%s)" % ("읽는 중이었음" if reading else "이미 끝"))
     QTest.keyClick(dlg, Qt.Key.Key_F11)                                  # 명함 창의 F11 — 본 창(발표는 F5)과 겹치지 않는다
     pump(timeout=0.3)

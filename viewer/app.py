@@ -2924,7 +2924,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             _bt.trash_runner = self._trash_bg                        # 261117-4(사진 보기 SOT §4.25.1)·261117-6(PDF 도) — 휴지통은 배경·잠깐 잡히면 다시
             _bt.save_first_check = self._copy_blocked                # 261107-21(§4.7.13): 저장 ▸ 사본 넷은 저장 전 쪽 편집이 있으면 먼저 저장
             _bt.pdf_backup_of = self._pdf_backup_of                  # 261107-29(§4.7.5): '원본으로 되돌리기' 는 처음 원본 백업이 있을 때만
-            _bt.bizcard_import = self._action_bizcard_import         # 261117-8(명함 SOT §5.10, D11): 사진 모드 폴더 줄 우클릭 '명함 관리'
+            _bt.bizcard_import = self._action_bizcard_import         # 261117-8(명함 SOT §5.10, D11): 사진 모드 폴더 줄 우클릭 '명함 읽기'
             _bt.xfer_quick = self._xfer_fill_quick                   # 261112-18: 폴더로 복사·이동 맨 위 즐겨찾기 폴더 + 최근 폴더(사진과 한 함수)
             _bt.xfer_done = self._xfer_remember
         self.page_thumbs.convertPagesRequested.connect(
@@ -7663,16 +7663,16 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         dlg.show()
 
     def _action_bizcard_import(self, folder=None):
-        """261117-8(명함 SOT §5.10): 명함 관리(261117-9 — 종전 '명함 들이기') — 확인 표 창. 대상은 준 폴더, 없으면 열린 폴더(D11)."""
+        """261117-8(명함 SOT §5.10): 명함 읽기(261117-9 — 종전 '명함 들이기') — 확인 표 창. 대상은 준 폴더, 없으면 열린 폴더(D11)."""
         if not folder:                                # 261117-10(§5.12, 사용자 결정 '지정 폴더 우선')
             pic = self._prefs.get("picture") if isinstance(self._prefs.get("picture"), dict) else {}
             bz = str(pic.get("bizcard_folder") or "")
             folder = bz if bz and os.path.isdir(bz) else self._folder
         if not folder or not os.path.isdir(str(folder)):
-            QMessageBox.information(self, tr("명함 관리"), tr("먼저 명함 그림이 있는 폴더를 여세요."))
+            QMessageBox.information(self, tr("명함 읽기"), tr("먼저 명함 그림이 있는 폴더를 여세요."))
             return
         from viewer.widgets.bizcard_import_dialog import BizcardImportDialog
-        old = getattr(self, "_bizcard_dlg", None)          # 261117-13(사용자 보고 '명함 관리가 2개'): 창은 하나
+        old = getattr(self, "_bizcard_dlg", None)          # 261117-13(사용자 보고 '명함 읽기가 2개'): 창은 하나
         try:
             from PyQt6 import sip
             alive = old is not None and not sip.isdeleted(old) and old.isVisible()
@@ -11036,7 +11036,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         for a in getattr(self, "_ko_only_acts", []):
             _act_en(a, True)
         # 명함 SOT §5.24.6·§5.27(사용자 지시): 환경설정 명함 폴더가 비어 있으면 본 화면 명함 아이콘 숨김(설정을 바꾸면 곧바로).
-        #   폴더가 없을 때 들어가는 길은 환경설정·사진 모드 폴더 줄 우클릭 '명함 관리'
+        #   폴더가 없을 때 들어가는 길은 환경설정·사진 모드 폴더 줄 우클릭 '명함 읽기'
         _pic = p.get("picture") if isinstance(p.get("picture"), dict) else {}
         _bzb = getattr(self, "_bizcard_btn", None)
         if _bzb is not None:

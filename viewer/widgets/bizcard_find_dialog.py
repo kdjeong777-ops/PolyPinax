@@ -3,7 +3,7 @@
 배치(§5.24): 왼쪽 = 위 즐겨찾기 줄(탭 + 카톡 꼴 사람 칸, 최대 2줄) + 아래 [결과 표 | 세부 칸(체크·메모)],
 오른쪽 끝 = 사진창(위 명함 + 앞↔뒤 동그란 단추, 아래 인물 사진 — 끌어 순서 바꾸기 = 파일 이름 차례, 지우기 = 휴지통).
 이름·회사를 고쳐 저장하면 정리본 이름도 `성명_회사명` 으로 — 앱의 이름 바꾸기 한 길(`_rename_bg` → `_after_rename`).
-목록에서 지우기는 명함 관리 [삭제]와 같은 함수(`trash_paths`, D18). 그림 읽기·인물 사진 넣기는 배경.
+목록에서 지우기는 명함 읽기 [삭제]와 같은 함수(`trash_paths`, D18). 그림 읽기·인물 사진 넣기는 배경.
 ★ 명함 글은 로그·상태 줄 밖으로 내보내지 않는다(§2.1).
 """
 from __future__ import annotations
@@ -1400,7 +1400,7 @@ class BizcardFindDialog(QDialog):
         self.btn_open = QPushButton(tr("명함 보기"))                     # D19: 종전 '사진 모드에서 열기' — 동작 그대로
         self.btn_open.setToolTip(tr("이 명함을 사진 모드에서 엽니다"))
         self.btn_open.clicked.connect(lambda _c=False: self.open_in_photo())
-        # 종전 아래 단추 줄(새 명함 입력·명함 관리·중복 검토·주소록·명함 보기)은 ≡ 메뉴 항목으로만(§5.24.1 '아래 줄', 261120-66)
+        # 종전 아래 단추 줄(새 명함 입력·명함 읽기·중복 검토·주소록·명함 보기)은 ≡ 메뉴 항목으로만(§5.24.1 '아래 줄', 261120-66)
         self.act_open = QAction(tr("명함 보기"), self)                 # D19: 종전 '사진 모드에서 열기' — 동작 그대로
         self.act_open.setToolTip(tr("이 명함을 사진 모드에서 엽니다"))
         self.act_open.triggered.connect(lambda _c=False: self.open_in_photo())
@@ -1418,10 +1418,13 @@ class BizcardFindDialog(QDialog):
         bm.addSeparator()
         _menu_act(bm, tr("명함 자료 내보내기(zip)"), lambda: self.export_archive())    # 다른 PC 로 옮기기(§5.31, 261120-73)
         _menu_act(bm, tr("명함 자료 불러오기(zip)"), lambda: self.import_archive())
-        self.act_manage = QAction(tr("명함 관리"), self)    # 메뉴 '명함 관리' 와 같은 길 — 본 뷰어 안에서만(§5.24.1 '≡ 메뉴')
-        self.act_manage.setToolTip(tr("명함 폴더의 확인 표 창(명함 관리)을 엽니다"))
+        self.act_manage = QAction(tr("명함 읽기"), self)    # 메뉴 '명함 읽기'(종전 '명함 관리', 261122-2) 와 같은 길 — 본 뷰어 안에서만(§5.24.1 '≡ 메뉴')
+        self.act_manage.setToolTip(tr("명함 폴더의 명함 그림을 읽는 확인 표 창(명함 읽기)을 엽니다"))
         self.act_manage.triggered.connect(lambda _c=False: self.open_manage())
         self.act_manage.setVisible(callable(getattr(self._mw, "_action_bizcard_import", None)))
+        self.act_roster = QAction(tr("명단 관리"), self)    # §5.32(261122-1·-2) — 명함이 있든 없든 모든 명단·010 둘 이상·vcf 비교·나누기
+        self.act_roster.setToolTip(tr("모든 명단을 보고 고칩니다 — 010 번호가 둘 이상인 명단, vcf 와 견주기, 잘못 합쳐진 명단 나누기"))
+        self.act_roster.triggered.connect(lambda _c=False: self.open_roster())
         self.act_dupe = QAction(tr("중복 검토"), self)      # §5.24.8 D30 — 번호·메일 등으로 같은 사람 묶어 합치기
         self.act_dupe.setToolTip(tr("같은 사람으로 보이는 명함(같은 번호·메일, 번호 오타, 같은 이름·회사)을 묶어 우선순위대로 합칩니다"))
         self.act_dupe.triggered.connect(lambda _c=False: self.open_dupes())
@@ -1466,7 +1469,7 @@ class BizcardFindDialog(QDialog):
         return dlg
 
     def after_new_card(self, dlg):
-        if getattr(dlg, "read_files", None):           # 261120-31: [사진에서 읽기] — 명함 관리(명함 폴더)에서 읽어 확인
+        if getattr(dlg, "read_files", None):           # 261120-31: [사진에서 읽기] — 명함 읽기(명함 폴더)에서 읽어 확인
             fn = getattr(self._mw, "_action_bizcard_import", None)
             if callable(fn):
                 fn(self._bizcard_folder())
@@ -1477,7 +1480,7 @@ class BizcardFindDialog(QDialog):
         if not getattr(dlg, "new_id", 0):
             return
         c = P.card_by_id(self._store(), dlg.new_id)
-        if c and not V.is_contact(c):                    # 그림 명함 — 정리본 파일 태그도(§5.5, 명함 관리 [적용]과 같게)
+        if c and not V.is_contact(c):                    # 그림 명함 — 정리본 파일 태그도(§5.5, 명함 읽기 [적용]과 같게)
             self._retag([x for x in (c["front"], c.get("back") or "") if x and os.path.exists(x)], set(), c.get("tags") or [])
         self._table_tab = None
         self.ed_find.clear()
@@ -1492,18 +1495,18 @@ class BizcardFindDialog(QDialog):
             self.open_dupes()
 
     def open_manage(self):
-        """[명함 관리] — 메뉴 '명함 관리' 와 같은 함수(MainWindow._action_bizcard_import, 대상 폴더 규칙도 같음 §5.12)."""
+        """[명함 읽기] — 메뉴 '명함 읽기' 와 같은 함수(MainWindow._action_bizcard_import, 대상 폴더 규칙도 같음 §5.12)."""
         fn = getattr(self._mw, "_action_bizcard_import", None)
         if callable(fn):
             fn()
 
     def _fill_main_menu(self):
-        """≡ 메뉴를 열 때마다 — 새 명함 입력·명함 관리(본 뷰어 안에서만)·중복 검토·주소록 ▸·명함 보기(그림 없는 명함이면 흐림),
+        """≡ 메뉴를 열 때마다 — 새 명함 입력·명함 읽기(본 뷰어 안에서만)·중복 검토·주소록 ▸·명함 보기(그림 없는 명함이면 흐림),
         끝에 '종료'(§5.24.1 '≡ 메뉴' — 종전 아래 단추 줄은 261120-66 에 없앴다)."""
         m = self.main_menu
         m.clear()
         m.setToolTipsVisible(True)
-        for a in (self.act_new_card, self.act_manage, self.act_dupe, None, self.act_open):
+        for a in (self.act_new_card, self.act_manage, self.act_roster, self.act_dupe, None, self.act_open):
             if a is None:
                 m.addMenu(self.vcard_menu)
             elif a.isVisible():
@@ -1791,6 +1794,23 @@ class BizcardFindDialog(QDialog):
             return dlg
         dlg.exec()
         self.after_dupes()
+        return dlg
+
+    def open_roster(self, exec_: bool = True):
+        """≡ 메뉴 '명단 관리'(§5.32) — 고치던 칸은 먼저 저장을 묻고, 창을 닫으면 목록·즐겨찾기를 다시."""
+        if self._dirty and not self._ask_save():
+            return None
+        if self.photo_busy:
+            QMessageBox.information(self, tr("명함찾기"), tr("인물 사진을 넣는 중입니다 — 끝난 뒤에 다시 하세요."))
+            return None
+        from viewer.widgets.bizcard_roster_dialog import RosterDialog
+        dlg = RosterDialog(self)
+        self.roster_dlg = dlg                                # 검사가 찾는다
+        dlg.finished.connect(lambda _r: self.after_dupes())
+        if not exec_:
+            dlg.show()
+            return dlg
+        dlg.exec()
         return dlg
 
     def after_dupes(self):
@@ -3605,7 +3625,7 @@ class BizcardFindDialog(QDialog):
 
     def detach_card_image(self, c, originals: bool = False) -> bool:
         """명함 그림 떼기(§5.24.8 '그림 떼기') — 정리본 앞·뒷면을 휴지통(앱 한 길), 명함은 그림 없는 명함(`contact:…`)으로,
-        인물 사진은 그림 없는 명함 자리로 옮긴다. 원본 스캔·인식 기록 열쇠(src_key)는 떼어 명함 관리가 새 명함으로 다시 읽게."""
+        인물 사진은 그림 없는 명함 자리로 옮긴다. 원본 스캔·인식 기록 열쇠(src_key)는 떼어 명함 읽기가 새 명함으로 다시 읽게."""
         import uuid
         from viewer.widgets.bizcard_import_dialog import trash_paths
         outs = [P._real(x) for x in (c.get("front"), c.get("back")) if x and os.path.exists(P._real(x))]
@@ -3632,7 +3652,7 @@ class BizcardFindDialog(QDialog):
         self.refresh()
         return True
 
-    # ── 목록에서 지우기 (§5.24 D18 — 명함 관리 [삭제] 와 같은 길) ──
+    # ── 목록에서 지우기 (§5.24 D18 — 명함 읽기 [삭제] 와 같은 길) ──
     def delete_cards(self, cards=None, ask: bool = True) -> int:
         cards = cards if cards is not None else (self.selected_cards() or ([self._card] if self._card else []))
         if not cards:

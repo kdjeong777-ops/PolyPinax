@@ -664,7 +664,7 @@ class BookmarkTree(QWidget):
         self._probe_total = 0        # 260906-4: 이번 묶음 진행 표시용
         self._probe_done = 0
         self.probe_provider = None   # 앱이 주입: (path,size,mtime) -> (enc,has_toc,auth)|None
-        self.bizcard_import = None    # 261117-8(명함 SOT §5.10, D11): 앱이 주입 — (폴더) 명함 관리 창
+        self.bizcard_import = None    # 261117-8(명함 SOT §5.10, D11): 앱이 주입 — (폴더) 명함 읽기 창
         self.photo_menu_fill = None   # 앱이 주입: (메뉴, 사진 경로들, 'tree', 책갈피창 줄) — 사진 세 메뉴 한 함수(사진 보기 SOT §4.20, 261107-2)
         self.view_only = None           # 앱이 주입: () -> True 면 보기만(섞은 2단의 아래 창, 사진 보기 SOT §4.47, 261116-19) — 우클릭·Del·이름 변경 막음
         self.view_only_menu = None      # 앱이 주입: (파일 경로|None, 전역 좌표) — 보기만일 때의 우클릭 메뉴('그 모드로 보기')
@@ -3994,7 +3994,7 @@ class BookmarkTree(QWidget):
             self._add_ocr_layer_action(menu, _ff)
         if pm and _folder_row is not None and self.bizcard_import is not None:   # 261117-8(명함 SOT §5.10, D11)
             menu.group("tool")                       # 도구 묶음(디자인 SOT §2.9.8 의 1) — 종전 없는 묶음 'bizcard' 로 단언이 터졌다(261117-8 덧고침)
-            _bz = menu.addAction(tr("명함 관리"))
+            _bz = menu.addAction(tr("명함 읽기"))
             _bz.triggered.connect(lambda _c=False, f=str(_folder_row): self.bizcard_import(f))
         # 끝 — 260615-4: ⑫ 즐겨찾기 등록(현재 폴더 / 현재 파일)
         self._mi_fav(menu, _dir_target if is_file else None)

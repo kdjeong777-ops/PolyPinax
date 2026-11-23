@@ -60,11 +60,11 @@ class Host(QObject):
         self.find_dlg = None
 
     def _action_bizcard_import(self, folder=None):
-        """[명함 관리] — 지정한 명함 폴더(없으면 묻기)로 확인 표 창. 창은 하나."""
+        """[명함 읽기] — 지정한 명함 폴더(없으면 묻기)로 확인 표 창. 창은 하나."""
         from PyQt6.QtWidgets import QFileDialog
         folder = folder or bizcard_folder()
         if not folder or not os.path.isdir(folder):
-            folder = QFileDialog.getExistingDirectory(self.find_dlg, tr("명함 관리"), "")
+            folder = QFileDialog.getExistingDirectory(self.find_dlg, tr("명함 읽기"), "")
             if not folder:
                 return None
         old = self._bizcard_dlg

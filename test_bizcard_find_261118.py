@@ -618,7 +618,7 @@ try:
     t = dlg.fav_copy_selected() if hasattr(dlg, "fav_copy_selected") else ""
     chk("홍길동" in t and "김철수" not in t and QApplication.clipboard().text() == t, "I14 즐겨찾기 사람 메뉴 '내용 복사' = 체크한 칸 글", repr(t[:40]))
     dlg.todo_delete(gid, ask=False)
-    # I19 ≡ 메뉴 '명함 관리' — 본 뷰어 안에서 [중복 검토] 앞, 누르면 명함 관리 창 길 `_action_bizcard_import`(아래 단추 줄은 261120-66 에 없앰)
+    # I19 ≡ 메뉴 '명함 읽기' — 본 뷰어 안에서 [중복 검토] 앞, 누르면 명함 읽기 창 길 `_action_bizcard_import`(아래 단추 줄은 261120-66 에 없앰)
     bm_ = getattr(dlg, "act_manage", None)
     calls = []
     _orig_imp = mw._action_bizcard_import
@@ -631,8 +631,8 @@ try:
             pump(timeout=0.1)
     finally:
         mw._action_bizcard_import = _orig_imp
-    chk(bm_ is not None and bm_.text() == "명함 관리" and mnames[:3] == ["새 명함 입력", "명함 관리", "중복 검토"] and calls == [()],
-        "I19 ≡ 메뉴 '명함 관리' 는 [중복 검토] 앞, 누르면 명함 관리 창 길", str((mnames, calls)))
+    chk(bm_ is not None and bm_.text() == "명함 읽기" and mnames[:4] == ["새 명함 입력", "명함 읽기", "명단 관리", "중복 검토"] and calls == [()],
+        "I19 ≡ 메뉴 '명함 읽기' 는 [중복 검토] 앞, 누르면 명함 읽기 창 길", str((mnames, calls)))
     # I15 탭·메뉴 개편 — 아이콘·끌어 복사·'+'·표/탭/사람 메뉴·이메일 복사·마감·삭제(메모 글)·최근·탭 명단 보기 (사용자 지시 261119)
     from PyQt6.QtWidgets import QMenu, QInputDialog, QToolButton, QWidgetAction
     st = dlg._store()
@@ -920,7 +920,7 @@ try:
     merge_now()
     chk(comp_of() == [("최가짜", "손회사")], "I10 손으로 고친 칸은 리멤버도 덮지 않음", str(comp_of()))
     pump(lambda: dlg.table.rowCount() == 5, timeout=3)
-    # I9 목록에서 지우기 — 명함 관리 [삭제]와 같은 길
+    # I9 목록에서 지우기 — 명함 읽기 [삭제]와 같은 길
     lee = next(c for c in dlg._rows if c["name"] == "이영희")
     st = S.BizcardStore()
     gid0 = dlg._fav_gid()
@@ -1179,7 +1179,7 @@ try:
         "I26 목록 머리말 높이·위 끝이 세부내용 제목 띠와 같음",
         "%d/%s %d/%d" % (hh2.height(), hd2.height() if hd2 is not None else None, y_h, y_d))
 
-    print("\n=== I27. 새 명함 입력 — 명함찾기·명함 관리 단추, 그림 없는/그림 명함, 인물 사진, 같은 사람 물음 (261120-15) ===")
+    print("\n=== I27. 새 명함 입력 — 명함찾기·명함 읽기 단추, 그림 없는/그림 명함, 인물 사진, 같은 사람 물음 (261120-15) ===")
     import viewer.widgets.bizcard_new_dialog as NDm
     bnew = getattr(dlg, "act_new_card", None)
     dlg.main_menu.aboutToShow.emit()
@@ -1239,7 +1239,7 @@ try:
             "I27 앞면 그림을 붙이면 그림 명함(정리\\성명_회사명.jpg, 원본 그대로)·인물 사진·같은 사람 없으면 묻지 않음",
             "%s %s %s" % (fr, ph_b, asked3[n_ask:]))
         st.close()
-        # C — 명함 관리 창: [새 명함 읽기] 오른쪽에 [새 명함 입력], 누르면 같은 창
+        # C — 명함 읽기 창: [새 명함 읽기] 오른쪽에 [새 명함 입력], 누르면 같은 창
         G2 = TMP / "manual_empty"
         G2.mkdir(exist_ok=True)
         from viewer.widgets import bizcard_import_dialog as BD2
@@ -1255,7 +1255,7 @@ try:
         cm_ = [r[0] for r in st2.con.execute("SELECT name FROM cards")]
         st2.close()
         chk(bm is not None and tl.indexOf(bm) == tl.indexOf(idlg2.btn_new) + 1 and cm_ == ["관리가짜"],
-            "I27 명함 관리 [새 명함 읽기] 오른쪽 [새 명함 입력] — 같은 창으로 넣음", str(cm_))
+            "I27 명함 읽기 [새 명함 읽기] 오른쪽 [새 명함 입력] — 같은 창으로 넣음", str(cm_))
         idlg2.close()
     finally:
         QMessageBox.question, NDm.NewCardDialog.exec = _o_q3, _o_exec3
@@ -1651,7 +1651,7 @@ try:
         dlg.main_menu.aboutToShow.emit()                         # 메뉴를 여는 것과 같은 길(열 때마다 채움)
         acts = [a for a in dlg.main_menu.actions() if not a.isSeparator()]
         names = [a.text() for a in acts]
-        want_names = ["새 명함 입력", "명함 관리", "중복 검토", "주소록", "명함 보기", "종료"]
+        want_names = ["새 명함 입력", "명함 읽기", "명단 관리", "중복 검토", "주소록", "명함 보기", "종료"]
         en = {a.text(): a.isEnabled() for a in acts}
         sub = next((a.menu() for a in acts if a.menu() is not None), None)
         hits4 = []

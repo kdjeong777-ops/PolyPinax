@@ -65,7 +65,7 @@ class BizcardSettingsDialog(QDialog):
         r1 = QHBoxLayout(g1)
         self.ed_folder = QLineEdit(str(pic.get("bizcard_folder") or ""))
         self.ed_folder.setReadOnly(True)
-        self.ed_folder.setPlaceholderText(tr("지정하지 않음 — '명함 관리' 는 열린 폴더"))
+        self.ed_folder.setPlaceholderText(tr("지정하지 않음 — '명함 읽기' 는 열린 폴더"))
         r1.addWidget(self.ed_folder, 1)
         b_pick = QPushButton(tr("바꾸기"))
         b_pick.clicked.connect(lambda _c=False: self._pick())

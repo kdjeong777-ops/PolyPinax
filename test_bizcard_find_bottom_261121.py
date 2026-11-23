@@ -65,13 +65,13 @@ try:
 
     # ── A ──
     print("=== A. 아래 단추 없음·≡ 메뉴 ===")
-    olds = ("새 명함 입력", "명함 관리", "중복 검토", "주소록", "명함 보기")
+    olds = ("새 명함 입력", "명함 읽기", "중복 검토", "주소록", "명함 보기")
     vis = [w.text() for w in fd.findChildren(QPushButton) if w.isVisible() and w.text() in olds]
-    chk(vis == [], "A 아래 단추 줄(새 명함 입력·명함 관리·중복 검토·주소록·명함 보기) 없음", str(vis))
+    chk(vis == [], "A 아래 단추 줄(새 명함 입력·명함 읽기·중복 검토·주소록·명함 보기) 없음", str(vis))
     fd.main_menu.aboutToShow.emit()
     acts = [x for x in fd.main_menu.actions() if not x.isSeparator()]
     names = [x.text() for x in acts]
-    chk(names == ["새 명함 입력", "중복 검토", "주소록", "명함 보기", "종료"], "A ≡ 메뉴 항목·차례(본 뷰어 없으면 명함 관리 없음)", str(names))
+    chk(names == ["새 명함 입력", "명단 관리", "중복 검토", "주소록", "명함 보기", "종료"], "A ≡ 메뉴 항목·차례(본 뷰어 없으면 명함 읽기 없음)", str(names))
     sub = next((x.menu() for x in acts if x.text() == "주소록"), None)
     chk(sub is not None and "변경 기록·되살리기" in [x.text() for x in sub.actions()], "A 주소록은 하위 메뉴(가져오기·내보내기·싱크·변경 기록)",
         str(sub and [x.text() for x in sub.actions()]))

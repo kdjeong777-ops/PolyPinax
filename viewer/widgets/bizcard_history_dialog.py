@@ -18,7 +18,7 @@ from viewer.bizcard import history as H
 
 _KEEP = []
 SRC_LABELS = {"edit": tr_noop("직접"), "sync": tr_noop("싱크"), "merge": tr_noop("합치기"), "kinds": tr_noop("번호 종류"), "split": tr_noop("나누기"),
-              "restore": tr_noop("되살리기")}
+              "restore": tr_noop("되살리기"), "unhash": tr_noop("# 빼기")}
 FIELD_LABELS = (("name", tr_noop("이름")), ("company", tr_noop("회사")), ("dept", tr_noop("부서")), ("title", tr_noop("직함")),
                 ("phones", tr_noop("전화")), ("emails", tr_noop("메일")), ("address", tr_noop("주소")), ("urls", tr_noop("누리집")),
                 ("memo", tr_noop("메모")), ("tags", tr_noop("해시태그")))

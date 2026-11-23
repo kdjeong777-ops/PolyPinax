@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-23 23:51+0900\n"
+"POT-Creation-Date: 2026-11-24 00:58+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -8663,6 +8663,10 @@ msgid "이메일 복사"
 msgstr "Copy Email Addresses"
 
 #: viewer/widgets/bizcard_find_dialog.py
+msgid "이름 앞 # 빼기"
+msgstr "Remove # before name"
+
+#: viewer/widgets/bizcard_find_dialog.py
 msgid "카톡 친구추가 방지"
 msgstr "Block KakaoTalk auto-friend"
 
@@ -8967,6 +8971,14 @@ msgid "사진 없음"
 msgstr "Without photo"
 
 #: viewer/widgets/bizcard_find_dialog.py
+msgid "이름 # 있음"
+msgstr "Name with #"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "이름 # 없음"
+msgstr "Name without #"
+
+#: viewer/widgets/bizcard_find_dialog.py
 #, python-brace-format
 msgid "구글에 사진 올리는 중 {i}/{n}"
 msgstr "Uploading photos to Google {i}/{n}"
@@ -9147,6 +9159,11 @@ msgstr "Delete the '{tab}' tab? The tab and its {n} people are permanently remov
 #, python-brace-format
 msgid "주소가 {n}개라 쓰기 창 {w}개로 나눠 엽니다."
 msgstr "{n} addresses — opening them in {w} compose windows."
+
+#: viewer/widgets/bizcard_find_dialog.py
+#, python-brace-format
+msgid "고른 {n}명의 이름 앞 '#' 를 뺍니다 — 변경 기록에서 되살릴 수 있습니다."
+msgstr "Remove the '#' before the names of the {n} selected people — you can restore them from the change history."
 
 #: viewer/widgets/bizcard_find_dialog.py
 #, python-brace-format
@@ -9410,6 +9427,10 @@ msgstr "Number type"
 #: viewer/widgets/bizcard_history_dialog.py
 msgid "되살리기"
 msgstr "Restore"
+
+#: viewer/widgets/bizcard_history_dialog.py
+msgid "# 빼기"
+msgstr "Remove #"
 
 #: viewer/widgets/bizcard_history_dialog.py
 msgid "체크한 명함을 기간이 시작되기 전 모습으로 되살립니다 — 되살리기도 기록에 남아 되돌릴 수 있습니다"

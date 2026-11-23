@@ -1033,7 +1033,8 @@ class BizcardFindDialog(QDialog):
         top = QHBoxLayout()
         self.cb_kind = _KindCombo()                    # 찾기 칸 앞 구분(§5.24.1 '위 줄', 사용자 지시 261119) — 체크로 여러 개(261120-49)
         kind_label = dict(zip(P.KINDS, (tr("전체"), tr("한글"), tr("영어"), tr("명함 있음"), tr("명함 없음"),
-                                        tr("사진 있음"), tr("사진 없음"), tr("카톡 친구추가 방지"))))
+                                        tr("사진 있음"), tr("사진 없음"), tr("이름 # 있음"), tr("이름 # 없음"),
+                                        tr("카톡 친구추가 방지"))))
         for gi, grp in enumerate(P.KIND_GROUPS):        # 언어 / 명함 / 사진 묶음 사이 구분선(261120-24)
             if gi:
                 self.cb_kind.insertSeparator(self.cb_kind.count())
@@ -1874,10 +1875,13 @@ class BizcardFindDialog(QDialog):
         return self.cb_kind.keys()
 
     def _on_kind(self):
-        """구분을 바꿈 — 기억하고(명함 DB meta, 여러 개면 목록) 찾기 결과로."""
+        """구분을 바꿈 — 기억하고(명함 DB meta, 여러 개면 목록) 지금 목록에 바로(탭 명단 보기면 그 명단을 다시 거름, 261122-10)."""
         ks = self.kinds()
         self._store().meta_set("find_kind", ks if len(ks) > 1 else ks[0])
-        self._on_period()
+        if self._table_tab is not None:
+            self.refresh()
+        else:
+            self._on_period()
 
     # ── 찾기 ──
     def _search_mode(self):
@@ -1908,15 +1912,15 @@ class BizcardFindDialog(QDialog):
             since, until = self._range()
             q = "" if self._ghost_all else self.ed_find.text()   # 흐린 글을 다시 고름 = 전체(§5.24.1 '찾기 칸 흐린 글')
             rows = P.find(self._store(), q, since, until, mates=self._tag_mates(q))   # 상한 없이 전부(§5.9 '결과'), #균열 은 짝 #crack 도
-            ks = self.kinds()
-            if ks != ["all"]:                           # 같은 묶음은 또는, 묶음끼리는 그리고(261120-49)
-                ph = P.photo_ids(rows, self._bizcard_folder()) if {"photo", "nophoto"} & set(ks) else None   # 사진 있음·없음(261120-24)
-                bl = None
-                if "kakao" in ks:                       # 카톡 친구추가 방지(§5.29)
-                    from viewer.bizcard import gsync as G
-                    bl = G.blocked_ids(self._store())
-                cd = P.card_ids(rows) if {"card", "nocard"} & set(ks) else None   # 그림 파일이 실제로 있나(261122-5)
-                rows = [c for c in rows if P.kinds_ok(c, ks, ph, bl, cd)]
+        ks = self.kinds()                                # 구분은 모든 목록에(탭 명단 보기도 — 261122-10, 종전엔 찾기 결과에만)
+        if ks != ["all"]:                           # 같은 묶음은 또는, 묶음끼리는 그리고(261120-49)
+            ph = P.photo_ids(rows, self._bizcard_folder()) if {"photo", "nophoto"} & set(ks) else None   # 사진 있음·없음(261120-24)
+            bl = None
+            if "kakao" in ks:                       # 카톡 친구추가 방지(§5.29)
+                from viewer.bizcard import gsync as G
+                bl = G.blocked_ids(self._store())
+            cd = P.card_ids(rows) if {"card", "nocard"} & set(ks) else None   # 그림 파일이 실제로 있나(261122-5)
+            rows = [c for c in rows if P.kinds_ok(c, ks, ph, bl, cd)]
         self._rows = rows
         self._by_id = {c["id"]: c for c in self._rows}
         for c in rows:                                     # 알려진 태그 — '#' 풀다운이 칸 토큰을 (0) 으로 남길지(검색창 SOT §5.1)
@@ -3052,6 +3056,8 @@ class BizcardFindDialog(QDialog):
         _menu_act(tm, tr("새 할 일"), lambda: self.todo_new(cards=cards))
         _menu_act(m, tr("이메일 복사"), lambda: self.copy_emails(cards))
         _menu_act(m, tr("해시태그 수정"), lambda: self.tags_for_cards(cards))   # 고른 명함들 — '해시태그 수정' 창(261120-54, 이름 261120-69)
+        a_un = _menu_act(m, tr("이름 앞 # 빼기"), lambda: self.unhash(cards))       # 고른 줄만(261122-10)
+        a_un.setEnabled(any(P.has_hash(c.get("name")) for c in cards))
         m.addSeparator()                               # 카톡 친구추가 방지 — 표시만, 구글에는 다음 싱크 때(§5.29)
         _menu_act(m, tr("카톡 친구추가 방지"), lambda: self.set_kakao(cards, True))
         _menu_act(m, tr("카톡 친구추가 방지 해제"), lambda: self.set_kakao(cards, False))
@@ -3059,6 +3065,38 @@ class BizcardFindDialog(QDialog):
         _menu_act(m, tr("삭제"), lambda: self.delete_cards())
         self._table_menu_obj = m                       # 검사용
         m.exec(self.table.viewport().mapToGlobal(pos))
+
+    def unhash(self, cards, ask: bool = True) -> int:
+        """고른 명함 이름 앞 '#' 를 한꺼번에 뺀다(§5.24.1 '이름 앞 # 빼기', 261122-10) — [저장] 과 같은 길(`store_card_edit` —
+        이름이 바뀌면 정리본·인물 사진 파일 이름도, 묵은 경로 피함·DB 실패면 되돌림), 변경 기록 출처 `unhash`(되돌리기는 변경 기록 창).
+        구글의 '#'(카톡 친구추가 방지 표시, §5.29)는 따로 — 바꾸지 않는다. 반환 = 바꾼 수."""
+        from viewer.bizcard import history as H
+        targets = [c for c in cards or [] if c and P.has_hash(c.get("name")) and P.unhash_name(c.get("name"))]
+        if not targets:
+            return 0
+        if self._dirty and not self._ask_save():
+            return 0
+        if ask and QMessageBox.question(self, tr("명함찾기"), tr("고른 {n}명의 이름 앞 '#' 를 뺍니다 — 변경 기록에서 되살릴 수 있습니다.")
+                                        .format(n=len(targets))) != QMessageBox.StandardButton.Yes:
+            return 0
+        st = self._store()
+        keep = self._card["id"] if self._card else None
+        n = 0
+        with H.source(st, "unhash"):
+            for c0 in targets:
+                c = P.card_by_id(st, c0["id"])
+                if c is None or not P.has_hash(c.get("name")):
+                    continue
+                new = {k: c.get(k) or "" for k in ("company", "dept", "title", "address", "memo")}
+                new.update(name=P.unhash_name(c.get("name")), phones=[tuple(x) for x in c.get("phones") or []],
+                           emails=list(c.get("emails") or []), urls=list(c.get("urls") or []))
+                if self.store_card_edit(c, new) is None:
+                    break                                  # 실패는 그 길이 알리고 되돌렸다 — 나머지는 멈춘다
+                n += 1
+        self._card = P.card_by_id(st, keep) if keep is not None else None
+        self.refresh()
+        self._fav_fill()
+        return n
 
     def _fav_tab_menu(self, pos):
         """탭 메뉴(§5.24.2, 261120-41) — 메일 네 줄 한 묶음 → 주요 항목 수정·탭 마감 [?]·탭 삭제 [?] → 마감한 탭 ▸ → 내보내기."""

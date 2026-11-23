@@ -64,8 +64,8 @@ def find(store, text: str = "", since: str = "", until: str = "", limit=None, ma
     return out
 
 
-KINDS = ("all", "ko", "en", "card", "nocard", "photo", "nophoto", "kakao")   # kakao = 카톡 친구추가 방지(§5.29, 261121)   # 찾기 칸 앞 구분(명함 SOT §5.24.1, 사용자 지시 261119·261120-24)
-KIND_GROUPS = (("all",), ("ko", "en"), ("card", "nocard"), ("photo", "nophoto"), ("kakao",))   # 콤보에서 묶음 사이 구분선(언어/명함/사진)
+KINDS = ("all", "ko", "en", "card", "nocard", "photo", "nophoto", "hash", "nohash", "kakao")   # hash = 이름 앞 '#'(261122-10)   # kakao = 카톡 친구추가 방지(§5.29, 261121)   # 찾기 칸 앞 구분(명함 SOT §5.24.1, 사용자 지시 261119·261120-24)
+KIND_GROUPS = (("all",), ("ko", "en"), ("card", "nocard"), ("photo", "nophoto"), ("hash", "nohash"), ("kakao",))   # 콤보에서 묶음 사이 구분선(언어/명함/사진)
 
 
 def photo_ids(cards, folder="") -> set:
@@ -123,6 +123,9 @@ def kind_ok(card: dict, kind: str, photos=None, blocked=None, cards=None) -> boo
     if kind in ("photo", "nophoto"):
         has = card.get("id") in (photos or set())
         return has if kind == "photo" else not has
+    if kind in ("hash", "nohash"):                     # 이름 앞 '#'(구글 카톡 표시를 이름에 그대로 들인 것 — 261122-10)
+        has = has_hash(card.get("name"))
+        return has if kind == "hash" else not has
     if kind in ("ko", "en"):
         name = str(card.get("name") or "")
         if _HANGUL.search(name):
@@ -134,6 +137,15 @@ def kind_ok(card: dict, kind: str, photos=None, blocked=None, cards=None) -> boo
         has = card.get("id") in cards                  # 그림 없는 주소록 명함(D22)·파일을 잃은 명함은 '명함 없음'(261122-5)
         return has if kind == "card" else not has
     return True
+
+
+def has_hash(name) -> bool:
+    return str(name or "").lstrip().startswith("#")
+
+
+def unhash_name(name) -> str:
+    """이름 앞 '#'(여러 개·뒤 빈칸 포함)를 뗀 이름(261122-10)."""
+    return re.sub(r"^\s*#+\s*", "", str(name or ""))
 
 
 def norm_kinds(kinds) -> list:

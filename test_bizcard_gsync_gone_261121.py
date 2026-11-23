@@ -99,7 +99,8 @@ try:
         "A·B 체크하지 않은 지워짐은 짝만 풀림(명함·구글 그대로)", str(G.links(st)))
     rows2 = G.plan(st, api.list_people())
     k2 = sorted((r["kind"], r.get("card_id") or r.get("rn")) for r in rows2)
-    chk((G.NEW_GOOGLE, b) in k2 and (G.NEW_CARD, rn[c]) in k2, "A·B 다음 싱크에 새 연락처·새 명함으로 다시 제안", str(k2))
+    # 구글에서 지워짐을 남긴 명함은 새 연락처로 다시 제안, 명함에서 지워짐을 남긴 구글 연락처는 '구글에만 둠' — 다시 가져오라 하지 않음(261122-8)
+    chk((G.NEW_GOOGLE, b) in k2 and (G.NEW_CARD, rn[c]) not in k2, "A·B 다음 싱크 — 남긴 명함은 새 연락처로 제안, 남긴 구글 연락처는 구글에만 둠", str(k2))
     api.delete(rn[c])
 
     # ── C ──

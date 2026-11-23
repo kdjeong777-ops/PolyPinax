@@ -62,11 +62,26 @@ def photo_gone_add(store, cid: int, on: bool = True) -> None:
 
 
 def row_default(r: dict) -> bool:
-    """미리보기 처음 체크 — 출처가 구글인 명함의 '구글로 보냄' 은 끔(구글에 이미 있을 수 있음, 사용자 결정 261121)."""
+    """미리보기 처음 체크 — 출처가 구글인 명함의 '구글로 보냄' 은 끔(구글에 이미 있을 수 있음, 사용자 결정 261121).
+    줄에 `default_on` 이 있으면 그것(명함 기준이면 '명함에서 지워짐' 도 켬 — 261122-8)."""
+    if r.get("default_on") is not None:
+        return bool(r["default_on"])
     return False if r.get("maybe_dup") else DEFAULT_ON.get(r["kind"], True)
 
 _G2C = {"mobile": "cell", "workFax": "fax", "homeFax": "fax", "otherFax": "fax"}
 _C2G = {"cell": "mobile", "fax": "workFax", "work": "work"}
+SYNC_SKEW_S = 120.0                              # 라벨을 넣은 뒤 짝 기록 시각 여유(초) — 구글 서버 시각이 조금 빨라도(261122-8)
+GOOGLE_ONLY_KEY = "gsync_google_only"            # meta — '지워짐' 을 남긴 구글 연락처(구글에만 둠) — 다시 '가져옴' 으로 내지 않음(261122-8)
+
+
+def _rt_kind(k) -> str:
+    """번호 종류를 구글에 올렸다 돌려받은 꼴로(휴대폰·팩스·그 밖은 일반 전화) — 비교용(261122-8)."""
+    return _G2C.get(_C2G.get(k or "", "work"), "work")
+
+
+def _phone_key(n) -> str:
+    """비교용 번호 숫자 — 적을 꼴로 고친 뒤(`+82 10…` 과 `010…` 을 같게, 261122-8)."""
+    return PH.digits(PH.normalize(n or ""))
 
 
 def init(store) -> None:
@@ -249,7 +264,9 @@ def _nz(s) -> str:
 def _norm(v: dict) -> dict:
     return {"name": _nz(bare_name(v.get("name"))), "company": _nz(v.get("company")), "dept": _nz(v.get("dept")),
             "title": _nz(v.get("title")), "address": _nz(v.get("address")), "memo": (v.get("memo") or "").strip(),
-            "phones": sorted({(k, PH.digits(n)) for k, n in v.get("phones") or [] if PH.digits(n)}),
+            # 구글이 돌려주는 꼴과 같게 — 번호는 적을 꼴 숫자, 종류는 올렸다 받은 꼴(종전: 명함의 `+82 10…`·종류 없는 번호가
+            # 명함 기준으로 올린 뒤에도 늘 '다름' 이라 다시 싱크하면 '명함을 구글 값으로 고침' 이 나왔다 — 261122-8)
+            "phones": sorted({(_rt_kind(k), _phone_key(n)) for k, n in v.get("phones") or [] if _phone_key(n)}),
             "emails": sorted({_nz(e) for e in v.get("emails") or [] if e}),
             "urls": sorted({(u or "").strip() for u in v.get("urls") or [] if u})}
 
@@ -409,8 +426,11 @@ def plan(store, people: list, folder: str = "", photos: bool = False, drive: boo
             lk.pop(cid)
             lk[-cid] = l
         if c is None and p is not None:
-            rows.append({"kind": MERGED_GOOGLE if l.get("merged") else GONE_CARD, "card_id": cid, "rn": l["rn"],
-                         "name": person_values(p)["name"]})
+            row = {"kind": MERGED_GOOGLE if l.get("merged") else GONE_CARD, "card_id": cid, "rn": l["rn"],
+                   "name": person_values(p)["name"]}
+            if card_first and row["kind"] == GONE_CARD:
+                row["default_on"] = True                   # 명함 기준 — 명함에서 지운 사람은 구글에서도(사용자 결정 261122-8)
+            rows.append(row)
         elif p is None and c is not None:
             if card_first:
                 regone.append(c)
@@ -474,8 +494,9 @@ def plan(store, people: list, folder: str = "", photos: bool = False, drive: boo
                              "path": first_photo(c, folder)})
             if drive:
                 rows += _drive_rows(c, "", {}, folder, new=True)
+    g_only = set(store.meta_get(GOOGLE_ONLY_KEY, []) or [])   # '지워짐' 을 남긴 연락처 — 다시 가져오라 하지 않음(261122-8)
     for p in free_people:
-        if p["resourceName"] not in m.values() and not card_first:
+        if p["resourceName"] not in m.values() and not card_first and p["resourceName"] not in g_only:
             rows.append({"kind": NEW_CARD, "card_id": 0, "rn": p["resourceName"], "name": person_values(p)["name"],
                          "tags_add": [ch[k] for k in _keys(person_labels(p, gmap))]})
     for c, p, l in pairs:
@@ -743,8 +764,12 @@ def _apply(store, api, rows: list, folder: str = "", drive_folder: str = DRIVE_F
                     label_add.setdefault(name, []).append(p["resourceName"])
                 by_rn[p["resourceName"]] = p
                 _link_put(store, c["id"], p["resourceName"], p.get("etag") or "", labels=list(r.get("labels") or []))
-            elif k == "unlink":                                  # '남김' — 짝만 풀림(다음 싱크에 다시 제안, 261120-62)
+            elif k == "unlink":                                  # '남김' — 짝만 풀림(261120-62)
                 store.con.execute("DELETE FROM google_link WHERE card_id=?", (r["card_id"],))
+                if r.get("was") in (GONE_CARD, MERGED_GOOGLE) and r.get("rn"):   # 명함엔 없고 구글에만 둠 — 다시 '가져옴' 으로 내지 않음(261122-8)
+                    go = list(store.meta_get(GOOGLE_ONLY_KEY, []) or [])
+                    if r["rn"] not in go:
+                        store.meta_set(GOOGLE_ONLY_KEY, go + [r["rn"]])
             elif k in (TO_CARD, GONE_VALUE):
                 p = _fetch(api, r["rn"], by_rn)
                 v = person_values(p)
@@ -827,6 +852,11 @@ def _apply(store, api, rows: list, folder: str = "", drive_folder: str = DRIVE_F
             g = group_of(name)
             for j in range(0, len(rns), 1000):
                 api.modify_members(g, add=rns[j:j + 1000])
+            # 라벨을 넣으면 구글 연락처의 고친 시각이 짝 기록보다 늦어져, 다음 싱크가 '구글이 나중에 고침' 으로 보았다(261122-8)
+            # 구글 서버 시각이 이 PC 보다 조금 빠를 수 있어 SYNC_SKEW_S 만큼 뒤로 적는다(그 사이 구글에서 고쳐도 둘 다 '새로' 가 아니면
+            # 고친 시각끼리 견주므로 구글 쪽이 이긴다)
+            now = time.time() + SYNC_SKEW_S
+            store.con.executemany("UPDATE google_link SET synced=? WHERE resource_name=?", [(now, rn) for rn in rns])
         except Exception as e:
             failed += 1
             _fail(e)

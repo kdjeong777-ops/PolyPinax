@@ -310,7 +310,7 @@ class GSyncDialog(QDialog):
                 if it.checkState(0) == Qt.CheckState.Checked:
                     out.append(r)
                 elif r["kind"] in G.UNLINK_IF_KEPT:
-                    out.append(dict(r, kind="unlink"))
+                    out.append(dict(r, kind="unlink", was=r["kind"]))   # 무엇을 남겼나 — 구글에만 둘 것 기억(261122-8)
                 elif r["kind"] == G.GONE_VALUE:
                     out.append(dict(r, kind=G.TO_GOOGLE))
         order = {k: n for n, k in enumerate(G.KINDS + ("link", "unlink"))}

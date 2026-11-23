@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-24 00:58+0900\n"
+"POT-Creation-Date: 2026-11-24 01:11+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -9845,13 +9845,8 @@ msgstr "Could not add {n} portrait photo(s)."
 
 #: viewer/widgets/bizcard_roster_dialog.py
 #, python-brace-format
-msgid "이름 같음 {n}장"
-msgstr "Same name ×{n}"
-
-#: viewer/widgets/bizcard_roster_dialog.py
-#, python-brace-format
-msgid "010 같음 {n}장"
-msgstr "Same 010 ×{n}"
+msgid "명함 {n}장"
+msgstr "{n} card images"
 
 #: viewer/widgets/bizcard_roster_dialog.py
 msgid "잘못 합쳐짐?"
@@ -9999,8 +9994,8 @@ msgstr "Email {m}"
 
 #: viewer/widgets/bizcard_roster_dialog.py
 #, python-brace-format
-msgid "나누지 못했습니다({err})."
-msgstr "Couldn't split ({err})."
+msgid "나누지 못했습니다({err}) — 바꾼 파일 이름은 되돌렸습니다."
+msgstr "Could not split ({err}) — the renamed files were changed back."
 
 #: viewer/widgets/bizcard_roster_dialog.py
 #, python-brace-format
@@ -19543,4 +19538,13 @@ msgstr "Getting Started"
 
 #~ msgid "바로잡는 차례: ① 변경 기록이 남은 합치기는 주소록 ▸ 변경 기록·되살리기에서 출처 '합치기' 로 되살립니다 ② 그보다 오래된 것은 '010 둘 이상' 이나 'vcf 비교' 에서 나누기·고치기 ③ 그 뒤 구글 주소록과 싱크로 구글·휴대폰에 올립니다."
 #~ msgstr "How to fix: ① merges with change history are restored in Contacts ▸ Change history·Restore with source 'Merge' ② older ones: Split·Fix in 'Two or more 010' or 'Compare vcf' ③ then sync with Google Contacts to update Google and your phone."
+
+#~ msgid "이름 같음 {n}장"
+#~ msgstr "Same name ×{n}"
+
+#~ msgid "010 같음 {n}장"
+#~ msgstr "Same 010 ×{n}"
+
+#~ msgid "나누지 못했습니다({err})."
+#~ msgstr "Couldn't split ({err})."
 

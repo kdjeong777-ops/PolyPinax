@@ -111,6 +111,13 @@ def card_ids(cards) -> set:
     return out
 
 
+def has_image(card) -> bool:
+    """명함 하나 — 그림(앞면) 파일이 실제로 있나(`card_ids` 와 같은 판정, 하나만 볼 때). 그림 없는 주소록 명함·파일 잃은 명함 = False(261122-11)."""
+    from viewer.bizcard.vcard import is_contact
+    f = str((card or {}).get("front") or "")
+    return bool(f) and not is_contact(card) and os.path.exists(_real(f))
+
+
 _HANGUL = re.compile(r"[가-힣ㄱ-ㆎ]")
 _LATIN = re.compile(r"[A-Za-z]")
 
@@ -1341,8 +1348,7 @@ def dupe_order(store) -> list:
 
 
 def card_source(store, card) -> str:
-    from viewer.bizcard.vcard import is_contact
-    if not is_contact(card):
+    if has_image(card):                         # 그림 파일이 실제로 있어야 '명함'(파일 잃은 명함은 필드 출처로 — 261122-11)
         return "card"
     vals = [v for v in field_srcs(store, card["id"]).values() if v in SOURCE_RANK]
     if not vals:

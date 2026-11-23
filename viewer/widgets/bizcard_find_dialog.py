@@ -1419,7 +1419,7 @@ class BizcardFindDialog(QDialog):
         bm.addSeparator()
         _menu_act(bm, tr("명함 자료 내보내기(zip)"), lambda: self.export_archive())    # 다른 PC 로 옮기기(§5.31, 261120-73)
         _menu_act(bm, tr("명함 자료 불러오기(zip)"), lambda: self.import_archive())
-        self.act_manage = QAction(tr("명함 읽기"), self)    # 메뉴 '명함 읽기'(종전 '명함 관리', 261122-2) 와 같은 길 — 본 뷰어 안에서만(§5.24.1 '≡ 메뉴')
+        self.act_manage = QAction(tr("명함 읽기"), self)    # 메뉴 '명함 읽기'(종전 '명함 관리', 261122-2) 와 같은 길 — 호스트(본 뷰어·PolyCardex)가 있을 때만(§5.24.1 '≡ 메뉴')
         self.act_manage.setToolTip(tr("명함 폴더의 명함 그림을 읽는 확인 표 창(명함 읽기)을 엽니다"))
         self.act_manage.triggered.connect(lambda _c=False: self.open_manage())
         self.act_manage.setVisible(callable(getattr(self._mw, "_action_bizcard_import", None)))
@@ -1502,7 +1502,7 @@ class BizcardFindDialog(QDialog):
             fn()
 
     def _fill_main_menu(self):
-        """≡ 메뉴를 열 때마다 — 새 명함 입력·명함 읽기(본 뷰어 안에서만)·중복 검토·주소록 ▸·명함 보기(그림 없는 명함이면 흐림),
+        """≡ 메뉴를 열 때마다 — 새 명함 입력·명함 읽기(호스트 — 본 뷰어·PolyCardex 가 있을 때만)·중복 검토·주소록 ▸·명함 보기(그림 없는 명함이면 흐림),
         끝에 '종료'(§5.24.1 '≡ 메뉴' — 종전 아래 단추 줄은 261120-66 에 없앴다)."""
         m = self.main_menu
         m.clear()
@@ -2365,7 +2365,7 @@ class BizcardFindDialog(QDialog):
         self.btn_save.setEnabled(self._dirty)
 
     def _enable_card_buttons(self, on: bool):
-        img = on and not V.is_contact(self._card)            # 주소록에서 가져온 명함 — 명함 그림 없음
+        img = on and P.has_image(self._card)                 # 명함 그림 파일이 있어야(주소록 명함·파일 잃은 명함은 흐림 — 261122-11)
         ph = on and bool(self._photo_front())                 # 인물 사진은 그림 없는 명함도(명함 폴더가 있으면, §5.24.3)
         self.btn_copy.setEnabled(on)
         self.act_open.setEnabled(img)

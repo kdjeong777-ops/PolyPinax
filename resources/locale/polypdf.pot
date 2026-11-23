@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-11-24 00:58+0900\n"
+"POT-Creation-Date: 2026-11-24 01:11+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -9583,12 +9583,7 @@ msgstr ""
 
 #: viewer/widgets/bizcard_roster_dialog.py
 #, python-brace-format
-msgid "이름 같음 {n}장"
-msgstr ""
-
-#: viewer/widgets/bizcard_roster_dialog.py
-#, python-brace-format
-msgid "010 같음 {n}장"
+msgid "명함 {n}장"
 msgstr ""
 
 #: viewer/widgets/bizcard_roster_dialog.py
@@ -9737,7 +9732,7 @@ msgstr ""
 
 #: viewer/widgets/bizcard_roster_dialog.py
 #, python-brace-format
-msgid "나누지 못했습니다({err})."
+msgid "나누지 못했습니다({err}) — 바꾼 파일 이름은 되돌렸습니다."
 msgstr ""
 
 #: viewer/widgets/bizcard_roster_dialog.py

@@ -873,7 +873,7 @@ try:
     pump(lambda: dlg.table.rowCount() == 4, timeout=3)
     dlg.table.clearSelection()
     dlg.table.setCurrentCell(dlg.row_of_id(new[0]["id"]), 0)
-    pump(timeout=0.1)
+    pump(lambda: dlg._card is not None and dlg._card["id"] == new[0]["id"], timeout=3)   # 부하 때 0.1초로는 아직 안 열렸다(261122-11 묶음 검사)
     chk(not dlg.btn_photo.isEnabled() and not dlg.act_open.isEnabled() and dlg.btn_tags.isEnabled(), "I8 그림 없는 명함 — 사진·명함 보기 끔")
     from viewer import bg_write
     rf = TMP / "remember.vcf"

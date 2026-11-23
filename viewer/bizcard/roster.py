@@ -22,36 +22,48 @@ def multi_mobile(cards) -> list:
     return [c for c in cards if len(P.mobiles_010(c)) >= 2]
 
 
-MANY_MIN = 3                 # '명함 3장 이상'(§5.32, 261122-5)
+MANY_MIN = 3                 # '명함 3장 이상'(§5.32, 261122-14)
 
 
-def many_cards(cards, least: int = MANY_MIN) -> list:
-    """같은 사람으로 보이는 명단이 least 장 이상인 것만(§5.32 '명함 3장 이상') — 이름(`_pname`)이 같은 명단이 least 장 이상이거나
-    같은 010 번호를 가진 명단이 least 장 이상. 반환 = [(명단, 'name'|'010', 장 수)] — 묶음끼리 모아(묶음 이름 차례), 명단 하나는 한 번
-    (이름·010 둘 다 걸리면 장 수가 큰 쪽)."""
-    groups = {}
+def card_images(cards, folder: str = "") -> dict:
+    """명단 하나에 붙은 실제 그림 수 {id: 장 수} — 명단 관리 오른쪽 그림 줄과 같은 것: 정리본 앞면·뒷면(파일이 있는 것) +
+    인물 폴더의 `<정리본 이름>.jpg`·` (n)` 들(`people.person_photos` 꼴). 폴더마다 한 번만 읽는다(명함마다 파일을 찾지 않게)."""
+    import os
+    import re
+    from pathlib import Path
+    from viewer.bizcard.vcard import is_contact
+    from viewer.bizcard.recognize import IMG_EXTS
+    lists = {}
+
+    def names(d):
+        d = os.path.normcase(os.path.abspath(str(d)))
+        if d not in lists:
+            try:
+                lists[d] = [n for n in os.listdir(d)]
+            except OSError:
+                lists[d] = []
+        return lists[d]
+    out = {}
     for c in cards:
-        pn = P._pname(c.get("name"))
-        if pn:
-            groups.setdefault(("name", pn), []).append(c)
-        for k in P.mobiles_010(c):
-            groups.setdefault(("010", k), []).append(c)
-    best = {}                                 # 명단 id → (장 수, 갈래, 묶음 열쇠)
-    for (kind, key), members in groups.items():
-        if len(members) < least:
-            continue
-        for c in members:
-            cur = best.get(c["id"])
-            if cur is None or len(members) > cur[0]:
-                best[c["id"]] = (len(members), kind, key)
-    by_id = {c["id"]: c for c in cards}
-    gkey = {}                                 # 묶음 → 이름 차례 열쇠(그 묶음 첫 이름)
-    for cid, (_n, kind, key) in best.items():
-        nm = str(by_id[cid].get("name") or "")
-        gkey[(kind, key)] = min(gkey.get((kind, key), nm), nm)
-    order = sorted(best, key=lambda cid: (gkey[best[cid][1:]], best[cid][1:], str(by_id[cid].get("name") or ""), cid))
-    return [(by_id[cid], best[cid][1], best[cid][0]) for cid in order]
+        n = 0
+        if not is_contact(c):
+            for f in (c.get("front"), c.get("back")):
+                if f and os.path.normcase(os.path.basename(str(f))) in {os.path.normcase(x) for x in names(os.path.dirname(os.path.abspath(str(f))))}:
+                    n += 1
+        pf = P.photo_front(c, folder)
+        if pf:
+            pat = re.compile(r"^%s( \(\d+\))?$" % re.escape(Path(pf).stem), re.I)
+            n += sum(1 for x in names(P.people_dir(pf)) if os.path.splitext(x)[1].lower() in IMG_EXTS and pat.match(os.path.splitext(x)[0]))
+        out[c["id"]] = n
+    return out
 
+
+def many_cards(cards, folder: str = "", least: int = MANY_MIN) -> list:
+    """한 명단에 실제 그림(앞·뒷면 + 인물 사진)이 least 장 이상 붙은 것만(§5.32 '명함 3장 이상', 261122-14 — 앞·뒤로 최대 2장인데
+    잘못 붙은 것을 찾으려고. 종전 261122-5 는 이름·010 이 같은 명단 수를 셌다 — 뜻이 달랐다). 반환 [(명단, 장 수)] — 많은 차례, 같으면 이름."""
+    cnt = card_images(cards, folder)
+    hits = [(c, cnt.get(c["id"], 0)) for c in cards if cnt.get(c["id"], 0) >= least]
+    return sorted(hits, key=lambda x: (-x[1], str(x[0].get("name") or ""), x[0]["id"]))
 
 def text_match(card: dict, text: str) -> bool:
     """찾기 칸 — 이름·회사·번호(숫자만으로도)·메일 글자."""

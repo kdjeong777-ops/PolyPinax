@@ -204,6 +204,7 @@ def unlink(store, cid=None) -> None:
     init(store)
     if cid is None:
         store.con.execute("DELETE FROM google_link")
+        store.meta_set(GOOGLE_ONLY_KEY, [])         # [연결 끊기] — '구글에만 둠' 도 함께 지움(사용자 결정 261122-11)
     else:
         store.con.execute("DELETE FROM google_link WHERE card_id=?", (cid,))
     store.con.commit()

@@ -23,17 +23,19 @@ from viewer.bizcard import vcard as V
 ROLE = Qt.ItemDataRole.UserRole
 THUMB = 96
 VIEWS = (("all", tr_noop("전체")), ("multi", tr_noop("010 둘 이상")), ("many", tr_noop("명함 3장 이상")), ("vcf", tr_noop("vcf 비교")))
-MANY_WHY = {"name": tr_noop("이름 같음 {n}장"), "010": tr_noop("010 같음 {n}장")}   # '명함 3장 이상' 이유 칸(§5.32, 261122-5)
+MANY_WHY = tr_noop("명함 {n}장")               # '명함 3장 이상' 이유 칸 — 그 명단에 붙은 실제 그림 수(§5.32, 261122-14)
 KIND_LABEL = {RS.MERGED: tr_noop("잘못 합쳐짐?"), RS.RENAMED: tr_noop("이름 바뀜?"), RS.NEW: tr_noop("새 사람"),
               RS.SAME_NAME: tr_noop("같은 이름·번호 다름")}
 _KEEP = []
+FIND_DELAY_MS = 250                             # 찾기 칸 늦춤(명함찾기 `FIND_DELAY_MS` 와 같은 값)
 
 
 def _other_phones(c) -> str:
+    """010 칸에 없는 번호 — 010 판단은 `people.mobiles_010` 한 곳(종류 무관, `phone.kr_digits` 열쇠 — 261122-11)."""
     keys = set(P.mobiles_010(c))
     from viewer.bizcard import phone as PH
-    return ", ".join(n for k, n in (tuple(x) for x in c.get("phones") or [])
-                     if (PH.mobile_key(k, n) or "") not in keys)
+    return ", ".join(n for _k, n in (tuple(x) for x in c.get("phones") or [])
+                     if (PH.kr_digits(n) or "") not in keys)
 
 
 def _m010(c) -> str:
@@ -46,12 +48,12 @@ class _RosterWorker(QObject):
     done = pyqtSignal(int, object)
     finished = pyqtSignal()
 
-    def __init__(self, gen, db, mode, text, vcf_path, persons, show_new, frozen=None):
+    def __init__(self, gen, db, mode, text, vcf_path, persons, show_new, frozen=None, folder=""):
         super().__init__()
-        self._a = (gen, db, mode, text, vcf_path, persons, show_new, frozen)
+        self._a = (gen, db, mode, text, vcf_path, persons, show_new, frozen, folder)
 
     def run(self):
-        gen, db, mode, text, vcf_path, persons, show_new, frozen = self._a
+        gen, db, mode, text, vcf_path, persons, show_new, frozen, folder = self._a
         out = {"mode": mode, "cards": [], "groups": [], "persons": persons, "error": "", "frozen": None}
         stage = "db"
         try:
@@ -88,11 +90,12 @@ class _RosterWorker(QObject):
             else:
                 if mode == "multi":
                     cards = RS.multi_mobile(cards)
-                elif mode == "many":                      # 같은 사람 명함 3장 이상(261122-5) — 묶음끼리 모아
-                    many = RS.many_cards(cards)
-                    out["why"] = {c["id"]: (k, n) for c, k, n in many}
-                    cards = [c for c, _k, _n in many]
+                elif mode == "many":                      # 한 명단에 실제 그림 3장 이상(261122-14)
+                    many = RS.many_cards(cards, folder)
+                    out["why"] = {c["id"]: n for c, n in many}
+                    cards = [c for c, _n in many]
                 out["cards"] = [c for c in cards if RS.text_match(c, text)]
+            out["has_card"] = P.card_ids(cards)       # '명함' 칸 — 그림 파일이 실제로 있는 것만(폴더마다 한 번 읽음, 261122-11)
         except Exception as e:                  # noqa: BLE001 — 메인에서 알린다(글·경로는 싣지 않음)
             # 어느 단계인지·SQLite 오류 글(명함 글 없음)까지 — 사용자 보고 261123 'DatabaseError' 만으로는 까닭을 몰랐다
             detail = str(e)[:120] if isinstance(e, sqlite3.Error) else ""
@@ -134,7 +137,7 @@ class SplitDialog(QDialog):
             it = QListWidgetItem(tr("전화 {n}").format(n=num))
             it.setData(ROLE, ("phone", (kind, num)))
             it.setFlags(it.flags() | Qt.ItemFlag.ItemIsUserCheckable)
-            it.setCheckState(Qt.CheckState.Checked if (PH.mobile_key(kind, num) or "-") in want else Qt.CheckState.Unchecked)
+            it.setCheckState(Qt.CheckState.Checked if (PH.kr_digits(num) or "-") in want else Qt.CheckState.Unchecked)   # mobiles_010 열쇠(261122-11)
             self.lst.addItem(it)
         for e in card.get("emails") or []:
             it = QListWidgetItem(tr("메일 {m}").format(m=e))
@@ -227,23 +230,33 @@ def run_split(parent, fd, cid, preset=None, dlg=None) -> int:
     v = dlg.values()
     f = v["fields"]
     image = None
+    moved = []                                  # 바꾼 파일 이름 [(원래, 새)] — DB 가 실패하면 되돌림(§5.9 '저장' 과 같은 길, 261122-11)
     if v["image"] and not V.is_contact(c):
         front = P._real(c["front"])
         folder = Path(front).parent
-        p = unique_path(folder, R.card_filename(f["name"], f.get("company") or "", os.path.splitext(front)[1] or ".jpg"), set())
+        taken = P.taken_paths(st, cid)          # 다른 명함 행의 경로도 피한다(파일 잃은 묵은 행 — 261122-5 규칙)
+        p = unique_path(folder, R.card_filename(f["name"], f.get("company") or "", os.path.splitext(front)[1] or ".jpg"), taken)
         if not fd._rename(front, str(p)):
             return 0
+        moved.append((front, str(p)))
         nb = ""
         back = P._real(c.get("back") or "") if c.get("back") else ""
         if back and os.path.exists(back):
-            pb = unique_path(folder, p.stem + BACK_SUFFIX + os.path.splitext(back)[1], set())
+            pb = unique_path(folder, p.stem + BACK_SUFFIX + os.path.splitext(back)[1], taken)
             if fd._rename(back, str(pb)):
                 nb = str(pb)
+                moved.append((back, nb))
         image = (str(p), nb)
     try:
         nid = P.split_card(st, cid, v["phones"], v["emails"], f, image=image)
     except Exception as e:                      # noqa: BLE001 — 글·경로는 싣지 않음
-        QMessageBox.warning(parent, tr("나누기"), tr("나누지 못했습니다({err}).").format(err=type(e).__name__))
+        try:
+            st.con.rollback()                   # 반쯤 된 쓰기를 남기지 않는다(다음 commit 에 섞이지 않게)
+        except Exception:
+            pass
+        for src, dst in reversed(moved):
+            fd._rename(dst, src, quiet=True)
+        QMessageBox.warning(parent, tr("나누기"), tr("나누지 못했습니다({err}) — 바꾼 파일 이름은 되돌렸습니다.").format(err=type(e).__name__))
         return 0
     new = P.card_by_id(st, nid)
     if image:                                   # 정리본 파일 태그도 새 사람의 것으로(§5.5)
@@ -296,7 +309,12 @@ class RosterDialog(QDialog):
         top.addWidget(self.cmb_view)
         self.ed_find = QLineEdit()
         self.ed_find.setPlaceholderText(tr("이름·회사·번호·메일로 거르기"))
-        self.ed_find.textChanged.connect(lambda _t: self.reload())
+        from PyQt6.QtCore import QTimer
+        self._find_timer = QTimer(self)             # 글자마다 일꾼·연결을 새로 열지 않게 — 멈춘 뒤 한 번(명함찾기와 같은 늦춤, 261122-11)
+        self._find_timer.setSingleShot(True)
+        self._find_timer.setInterval(FIND_DELAY_MS)
+        self._find_timer.timeout.connect(self.reload)
+        self.ed_find.textChanged.connect(lambda _t: self._find_timer.start())
         top.addWidget(self.ed_find, 1)
         self.btn_vcf = QPushButton(tr("vcf 열기…"))
         self.btn_vcf.setToolTip(tr("휴대폰 주소록 등에서 내보낸 vcf 와 견줍니다 — 파일은 읽기만 합니다"))
@@ -434,6 +452,8 @@ class RosterDialog(QDialog):
 
     def reload(self):
         from viewer.workers import run_in_thread
+        if getattr(self, "_find_timer", None) is not None:
+            self._find_timer.stop()                     # 바로 다시 읽으면 늦춰 둔 읽기는 버림
         self._gen += 1
         if self.view() == "vcf" and not self.vcf_path:
             self.tree.clear()
@@ -444,7 +464,7 @@ class RosterDialog(QDialog):
         self.loading = True
         self.lbl.setText(tr("읽는 중…"))
         w = _RosterWorker(self._gen, str(self.fd._store().path), self.view(), self.ed_find.text(), self.vcf_path, self.persons,
-                          self.chk_new.isChecked(), self.frozen)
+                          self.chk_new.isChecked(), self.frozen, self.fd._bizcard_folder())
         w.done.connect(self._loaded)
         keep = getattr(self.fd._mw, "_thread_keep", None) if self.fd._mw is not None else None
         run_in_thread(w, keep if isinstance(keep, list) else _KEEP)
@@ -463,6 +483,7 @@ class RosterDialog(QDialog):
             self.frozen, self.checks, self.added = out["frozen"], {}, {}
             self._save_state()
         self.cards, self.groups = out["cards"], out["groups"]
+        self._has_card = out.get("has_card")
         self._prune_added()
         for g in self.groups or []:                         # [추가] 한 줄은 저절로 체크(261122-7)
             if str(g.get("gi")) in self.added:
@@ -470,9 +491,14 @@ class RosterDialog(QDialog):
         self.why = out.get("why") or {}
         self.fill()
 
+    def _card_has(self, c) -> bool:
+        """'명함' 칸 — 배경이 모은 `card_ids`(없으면 이 명함만 확인)."""
+        hc = getattr(self, "_has_card", None)
+        return (c["id"] in hc) if hc is not None and not c.get("_gone") else P.has_image(c)
+
     def _card_item(self, c, why="", data=None):
         it = QTreeWidgetItem([c.get("name") or "", c.get("company") or "", _m010(c), _other_phones(c),
-                              ", ".join(c.get("emails") or []), "" if V.is_contact(c) else tr("명함"), why])
+                              ", ".join(c.get("emails") or []), tr("명함") if self._card_has(c) else "", why])
         it.setData(0, ROLE, data or ("card", c["id"]))
         return it
 
@@ -539,8 +565,7 @@ class RosterDialog(QDialog):
             many = getattr(self, "why", {}) if self.view() == "many" else {}
             for c in self.cards:
                 if c["id"] in many:
-                    k, n = many[c["id"]]
-                    w = tr(MANY_WHY[k]).format(n=n)
+                    w = tr(MANY_WHY).format(n=many[c["id"]])
                 else:
                     w = why.format(n=len(P.mobiles_010(c))) if why else ""
                 self.tree.addTopLevelItem(self._card_item(c, w))
@@ -885,13 +910,14 @@ class RosterDialog(QDialog):
         # 같은 사람이 두 번 생기지 않게(261122-7) — 이 줄에서 이미 [추가] 했거나, 그 이름이고 그 010 번호를 모두 가진 명단이 이미 있으면
         st = self.fd._store()
         self._prune_added()
+        # 명단 전체는 한 번만 읽는다(종전 세 번 — 261122-11), 새 명단 id 는 가장 큰 id 로
         if str(g["gi"]) in self.added or RS.person_resolved(g, RS.all_cards(st)):
             QMessageBox.information(self, tr("명단 관리"), tr("이미 추가한 사람입니다 — 다시 추가하지 않습니다."))
             return 0
-        before = {c["id"] for c in RS.all_cards(st)}
+        top = st.con.execute("SELECT IFNULL(MAX(id), 0) FROM cards").fetchone()[0]
         n = self._record([], lambda: P.apply_import(st, [dict(person)]))
         if n:
-            new = sorted({c["id"] for c in RS.all_cards(st)} - before)
+            new = [r[0] for r in st.con.execute("SELECT id FROM cards WHERE id > ? ORDER BY id", (top,))]
             self.added[str(g["gi"])] = new[0] if new else 0
             self._save_state()
             if not getattr(self.fd, "_dirty", False):

@@ -5,7 +5,7 @@
 A. 그림 파일이 없어진 명함(DB 경로만 남음)은 '명함 있음' 이 아니라 '명함 없음'(한글+명함 있음으로 거르면 빠짐)
 B. 성명을 영어로 바꿔 [저장] — 새 이름이 파일 잃은 묵은 행의 경로와 겹쳐도 저장됨(다른 이름 ` (2)`), 저장 확인이 되풀이되지 않음
 C. DB 고침이 실패하면 바꾼 파일 이름을 되돌리고 알림, 칸은 그대로 남아 다시 [저장] 하면 됨(DB 잠김 없음)
-D. 명단 관리 보기 `명함 3장 이상` — 이름 같음 3장·010 같음 3장만, 이유 칸
+D. 명단 관리 보기 `명함 3장 이상` — 한 명단에 실제 그림(앞·뒷면 + 인물 사진) 3장 이상만, 이유 칸 '명함 n장'(261122-14)
 """
 import os, sys, tempfile, time
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -184,24 +184,37 @@ try:
         "E 다음 고침은 누른 명함에 저장(엉뚱한 명함 아님)")
     st.close()
 
-    print("\n=== D 명단 관리 '명함 3장 이상' ===")
+    print("\n=== D 명단 관리 '명함 3장 이상' — 한 명단에 실제 그림 3장 이상(261122-14) ===")
     st = fd._store()
-    same = [P._insert_contact(st, {"name": "가짜무", "phones": [("cell", num(10 + i))]}, ["명함"]) for i in range(3)]
-    share = [P._insert_contact(st, {"name": n, "phones": [("cell", num(7))]}, ["명함"]) for n in ("가짜기", "가짜경", "가짜신")]
-    two = [P._insert_contact(st, {"name": "가짜임", "phones": [("cell", num(20 + i))]}, ["명함"]) for i in range(2)]
+    same = [P._insert_contact(st, {"name": "가짜무", "phones": [("cell", num(10 + i))]}, ["명함"]) for i in range(3)]   # 이름만 같음 — 아님
+    fold = TMP / "cards"
+
+    def img_card(nm, back, photos):
+        f = OUT / ("%s_가짜사.jpg" % nm)
+        Image.new("RGB", (300, 180), "white").save(f)
+        b = ""
+        if back:
+            b = str(OUT / ("%s_가짜사_뒷면.jpg" % nm))
+            Image.new("RGB", (300, 180), "gray").save(b)
+        cid = st.upsert({"front": str(f), "back": b, "name": nm, "company": "가짜사"})
+        for _ in range(photos):
+            pp = P.next_photo_path(P.photo_front(P.card_by_id(st, cid), str(fold)))
+            pp.parent.mkdir(parents=True, exist_ok=True)
+            Image.new("RGB", (60, 80), "red").save(pp)
+        return cid
+    three = img_card("가짜삼", True, 1)                 # 앞·뒤 + 잘못 붙은 1 = 3장
+    four = img_card("가짜사", False, 3)                 # 앞 + 3 = 4장
+    two = img_card("가짜둘", True, 0)                   # 앞·뒤만 = 2장 — 아님
     st.con.commit()
-    got = RS.many_cards(RS.all_cards(st))
-    ids = [c["id"] for c, _k, _n in got]
-    chk(sorted(ids) == sorted(same + share) and {(k, n) for _c, k, n in got} == {("name", 3), ("010", 3)},
-        "D 이름 같음 3장·010 같음 3장만(2장은 빼고)", str([(c["name"], k, n) for c, k, n in got]))
-    chk(ids[:3] in (sorted(same), sorted(share)) or set(ids[:3]) in (set(same), set(share)), "D 묶음끼리 모아", str(ids))
+    got = RS.many_cards(RS.all_cards(st), str(fold))
+    chk([(c["id"], n) for c, n in got] == [(four, 4), (three, 3)],
+        "D 실제 그림 3장 이상인 명단만(많은 차례) — 이름만 같은 명단·앞뒤 2장은 아님", str([(c["name"], n) for c, n in got]))
     rd = fd.open_roster(exec_=False)
     pump(lambda: not rd.loading, timeout=10)
     rd.set_view("many")
-    pump(lambda: not rd.loading and rd.view() == "many" and rd.tree.topLevelItemCount() == 6, timeout=10)
-    whys = sorted({rd.tree.topLevelItem(i).text(rd.tree.columnCount() - 1) for i in range(rd.tree.topLevelItemCount())})
-    chk(rd.tree.topLevelItemCount() == 6 and whys == ["010 같음 3장", "이름 같음 3장"], "D 보기 갈래 '명함 3장 이상' — 여섯 줄·이유 칸",
-        "%d %s" % (rd.tree.topLevelItemCount(), whys))
+    pump(lambda: not rd.loading and rd.view() == "many" and rd.tree.topLevelItemCount() == 2, timeout=10)
+    whys = [rd.tree.topLevelItem(i).text(rd.tree.columnCount() - 1) for i in range(rd.tree.topLevelItemCount())]
+    chk(whys == ["명함 4장", "명함 3장"], "D 보기 갈래 '명함 3장 이상' — 이유 칸 '명함 n장'", str(whys))
     chk([rd.cmb_view.itemData(i) for i in range(rd.cmb_view.count())] == ["all", "multi", "many", "vcf"],
         "D '010 둘 이상' 바로 옆 자리")
 except Exception as e:

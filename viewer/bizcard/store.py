@@ -11,6 +11,7 @@ import json
 import os
 import sqlite3
 import time
+import weakref
 from pathlib import Path
 from typing import Optional
 
@@ -54,15 +55,35 @@ def _key(p) -> str:
     return os.path.normcase(os.path.abspath(str(p)))
 
 
+_OPEN = weakref.WeakSet()                         # 열린 연결 — 앱이 `os._exit` 로 끝나기 전에 `close_all`(main.py)
+
+
+def close_all() -> int:
+    """열린 명함 DB 연결을 모두 닫는다(WAL 정리 포함) — 메인 스레드에서, 앱이 끝나기 직전. 반환 = 닫은 수."""
+    n = 0
+    for st in list(_OPEN):
+        st.close()
+        n += 1
+    return n
+
+
 class BizcardStore:
     """한 연결. 워커는 자기 것을 열고(BUSY_MS_BG), 메인은 읽기만 짧게(BUSY_MS_UI)."""
 
     def __init__(self, path=None, ui: bool = False):
         self.path = Path(path) if path else db_path()
         self.con = dbutil.connect(self.path, dbutil.BUSY_MS_UI if ui else dbutil.BUSY_MS_BG)
+        _OPEN.add(self)
         self._init()
 
     def close(self):
+        """닫기 전에 WAL 을 본 파일에 옮기고 비운다(`wal_checkpoint(TRUNCATE)`) — 묵은 -wal 이 남지 않게(261122-1 덧붙임,
+        명함 DB 손상 261123: 보조 파일이 두 벌로 갈라졌을 때 남은 묵은 WAL 이 다음 실행에 다시 얹혔다). 다른 연결이 쓰는 중이면 건너뜀."""
+        _OPEN.discard(self)
+        try:
+            self.con.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        except Exception:
+            pass
         try:
             self.con.close()
         except Exception:

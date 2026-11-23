@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-23 20:50+0900\n"
+"POT-Creation-Date: 2026-11-23 21:07+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -5959,6 +5959,16 @@ msgstr "{n} cloud-only photos left out"
 #: viewer/photo_map.py
 msgid "지도 페이지가 없습니다 — PolyPinax 에서 다시 여세요."
 msgstr "This map page is gone — open it again from PolyPinax."
+
+#: viewer/pkg_guard.py
+msgid ""
+"PolyPDF 를 다른 앱(Claude 앱의 터미널·실행 단추 등) 안에서 띄웠습니다 — 이렇게 띄우면 설정·명함 DB 의 보조 파일이 따로 만들어져 자료가 깨질 수 있어 끝냅니다.\n"
+"\n"
+"탐색기에서 run.bat 을 두 번 누르거나 보통 PowerShell 창에서 띄우세요."
+msgstr ""
+"PolyPDF was started inside another app (such as the Claude app's terminal or Run button) — started this way, helper files for the settings and the business card database are created separately and your data can be damaged, so it will close.\n"
+"\n"
+"Start it by double-clicking run.bat in File Explorer or from a normal PowerShell window."
 
 #: viewer/present_controller.py
 msgid "녹화 전환 중… (이전 파일 마무리)"

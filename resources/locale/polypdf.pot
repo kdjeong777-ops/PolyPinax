@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-11-23 20:50+0900\n"
+"POT-Creation-Date: 2026-11-23 21:07+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -5794,6 +5794,13 @@ msgstr ""
 
 #: viewer/photo_map.py
 msgid "지도 페이지가 없습니다 — PolyPinax 에서 다시 여세요."
+msgstr ""
+
+#: viewer/pkg_guard.py
+msgid ""
+"PolyPDF 를 다른 앱(Claude 앱의 터미널·실행 단추 등) 안에서 띄웠습니다 — 이렇게 띄우면 설정·명함 DB 의 보조 파일이 따로 만들어져 자료가 깨질 수 있어 끝냅니다.\n"
+"\n"
+"탐색기에서 run.bat 을 두 번 누르거나 보통 PowerShell 창에서 띄우세요."
 msgstr ""
 
 #: viewer/present_controller.py

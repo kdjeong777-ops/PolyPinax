@@ -590,6 +590,10 @@ def main():
         # 셀프테스트 경로는 fitz 가 필요 — 지연 import
         _study_selftest(_st)
         return
+    # 261122-1 덧붙임(응답성 SOT §4 ⑤, 명함 DB 손상 261123): 다른 앱(Claude 앱 터미널·Run 단추 등 MSIX) 안에서 띄우면 설정·자료 폴더가
+    #   그 앱의 가상 사본으로 돌려 써져 SQLite 보조 파일(-wal·-shm)이 두 벌이 된다 — 실제 폴더를 열기 전에 알리고 끝낸다.
+    from viewer import pkg_guard
+    pkg_guard.stop_if_blocked((APP_ID, _branding.OLD_ID))
     try:
         QApplication.setHighDpiScaleFactorRoundingPolicy(
             Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
@@ -781,6 +785,12 @@ def main():
         # 261108-15(응답성 SOT §6): 설정·사이드카·태그·고친 글은 배경 줄(`bg_write`)이 쓴다 — 끝나기 전에 비우고 기다린다
         from viewer import bg_write
         bg_write.flush()
+    except Exception:
+        pass
+    try:
+        # 261122-1 덧붙임(명함 SOT §5.7): 명함 DB 연결을 닫으며 WAL 을 비운다 — `os._exit` 는 연결을 닫지 않아 묵은 -wal 이 남는다
+        if "viewer.bizcard.store" in sys.modules:
+            sys.modules["viewer.bizcard.store"].close_all()
     except Exception:
         pass
     try:

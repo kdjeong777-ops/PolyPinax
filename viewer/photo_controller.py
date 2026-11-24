@@ -452,6 +452,7 @@ class PhotoMixin:
         if n_new or n_gone:
             self.status.showMessage(tr("사진 색인: {n}장 (새로 {a}·지움 {d})").format(n=n_total, a=n_new, d=n_gone), 4000)
         self._photo_kind_start(folder)
+        self._photo_people_start(folder)               # 261122-15: 인물(얼굴) 자동 태그 — 종류와 따로(태그 SOT §5.7)
 
     # ── 사진 자동 태그(태그 SOT §5.7, 261105-6) — 값은 배경 워커가 만들고, 태그 저장소에는 메인이 쓴다 ─────
     def _photo_autotag_apply(self, found: dict, part: str, run=None):
@@ -529,13 +530,32 @@ class PhotoMixin:
         run_in_thread(w, self.__dict__.setdefault("_photo_keep", []))
 
     def _photo_kind_stop(self):
-        w = self.__dict__.get("_photo_kinder")
-        if w is not None:
-            try:
-                w.request_cancel()
-            except Exception:
-                pass
-            self._photo_kinder = None
+        """종류 워커를 멈춘다 — 인물 워커(261122-15)도 같은 때(다른 폴더·PDF 모드·새 색인 훑기) 멈춘다."""
+        for attr in ("_photo_kinder", "_photo_peopler"):
+            w = self.__dict__.get(attr)
+            if w is not None:
+                try:
+                    w.request_cancel()
+                except Exception:
+                    pass
+                setattr(self, attr, None)
+
+    def _photo_people_start(self, folder: str):
+        """인물 자동 태그(#인물·#인물1, 태그 SOT §5.7) — 색인 훑기 뒤 배경에서(설정 `photo_people`, 기본 켬)."""
+        prefs = getattr(self, "_prefs", {}) or {}
+        if not getattr(self, "_photo_mode", False) or not prefs.get("photo_auto_tag", True) or not prefs.get("photo_people", True):
+            return
+        if str(folder) != str(getattr(self, "_folder", "") or ""):
+            return
+        from viewer.workers import run_in_thread
+        old = self.__dict__.get("_photo_peopler")
+        if old is not None:
+            old.request_cancel()
+        w = PhotoPeopleWorker(str(folder))
+        w.found.connect(lambda d, _w=w: self._photo_autotag_apply(d, "people", _w))
+        w.finished.connect(lambda _w=w: self.__dict__.get("_photo_peopler") is _w and setattr(self, "_photo_peopler", None))
+        self._photo_peopler = w
+        run_in_thread(w, self.__dict__.setdefault("_photo_keep", []))
 
     def _photo_search(self, query: str):
         """사진 모드 검색(4.24, R13) — 사진 정보 색인에서 이름·촬영일·카메라·태그로 찾아 **썸네일 줄**에 결과를 보이고 첫 사진을 연다.
@@ -5184,6 +5204,71 @@ class PhotoKindWorker(QObject):
                     new = [photo_tags.alias(k, rules)] if k else []
                     photo_index.set_tags(con, key, photo_tags.row_tags(tags, path, "kind", new),
                                          kind="%d:%s" % (photo_tags.KIND_VER, new[0] if new else ""))
+                    con.commit()
+                    self.judged += 1
+                    self.found.emit({path: new})
+                    pacing.pace(self)
+            finally:
+                con.close()
+        except Exception:
+            pass
+        finally:
+            self.finished.emit()
+
+
+class PhotoPeopleWorker(QObject):
+    """사진 인물 자동 태그(태그 SOT §5.7 '인물 판정', 261122-15) — 얼굴 찾기(명함과 같은 윈도우 내장, 오프라인)로 #인물·#인물1.
+    색인 훑기가 끝난 뒤 한 장씩, 취소 가능. 태그 SOT §7.1 의무 표의 한 행(배경·pacing·취소)."""
+    found = pyqtSignal(dict)                   # 경로 → [태그] — 판정할 때마다
+    finished = pyqtSignal()
+
+    def __init__(self, folder: str, detect=None):
+        super().__init__()
+        self.folder, self.detect = str(folder), detect
+        self._cancel = False
+        self.judged = 0
+
+    def request_cancel(self):
+        self._cancel = True
+
+    def run(self):
+        import os
+        from viewer import pacing, photo_index, photo_io, photo_tags
+        try:
+            tags = None
+            try:
+                from viewer.tag_store import TagStore
+                tags = TagStore()
+            except Exception:
+                tags = None
+            rules = None
+            try:
+                from viewer import auto_tag
+                rules = auto_tag.load_rules()
+            except Exception:
+                pass
+            con = photo_index.connect()
+            try:
+                todo = photo_index.people_todo(con, photo_index.norm_folder(self.folder), photo_tags.PEOPLE_VER)
+                for key, path in todo:
+                    if self._cancel:
+                        break
+                    try:
+                        if photo_io.cloud_only(os.stat(path)):
+                            continue                         # 색인 뒤 클라우드로 비워진 사진 — 열지 않는다(§4.37). 판정은 아직으로
+                    except OSError:
+                        continue
+                    try:
+                        got = photo_tags.people_tag(path, self.detect)
+                    except Exception:
+                        continue                             # 그 사진만 — 판정 '아직' 으로 남긴다
+                    if got is None:
+                        break                                # 얼굴 찾기를 못 쓰는 PC — 판정 '아직', 다음에 다시
+                    if self._cancel:
+                        break
+                    new = [photo_tags.alias(t, rules) for t in got]
+                    photo_index.set_tags(con, key, photo_tags.row_tags(tags, path, "people", new),
+                                         people="%d:%s" % (photo_tags.PEOPLE_VER, " ".join(new)))
                     con.commit()
                     self.judged += 1
                     self.found.emit({path: new})

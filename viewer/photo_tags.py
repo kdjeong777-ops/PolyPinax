@@ -285,3 +285,49 @@ def kind_tag(path: str, lang: str | None = None):
     if not text_like(path):
         return None
     return classify_text(ocr_text(path, lang))
+
+
+# ── 인물 — 얼굴 찾기(윈도우 내장, 오프라인) (태그 SOT §5.7 '인물 판정', 261122-15) ──────────
+PEOPLE_VER = 1                  # 판정 규칙을 바꾸면 올린다 — 다음 훑기가 사진마다 다시
+PERSON = "인물"                 # 얼굴 하나 이상 — 저장 데이터(번역하지 않는다)
+PERSON1 = "인물1"               # 얼굴이 딱 하나
+PEOPLE_SIDE = 1024              # 얼굴 찾기에 넣는 그림 긴 변
+FACE_MIN_FRAC = 0.04            # 짧은 변의 이 비율보다 작은 얼굴은 세지 않는다(먼 군중·무늬)
+
+
+def people_tags(n: int) -> list:
+    """얼굴 수 → 태그. 하나 이상 = 인물, 딱 하나 = 인물1 도(사용자 답 '1명이상이면 인물' + 원 지시 '하나만이면 인물1')."""
+    if n <= 0:
+        return []
+    return [PERSON, PERSON1] if n == 1 else [PERSON]
+
+
+def face_count(path: str, detect=None):
+    """사진 속 얼굴 수, 얼굴 찾기를 못 쓰면 None. `detect` 는 검사용 바꿔치기(그림 → [(x, y, w, h)])."""
+    from PIL import Image, ImageOps
+    if detect is None:
+        from viewer.bizcard import face_thumb             # 명함과 같은 얼굴 찾기(import 만 — 명함 SOT §5.24)
+        if face_thumb._no_detector:
+            return None
+        detect = face_thumb.faces
+    with Image.open(path) as im0:
+        im0.draft("RGB", (PEOPLE_SIDE, PEOPLE_SIDE))       # JPEG 은 줄여 풀기(빠르게)
+        im = ImageOps.exif_transpose(im0).convert("RGB")
+    if max(im.size) > PEOPLE_SIDE:
+        s = PEOPLE_SIDE / float(max(im.size))
+        im = im.resize((max(1, int(im.width * s)), max(1, int(im.height * s))))
+    boxes = detect(im)
+    if not boxes:
+        if detect is not None and getattr(detect, "__module__", "") == "viewer.bizcard.face_thumb":
+            from viewer.bizcard import face_thumb
+            if face_thumb._no_detector:
+                return None                                  # 이번에 못 쓰게 된 PC — 판정 '아직'
+        return 0
+    lo = FACE_MIN_FRAC * min(im.size)
+    return sum(1 for (_x, _y, w, h) in boxes if min(w, h) >= lo)
+
+
+def people_tag(path: str, detect=None):
+    """인물 태그 목록, 얼굴 찾기를 못 쓰면 None(판정하지 않음)."""
+    n = face_count(path, detect)
+    return None if n is None else people_tags(n)

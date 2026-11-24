@@ -149,7 +149,8 @@ def attach(dlg) -> TagRulesPanel:
         for c in panel.fmt_chk.values():
             c.setEnabled(cb.isChecked())
         # 261113-10 덧붙임: 사진 켜기·종류 구분 체크와 안내를 '자동 해시태그 (사진 모드)' 맨 위로, 빈 위 묶음은 숨긴다
-        for i, w in enumerate((dlg.chk_photo_tag, dlg.chk_photo_kind, getattr(dlg, "lbl_photo_tag_note", None))):
+        for i, w in enumerate((dlg.chk_photo_tag, dlg.chk_photo_kind, getattr(dlg, "chk_photo_people", None),   # 261122-15
+                               getattr(dlg, "lbl_photo_tag_note", None))):
             if w is not None:
                 panel.photo_lay.insertWidget(i, w)
         if getattr(dlg, "grp_auto_tags", None) is not None:

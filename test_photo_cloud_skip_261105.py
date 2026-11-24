@@ -82,7 +82,8 @@ try:
     photo_io.cloud_only, photo_tags.kind_tag, ocr.ensure_tesseract = _orig_cloud, _orig_kind, _orig_tess
 
     # C — 정적: 사진 모듈의 워커 분류. 폴더·여러 장을 스스로 여는 워커는 cloud_only 를 거친다(§4.37)
-    BULK = {"PhotoIndexWorker", "PhotoKindWorker", "PhotoDateWorker", "PhotoMapWorker", "PhotoMetaRetagWorker"}
+    BULK = {"PhotoIndexWorker", "PhotoKindWorker", "PhotoDateWorker", "PhotoMapWorker", "PhotoMetaRetagWorker",
+            "PhotoPeopleWorker"}                       # 261122-15: 인물(얼굴) — people_todo·stat 로 건너뜀
     CHOSEN = {                                         # 사용자가 고른·보는 사진 한 장(또는 고른 것)만 — 내려받는 것이 맞다
         "PhotoOrientSaveWorker", "PhotoCopyWorker", "PhotoShareWorker", "PhotoFlattenWorker", "PhotoInfoWorker",
         "PhotoOcrWorker", "PhotoPreloadWorker", "PhotoZipWorker",

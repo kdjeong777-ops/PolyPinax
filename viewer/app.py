@@ -10341,6 +10341,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         # 261105-6(태그 SOT §5.7, 사용자 결정): 사진 자동 태그(날짜·동·장비·스크린샷)·종류(영수증·명함·서류)는 기본 켬
         self._prefs.setdefault("photo_auto_tag", True)
         self._prefs.setdefault("photo_kind_ocr", True)
+        self._prefs.setdefault("photo_people", True)          # 261122-15: 인물(얼굴) 자동 태그 — 기본 켬(태그 SOT §5.7)
         # 260901-3: 책갈피 목록 보기 — 기본 트리(사용자 지정). 두 트리(상·하단)에 함께 적용.
         self._prefs.setdefault("bookmark_tree_view", True)
         try:
@@ -10807,6 +10808,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             # 261105-6(태그 SOT §5.7): 사진 자동 태그 — 기본 켬, 허용목록에 빠지면 조용히 사라진다(§14.2)
             "photo_auto_tag": bool(prefs.get("photo_auto_tag", old.get("photo_auto_tag", True))),
             "photo_kind_ocr": bool(prefs.get("photo_kind_ocr", old.get("photo_kind_ocr", True))),
+            "photo_people": bool(prefs.get("photo_people", old.get("photo_people", True))),   # 261122-15
             # 260901-3: 책갈피 목록 보기(트리/단일) — 마지막 상태 기억. 기본 True(트리).
             #   ※ 허용목록 미등재 시 조용히 유실(§14.2 함정) — SettingsDialog 미관리 키라
             #     반드시 old 폴백으로 보존한다.

@@ -16,7 +16,7 @@ import sqlite3
 from pathlib import Path
 
 DB_NAME = "photo_index.db"
-SCHEMA = 3                       # 2: `ocr` 칸(261104-10 P4-c) · 3: `at_ver`·`kind` 칸(자동 태그 판정 표시, 태그 SOT §5.7, 261105-6)
+SCHEMA = 4                       # 2: `ocr` 칸(261104-10 P4-c) · 3: `at_ver`·`kind` 칸(자동 태그 판정 표시, 태그 SOT §5.7, 261105-6) · 4: `people` 칸(인물, 261122-15)
 
 
 def db_path() -> Path:
@@ -80,6 +80,8 @@ def _init(con) -> None:
         con.execute("ALTER TABLE photos ADD COLUMN at_ver INTEGER")
     if "kind" not in cols:                   # 종류 판정 '판:태그'('1:영수증'·'1:') — NULL 이면 아직(태그 SOT §5.7)
         con.execute("ALTER TABLE photos ADD COLUMN kind TEXT")
+    if "people" not in cols:                 # 인물 판정 '판:태그 태그'('1:인물 인물1'·'1:') — NULL 이면 아직(태그 SOT §5.7, 261122-15)
+        con.execute("ALTER TABLE photos ADD COLUMN people TEXT")
     row = con.execute("SELECT v FROM meta WHERE k='schema'").fetchone()
     if not row or row[0] != str(SCHEMA):             # 같으면 쓰지 않는다 — 열 때마다 쓰면 그 연결이 쓰기 잠금을 쥔 채 남는다(261105-10)
         con.execute("INSERT OR REPLACE INTO meta(k, v) VALUES('schema', ?)", (str(SCHEMA),))
@@ -131,15 +133,15 @@ def set_ocr(con, path: str, ocr: str, tags=None) -> bool:
     return True
 
 
-def set_tags(con, key: str, tags, at_ver=None, kind=None) -> bool:
-    """자동 태그를 정한 뒤(태그 SOT §5.7) — 그 행의 태그 글·검색 글을 바꾸고, 주면 `at_ver`·`kind` 도. 워커에서. 행이 없으면 False."""
+def set_tags(con, key: str, tags, at_ver=None, kind=None, people=None) -> bool:
+    """자동 태그를 정한 뒤(태그 SOT §5.7) — 그 행의 태그 글·검색 글을 바꾸고, 주면 `at_ver`·`kind`·`people` 도. 워커에서. 행이 없으면 False."""
     row = con.execute("SELECT name, taken, camera, ocr FROM photos WHERE key=?", (key,)).fetchone()
     if not row:
         return False
     name, taken, camera, ocr = row
     tag_txt = " ".join("#" + t for t in tags or [])
-    con.execute("UPDATE photos SET tags=?, at_ver=COALESCE(?, at_ver), kind=COALESCE(?, kind) WHERE key=?",
-                (tag_txt, at_ver, kind, key))
+    con.execute("UPDATE photos SET tags=?, at_ver=COALESCE(?, at_ver), kind=COALESCE(?, kind), people=COALESCE(?, people) WHERE key=?",
+                (tag_txt, at_ver, kind, people, key))
     con.execute("DELETE FROM photo_fts WHERE key=?", (key,))
     con.execute("INSERT INTO photo_fts(key, body) VALUES(?, ?)", (key, _body(name, taken, camera, tag_txt, ocr)))
     return True
@@ -163,6 +165,17 @@ def kind_todo(con, folder: str, ver: int) -> list:
                        (folder, like)).fetchall()
     pre = "%d:" % int(ver)
     return [(k, p) for k, p, kd, tg in rows if not (kd or "").startswith(pre) and "#스크린샷" not in (tg or "")]
+
+
+def people_todo(con, folder: str, ver: int) -> list:
+    """인물 판정이 아직이거나 옛 판인 사진 — [(key, path)]. 빼는 것은 `kind_todo` 와 같다(zip 안·스크린샷·클라우드 이름 행, 261122-15).
+    행을 새로 쓰면(`upsert` — 사진이 바뀜) `people` 칸이 비어 다시 판정한다."""
+    like = folder.rstrip("\\/") + os.sep + "%"
+    rows = con.execute("SELECT key, path, people, tags FROM photos WHERE (folder=? OR folder LIKE ?) AND zip IS NULL AND mtime_ns<>0 "
+                       "ORDER BY taken DESC, name",
+                       (folder, like)).fetchall()
+    pre = "%d:" % int(ver)
+    return [(k, p) for k, p, pp, tg in rows if not (pp or "").startswith(pre) and "#스크린샷" not in (tg or "")]
 
 
 def known(con, folder: str) -> dict:

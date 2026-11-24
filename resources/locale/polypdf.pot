@@ -14300,6 +14300,10 @@ msgid "사진 종류도 구분 (영수증·명함·서류 — 글자 있는 사�
 msgstr ""
 
 #: viewer/widgets/settings_dialog.py
+msgid "사람이 있으면 #인물 (얼굴 찾기 — 한 명이면 #인물1 도)"
+msgstr ""
+
+#: viewer/widgets/settings_dialog.py
 msgid "사진 모드에서 폴더를 열면 백그라운드에서 붙입니다. 위치는 동봉한 행정동 자료로 찾아 밖으로 보내지 않습니다(국내만). 읽은 글은 종류 판정에만 쓰고 저장하지 않습니다."
 msgstr ""
 

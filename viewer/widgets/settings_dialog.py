@@ -929,6 +929,12 @@ class SettingsDialog(QDialog):
         self.chk_photo_kind.setEnabled(self.chk_photo_tag.isChecked())
         self.chk_photo_tag.toggled.connect(self.chk_photo_kind.setEnabled)
         gl.addWidget(self.chk_photo_kind)
+        # 261122-15(태그 SOT §5.7 '인물 판정'): 얼굴 찾기(윈도우 내장, 오프라인)로 #인물·#인물1 — 기본 켬
+        self.chk_photo_people = QCheckBox(tr("사람이 있으면 #인물 (얼굴 찾기 — 한 명이면 #인물1 도)"))
+        self.chk_photo_people.setChecked(bool(self._prefs.get("photo_people", True)))
+        self.chk_photo_people.setEnabled(self.chk_photo_tag.isChecked())
+        self.chk_photo_tag.toggled.connect(self.chk_photo_people.setEnabled)
+        gl.addWidget(self.chk_photo_people)
         self.lbl_photo_tag_note = _small(tr("사진 모드에서 폴더를 열면 백그라운드에서 붙입니다. 위치는 동봉한 행정동 자료로 "
                                             "찾아 밖으로 보내지 않습니다(국내만). 읽은 글은 종류 판정에만 쓰고 저장하지 않습니다."))
         gl.addWidget(self.lbl_photo_tag_note)
@@ -1312,6 +1318,7 @@ class SettingsDialog(QDialog):
             "auto_tag_enabled": self.chk_auto_tag.isChecked(),      # 태그 SOT §3.5 — 기본 켬(261113-10 덧붙임)
             "photo_auto_tag": self.chk_photo_tag.isChecked(),       # 261105-6(태그 SOT §5.7): 기본 켬
             "photo_kind_ocr": self.chk_photo_kind.isChecked(),
+            "photo_people": self.chk_photo_people.isChecked(),
             "open_edit_mode": (self.cmb_open_mode.currentData() == "edit"),
             "screenshot_max": int(self.spin_screenshot.value()),
             "show_panel_toolbar": self.chk_show_panel_toolbar.isChecked(),

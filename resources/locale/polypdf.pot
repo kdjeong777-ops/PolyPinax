@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-11-24 21:07+0900\n"
+"POT-Creation-Date: 2026-11-24 22:41+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -9728,7 +9728,7 @@ msgid "이름·회사·번호·메일로 거르기"
 msgstr ""
 
 #: viewer/widgets/bizcard_roster_dialog.py
-msgid "vcf 열기…"
+msgid "vcf 열기"
 msgstr ""
 
 #: viewer/widgets/bizcard_roster_dialog.py
@@ -9804,15 +9804,11 @@ msgid "다른 전화"
 msgstr ""
 
 #: viewer/widgets/bizcard_roster_dialog.py
-msgid "vcf 열기"
-msgstr ""
-
-#: viewer/widgets/bizcard_roster_dialog.py
 msgid "vCard (*.vcf)"
 msgstr ""
 
 #: viewer/widgets/bizcard_roster_dialog.py
-msgid "[vcf 열기…] 로 견줄 vcf 를 고르세요."
+msgid "[vcf 열기] 로 견줄 vcf 를 고르세요."
 msgstr ""
 
 #: viewer/widgets/bizcard_roster_dialog.py

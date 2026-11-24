@@ -316,7 +316,7 @@ class RosterDialog(QDialog):
         self._find_timer.timeout.connect(self.reload)
         self.ed_find.textChanged.connect(lambda _t: self._find_timer.start())
         top.addWidget(self.ed_find, 1)
-        self.btn_vcf = QPushButton(tr("vcf 열기…"))
+        self.btn_vcf = QPushButton(tr("vcf 열기"))
         self.btn_vcf.setToolTip(tr("휴대폰 주소록 등에서 내보낸 vcf 와 견줍니다 — 파일은 읽기만 합니다"))
         self.btn_vcf.clicked.connect(lambda _c=False: self.open_vcf())
         top.addWidget(self.btn_vcf)
@@ -458,7 +458,7 @@ class RosterDialog(QDialog):
         if self.view() == "vcf" and not self.vcf_path:
             self.tree.clear()
             self.cards, self.groups = [], []
-            self.lbl.setText(tr("[vcf 열기…] 로 견줄 vcf 를 고르세요."))
+            self.lbl.setText(tr("[vcf 열기] 로 견줄 vcf 를 고르세요."))
             self._enable()
             return
         self.loading = True

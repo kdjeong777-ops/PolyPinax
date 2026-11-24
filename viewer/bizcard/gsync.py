@@ -14,6 +14,7 @@ from datetime import datetime
 
 from viewer.bizcard import people as P
 from viewer.bizcard import phone as PH
+from viewer.i18n import tr
 
 SRC = "google"                                  # contact_src 출처·태그
 TAG = "구글"
@@ -490,7 +491,6 @@ def show(v: dict, f: str) -> str:
     if f == "phones":
         x = ", ".join(n for _k, n in x or [] if n)
     elif f == "extra":                                  # 추가 칸 — '생일: …' 줄을 ' / ' 로(261122-25)
-        from viewer.i18n import tr
         x = " / ".join("%s%s: %s" % (tr(P.EXTRA_LABEL.get(k, k)), (" (%s)" % t) if t else "", val) for k, t, val in P.extra_clean(x))
     elif isinstance(x, (list, tuple)):
         x = ", ".join(str(i) for i in x if i)

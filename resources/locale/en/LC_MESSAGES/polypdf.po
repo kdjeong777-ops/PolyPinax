@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-24 12:42+0900\n"
+"POT-Creation-Date: 2026-11-24 15:04+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -1505,7 +1505,8 @@ msgstr "Copy as screenshot (p.{page})"
 msgid "스크린샷으로 복사 (붙여넣은 쪽)"
 msgstr "Copy as screenshot (pasted page)"
 
-#: viewer/app.py viewer/widgets/pres_timer.py viewer/widgets/thumbs_list.py
+#: viewer/app.py viewer/widgets/bizcard_find_dialog.py
+#: viewer/widgets/pres_timer.py viewer/widgets/thumbs_list.py
 msgid "붙여넣기"
 msgstr "Paste"
 
@@ -8526,6 +8527,10 @@ msgstr "View card"
 msgid "이 명함을 사진 모드에서 엽니다"
 msgstr "Open this card in photo mode"
 
+#: viewer/widgets/bizcard_find_dialog.py viewer/widgets/bizcard_gsync_dialog.py
+msgid "구글 주소록과 싱크"
+msgstr "Sync with Google Contacts"
+
 #: viewer/widgets/bizcard_find_dialog.py
 msgid "리멤버 vCard 가져오기"
 msgstr "Import Remember vCard"
@@ -8541,10 +8546,6 @@ msgstr "Export vCard for Google Contacts"
 #: viewer/widgets/bizcard_find_dialog.py
 msgid "리멤버용 vCard 로 내보내기"
 msgstr "Export vCard for Remember"
-
-#: viewer/widgets/bizcard_find_dialog.py viewer/widgets/bizcard_gsync_dialog.py
-msgid "구글 주소록과 싱크"
-msgstr "Sync with Google Contacts"
 
 #: viewer/widgets/bizcard_find_dialog.py
 #: viewer/widgets/bizcard_history_dialog.py
@@ -9006,8 +9007,8 @@ msgid "(그림 파일이 없습니다)"
 msgstr "(No image file)"
 
 #: viewer/widgets/bizcard_find_dialog.py
-msgid "(인물 사진 없음 — 끌어 놓거나 [사진 추가])"
-msgstr "(No person photo — drop one here or use [Add Photo])"
+msgid "(인물 사진 없음 — 끌어 놓거나 Ctrl+V 로 붙여넣거나 [사진 추가])"
+msgstr "(No person photo — drop one here, paste with Ctrl+V, or use [Add Photo])"
 
 #: viewer/widgets/bizcard_find_dialog.py
 #, python-brace-format

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-11-24 12:42+0900\n"
+"POT-Creation-Date: 2026-11-24 15:04+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1465,7 +1465,8 @@ msgstr ""
 msgid "스크린샷으로 복사 (붙여넣은 쪽)"
 msgstr ""
 
-#: viewer/app.py viewer/widgets/pres_timer.py viewer/widgets/thumbs_list.py
+#: viewer/app.py viewer/widgets/bizcard_find_dialog.py
+#: viewer/widgets/pres_timer.py viewer/widgets/thumbs_list.py
 msgid "붙여넣기"
 msgstr ""
 
@@ -8271,6 +8272,10 @@ msgstr ""
 msgid "이 명함을 사진 모드에서 엽니다"
 msgstr ""
 
+#: viewer/widgets/bizcard_find_dialog.py viewer/widgets/bizcard_gsync_dialog.py
+msgid "구글 주소록과 싱크"
+msgstr ""
+
 #: viewer/widgets/bizcard_find_dialog.py
 msgid "리멤버 vCard 가져오기"
 msgstr ""
@@ -8285,10 +8290,6 @@ msgstr ""
 
 #: viewer/widgets/bizcard_find_dialog.py
 msgid "리멤버용 vCard 로 내보내기"
-msgstr ""
-
-#: viewer/widgets/bizcard_find_dialog.py viewer/widgets/bizcard_gsync_dialog.py
-msgid "구글 주소록과 싱크"
 msgstr ""
 
 #: viewer/widgets/bizcard_find_dialog.py
@@ -8747,7 +8748,7 @@ msgid "(그림 파일이 없습니다)"
 msgstr ""
 
 #: viewer/widgets/bizcard_find_dialog.py
-msgid "(인물 사진 없음 — 끌어 놓거나 [사진 추가])"
+msgid "(인물 사진 없음 — 끌어 놓거나 Ctrl+V 로 붙여넣거나 [사진 추가])"
 msgstr ""
 
 #: viewer/widgets/bizcard_find_dialog.py

@@ -425,7 +425,8 @@ def _rounded(img, name: str) -> QPixmap:
 
 
 class PhotoWorker(QObject):
-    """인물 사진 넣기(배경) — 그림마다 JPG·EXIF 뺌. done(만든 경로들, 실패 수)."""
+    """인물 사진 넣기(배경) — 그림마다 JPG·EXIF 뺌. srcs = 파일 경로 또는 QImage(클립보드 그림 자체 — 여기서 PNG 로 풀어
+    같은 `save_person_photo` 에, §5.24.3 '붙여넣기'). done(만든 경로들, 실패 수)."""
     done = pyqtSignal(list, int)
     finished = pyqtSignal()
 
@@ -433,12 +434,24 @@ class PhotoWorker(QObject):
         super().__init__()
         self._front, self._srcs = front, list(srcs)
 
+    @staticmethod
+    def _png(im):
+        import io
+        from PyQt6.QtCore import QBuffer, QByteArray, QIODevice
+        ba = QByteArray()
+        buf = QBuffer(ba)
+        buf.open(QIODevice.OpenModeFlag.WriteOnly)
+        if not im.save(buf, "PNG"):
+            raise ValueError("png")
+        buf.close()
+        return io.BytesIO(bytes(ba))
+
     def run(self):
         made, bad = [], 0
         for s in self._srcs:
             try:
                 dst = P.next_photo_path(self._front)
-                P.save_person_photo(s, dst)
+                P.save_person_photo(self._png(s) if isinstance(s, QImage) else s, dst)
                 made.append(str(dst))
             except Exception:
                 bad += 1
@@ -1352,6 +1365,12 @@ class BizcardFindDialog(QDialog):
         self.photo_shown = ""
         pvl.addWidget(self.photo_view, 1)
         self.photo_view.installEventFilter(self)           # 좌우로 쓸기·휠로 다음 인물 사진(261120-50)
+        self.photo_view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)   # 우클릭 '붙여넣기'(§5.24.3, 261122-21)
+        self.photo_view.customContextMenuRequested.connect(
+            lambda pos: self._photo_menu(pos, self.photo_view))
+        sc = QShortcut(QKeySequence(QKeySequence.StandardKey.Paste), self)   # Ctrl+V — 글 칸에 커서면 그 칸이 먼저 가져감
+        sc.setContext(Qt.ShortcutContext.WindowShortcut)
+        sc.activated.connect(lambda: self.paste_photos())
         self.photos = _OrderList(external=self._drop_files, accepts=lambda e: e.mimeData().hasUrls())
         self.photos.setWrapping(False)                     # 한 줄 — 넘치면 가로 스크롤
         self.photos.setIconSize(QSize(PHOTO_ICON, PHOTO_ICON))
@@ -1408,13 +1427,13 @@ class BizcardFindDialog(QDialog):
         self.act_open.triggered.connect(lambda _c=False: self.open_in_photo())
         self.vcard_menu = bm = QMenu(tr("주소록"), self)                # §5.24 D22·D23 — 구글 주소록·리멤버 명함첩(vCard)
         bm.setToolTipsVisible(True)
+        _menu_act(bm, tr("구글 주소록과 싱크"), lambda: self.open_gsync())     # 261120-36(§5.29) — 맨 위(261122-21), 구글 계정 연결은 명함 환경설정
+        bm.addSeparator()
         _menu_act(bm, tr("리멤버 vCard 가져오기"), lambda: self.import_contacts(source="remember"))
         _menu_act(bm, tr("구글 주소록 vCard 가져오기"), lambda: self.import_contacts(source="google"))
         bm.addSeparator()
         _menu_act(bm, tr("구글 주소록용 vCard 로 내보내기"), lambda: self.export_vcard(style="google"))
         _menu_act(bm, tr("리멤버용 vCard 로 내보내기"), lambda: self.export_vcard(style="remember"))
-        bm.addSeparator()
-        _menu_act(bm, tr("구글 주소록과 싱크"), lambda: self.open_gsync())     # 261120-36(§5.29) — 구글 계정 연결은 명함 환경설정
         bm.addSeparator()
         _menu_act(bm, tr("변경 기록·되살리기"), lambda: self.open_history())   # §5.30(261120-64)
         bm.addSeparator()
@@ -2170,7 +2189,7 @@ class BizcardFindDialog(QDialog):
         if not path or not os.path.exists(path):
             self.photo_view.clear()
             if self._photo_front():
-                self.photo_view.setText(tr("(인물 사진 없음 — 끌어 놓거나 [사진 추가])"))
+                self.photo_view.setText(tr("(인물 사진 없음 — 끌어 놓거나 Ctrl+V 로 붙여넣거나 [사진 추가])"))
             return
         self.photo_view.setPixmap(_scaled(path, max(120, self.photo_view.width()), max(90, self.photo_view.height())))
 
@@ -3693,12 +3712,42 @@ class BizcardFindDialog(QDialog):
         paths = [it.data(ROLE) for it in self.photos.selectedItems()] or ([self.photo_shown] if self.photo_shown else [])
         return self.delete_photos(paths, ask=ask)
 
-    def _photo_menu(self, pos):
-        if self.photos.itemAt(pos) is None:
-            return
+    def _photo_menu(self, pos, w=None):
+        """사진창 우클릭 — 썸네일 위면 '지우기', 어디서든 '붙여넣기'(클립보드에 받을 그림이 없으면 흐림, §5.24.3 '붙여넣기')."""
+        w = w or self.photos
         m = QMenu(self)
-        _menu_act(m, tr("지우기"), lambda: self.delete_photos())
-        m.exec(self.photos.mapToGlobal(pos))
+        if w is self.photos and self.photos.itemAt(pos) is not None:
+            _menu_act(m, tr("지우기"), lambda: self.delete_photos())
+        act = _menu_act(m, tr("붙여넣기"), lambda: self.paste_photos())
+        act.setEnabled(bool(self._photo_front()) and not self.photo_busy and self._clip_photos() is not None)
+        self._photo_menu_obj = m                       # 검사용
+        m.exec(w.mapToGlobal(pos))
+
+    def _clip_photos(self):
+        """클립보드에서 받을 인물 사진 — 그림 파일 목록(HEIC 포함, 끌어 놓기와 같은 거름)이 먼저, 없으면 그림 자체(사본).
+        없으면 None."""
+        md = QApplication.clipboard().mimeData()
+        if md is None:
+            return None
+        if md.hasUrls():
+            files = [u.toLocalFile() for u in md.urls() if self._is_img(u.toLocalFile())]
+            if files:
+                return files
+        if md.hasImage():
+            im = QApplication.clipboard().image()
+            if not im.isNull():
+                return [im.copy()]
+        return None
+
+    def paste_photos(self) -> bool:
+        """붙여넣기(Ctrl+V·우클릭, §5.24.3 '붙여넣기', 261122-21) — 넣는 길은 [사진 추가]·끌어 놓기와 같은 `add_photos`."""
+        if not self._card or self.photo_busy or not self._photo_front():
+            return False
+        srcs = self._clip_photos()
+        if not srcs:
+            return False
+        self.add_photos(srcs)
+        return True
 
     def delete_card_pictures(self, c, picks) -> bool:
         """'명함 사진 삭제'(§5.24.8, 261120-65·-69) — picks = 'front'·'back'·인물 사진 경로. 인물 사진 먼저(남은 것 이름 차례대로),

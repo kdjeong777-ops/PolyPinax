@@ -116,6 +116,9 @@ def restore(store, items) -> int:
             cid = e["card_id"]
             row["updated"] = now
             vals = {c: row[c] for c in cols if c != "id" and c in row}   # 기록에 있는 칸만 — 뒤 판에서 는 칸은 그대로(261120-68)
+            if vals.get("front"):                         # 옛 기록의 경로 꼴로 망가진 그림 없는 명함 열쇠는 되살리지 않는다(261122-24)
+                from viewer.bizcard.people import contact_key
+                vals["front"] = contact_key(vals["front"])
             if con.execute("SELECT 1 FROM cards WHERE id=?", (cid,)).fetchone():
                 other = con.execute("SELECT 1 FROM cards WHERE front=? AND id<>?", (vals.get("front"), cid)).fetchone()
                 if other:

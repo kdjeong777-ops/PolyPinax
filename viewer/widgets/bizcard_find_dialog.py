@@ -61,6 +61,7 @@ PHOTO_HANDLE = 9                    # 사진창 구분선 손잡이 높이(가�
 SWIPE_PX = 40                       # 사진 쓸어 넘기기 — 이만큼 넘게 좌우로 끌면 다음·이전(§5.24.3 '명함', 261120-50)
 PHOTO_MIN_SHOW = 300                # 사진창 한 칸이 이보다 낮으면 그림이 있는 칸을 크게(§5.24.3 '크기 비율', 261120-51)
 PHOTO_FAVOR = 0.68                  # 그때 그림이 있는 칸의 몫
+KEYS_BAK = ".keys_bak"            # 그림 없는 명함 열쇠 바로잡기 전 DB 백업 뒤붙이(261122-24)
 PHOTO_SPLIT_KEY = "photo_split"     # 사람이 끈 비율(위 칸 몫) — 명함 DB meta
 PRELOAD_MS = 1500                  # 창이 뜬 뒤 이만큼 쉬면 '해시태그 수정' 창 준비(모듈·전체 태그 목록 — §5.24.4 '빠르게')
 DROP_TINT, DROP_TINT_HOT = "0.04", "0.14"   # 놓을 자리 틀 바탕(강조색 투명도) — 창 위 / 그 자리 위(§5.24.3 '끌어 놓기')
@@ -671,8 +672,10 @@ class _ArchiveWorker(QObject):
 
 class _StoreChoresWorker(QObject):
     """명함찾기를 열 때 한 번 — 변경 기록 정리(§5.30 '보존', 하루 한 번)와 이미 있는 DB 의 번호 종류 바로잡기(§5.11, kinds 일 때만).
-    배경, 자기 연결(응답성 SOT §4.4, 261120-55·-68). done(바꾼 수 — 안 했으면 0, 실패면 -1, 까닭)."""
+    배경, 자기 연결(응답성 SOT §4.4, 261120-55·-68). done(바꾼 수 — 안 했으면 0, 실패면 -1, 까닭).
+    경로 꼴로 망가진 그림 없는 명함 열쇠 바로잡기(`people.fix_contact_keys`, 261122-24 — 열 때마다, 고칠 것이 있을 때만 백업) → keys(고친 수)."""
     done = pyqtSignal(int, str)
+    keys = pyqtSignal(int)
     finished = pyqtSignal()
 
     def __init__(self, db, kinds: bool, folder: str = ""):
@@ -695,6 +698,12 @@ class _StoreChoresWorker(QObject):
                 if _t.time() - float(st.meta_get(FACE_PRUNE_KEY, 0) or 0) > 86400:
                     FT.prune(st, self._folder)
                     st.meta_set(FACE_PRUNE_KEY, _t.time())
+            except Exception:
+                pass
+            try:
+                k = P.fix_contact_keys(st, str(st.path) + KEYS_BAK)
+                if k:
+                    self.keys.emit(k)
             except Exception:
                 pass
             if self._kinds:
@@ -1909,6 +1918,7 @@ class BizcardFindDialog(QDialog):
         from viewer.workers import run_in_thread
         w = _StoreChoresWorker(st.path, kinds, self._bizcard_folder())
         w.done.connect(self._kinds_fixed)
+        w.keys.connect(self._keys_fixed)
         keep = getattr(self._mw, "_thread_keep", None)
         run_in_thread(w, keep if isinstance(keep, list) else _KEEP)
         self._chores_worker = w
@@ -1916,6 +1926,14 @@ class BizcardFindDialog(QDialog):
 
     def _save_copy_fields(self):
         self._store().meta_set("copy_fields", [k for k in P.COPY_FIELDS if self.chk[k].isChecked()])
+
+    def _keys_fixed(self, n):
+        """경로 꼴로 망가진 그림 없는 명함 열쇠를 바로잡았다(261122-24) — 목록을 다시, 한 번 알림."""
+        self._card = P.card_by_id(self._store(), self._card["id"]) if self._card else None
+        self.refresh()
+        QMessageBox.information(self, tr("명함찾기"), tr(
+            "그림 없는 명함 {n}장의 저장 열쇠가 옛 판 [저장]으로 망가져 있어 바로잡았습니다 — 이제 인물 사진·명함 그림을 넣을 수 있습니다. "
+            "바꾸기 전 명함 DB 는 같은 폴더 'bizcard.db{bak}' 에 두었습니다.").format(n=n, bak=KEYS_BAK))
 
     def _kinds_fixed(self, n, err=""):
         if n < 0:                                         # 실패 — 세고 알린다, 세 번이면 더는 저절로 하지 않는다(261120-68)

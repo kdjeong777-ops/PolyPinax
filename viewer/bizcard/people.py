@@ -387,6 +387,7 @@ def update_card(store, card_id: int, fields: dict, commit: bool = True) -> None:
         elif k in ("front", "back", "src_key"):
             from viewer.bizcard.vcard import CONTACT_PREFIX
             # 주소록 명함의 열쇠 `contact:…` 는 경로가 아니다 — 경로 열쇠로 바꾸면 [저장] 뒤 그림 없는 명함이 아니게 된다(§5.24.5)
+            v = contact_key(v) if v else ""                    # 경로 꼴로 망가진 옛 열쇠도 바로(261122-24)
             v = (v if str(v).startswith(CONTACT_PREFIX) else _nk(v)) if v else ""
         sets.append("%s=?" % k)
         args.append(v)
@@ -410,6 +411,48 @@ def fix_phone_fields(fields: dict, memo: str = "") -> dict:
 
 
 KINDS_FIXED_KEY = "phone_kinds_fixed"
+
+
+def contact_key(v):
+    """그림 없는 명함 열쇠 바로잡기(261122-24) — 1.1.0-beta.19 이전 [저장]이 `contact:<번호>` 를 경로로 바꿔(작업 폴더를 앞에 붙여)
+    `…\\contact:<번호>` 로 남긴 값을 본래 `contact:<번호>` 로. 그 밖의 값은 그대로."""
+    from viewer.bizcard.vcard import CONTACT_PREFIX
+    s = str(v or "")
+    i = s.lower().rfind(os.sep + CONTACT_PREFIX)
+    if i < 0 and os.altsep:
+        i = s.lower().rfind(os.altsep + CONTACT_PREFIX)
+    return s[i + 1:].lower() if i >= 0 and not s.startswith(CONTACT_PREFIX) else v
+
+
+def fix_contact_keys(store, backup_path: str = "") -> int:
+    """경로 꼴로 망가진 그림 없는 명함 열쇠(`…\\contact:<번호>`)를 `contact:<번호>` 로(261122-24 — 명함찾기를 열 때마다, 배경·자기 연결).
+    망가진 행은 '파일 잃은 그림 명함' 으로 보여 인물 사진·명함 그림을 엉뚱한 자리(작업 폴더 옆)에 쓰려다 실패했다.
+    고칠 것이 있으면 먼저 backup_path 로 DB 백업(SQLite 온라인 백업). 변경 기록에는 남기지 않는다(보이는 칸은 그대로). 반환 = 고친 수."""
+    rows = [(r[0], r[1]) for r in store.con.execute(
+        "SELECT id, front FROM cards WHERE front LIKE ? AND front NOT LIKE ?", ("%contact:%", "contact:%")).fetchall()]
+    todo = [(cid, contact_key(f)) for cid, f in rows if contact_key(f) != f]
+    if not todo:
+        return 0
+    if backup_path:
+        import sqlite3 as _sq
+        dst = _sq.connect(backup_path)
+        try:
+            store.con.backup(dst)
+        finally:
+            dst.close()
+    import uuid
+    from viewer.bizcard import history as H
+    from viewer.bizcard.vcard import CONTACT_PREFIX
+    store.con.execute("DROP TRIGGER IF EXISTS temp.card_hist_upd")    # 열쇠만 — 변경 기록 '고친 것' 으로 남기지 않는다
+    try:
+        for cid, key in todo:
+            if store.con.execute("SELECT 1 FROM cards WHERE front=? AND id<>?", (key, cid)).fetchone():
+                key = CONTACT_PREFIX + uuid.uuid4().hex         # 드물게 같은 열쇠가 이미 있으면 새 열쇠
+            store.con.execute("UPDATE cards SET front=? WHERE id=?", (key, cid))
+        store.con.commit()
+    finally:
+        H.init(store)
+    return len(todo)
 
 
 def fix_kinds_all(store, backup_path: str = "") -> int:

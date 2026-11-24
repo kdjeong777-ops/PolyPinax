@@ -3,7 +3,7 @@
 
 A 클립보드의 그림 자체(화면 캡처처럼)를 실제 Ctrl+V(목록 표에 커서) → 인물 사진 JPG(크기 그대로)
 B 탐색기에서 복사한 그림 파일(파일 목록)을 Ctrl+V → 인물 사진 하나 더
-C 글 칸(찾기 칸)에 커서가 있으면 Ctrl+V 는 글 칸 몫 — 인물 사진이 늘지 않음
+C 글 칸(찾기 칸)에 커서 + 클립보드가 글이면 Ctrl+V 는 글 칸 몫 — 인물 사진이 늘지 않음(그림뿐이면 그림 — 261122-23, test_bizcard_paste_fix_261124)
 D 사진창 우클릭 '붙여넣기' — 클립보드에 그림이 있으면 켜짐·누르면 붙음, 그림이 없으면 흐림
 E ≡ 주소록 메뉴 맨 위 = '구글 주소록과 싱크', 그 뒤 구분선
 """
@@ -121,10 +121,13 @@ try:
     chk(png.exists(), "B 원본 파일은 그대로")
 
     print("\n=== C 글 칸에서는 글 붙여넣기 ===")
-    cb.setImage(im)
+    cb.setText("가짜글")
     ctrl_v(fd.ed_find)
     pump(timeout=0.8)
-    chk(len(photos()) == 2 and not fd.photo_busy, "C 찾기 칸에 커서 — 인물 사진이 늘지 않음", str(photos()))
+    chk(len(photos()) == 2 and not fd.photo_busy, "C 찾기 칸에 커서·클립보드 글 — 인물 사진이 늘지 않음", str(photos()))
+    fd.ed_find.clear()                                 # 붙은 글이 목록을 거르지 않게
+    fd.refresh()
+    pump(lambda: fd._card is not None, timeout=3)
 
     print("\n=== D 사진창 우클릭 '붙여넣기' ===")
 

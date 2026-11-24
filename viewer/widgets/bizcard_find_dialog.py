@@ -1983,7 +1983,11 @@ class BizcardFindDialog(QDialog):
                 from viewer.bizcard import gsync as G
                 bl = G.blocked_ids(self._store())
             cd = P.card_ids(rows) if {"card", "nocard"} & set(ks) else None   # 그림 파일이 실제로 있나(261122-5)
+            pre = rows
             rows = [c for c in rows if P.kinds_ok(c, ks, ph, bl, cd)]
+            kid = getattr(self, "_keep_id", None)          # 방금 그림·사진을 넣은 명함 — 구분에서 빠져도 다른 명함을 고를 때까지 남김
+            if kid and self._card and self._card.get("id") == kid and all(c["id"] != kid for c in rows):
+                rows += [c for c in pre if c["id"] == kid]
         self._rows = rows
         self._by_id = {c["id"]: c for c in self._rows}
         for c in rows:                                     # 알려진 태그 — '#' 풀다운이 칸 토큰을 (0) 으로 남길지(검색창 SOT §5.1)
@@ -2402,6 +2406,11 @@ class BizcardFindDialog(QDialog):
         if not getattr(self, "_sized", False):
             self._sized = True
             self._init_sizes()
+            from PyQt6.QtWidgets import QTextEdit, QPlainTextEdit
+            self._text_edits = set(self.findChildren(QLineEdit)) | set(self.findChildren(QTextEdit)) \
+                | set(self.findChildren(QPlainTextEdit))   # 글 칸 — Ctrl+V 에 그림만 있으면 그림 붙여넣기(261122-23)
+            for w in self._text_edits:
+                w.installEventFilter(self)
             QTimer.singleShot(PRELOAD_MS, self._preload_tags)   # 쉬는 동안 '해시태그 수정' 창 준비(261120-20)
             QTimer.singleShot(0, lambda: self._todo_show(self._fav_gid()))   # 처음 탭이 할 일이면 칸(§5.24.10)
 
@@ -3375,6 +3384,10 @@ class BizcardFindDialog(QDialog):
 
     def eventFilter(self, obj, e):
         from PyQt6.QtCore import QEvent
+        if e.type() == QEvent.Type.KeyPress and obj in getattr(self, "_text_edits", ()) \
+                and e.matches(QKeySequence.StandardKey.Paste) and self._clip_is_picture():
+            self.paste_photos()                            # 글 칸이라도 클립보드에 글 없이 그림만 있으면 그림 붙여넣기(마우스 자리, 261122-23)
+            return True
         if obj is getattr(self, "pv", None) or obj is getattr(self, "photo_view", None):
             return self._swipe_event(obj, e)
         if obj is getattr(self, "photo_split", None):
@@ -3732,6 +3745,7 @@ class BizcardFindDialog(QDialog):
             self.btn_photo.setEnabled(bool(self._photo_front()))
             self.last_photos = made
             if self._card and self._card["id"] == card_id:
+                self._keep_id = card_id                    # '사진 없음' 구분에서 빠져도 다음 목록 갱신까지 보던 명함을(261122-23)
                 self._fill_photos(select=made[-1] if made else "")
             if card_id in self.fav_ids():
                 self._fav_fill()
@@ -3838,6 +3852,7 @@ class BizcardFindDialog(QDialog):
             self.last_card_images = made
             if self._card and self._card.get("id") == card_id:
                 self._card = new
+                self._keep_id = card_id                    # '명함 없음' 등 구분에서 빠져도 보던 명함을 그대로(261122-23)
             self.refresh()
             if card_id in self.fav_ids():
                 self._fav_fill()
@@ -3921,6 +3936,13 @@ class BizcardFindDialog(QDialog):
             if not im.isNull():
                 return [im.copy()]
         return None
+
+    def _clip_is_picture(self) -> bool:
+        """클립보드가 그림뿐인가 — 글(파일 목록 아닌 글)이 없고 받을 그림(그림 자체·그림 파일)이 있다. 글 칸의 Ctrl+V 를 가른다."""
+        md = QApplication.clipboard().mimeData()
+        if md is None or (md.hasText() and not md.hasUrls() and md.text().strip()):
+            return False
+        return self._clip_photos() is not None
 
     def paste_photos(self, zone=None) -> bool:
         """붙여넣기(Ctrl+V·우클릭, §5.24.3 '붙여넣기', 261122-21·-22) — zone 'card' = 명함 그림(`add_card_images`),

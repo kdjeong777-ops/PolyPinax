@@ -506,7 +506,7 @@ def save(data: dict, name: str = "settings.json") -> None:
     bg_write.submit(p, text, fsync=True)
 
 
-# ── 명함 창과 본 뷰어가 함께 바꾸는 값 (명함 SOT §5.24.9, 261120-17) ──
+# ── 명함 창과 본 뷰어가 함께 바꾸는 값 (명함찾기 SOT §5.24.9, 261120-17) ──
 #   명함 프로그램(따로 뜬 프로세스)이 이 값만 설정 파일에 쓰고, 본 뷰어는 저장할 때 자기가 바꾸지 않은 이 값을 파일 쪽으로 따른다.
 SHARED_PICTURE_KEYS = ("bizcard_folder", "phone_country")
 

@@ -1,4 +1,4 @@
-"""명단 관리 창 (명함 SOT §5.32, 261122-1·-2) — 명함이 있든 없든 모든 명단, 010 둘 이상, vcf 비교, 나누기.
+"""명단 관리 창 (명함찾기 SOT §5.32, 261122-1·-2) — 명함이 있든 없든 모든 명단, 010 둘 이상, vcf 비교, 나누기.
 
 계산은 Qt 없는 `viewer.bizcard.roster`·`people.split_card`. 고치기·지우기·사진 지우기는 명함찾기와 같은 길(`store_card_edit`·
 `delete_cards`·`delete_card_pictures`), 파일 옮김은 앱 이름 바꾸기 한 길(`_rename`). 목록·vcf 읽기는 배경(`_RosterWorker`).

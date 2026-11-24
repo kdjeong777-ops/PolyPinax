@@ -23,7 +23,7 @@ _TEXT_COLS = ("name", "company", "dept", "title", "address", "memo", "scanned")
 
 
 def extra_load(v):
-    """`cards.extra` 열 값 → [[갈래, 이름표, 값]] (NULL·읽을 수 없음 = None — 구글 추가 칸을 받은 적 없음, 명함 SOT §5.29 '추가 칸 처음')."""
+    """`cards.extra` 열 값 → [[갈래, 이름표, 값]] (NULL·읽을 수 없음 = None — 구글 추가 칸을 받은 적 없음, 구글 싱크 SOT §5.29 '추가 칸 처음')."""
     if v is None:
         return None
     if isinstance(v, list):
@@ -128,11 +128,11 @@ class BizcardStore:
         cols = {r[1] for r in c.execute("PRAGMA table_info(cards)")}
         if "dept" not in cols:                       # 261117-11: 부서 칸(옛 DB 는 열만 더한다)
             c.execute("ALTER TABLE cards ADD COLUMN dept TEXT")
-        if "extra" not in cols:                      # 261122-25: 구글 추가 칸(명함 SOT §5.24.1 '구글 추가 칸') — NULL = 받은 적 없음
+        if "extra" not in cols:                      # 261122-25: 구글 추가 칸(명함찾기 SOT §5.24.1 '구글 추가 칸') — NULL = 받은 적 없음
             c.execute("ALTER TABLE cards ADD COLUMN extra TEXT")
         c.execute("INSERT OR IGNORE INTO meta(k, v) VALUES('schema', ?)", (str(SCHEMA_VER),))
         c.commit()
-        from viewer.bizcard import history                # 변경 기록 트리거(연결마다 TEMP — 명함 SOT §5.30, 261120-64)
+        from viewer.bizcard import history                # 변경 기록 트리거(연결마다 TEMP — 명함찾기 SOT §5.30, 261120-64)
         history.init(self)
 
     # ── 인식 캐시 ──

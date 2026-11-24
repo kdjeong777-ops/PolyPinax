@@ -165,7 +165,7 @@ try:
     mw.show(); pump(timeout=1.0)
     from PyQt6.QtGui import QAction
     acts = [a.text() for a in mw.findChildren(QAction) if "명함" in a.text()]
-    # 261117-56: 본 뷰어 도구 탭의 `명함 ▾` 는 없앴다 — '명함 읽기' 는 명함찾기 아래 줄 단추(명함 SOT §5.24.1 '단추')
+    # 261117-56: 본 뷰어 도구 탭의 `명함 ▾` 는 없앴다 — '명함 읽기' 는 명함찾기 아래 줄 단추(명함찾기 SOT §5.24.1 '단추')
     from viewer.widgets.bizcard_find_dialog import BizcardFindDialog as _BFD
     _fd = _BFD(mw)
     chk(_fd.act_manage.text() == "명함 읽기" and not any("들이기" in t for t in acts), "F 글자 '명함 읽기'(명함찾기 단추, 옛 '들이기' 없음)",

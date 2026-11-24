@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""구글 주소록 싱크 — 로그인 일꾼·미리보기 창 (명함 SOT §5.29 '연결'·'미리보기', 261120-36).
+"""구글 주소록 싱크 — 로그인 일꾼·미리보기 창 (구글 싱크 SOT §5.29 '연결'·'미리보기', 261120-36).
 
 [구글 주소록과 싱크](명함찾기 ≡ 메뉴 '주소록 ▸') → 배경에서 구글 목록을 받아 계획만 세움 → 갈래별 줄·체크 → [반영] 을 눌러야 바뀐다.
 네트워크·DB 쓰기는 모두 배경 일꾼(응답성 SOT §4). 오류 글에 명함 값·토큰을 싣지 않는다(§2.1 의 3).
@@ -44,7 +44,7 @@ def _api(store):
 
 
 class MediaWorker(QObject):
-    """2단계 사진·드라이브(배경, 명함 SOT §5.29 '단계', 261120-71) — 대기열을 한 사람씩. progressed(i, n) · done(결과).
+    """2단계 사진·드라이브(배경, 구글 싱크 SOT §5.29 '단계', 261120-71) — 대기열을 한 사람씩. progressed(i, n) · done(결과).
     stop() 하면 그 사람 뒤에 멈춘다(남은 것은 대기열 — 다음에 열 때 이어서)."""
     progressed = pyqtSignal(int, int)
     done = pyqtSignal(dict)
@@ -161,7 +161,7 @@ WHY_LABELS = {"quota": tr_noop("드라이브 저장 공간 부족 {n}건"), "aut
 
 
 def fail_text(res) -> str:
-    """[적용] 뒤 못 한 것 — 까닭별(명함 SOT §5.29 '못 올렸을 때', 261120-70). 값은 싣지 않는다."""
+    """[적용] 뒤 못 한 것 — 까닭별(구글 싱크 SOT §5.29 '못 올렸을 때', 261120-70). 값은 싣지 않는다."""
     msg = tr("{ok}건 적용, {bad}건은 하지 못했습니다(다음 싱크에서 다시 보입니다).").format(ok=res.get("done", 0), bad=res.get("failed", 0))
     why = res.get("reasons") or {}
     parts = [tr(WHY_LABELS[k]).format(n=why[k]) for k in WHY_LABELS if why.get(k)]

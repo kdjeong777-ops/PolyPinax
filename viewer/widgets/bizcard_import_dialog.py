@@ -268,7 +268,7 @@ class BizcardImportDialog(QDialog):
         self.btn_new.setToolTip(tr("폴더를 다시 훑어 창을 연 뒤에 넣은 명함 그림만 표 끝에 더하고 읽습니다"))
         self.btn_new.clicked.connect(lambda _c=False: self.read_new())
         top.addWidget(self.btn_new)
-        self.btn_manual = QPushButton(tr("새 명함 입력"))   # [새 명함 읽기] 오른쪽(명함 SOT §5.24.1 '새 명함 입력', 261120-15)
+        self.btn_manual = QPushButton(tr("새 명함 입력"))   # [새 명함 읽기] 오른쪽(명함찾기 SOT §5.24.1 '새 명함 입력', 261120-15)
         self.btn_manual.setToolTip(tr("새 명함이나 새 인물 정보를 손으로 넣습니다 — 명함 그림·인물 사진도 함께"))
         self.btn_manual.clicked.connect(lambda _c=False: self.new_manual())
         top.addWidget(self.btn_manual)
@@ -296,7 +296,7 @@ class BizcardImportDialog(QDialog):
         self.btn_multi.setToolTip(tr("고른 줄의 사진에 명함이 여럿이면 명함마다 잘라 따로 읽습니다 — 찾은 테두리를 고치거나 새로 그릴 수 있습니다"))
         self.btn_multi.clicked.connect(lambda _c=False: self.split_selected())
         top.addWidget(self.btn_multi)
-        # P3(명함 SOT §5.8): vCard 내보내기·기존 vCard 에 합치기
+        # P3(구글 싱크 SOT §5.8): vCard 내보내기·기존 vCard 에 합치기
         self.btn_vcard = QPushButton("vCard")
         self.btn_vcard.setToolTip(tr("적용한 명함을 vCard(.vcf) 로 내보내거나 기존 vCard 에 합칩니다 — 구글 연락처·휴대폰에서 읽습니다"))
         self._vcard_menu = QMenu(self)
@@ -858,7 +858,7 @@ class BizcardImportDialog(QDialog):
         self._start(rows)
         return True
 
-    # ── vCard (P3, 명함 SOT §5.8) ──
+    # ── vCard (P3, 구글 싱크 SOT §5.8) ──
     def _fill_vcard_menu(self):
         m = self._vcard_menu
         m.clear()
@@ -1557,7 +1557,7 @@ class BizcardImportDialog(QDialog):
                     store.set(p, list(dict.fromkeys(list(old) + list(tags))))
 
     def new_manual(self, exec_: bool = True):
-        """[새 명함 입력](명함 SOT §5.24.1 '새 명함 입력') — 명함찾기와 같은 창. 같은 사람일 수 있으면 알림만."""
+        """[새 명함 입력](명함찾기 SOT §5.24.1 '새 명함 입력') — 명함찾기와 같은 창. 같은 사람일 수 있으면 알림만."""
         from viewer.widgets.bizcard_new_dialog import NewCardDialog
         dlg = NewCardDialog(self, db=self._db, folder=str(self._folder))
         self.new_dlg = dlg                                   # 검사가 찾는다

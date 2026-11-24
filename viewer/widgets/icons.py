@@ -772,7 +772,7 @@ FILE_KIND_COLOR = {"PDF": {False: "#d93025", True: "#ef5350"}, "JPG": ACCENT["pl
                    "GIF": {False: "#d9822b", True: "#f0a050"}, "TIF": FILE_GRAY, "BMP": FILE_GRAY,
                    "WEBP": {False: "#00838f", True: "#4dd0e1"},
                    "ZIP": {False: "#8d6e63", True: "#bcaaa4"},     # 261104-4(사진 보기 SOT 4.24): 사진이 든 zip
-                   "XLSX": {False: "#1d6f42", True: "#4caf7d"},    # 261120-42(명함 SOT §5.24.2 '할 일 내보내기' 단추) — EXT_KIND 에는 없다
+                   "XLSX": {False: "#1d6f42", True: "#4caf7d"},    # 261120-42(명함찾기 SOT §5.24.2 '할 일 내보내기' 단추) — EXT_KIND 에는 없다
                    "DOCX": {False: "#2b579a", True: "#6e9be0"}}
 FILE_KIND_TEXT = {"XLSX": "X", "DOCX": "W"}     # 그리는 글자가 형식 이름과 다른 것 — 엑셀·워드는 한 글자
 EXT_KIND = {".pdf": "PDF", ".jpg": "JPG", ".jpeg": "JPG", ".png": "PNG", ".heic": "HEIC", ".heif": "HEIC",

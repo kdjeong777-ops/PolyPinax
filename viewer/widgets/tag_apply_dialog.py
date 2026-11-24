@@ -204,7 +204,7 @@ class TagApplyDialog(QDialog):
         self._keep = keep if keep is not None else []
         self._mode = "avail"                    # 261111-20: 지금 쓰는 목록 — "avail"(붙일 수 있는 태그) | "tags"(붙은 태그)
         self._known = None                      # 저장소의 모든 태그(한 번 센다)
-        # 명함 꼴(명함 SOT §5.24.4, 261120-52): 기존 태그 = 부른 쪽이 준 목록(지금 명함 목록의 태그), 문서 종류·자동 속성·새 태그 후보·[문서 종류] 없음
+        # 명함 꼴(명함찾기 SOT §5.24.4, 261120-52): 기존 태그 = 부른 쪽이 준 목록(지금 명함 목록의 태그), 문서 종류·자동 속성·새 태그 후보·[문서 종류] 없음
         self._card_mode = bool(card_mode)
         self._known_fixed = list(known) if known is not None else None
         self._cand_filter = False

@@ -1,4 +1,4 @@
-"""명함 중복 검토 창 (명함 SOT §5.24.8, D30).
+"""명함 중복 검토 창 (명함찾기 SOT §5.24.8, D30).
 
 묶기·출처·차례·합친 값은 `people.dupe_groups`·`people.merge_plan`(Qt 없음), 이 창은 보여 주고 적용·되돌리기만.
 파일 이름 바꾸기·옮기기는 명함찾기 창의 한 길(`_rename` → 앱 `_rename_bg`·`_after_rename`)로.

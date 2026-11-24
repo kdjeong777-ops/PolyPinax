@@ -3729,7 +3729,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self._rehome_sidecars([(o, n) for o, n in pairs if o])
         # 261105-8(§4.7.14): 경로 키 기록(OCR·고른 낱말·고친 글·하이라이트)도 새 이름으로 — 배경
         self._carry_records([(o, n) for o, n in pairs if o], copy=False)
-        self._bizcard_follow([(o, n) for o, n in pairs if o])   # 명함 SOT §5.7·§5.9(P4): 명함 DB 의 정리본 경로도 — 배경
+        self._bizcard_follow([(o, n) for o, n in pairs if o])   # 명함 SOT §5.7·명함찾기 SOT §5.9(P4): 명함 DB 의 정리본 경로도 — 배경
         try:
             from viewer import sign_drafts             # 보안 SOT §3.10 — 서명 자리 기록도 새 경로로
             sign_drafts.relocate([(o, n) for o, n in pairs if o])
@@ -7578,7 +7578,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         run_in_thread(worker, self._thread_keep)
 
     def _bizcard_follow(self, pairs):
-        """명함 SOT §5.7·§5.9(P4): 이름 바꾸기·옮기기 뒤 명함 DB 의 앞면·뒷면·원천 경로를 새 경로로 — 배경 스레드.
+        """명함 SOT §5.7·명함찾기 SOT §5.9(P4): 이름 바꾸기·옮기기 뒤 명함 DB 의 앞면·뒷면·원천 경로를 새 경로로 — 배경 스레드.
         명함 DB 가 없으면(명함 기능을 안 쓰는 PC) 아무것도 안 한다. 끝나면 `_bizcard_follow_done` 을 센다(검사)."""
         if not pairs:
             return
@@ -7644,7 +7644,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             QMessageBox.warning(self, APP_TITLE, tr("명함 프로그램을 띄우지 못했습니다."))
 
     def _action_bizcard_find(self):
-        """명함 SOT §5.9(P4): 명함찾기 창 — 하나만(다시 누르면 앞으로)."""
+        """명함찾기 SOT §5.9(P4): 명함찾기 창 — 하나만(다시 누르면 앞으로)."""
         old = getattr(self, "_bizcard_find_dlg", None)
         try:
             from PyQt6 import sip
@@ -10316,7 +10316,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
 
         # 환경설정 적용 (v1.6.2: history 관련 키 제거)
         self._prefs = dict(data.get("preferences", {}))
-        self._shared_pic_base = settings_store.shared_picture(self._prefs)   # 명함 창과 함께 바꾸는 값의 기준(명함 SOT §5.24.9)
+        self._shared_pic_base = settings_store.shared_picture(self._prefs)   # 명함 창과 함께 바꾸는 값의 기준(명함찾기 SOT §5.24.9)
         # 261008(다국어 SOT §4): 언어가 없으면 한 번 정해 설정에 넣는다(이후엔 설정이 기준).
         #   설정 파일이 이미 있으면 ko — 이 기능 전 설치본은 모두 한국어였다.
         if not self._prefs.get("language"):
@@ -11041,7 +11041,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         _act_en(va.get("study"), True)
         for a in getattr(self, "_ko_only_acts", []):
             _act_en(a, True)
-        # 명함 SOT §5.24.6·§5.27(사용자 지시): 환경설정 명함 폴더가 비어 있으면 본 화면 명함 아이콘 숨김(설정을 바꾸면 곧바로).
+        # 명함찾기 SOT §5.24.6·명함 SOT §5.27(사용자 지시): 환경설정 명함 폴더가 비어 있으면 본 화면 명함 아이콘 숨김(설정을 바꾸면 곧바로).
         #   폴더가 없을 때 들어가는 길은 환경설정·사진 모드 폴더 줄 우클릭 '명함 읽기'
         _pic = p.get("picture") if isinstance(p.get("picture"), dict) else {}
         _bzb = getattr(self, "_bizcard_btn", None)
@@ -11254,7 +11254,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
 
     def _build_settings_payload(self) -> dict:
         """settings.json 저장 페이로드 (closeEvent / _save_settings_now 공용)."""
-        try:                                           # 명함 창이 바꾼 명함 폴더·번호 국가를 옛 기억으로 덮지 않게(명함 SOT §5.24.9)
+        try:                                           # 명함 창이 바꾼 명함 폴더·번호 국가를 옛 기억으로 덮지 않게(명함찾기 SOT §5.24.9)
             self._shared_pic_base = settings_store.merge_shared_picture(
                 self._prefs, getattr(self, "_shared_pic_base", None), self.SETTINGS_FILE)
         except Exception:

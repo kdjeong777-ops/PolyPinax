@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""구글 주소록 싱크 (명함 SOT §5.29, 261120-36) — 가짜 OAuth·People·Drive 서버(이 PC 안 http)와 가짜 연락처만(§2.1).
+"""구글 주소록 싱크 (구글 싱크 SOT §5.29, 261120-36) — 가짜 OAuth·People·Drive 서버(이 PC 안 http)와 가짜 연락처만(§2.1).
 실제 구글에는 붙지 않는다.
 
 A. 루프백 로그인 — PKCE(code_verifier 가 challenge 와 맞음)·state, 계정 메일, 갱신 토큰은 DPAPI 로 잠가 파일에(평문 없음)

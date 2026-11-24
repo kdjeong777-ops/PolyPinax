@@ -905,7 +905,7 @@ class SettingsDialog(QDialog):
         for b in (b_bz, b_bz_mv, b_bz_clr):
             row_bz.addWidget(b)
         pl.addLayout(row_bz)
-        # 명함 SOT §5.24.9(261120-28, 사용자 지시): 본 뷰어 환경설정에는 명함 폴더만 — 나머지(전화번호 기본 국가·'최근' 제한)는 명함 환경설정
+        # 명함찾기 SOT §5.24.9(261120-28, 사용자 지시): 본 뷰어 환경설정에는 명함 폴더만 — 나머지(전화번호 기본 국가·'최근' 제한)는 명함 환경설정
         pl.addWidget(_small(tr("그 밖의 명함 설정(전화번호 꼴·'최근' 제한)은 명함찾기 창 오른쪽 위 톱니(명함 환경설정)에서 바꿉니다.")))
         layout.addWidget(grp)
 

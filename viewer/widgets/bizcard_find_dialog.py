@@ -1,4 +1,4 @@
-"""명함찾기 창 (명함 SOT §5.9 P4, §5.24 개편 · R2·R11·R12).
+"""명함찾기 창 (명함찾기 SOT §5.9 P4, §5.24 개편 · R2·R11·R12).
 
 배치(§5.24): 왼쪽 = 위 즐겨찾기 줄(탭 + 카톡 꼴 사람 칸, 최대 2줄) + 아래 [결과 표 | 세부 칸(체크·메모)],
 오른쪽 끝 = 사진창(위 명함 + 앞↔뒤 동그란 단추, 아래 인물 사진 — 끌어 순서 바꾸기 = 파일 이름 차례, 지우기 = 휴지통).
@@ -1703,7 +1703,7 @@ class BizcardFindDialog(QDialog):
         quit_act.triggered.connect(lambda _c=False: self.close())   # 따로 실행이면 프로그램이 끝나고, 본 뷰어 안이면 창만 닫힘
 
     def open_gsync(self, exec_: bool = True):
-        """[구글 주소록과 싱크](명함 SOT §5.29, 261120-36) — 미리보기 창. 반영 뒤 목록을 다시 채우고, 구글에서 지워져
+        """[구글 주소록과 싱크](구글 싱크 SOT §5.29, 261120-36) — 미리보기 창. 반영 뒤 목록을 다시 채우고, 구글에서 지워져
         '명함도 지움' 을 고른 명함은 목록 지우기와 같은 휴지통 길(§5.20)로."""
         from viewer.bizcard import gsync as G
         from viewer.bizcard import gsync_auth as A
@@ -1928,7 +1928,7 @@ class BizcardFindDialog(QDialog):
         self._bz_folder = folder
 
     def open_history(self, exec_: bool = True):
-        """[주소록] '변경 기록·되살리기'(명함 SOT §5.30) — 창을 닫으면 목록을 다시."""
+        """[주소록] '변경 기록·되살리기'(명함찾기 SOT §5.30) — 창을 닫으면 목록을 다시."""
         if self._dirty and not self._ask_save():
             return None
         from viewer.widgets.bizcard_history_dialog import HistoryDialog

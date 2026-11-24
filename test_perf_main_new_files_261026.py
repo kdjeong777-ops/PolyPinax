@@ -54,7 +54,7 @@ ALLOWED = {
     "viewer/widgets/read_aloud.py:page_texts_bg":
         "배경 — `StudyMp3Worker`(run_in_thread)만 부르는 본문 mp3 읽을 글 모으기, 자기 연결(261109-5)",
     "viewer/widgets/bizcard_dupe_dialog.py:_copy_db":
-        "배경 — 명함 중복 검토 `_bg` 스레드만 부르는 bizcard.db 백업·되돌리기, 자기 연결(261117-46·-54, 명함 SOT §5.24.8)",
+        "배경 — 명함 중복 검토 `_bg` 스레드만 부르는 bizcard.db 백업·되돌리기, 자기 연결(261117-46·-54, 명함찾기 SOT §5.24.8)",
 }
 
 fails = []

@@ -200,7 +200,7 @@ try:
         "E vCard 내보내기(구글·리멤버) — 옛 값도 그 꼴", repr(out2))
     from viewer.widgets import settings_dialog as SD
     sdlg = SD.SettingsDialog({}, None) if hasattr(SD, "SettingsDialog") else None
-    # 261120-28: 본 뷰어 환경설정에는 명함 폴더만 — '전화번호 기본 국가' 는 명함 환경설정(톱니) 창에만(명함 SOT §5.24.9)
+    # 261120-28: 본 뷰어 환경설정에는 명함 폴더만 — '전화번호 기본 국가' 는 명함 환경설정(톱니) 창에만(명함찾기 SOT §5.24.9)
     chk(sdlg is not None and getattr(sdlg, "cmb_phone_country", None) is None
         and "phone_country" not in (sdlg.result_prefs().get("picture") or {}),
         "E 본 뷰어 환경설정에는 '전화번호 기본 국가' 칸이 없음(값을 건드리지 않음)")

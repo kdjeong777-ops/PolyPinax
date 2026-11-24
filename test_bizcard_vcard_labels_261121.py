@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""vCard 가져오기 — 라벨·그룹 카드는 명함으로 넣지 않음 (명함 SOT §5.24.5 '라벨 카드 거르기', 261120-60). 가짜 vCard 만."""
+"""vCard 가져오기 — 라벨·그룹 카드는 명함으로 넣지 않음 (명함찾기 SOT §5.24.5 '라벨 카드 거르기', 261120-60). 가짜 vCard 만."""
 import os, sys
 sys.stdout.reconfigure(encoding="utf-8")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))

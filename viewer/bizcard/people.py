@@ -1,4 +1,4 @@
-"""명함찾기 창의 Qt 없는 부분 (명함 SOT §5.9 P4) — 찾기, 인물 사진, 이름 바꾼 뒤 명함 DB 따라가기.
+"""명함찾기 창의 Qt 없는 부분 (명함찾기 SOT §5.9 P4) — 찾기, 인물 사진, 이름 바꾼 뒤 명함 DB 따라가기.
 
 ★ 명함 글·경로는 로그·예외 메시지에 싣지 않는다(§2.1).
 """
@@ -15,7 +15,7 @@ from viewer.bizcard import recognize as R
 
 PEOPLE_DIR = "인물"            # 인물 사진 폴더 — 정리 폴더 옆(D16 '폴더 통째' 와 같은 자리)
 _COLS = ("name", "company", "dept", "title", "memo", "address", "emails", "phones", "urls", "en", "extra")   # extra = 구글 추가 칸(261122-25)
-# 구글 추가 칸(명함 SOT §5.24.1 '구글 추가 칸'·§5.29 '오가는 칸', 261122-25) — 갈래, 화면 이름, 이름표가 있는가, 한 줄만인가
+# 구글 추가 칸(명함찾기 SOT §5.24.1 '구글 추가 칸'·§5.29 '오가는 칸', 261122-25) — 갈래, 화면 이름, 이름표가 있는가, 한 줄만인가
 EXTRA_KINDS = (("birthday", "생일", False, True), ("nickname", "별명", False, True), ("event", "기념일", True, False),
                ("relation", "관계", True, False), ("im", "메신저", True, False), ("address", "주소", False, False),
                ("occupation", "직업", False, False), ("custom", "사용자 칸", True, False))
@@ -48,7 +48,7 @@ def _nk(p) -> str:
 def find(store, text: str = "", since: str = "", until: str = "", limit=None, mates=None) -> list:
     """검색 연산자(검색창 SOT §4.2 — 띄어쓰기 AND·`|` OR·`-` NOT·괄호·"구절") — 단위는 명함 하나, 낱말은 모든 칸 글자 **일부**로
     (대소문자·빈칸·하이픈 무시). `#낱말` 은 해시태그(앞부분 일치). 스캔일 범위 YYYY-MM-DD.
-    반환 = 명함 DB 행(dict), 스캔일 최근 먼저, 찾은 것 전부(명함 SOT §5.9 '결과' — 종전 500장 상한은 '전체 목록이 일부만' 이라 없앰).
+    반환 = 명함 DB 행(dict), 스캔일 최근 먼저, 찾은 것 전부(명함찾기 SOT §5.9 '결과' — 종전 500장 상한은 '전체 목록이 일부만' 이라 없앰).
     limit 을 주면 그 장 수까지만. mates = {`#낱말`(소문자): 한영 짝} — 짝 태그와 이름이 같은 태그도 맞음(태그 SOT §8.9, 261120-69).
     261117-30: 칸을 이어 붙인 글을 식으로 보려고 날짜로만 SQL 에서 거르고 낱말은 파이썬에서 본다(명함 수천 장 — 수 ms)."""
     from viewer.query import parse, flat_text
@@ -87,7 +87,7 @@ def find(store, text: str = "", since: str = "", until: str = "", limit=None, ma
     return out
 
 
-KINDS = ("all", "ko", "en", "card", "nocard", "photo", "nophoto", "hash", "nohash", "kakao")   # hash = 이름 앞 '#'(261122-10)   # kakao = 카톡 친구추가 방지(§5.29, 261121)   # 찾기 칸 앞 구분(명함 SOT §5.24.1, 사용자 지시 261119·261120-24)
+KINDS = ("all", "ko", "en", "card", "nocard", "photo", "nophoto", "hash", "nohash", "kakao")   # hash = 이름 앞 '#'(261122-10)   # kakao = 카톡 친구추가 방지(§5.29, 261121)   # 찾기 칸 앞 구분(명함찾기 SOT §5.24.1, 사용자 지시 261119·261120-24)
 KIND_GROUPS = (("all",), ("ko", "en"), ("card", "nocard"), ("photo", "nophoto"), ("hash", "nohash"), ("kakao",))   # 콤보에서 묶음 사이 구분선(언어/명함/사진)
 
 
@@ -658,7 +658,7 @@ def note_add(store, gid: int, note: dict, today: str) -> int:
 
 
 def note_delete(store, nid: int) -> None:
-    """할 일 기록 하나 지우기 — 지우기 전 행을 변경 기록에 남긴다(되살릴 수 있게, 명함 SOT §5.24.10·§5.30, 261120-69)."""
+    """할 일 기록 하나 지우기 — 지우기 전 행을 변경 기록에 남긴다(되살릴 수 있게, 명함찾기 SOT §5.24.10·§5.30, 261120-69)."""
     r = store.con.execute("SELECT * FROM todo_notes WHERE id=?", (nid,)).fetchone()
     if r is None:
         return
@@ -1054,7 +1054,7 @@ def recent_remove(store, card_ids) -> None:
 
 # ── 이메일 복사 (§5.24.1) — 받는 사람 칸에 붙여 쓰기 ──
 def email_list(cards, first_only: bool = True) -> tuple:
-    """고른 명함들의 메일 주소(같은 주소 한 번) + 메일 없는 명함 수 (명함 SOT §5.24.1 '이메일 복사').
+    """고른 명함들의 메일 주소(같은 주소 한 번) + 메일 없는 명함 수 (명함찾기 SOT §5.24.1 '이메일 복사').
     first_only = 사람마다 첫 메일 하나만(261120-32, 사용자 결정 '보내기·복사 모두'), False 면 여럿이면 모두."""
     out, seen, missing = [], set(), 0
     for c in cards:
@@ -1081,7 +1081,7 @@ def emails_text(cards) -> str:
 MAIL_FIELD_KEY = "mail_field"        # 메일 보내기 받는 칸 'to'·'bcc' — 명함 환경설정에서 고르고 기억(§5.24.9, 261120-33)
 
 
-# ── Gmail 보내기 (명함 SOT §5.24.1 'Gmail 보내기', 사용자 결정 261120) — 브라우저 쓰기 창 주소만, 네트워크 없음(§2.1) ──
+# ── Gmail 보내기 (명함찾기 SOT §5.24.1 'Gmail 보내기', 사용자 결정 261120) — 브라우저 쓰기 창 주소만, 네트워크 없음(§2.1) ──
 GMAIL_COMPOSE = "https://mail.google.com/mail/?view=cm&fs=1"
 GMAIL_URL_MAX = 2000                # 주소 한 개 최대 길이 — 넘으면 쓰기 창을 나눠 연다
 

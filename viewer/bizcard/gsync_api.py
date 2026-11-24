@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""구글 People API·Drive API REST (명함 SOT §5.29) — 표준 urllib 만, 배경에서 부른다.
+"""구글 People API·Drive API REST (구글 싱크 SOT §5.29) — 표준 urllib 만, 배경에서 부른다.
 
 요청마다 시간 상한 `HTTP_TIMEOUT`, 429·5xx 는 `RETRY_WAITS` 만큼 기다려 다시. 오류 글은 HTTP 상태·갈래만(명함 값·토큰 없음, §2.1 의 3).
 """
@@ -18,7 +18,7 @@ HTTP_TIMEOUT = 30
 RETRY_WAITS = (1, 2, 4)
 RATE_WAITS = (5, 10, 20, 40, 60)                 # 요청 한도(429) — Retry-After 가 없을 때 쉬는 초(끝 값을 되풀이, 261120-71)
 RATE_TRIES = 12                                  # 429 를 이만큼 연달아 받으면 그때 실패(약 10분 — 배경 일꾼 안에서만 기다린다)
-# 추가 칸(명함 SOT §5.29 '오가는 칸', 261122-25) — 생일·별명·기념일·관계·메신저·직업·사용자 칸(둘째부터 주소는 addresses 에)
+# 추가 칸(구글 싱크 SOT §5.29 '오가는 칸', 261122-25) — 생일·별명·기념일·관계·메신저·직업·사용자 칸(둘째부터 주소는 addresses 에)
 EXTRA_FIELDS = "birthdays,nicknames,events,relations,imClients,occupations,userDefined"
 PERSON_FIELDS = "names,organizations,phoneNumbers,emailAddresses,addresses,urls,biographies,photos,memberships,metadata," + EXTRA_FIELDS
 UPDATE_BASE = "names,organizations,phoneNumbers,emailAddresses,addresses,urls,biographies"   # 추가 칸을 받은 적 없는 명함(§5.29 '추가 칸 처음')
@@ -36,7 +36,7 @@ class ApiError(Exception):
 
 
 def _reason(e) -> str:
-    """HTTPError 본문에서 구글 오류 reason 한 낱말만(명함 SOT §5.29 '못 올렸을 때', 261120-70)."""
+    """HTTPError 본문에서 구글 오류 reason 한 낱말만(구글 싱크 SOT §5.29 '못 올렸을 때', 261120-70)."""
     try:
         d = json.loads(e.read().decode("utf-8", "replace") or "{}").get("error") or {}
         errs = d.get("errors") or []
@@ -65,7 +65,7 @@ class Api:
                 with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT) as r:
                     return r.read()
             except urllib.error.HTTPError as e:
-                if e.code == 429 and n429 < RATE_TRIES:     # 한도 — 실패로 끝내지 않고 쉬었다 이어 감(명함 SOT §5.29 '네트워크', 261120-71)
+                if e.code == 429 and n429 < RATE_TRIES:     # 한도 — 실패로 끝내지 않고 쉬었다 이어 감(구글 싱크 SOT §5.29 '네트워크', 261120-71)
                     try:
                         wait = float((e.headers or {}).get("Retry-After") or 0)
                     except (TypeError, ValueError):
@@ -131,7 +131,7 @@ class Api:
         return self._json("PATCH", PEOPLE_BASE + "/v1/%s:updateContactPhoto" % resource,
                           {"photoBytes": base64.b64encode(jpeg).decode("ascii"), "personFields": "photos,metadata"})
 
-    # ── 라벨(contactGroups — 같은 contacts 권한, 명함 SOT §5.29 '라벨', 261120-61) ──
+    # ── 라벨(contactGroups — 같은 contacts 권한, 구글 싱크 SOT §5.29 '라벨', 261120-61) ──
     def list_groups(self) -> list:
         """[{resourceName, name, groupType}] — 시스템 라벨(SYSTEM_CONTACT_GROUP)도 함께, 거르기는 부르는 쪽이."""
         out, tok = [], ""
@@ -175,7 +175,7 @@ class Api:
         return self._json("POST", DRIVE_BASE + "/drive/v3/files?fields=id", {"name": name, "mimeType": FOLDER_MIME})["id"]
 
     def list_folder(self, folder_id: str) -> list:
-        """폴더 안 파일 [{id, name, md5Checksum}] — 지난번 올린 기록이 없는 파일을 다시 올리지 않게(명함 SOT §5.29 '드라이브', 261122-6)."""
+        """폴더 안 파일 [{id, name, md5Checksum}] — 지난번 올린 기록이 없는 파일을 다시 올리지 않게(구글 싱크 SOT §5.29 '드라이브', 261122-6)."""
         out, token = [], ""
         q = "'%s' in parents and trashed = false" % folder_id.replace("'", "\\'")
         while True:

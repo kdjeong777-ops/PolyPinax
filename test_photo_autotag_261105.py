@@ -189,6 +189,7 @@ try:
     mw.resize(1200, 800); mw.show(); pump()
     bt = mw.bookmark_tree
     chk(mw._prefs.get("photo_auto_tag") is True and mw._prefs.get("photo_kind_ocr") is True, "H 설정 기본 켬")
+    mw._prefs["photo_people"] = False    # 인물(얼굴 찾기)은 이 검사와 무관 — 진짜 얼굴 찾기가 돌면 흔들린다(261122-19)
     idx_done, kind_done = [], []
     real_done = mw._photo_index_done
     mw._photo_index_done = lambda f, x, y, n: (idx_done.append(n), real_done(f, x, y, n))

@@ -10338,7 +10338,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             self._prefs["auto_tag_enabled"] = True
             self._prefs["auto_tag_on_migrated"] = True
         self._prefs.setdefault("autotag_summary_shown", False)  # §8.2 첫 실행 요약 1회
-        # 261105-6(태그 SOT §5.7, 사용자 결정): 사진 자동 태그(날짜·동·장비·스크린샷)·종류(영수증·명함·서류)는 기본 켬
+        # 261105-6(태그 SOT §5.7, 사용자 결정): 사진 자동 태그(날짜·지역·장비·스크린샷)·종류(영수증·명함·서류)·인물(261122-15)은 기본 켬
         self._prefs.setdefault("photo_auto_tag", True)
         self._prefs.setdefault("photo_kind_ocr", True)
         self._prefs.setdefault("photo_people", True)          # 261122-15: 인물(얼굴) 자동 태그 — 기본 켬(태그 SOT §5.7)
@@ -10975,6 +10975,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         except Exception:
             pass
         self._apply_page_flow_prefs()             # 260914-1(입력 SOT §2.9·§2.10)
+        try:
+            self._photo_autotag_gate()            # 261122-19(태그 SOT §5.7 '끄면'): 끈 사진 자동 태그(종류·인물) 워커는 곧바로 멈춘다
+        except Exception:
+            pass
         # 260621-P3: API 키 미입력 기능 게이팅
         try:
             self._gate_api_dependent_ui(self._prefs)

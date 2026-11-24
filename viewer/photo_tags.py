@@ -293,6 +293,13 @@ PERSON = "인물"                 # 얼굴 하나 이상 — 저장 데이터(�
 PERSON1 = "인물1"               # 얼굴이 딱 하나
 PEOPLE_SIDE = 1024              # 얼굴 찾기에 넣는 그림 긴 변
 FACE_MIN_FRAC = 0.04            # 짧은 변의 이 비율보다 작은 얼굴은 세지 않는다(먼 군중·무늬)
+PEOPLE_ERR_MAX = 5              # 한 훑기에서 얼굴 찾기 일시 오류가 이만큼 잇따르면 그 훑기는 멈춘다(사진 쪽이 따로 센다, 261122-19)
+
+
+def people_ready() -> bool:
+    """이 PC 에서 얼굴 찾기를 쓸 수 있나 — 공용 `viewer/win_face.py`(명함 얼굴 썸네일과 함께 씀, 261122-18·-19)."""
+    from viewer import win_face
+    return bool(win_face.available())
 
 
 def people_tags(n: int) -> list:
@@ -303,13 +310,14 @@ def people_tags(n: int) -> list:
 
 
 def face_count(path: str, detect=None):
-    """사진 속 얼굴 수, 얼굴 찾기를 못 쓰면 None. `detect` 는 검사용 바꿔치기(그림 → [(x, y, w, h)])."""
+    """사진 속 얼굴 수 — 얼굴 찾기를 못 쓰는 PC·그 사진만의 일시 오류면 None(판정 '아직' — '얼굴 없음' 0 과 가른다, 261122-19).
+    `detect` 는 검사용 바꿔치기(그림 → [(x, y, w, h)], 못 쓰면 None)."""
     from PIL import Image, ImageOps
     if detect is None:
-        from viewer.bizcard import face_thumb             # 명함과 같은 얼굴 찾기(import 만 — 명함 SOT §5.24)
-        if face_thumb._no_detector:
+        from viewer import win_face                       # 공용 얼굴 찾기(명함 얼굴 썸네일과 같은 것, 261122-18)
+        if not win_face.available():
             return None
-        detect = face_thumb.faces
+        detect = win_face.detect
     with Image.open(path) as im0:
         im0.draft("RGB", (PEOPLE_SIDE, PEOPLE_SIDE))       # JPEG 은 줄여 풀기(빠르게)
         im = ImageOps.exif_transpose(im0).convert("RGB")
@@ -317,11 +325,9 @@ def face_count(path: str, detect=None):
         s = PEOPLE_SIDE / float(max(im.size))
         im = im.resize((max(1, int(im.width * s)), max(1, int(im.height * s))))
     boxes = detect(im)
+    if boxes is None:
+        return None                                      # 못 씀·일시 오류 — 판정 '아직'(얼굴 없음으로 굳히지 않는다)
     if not boxes:
-        if detect is not None and getattr(detect, "__module__", "") == "viewer.bizcard.face_thumb":
-            from viewer.bizcard import face_thumb
-            if face_thumb._no_detector:
-                return None                                  # 이번에 못 쓰게 된 PC — 판정 '아직'
         return 0
     lo = FACE_MIN_FRAC * min(im.size)
     return sum(1 for (_x, _y, w, h) in boxes if min(w, h) >= lo)

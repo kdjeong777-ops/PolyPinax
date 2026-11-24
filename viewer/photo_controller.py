@@ -411,7 +411,7 @@ class PhotoMixin:
             self._photo_search_paths = None
             self._photo_zip_paths = None
             self._photo_device_stop()
-            self._photo_kind_stop()                     # 종류 자동 태그(태그 SOT §5.7) — 사진 모드에서만
+            self._photo_kind_stop()                     # 종류·인물 자동 태그(태그 SOT §5.7) — 사진 모드에서만
             self._photo_anim_stop(hide=True)
             self._photo_deco_gate(True)
             self._photo_info_hide()
@@ -532,6 +532,22 @@ class PhotoMixin:
     def _photo_kind_stop(self):
         """종류 워커를 멈춘다 — 인물 워커(261122-15)도 같은 때(다른 폴더·PDF 모드·새 색인 훑기) 멈춘다."""
         for attr in ("_photo_kinder", "_photo_peopler"):
+            w = self.__dict__.get(attr)
+            if w is not None:
+                try:
+                    w.request_cancel()
+                except Exception:
+                    pass
+                setattr(self, attr, None)
+
+    def _photo_autotag_gate(self):
+        """설정을 저장한 뒤(261122-19, 태그 SOT §5.7 '끄면') — 끈 설정이 맡은 워커(종류·인물)를 곧바로 멈춘다.
+        다음 폴더 열기를 기다리지 않는다. 이미 붙은 태그는 그대로(끄기 = 앞으로 붙이지 않음)."""
+        prefs = getattr(self, "_prefs", {}) or {}
+        on = bool(prefs.get("photo_auto_tag", True))
+        for attr, key in (("_photo_kinder", "photo_kind_ocr"), ("_photo_peopler", "photo_people")):
+            if on and prefs.get(key, True):
+                continue
             w = self.__dict__.get(attr)
             if w is not None:
                 try:
@@ -5152,7 +5168,7 @@ class PhotoIndexWorker(QObject):
 
 class PhotoKindWorker(QObject):
     """사진 종류 자동 태그(태그 SOT §5.7) — 영수증·명함·서류. 글이 있어 보이는 사진만 작게 OCR, 글은 판정에만(저장 없음, 사진 SOT D15).
-    색인 훑기가 끝난 뒤 한 장씩, 취소 가능. 사진 보기 SOT §6.6 의무 표의 한 행(배경·pacing·취소)."""
+    색인 훑기가 끝난 뒤 한 장씩, 취소 가능. 태그 SOT §7.1 의무 표의 한 행(배경·pacing·취소)."""
     found = pyqtSignal(dict)                   # 경로 → [종류] 또는 [] — 판정할 때마다(OCR 이 느려 묶지 않는다)
     finished = pyqtSignal()
 
@@ -5250,6 +5266,7 @@ class PhotoPeopleWorker(QObject):
             con = photo_index.connect()
             try:
                 todo = photo_index.people_todo(con, photo_index.norm_folder(self.folder), photo_tags.PEOPLE_VER)
+                errs = 0                                     # 잇따른 얼굴 찾기 오류(261122-19 — 명함 쪽과 따로 센다)
                 for key, path in todo:
                     if self._cancel:
                         break
@@ -5262,8 +5279,14 @@ class PhotoPeopleWorker(QObject):
                         got = photo_tags.people_tag(path, self.detect)
                     except Exception:
                         continue                             # 그 사진만 — 판정 '아직' 으로 남긴다
-                    if got is None:
-                        break                                # 얼굴 찾기를 못 쓰는 PC — 판정 '아직', 다음에 다시
+                    if got is None:                          # 261122-19: 못 씀·일시 오류 — 그 사진은 '아직'(people NULL), 다음 훑기에 다시
+                        if self.detect is None and not photo_tags.people_ready():
+                            break                            # 얼굴 찾기를 못 쓰는 PC
+                        errs += 1
+                        if errs >= photo_tags.PEOPLE_ERR_MAX:
+                            break                            # 잇따른 오류 — 이 훑기는 멈춘다(오류 횟수는 사진 쪽이 따로)
+                        continue
+                    errs = 0
                     if self._cancel:
                         break
                     new = [photo_tags.alias(t, rules) for t in got]

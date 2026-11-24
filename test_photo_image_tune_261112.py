@@ -131,6 +131,7 @@ try:
     mw.resize(1300, 900); mw.show(); pump()
     mw._prefs.setdefault("picture", {})["view_kind"] = "mixed"
     mw._prefs["photo_kind_ocr"] = False
+    mw._prefs["photo_people"] = False    # 인물(얼굴 찾기)은 이 검사와 무관 — 진짜 얼굴 찾기가 돌면 흔들린다(261122-19)
     mw._photo_apply_view_kind()
     mw._set_photo_mode(True)
     mw.open_folder(tmp)

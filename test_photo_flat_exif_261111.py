@@ -69,6 +69,7 @@ try:
     mw = MainWindow(); mw._skip_save_on_close = True
     mw.resize(1200, 850); mw.show(); pump()
     mw._prefs["photo_kind_ocr"] = False                  # 종류 판정(OCR)은 이 검사와 무관 — 느리다
+    mw._prefs["photo_people"] = False    # 인물(얼굴 찾기)은 이 검사와 무관 — 진짜 얼굴 찾기가 돌면 흔들린다(261122-19)
     bt = mw.bookmark_tree
     idx_done = []
     real_done = mw._photo_index_done

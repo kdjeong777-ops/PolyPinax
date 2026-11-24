@@ -21,7 +21,7 @@ from PyQt6.QtCore import QObject, pyqtSignal
 
 from viewer.i18n import tr
 
-PHOTO_KINDS = ("date", "region", "device", "screenshot")      # 사진 종류(영수증·명함·서류)는 설정 photo_kind_ocr 이 켜고 끈다
+PHOTO_KINDS = ("date", "region", "device", "screenshot")      # 사진 종류(영수증·명함·서류)는 설정 photo_kind_ocr 이, 인물은 photo_people 이 켜고 끈다
 PDF_AUTO_V = 3                       # 3 = 261114-14 '설명서' → '제품설명서' 옮기기
 _DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 RULE_KEYS = ("alias", "format_off", "photo_off", "format_custom", "pdf_auto_v")

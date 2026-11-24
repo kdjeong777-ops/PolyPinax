@@ -229,6 +229,7 @@ try:
     # G
     mw._prefs.setdefault("picture", {})["view_kind"] = "pdf"
     mw._prefs["photo_kind_ocr"] = False
+    mw._prefs["photo_people"] = False    # 인물(얼굴 찾기)은 이 검사와 무관 — 진짜 얼굴 찾기가 돌면 흔들린다(261122-19)
     mw._photo_apply_view_kind()
     chk(not mw._photo_mode and not mw._photo_enabled(), "G 준비 — PDF 전용·PDF 모드")
     ok = getattr(mw, "_photo_open_arg", lambda p: False)(str(b_png))

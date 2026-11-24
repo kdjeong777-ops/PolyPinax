@@ -40,7 +40,7 @@ from viewer import bg_write
 
 MAX_KEYWORDS = 10          # §9.1 — 파일당 키워드 상한
 AUTO_FIELDS = ("auto", "auto_conf", "auto_at", "auto_src", "auto_parts")   # 자동 칸 — 지울 때 함께(§6, auto_parts 는 §5.7)
-AUTO_PART_ORDER = ("meta", "kind", "ocr")   # §5.7 사진 — `auto` 합집합의 차례(촬영일·동·장비 → 종류 → 확정 OCR 형식)
+AUTO_PART_ORDER = ("meta", "kind", "people", "ocr")   # §5.7 사진 — `auto` 합집합의 차례(촬영일·지역·장비 → 종류 → 인물 → 확정 OCR 형식, 261122-19)
 
 
 def normalize_tags(tags) -> list:
@@ -334,7 +334,7 @@ class TagStore:
         return []
 
     def set_auto_part(self, path, part: str, tags, src: str = "photo"):
-        """자동 칸의 **한 부분만** 바꾼다(태그 SOT §5.7 — 사진의 meta·kind·ocr). 다른 부분·사용자 태그·거절은 그대로.
+        """자동 칸의 **한 부분만** 바꾼다(태그 SOT §5.7 — 사진의 meta·kind·people·ocr). 다른 부분·사용자 태그·거절은 그대로.
         `auto` = 부분들의 합집합(부분 차례). 부분 없이 쓴 옛 자동 태그는 `_` 부분으로 남긴다. 바뀌었으면 True."""
         tags = normalize_tags(tags)
         k = self._key(path)

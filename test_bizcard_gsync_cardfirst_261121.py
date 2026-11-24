@@ -3,7 +3,7 @@
 가짜 구글(메모리 안 사전)·가짜 값만 — 실제 구글·실제 명함 DB 에 붙지 않는다(§2.1).
 
 A 구글 연락처를 통째로 지운 뒤 명함 기준 — 짝 있던 명함은 '새 연락처'로 다시(지워짐 줄 없음), 반영하면 새 짝, 다시 계획하면 바꿀 것 없음
-B 명함 기준이면 구글 → 명함 고침·구글에만 있는 사람 가져오기 줄 없음, 값이 다르면 '구글 고침'
+B 명함 기준이면 구글 → 명함 고침·구글에만 있는 사람 가져오기 줄 없음(대신 '구글에만 있음 — 지울까요' 기본 체크, 261122-17), 값이 다르면 '구글 고침'
 C '#' — 예전 구글에 있던 사람(구글 출처·예전 짝·그와 같은 휴대폰)은 # 없이, 나머지는 #, 사람 표시가 먼저
 D 미리보기 창 체크 '명함 기준으로 올리기' 를 켜면 다시 계획(창 [반영] 전엔 안 바뀜)
 """
@@ -110,13 +110,13 @@ try:
 
     res = G.apply(st, api, rows, people=api.list_people())
     names = sorted(p["names"][0]["unstructuredName"] for p in api.people.values())
-    chk(res["failed"] == 0 and "#가짜새사람" in names and "가짜구글" in names and "가짜구글만" in names,
-        "A 반영 — 구글에 다시 만들고(#는 새 사람만), 구글에만 있던 연락처는 그대로", str(names))
+    # 261122-17(사용자 결정): 명함 기준이면 구글에만 있는 연락처는 '구글에만 있음 — 지울까요'(기본 체크) — 처음 체크대로 반영하면 지움
+    chk(res["failed"] == 0 and "#가짜새사람" in names and "가짜구글" in names and "가짜구글만" not in names,
+        "A 반영 — 구글에 다시 만들고(#는 새 사람만), 구글에만 있던 연락처는 '지울까요' 기본 체크로 지움", str(names))
     again = G.plan(st, api.list_people(), card_first=True)
-    chk(not [r for r in again if r["kind"] != G.NEW_CARD] and not G.plan(st, api.list_people(), card_first=True),
-        "A 다시 계획하면 바꿀 것 없음(새 짝)", str([(r["kind"], r.get("name")) for r in again]))
+    chk(not again, "A 다시 계획하면 바꿀 것 없음(새 짝)", str([(r["kind"], r.get("name")) for r in again]))
     plain = G.plan(st, api.list_people())
-    chk([r["kind"] for r in plain] == [G.NEW_CARD], "A 보통 싱크는 구글에만 있는 사람을 가져오는 줄만", str([r["kind"] for r in plain]))
+    chk(not plain, "A 보통 싱크도 바꿀 것 없음(명함 기준으로 올린 뒤 = 0)", str([r["kind"] for r in plain]))
     st.close()
 
     # ── D ──

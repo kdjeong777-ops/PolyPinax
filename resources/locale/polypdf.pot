@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-11-24 01:11+0900\n"
+"POT-Creation-Date: 2026-11-24 11:01+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -8971,6 +8971,10 @@ msgstr ""
 
 #: viewer/widgets/bizcard_gsync_dialog.py
 msgid "명함 합치기로 남은 구글 연락처 — 구글에서 지울까요"
+msgstr ""
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+msgid "구글에만 있음(명함에 없음) — 구글에서 지울까요"
 msgstr ""
 
 #: viewer/widgets/bizcard_gsync_dialog.py

@@ -83,7 +83,7 @@ class FakeApi:
     def modify_members(self, g, add=(), remove=()):
         for rn in add:
             self.people[rn].setdefault("memberships", []).append({"contactGroupMembership": {"contactGroupResourceName": g}})
-            self._touch(rn, later=2.0)                  # 서버 시각이 조금 늦어도(라벨 넣기가 연락처 고친 시각을 바꿈)
+            self._touch(rn)                             # 라벨 넣기가 연락처 고친 시각을 바꿈(서버 시각 차는 D 가 본다)
 
 
 def apply_default(st, api, rows):
@@ -133,6 +133,31 @@ try:
     nxt = G.plan(st, api.list_people(), "", groups=api.list_groups())
     chk(rn_c in api.people and not [r for r in nxt if r["kind"] == G.NEW_CARD and r["rn"] == rn_c],
         "C 남긴 연락처는 다음 싱크에 '구글에서 가져옴' 으로 다시 나오지 않음", str(kinds(nxt)))
+
+    print("\n=== D 명함에서 고친 뒤 — 구글 시각만 늦어도 '구글을 명함 값으로'(261122-17) ===")
+    from viewer.bizcard import history as H
+    H.init(st)
+    time.sleep(0.05)
+    P.update_card(st, a, {"title": "가짜부장"})                 # 사람이 명함에서 고침(변경 기록에 남음)
+    st.con.commit()
+    time.sleep(0.05)
+    api._touch(G.links(st)[a]["rn"], later=5.0)                # 구글은 우리 칸을 안 바꿨는데 고친 시각만 늦어짐(휴대폰 동기화 등)
+    rows = G.plan(st, api.list_people(), "", groups=api.list_groups())
+    ch = [(r["kind"], r["card_id"], tuple(r.get("fields") or [])) for r in rows if r["kind"] in (G.TO_CARD, G.TO_GOOGLE)]
+    chk(ch == [(G.TO_GOOGLE, a, ("title",))], "D 바꿀 것은 '구글을 명함 값으로 고침' 한 건(직함)", str(ch))
+
+    print("\n=== E 명함 기준 — 구글에만 있는 연락처는 '지울까요'(기본 체크), 남기면 구글에만 둠(261122-17) ===")
+    nameless = api._make({"phoneNumbers": [{"value": "010-0000-7777", "type": "mobile"}]})["resourceName"]   # 이름 없는 연락처
+    other = api._make({"names": [{"unstructuredName": "가짜구글만"}]})["resourceName"]
+    rows = G.plan(st, api.list_people(), "", card_first=True, groups=api.list_groups())
+    ex = {r["rn"]: r for r in rows if r["kind"] == getattr(G, "GOOGLE_EXTRA", "?")}
+    chk(set(ex) == {nameless, other} and all(G.row_default(r) for r in ex.values()) and rn_c not in ex,
+        "E 이름 없는 것·구글에만 있는 사람이 '지울까요' 줄로(기본 체크, 이미 구글에만 둔 것은 빼고)", str(kinds(rows)))
+    keep = [dict(ex[other], kind="unlink", was=ex[other]["kind"])] if other in ex else []
+    G.apply(st, api, [ex[nameless]] + keep if nameless in ex else keep, "", people=api.list_people())
+    after = G.plan(st, api.list_people(), "", groups=api.list_groups())
+    chk(nameless not in api.people and other in api.people and not [r for r in after if r["kind"] == G.NEW_CARD],
+        "E 체크한 것은 구글에서 지우고, 남긴 것은 다음 보통 싱크에 다시 나오지 않음", str(kinds(after)))
 except Exception as e:
     import traceback
     traceback.print_exc()

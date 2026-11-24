@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-24 01:11+0900\n"
+"POT-Creation-Date: 2026-11-24 11:01+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -9232,6 +9232,10 @@ msgstr "Deleted in cards — delete in Google too?"
 #: viewer/widgets/bizcard_gsync_dialog.py
 msgid "명함 합치기로 남은 구글 연락처 — 구글에서 지울까요"
 msgstr "Google contacts left over after merging cards — delete them from Google?"
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+msgid "구글에만 있음(명함에 없음) — 구글에서 지울까요"
+msgstr "Only in Google (not in cards) — delete from Google?"
 
 #: viewer/widgets/bizcard_gsync_dialog.py
 msgid "인물 사진을 연락처 사진으로"

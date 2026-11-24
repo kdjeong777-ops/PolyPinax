@@ -15,7 +15,7 @@ sys.path.insert(0, HERE)
 from PyQt6.QtCore import QStandardPaths, QCoreApplication, Qt, QMimeData, QUrl, QPoint
 QStandardPaths.setTestModeEnabled(True)             # 검사 작성 SOT §14.7.2
 from PyQt6.QtWidgets import QApplication, QMessageBox, QMenu
-from PyQt6.QtGui import QImage, QColor
+from PyQt6.QtGui import QImage, QColor, QCursor
 from PyQt6.QtTest import QTest
 from pathlib import Path
 from PIL import Image
@@ -91,6 +91,7 @@ try:
         return P.person_photos(P.photo_front(P.card_by_id(fd._store(), a), str(FOLD)))
 
     def ctrl_v(w):
+        QCursor.setPos(-500, -500)                     # 마우스는 창 밖 — Ctrl+V 는 인물 사진(261122-22: 위 명함 칸 위면 명함 그림)
         fd.activateWindow()
         w.setFocus()
         pump(timeout=0.05)

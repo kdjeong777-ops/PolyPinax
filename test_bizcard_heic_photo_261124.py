@@ -93,7 +93,7 @@ try:
     fd.show()
     pump(lambda: fd.table.rowCount() == 1 and fd._card is not None)
     pump(lambda: False, timeout=0.3)
-    z = fd.photo_split
+    z = fd.photo_split.widget(1)                         # 아래 인물 사진 칸(261122-22 — 위 칸은 명함 그림 자리)
     pos = QPointF(z.mapTo(fd, QPoint(z.width() // 2, z.height() // 2)))
 
     def drop(path):

@@ -459,6 +459,47 @@ class PhotoWorker(QObject):
         self.finished.emit()
 
 
+class CardImageWorker(QObject):
+    """명함 그림 넣기(배경, §5.24.3 '명함 그림 넣기', 261122-22) — plan = [(그림, 'front'|'back', 바꾸기)].
+    새 면은 정리본 이름을 지어 바로 쓰고, 바꾸기는 옆 임시 이름에 써 둔다(옛 그림 휴지통·이름 바꾸기는 메인이 앱 한 길로).
+    done([(면, 최종 경로, 임시 경로|'')], 실패 수)."""
+    done = pyqtSignal(list, int)
+    finished = pyqtSignal()
+
+    def __init__(self, plan, out_dir, card):
+        super().__init__()
+        self._plan, self._out, self._card = list(plan), out_dir, dict(card)
+
+    def run(self):
+        from viewer.bizcard import vcard as _V
+        c = self._card
+        front = "" if _V.is_contact(c) else P._real(c.get("front") or "")
+        back = P._real(c.get("back") or "") if c.get("back") else ""
+        out, bad = [], 0
+        for src, side, replace in self._plan:
+            try:
+                s = PhotoWorker._png(src) if isinstance(src, QImage) else src
+                if replace:
+                    dst = Path(front if side == "front" else back)
+                    tmp = dst.with_name(dst.stem + "~new.jpg")
+                    P.write_card_side(s, tmp)
+                    out.append((side, str(dst), str(tmp)))
+                    continue
+                if side == "front":
+                    dst = Path(front) if front and not os.path.exists(front) else \
+                        P.card_side_path(self._out, "front", c.get("name"), c.get("company"))
+                    front = str(dst)
+                else:
+                    dst = P.card_side_path(self._out, "back", "", "", front)
+                    back = str(dst)
+                P.write_card_side(s, dst)
+                out.append((side, str(dst), ""))
+            except Exception:
+                bad += 1
+        self.done.emit(out, bad)
+        self.finished.emit()
+
+
 class _FaceWorker(QObject):
     """목록 표 얼굴(배경, §5.24.1 '목록 표 얼굴', 261120-76) — [(명함 id, 명함, 명함 폴더)] → one(명함 id, 캐시 그림 경로|'')."""
     one = pyqtSignal(int, str)
@@ -1346,7 +1387,9 @@ class BizcardFindDialog(QDialog):
         self.pv.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.pv.setMinimumSize(260, 150)
         self.pv.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Ignored)
-        self.pv.setToolTip(tr("인물 사진을 여기에 끌어 놓으면 이 명함의 인물 사진으로 넣습니다"))
+        self.pv.setToolTip(tr("명함 그림을 여기에 끌어 놓거나 붙여넣으면(Ctrl+V·우클릭) 이 명함의 앞·뒷면으로 넣습니다 — 인물 사진은 아래 칸에"))
+        self.pv.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)   # 우클릭 '붙여넣기' = 명함 그림(§5.24.3, 261122-22)
+        self.pv.customContextMenuRequested.connect(lambda pos: self._photo_menu(pos, self.pv))
         cv.addWidget(self.pv, 1)
         self.pv.installEventFilter(self)                   # 좌우로 쓸기·휠로 앞↔뒷면(261120-50)
         self.dots = PageDots()                         # 쪽 점 표시 — 앞·뒷면(사용자 지시 261119, 종전 앞↔뒤 동그란 단추)
@@ -3567,48 +3610,76 @@ class BizcardFindDialog(QDialog):
         if files:
             self.add_photos(files)
 
-    # 끌어 놓기(§5.24.3 '끌어 놓기') — 놓는 자리는 사진창(photo_split) 하나, 끄는 동안 그 자리를 점선 틀로 보인다.
+    # 끌어 놓기(§5.24.3 '끌어 놓기') — 놓는 자리는 사진창(photo_split)의 두 칸, 놓은 자리로 갈린다(261122-22): 위 명함 칸 = 명함 그림,
+    #   아래 인물 사진 칸 = 인물 사진. 끄는 동안 두 칸을 점선 틀로 보이고 올린 칸만 진하게.
     #   종전엔 창이 들어오기(enter)만 받고 움직이기(move)를 받지 않아 Windows 에서 '놓을 수 없음' 이 되어 놓아지지 않았다.
-    def _drop_ok(self, e) -> bool:
+    def _zone_widget(self, zone):
+        return self.photo_split.widget(0 if zone == "card" else 1)
+
+    def _zone_at(self, pos) -> str:
+        """창 좌표 → 'card'(위 명함 칸)·'photo'(아래 인물 사진 칸)·''(사진창 밖)."""
+        from PyQt6.QtCore import QRect, QPoint
+        for zone in ("card", "photo"):
+            w = self._zone_widget(zone)
+            if w is not None and w.isVisible() and QRect(w.mapTo(self, QPoint(0, 0)), w.size()).contains(pos):
+                return zone
+        return ""
+
+    def _zone_ok(self, zone) -> bool:
+        """그 칸이 지금 명함에 받을 수 있나 — 인물 사진은 사진 자리, 명함 그림은 정리본 자리(그림 없는 명함은 명함 폴더)."""
+        if zone == "photo":
+            return bool(self._photo_front())
+        if zone == "card":
+            return bool(self._card) and bool(self._card_out_dir())
+        return False
+
+    def _drop_imgs(self, e) -> list:
         md = e.mimeData()
-        return bool(self._photo_front()) and md.hasUrls() and any(self._is_img(u.toLocalFile()) for u in md.urls())
+        return [u.toLocalFile() for u in md.urls() if self._is_img(u.toLocalFile())] if md.hasUrls() else []
 
-    def _in_drop_zone(self, pos) -> bool:
-        from PyQt6.QtCore import QRect, QPoint
-        z = self.photo_split
-        return z.isVisible() and QRect(z.mapTo(self, QPoint(0, 0)), z.size()).contains(pos)
+    def _drop_ok(self, e) -> bool:
+        return bool(self._drop_imgs(e)) and (self._zone_ok("card") or self._zone_ok("photo"))
 
-    def _show_drop_zone(self, on: bool, hot: bool = False):
-        """놓을 자리 표시 — 사진창 위에 겹친 틀(마우스·끌기를 받지 않는다). hot = 그 안에 올림(바탕도 칠함)."""
+    def _drop_hot(self, e) -> str:
+        z = self._zone_at(e.position().toPoint())
+        return z if z and self._zone_ok(z) and self._drop_imgs(e) else ""
+
+    def _show_drop_zone(self, on: bool, hot: str = ""):
+        """놓을 자리 표시 — 받을 수 있는 칸마다 겹친 틀(마우스·끌기를 받지 않는다). hot = 올린 칸('card'·'photo', 바탕도 칠함)."""
         from PyQt6.QtCore import QRect, QPoint
-        z = getattr(self, "drop_zone", None)
-        if not on:
-            if z is not None:
-                z.hide()
-            return
-        if z is None:
-            z = self.drop_zone = QLabel(tr("여기에 놓으면 인물 사진으로 넣습니다"), self)
-            z.setObjectName("bizDropZone")
-            z.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            z.setWordWrap(True)
-            z.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
-        h = self.palette().color(self.palette().ColorRole.Highlight)
-        z.setStyleSheet("QLabel#bizDropZone{border:2px dashed %s;border-radius:8px;background:rgba(%d,%d,%d,%s);"
-                        "color:%s;font-weight:bold;}" % (h.name(), h.red(), h.green(), h.blue(),
-                                                         DROP_TINT_HOT if hot else DROP_TINT, h.name()))
-        z.setGeometry(QRect(self.photo_split.mapTo(self, QPoint(0, 0)), self.photo_split.size()))
-        z.raise_()
-        z.show()
+        self.drop_hot = hot if on else ""
+        for zone, attr, text in (("photo", "drop_zone", tr("여기에 놓으면 인물 사진으로 넣습니다")),
+                                 ("card", "card_drop_zone", tr("여기에 놓으면 명함 그림으로 넣습니다"))):
+            z = getattr(self, attr, None)
+            if not on or not self._zone_ok(zone):
+                if z is not None:
+                    z.hide()
+                continue
+            if z is None:
+                z = QLabel(text, self)
+                setattr(self, attr, z)
+                z.setObjectName("bizDropZone")
+                z.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                z.setWordWrap(True)
+                z.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+            h = self.palette().color(self.palette().ColorRole.Highlight)
+            z.setStyleSheet("QLabel#bizDropZone{border:2px dashed %s;border-radius:8px;background:rgba(%d,%d,%d,%s);"
+                            "color:%s;font-weight:bold;}" % (h.name(), h.red(), h.green(), h.blue(),
+                                                             DROP_TINT_HOT if hot == zone else DROP_TINT, h.name()))
+            w = self._zone_widget(zone)
+            z.setGeometry(QRect(w.mapTo(self, QPoint(0, 0)), w.size()))
+            z.raise_()
+            z.show()
 
     def dragEnterEvent(self, e):
         if self._drop_ok(e):
-            e.acceptProposedAction()                   # 창 어디로 들어와도 받아 두고 — 놓는 것은 사진창 안에서만(move)
-            self._show_drop_zone(True, self._in_drop_zone(e.position().toPoint()))
+            e.acceptProposedAction()                   # 창 어디로 들어와도 받아 두고 — 놓는 것은 사진창 칸 안에서만(move)
+            self._show_drop_zone(True, self._drop_hot(e))
         else:
             e.ignore()
 
     def dragMoveEvent(self, e):
-        hot = self._drop_ok(e) and self._in_drop_zone(e.position().toPoint())
+        hot = self._drop_hot(e)
         if hot:
             e.acceptProposedAction()
         else:
@@ -3619,19 +3690,23 @@ class BizcardFindDialog(QDialog):
         self._show_drop_zone(False)
 
     def dropEvent(self, e):
+        hot = self._drop_hot(e)
         self._show_drop_zone(False)
-        if self._drop_ok(e) and self._in_drop_zone(e.position().toPoint()):
+        if hot == "card":
+            e.acceptProposedAction()
+            self.add_card_images(self._drop_imgs(e))
+        elif hot == "photo":
             self._drop_files(e)
         else:
             e.ignore()
 
     def _photos_drag(self, e):
-        """썸네일 줄 위(그 줄이 직접 받는다)에서도 같은 틀 — e = 끌기 이벤트, None = 떠남·놓음."""
-        self._show_drop_zone(e is not None and self._drop_ok(e), True)
+        """썸네일 줄 위(그 줄이 직접 받는다 — 아래 칸)에서도 같은 틀 — e = 끌기 이벤트, None = 떠남·놓음."""
+        self._show_drop_zone(e is not None and self._drop_ok(e), "photo")
 
     def _drop_files(self, e):
         self._show_drop_zone(False)
-        files = [u.toLocalFile() for u in e.mimeData().urls() if self._is_img(u.toLocalFile())]
+        files = self._drop_imgs(e)
         if files:
             e.acceptProposedAction()
             self.add_photos(files)
@@ -3665,6 +3740,112 @@ class BizcardFindDialog(QDialog):
         w.done.connect(_done)
         keep = getattr(self._mw, "_thread_keep", None)
         run_in_thread(w, keep if isinstance(keep, list) else _KEEP)
+
+    # ── 명함 그림 넣기(§5.24.3 '명함 그림 넣기', 261122-22) — 위 명함 칸에 놓기·붙여넣기 ──
+    def _card_out_dir(self, c=None) -> str:
+        """새 정리본을 쓸 폴더 — 그림 명함은 지금 정리본 옆, 그림 없는 명함은 명함 폴더의 `정리`(없으면 '')."""
+        c = self._card if c is None else c
+        if not c:
+            return ""
+        if not V.is_contact(c) and c.get("front"):
+            return str(Path(P._real(c["front"])).parent)
+        folder = self._bizcard_folder()
+        if not folder:
+            return ""
+        from viewer.bizcard.importer import OUT_DIR
+        return str(Path(folder) / OUT_DIR)
+
+    def _ask_card_side(self):
+        """앞·뒷면이 다 있을 때 바꿀 면 — 'front'·'back'·None(취소). 검사가 바꿔 끼운다."""
+        mb = QMessageBox(self)
+        mb.setIcon(QMessageBox.Icon.Question)
+        mb.setWindowTitle(tr("명함 그림"))
+        mb.setText(tr("이 명함에는 앞·뒷면이 다 있습니다 — 어느 면을 바꿀까요? 옛 그림은 휴지통으로 보냅니다."))
+        bf = mb.addButton(tr("앞면 바꾸기"), QMessageBox.ButtonRole.AcceptRole)
+        bb = mb.addButton(tr("뒷면 바꾸기"), QMessageBox.ButtonRole.AcceptRole)
+        mb.addButton(QMessageBox.StandardButton.Cancel)
+        mb.exec()
+        return "front" if mb.clickedButton() is bf else "back" if mb.clickedButton() is bb else None
+
+    def add_card_images(self, srcs) -> bool:
+        """빈 면 먼저(앞면 → 뒷면), 다 있으면 바꿀 면을 묻는다(사용자 결정). 두 장까지 — 셋째부터는 넣지 않고 알린다."""
+        c = self._card
+        out = self._card_out_dir(c)
+        srcs = list(srcs or [])
+        if not c or self.photo_busy or not srcs or not out:
+            return False
+        if len(srcs) > 2:
+            QMessageBox.information(self, tr("명함 그림"), tr("명함 그림은 앞·뒷면 두 장까지 — 앞의 2장만 넣습니다."))
+            srcs = srcs[:2]
+        has_front = not V.is_contact(c) and P.has_image(c)
+        has_back = bool(c.get("back")) and os.path.exists(P._real(c["back"]))
+        plan = []
+        for s in srcs:
+            if not has_front:
+                plan.append((s, "front", False))
+                has_front = True
+            elif not has_back:
+                plan.append((s, "back", False))
+                has_back = True
+            else:
+                side = self._ask_card_side()
+                if side:
+                    plan.append((s, side, True))
+        if not plan:
+            return False
+        from viewer.workers import run_in_thread
+        self.photo_busy = True
+        self.btn_photo.setEnabled(False)
+        w = CardImageWorker(plan, out, c)
+        w.done.connect(lambda res, bad, cid=c["id"]: self._card_images_done(cid, res, bad))
+        keep = getattr(self._mw, "_thread_keep", None)
+        run_in_thread(w, keep if isinstance(keep, list) else _KEEP)
+        return True
+
+    def _card_images_done(self, card_id, res, bad):
+        """배경이 쓴 정리본을 명함에 — 바꾸기는 옛 그림 휴지통 → 임시 이름을 그 이름으로(앱 한 길), 새 면은 명함 DB 에.
+        그림 없는 명함이 앞면을 얻으면 그림 명함이 되고 인물 사진은 새 정리본 이름으로 따라간다(§5.24.8 '그림 떼기' 의 거꾸로)."""
+        from viewer.bizcard import store as S
+        st = self._store()
+        c = P.card_by_id(st, card_id)
+        try:
+            if not c:
+                return
+            old_pf = self._photo_front(c)
+            photos = P.person_photos(old_pf) if old_pf else []
+            fields, made = {}, []
+            for side, dst, tmp in res:
+                if tmp:
+                    if self._trash([dst]) or not self._rename(tmp, dst, quiet=True):
+                        bad += 1
+                        continue
+                else:
+                    fields[side] = S._key(dst)
+                made.append(dst)
+            if fields:
+                P.update_card(st, card_id, fields)
+            new = P.card_by_id(st, card_id) or c
+            new_pf = self._photo_front(new)
+            if photos and new_pf and os.path.normcase(new_pf) != os.path.normcase(old_pf):
+                for i, ph in enumerate(photos):
+                    dst = P.people_dir(new_pf) / P.photo_name(new_pf, i, os.path.splitext(ph)[1])
+                    if os.path.normcase(str(dst)) == os.path.normcase(ph) or dst.exists():
+                        continue
+                    dst.parent.mkdir(parents=True, exist_ok=True)
+                    self._rename(ph, str(dst), quiet=True)
+            if fields:
+                self._retag([p for p in made if os.path.exists(p)], set(), new.get("tags") or [])
+            self.last_card_images = made
+            if self._card and self._card.get("id") == card_id:
+                self._card = new
+            self.refresh()
+            if card_id in self.fav_ids():
+                self._fav_fill()
+        finally:
+            self.photo_busy = False
+            self.btn_photo.setEnabled(bool(self._photo_front()))
+        if bad:
+            QMessageBox.warning(self, tr("명함 그림"), tr("그림 {n}개를 넣지 못했습니다.").format(n=bad))
 
     def _photo_reordered(self):
         self.apply_photo_order(self.photo_paths())
@@ -3713,13 +3894,15 @@ class BizcardFindDialog(QDialog):
         return self.delete_photos(paths, ask=ask)
 
     def _photo_menu(self, pos, w=None):
-        """사진창 우클릭 — 썸네일 위면 '지우기', 어디서든 '붙여넣기'(클립보드에 받을 그림이 없으면 흐림, §5.24.3 '붙여넣기')."""
+        """사진창 우클릭 — 썸네일 위면 '지우기', 어디서든 '붙여넣기'(클립보드에 받을 그림이 없으면 흐림, §5.24.3 '붙여넣기').
+        위 명함 그림(`pv`)이면 명함 그림으로, 아래 큰 화면·썸네일 줄이면 인물 사진으로(261122-22)."""
         w = w or self.photos
+        zone = "card" if w is self.pv else "photo"
         m = QMenu(self)
         if w is self.photos and self.photos.itemAt(pos) is not None:
             _menu_act(m, tr("지우기"), lambda: self.delete_photos())
-        act = _menu_act(m, tr("붙여넣기"), lambda: self.paste_photos())
-        act.setEnabled(bool(self._photo_front()) and not self.photo_busy and self._clip_photos() is not None)
+        act = _menu_act(m, tr("붙여넣기"), lambda: self.paste_photos(zone))
+        act.setEnabled(self._zone_ok(zone) and not self.photo_busy and self._clip_photos() is not None)
         self._photo_menu_obj = m                       # 검사용
         m.exec(w.mapToGlobal(pos))
 
@@ -3739,13 +3922,20 @@ class BizcardFindDialog(QDialog):
                 return [im.copy()]
         return None
 
-    def paste_photos(self) -> bool:
-        """붙여넣기(Ctrl+V·우클릭, §5.24.3 '붙여넣기', 261122-21) — 넣는 길은 [사진 추가]·끌어 놓기와 같은 `add_photos`."""
-        if not self._card or self.photo_busy or not self._photo_front():
+    def paste_photos(self, zone=None) -> bool:
+        """붙여넣기(Ctrl+V·우클릭, §5.24.3 '붙여넣기', 261122-21·-22) — zone 'card' = 명함 그림(`add_card_images`),
+        'photo' = 인물 사진(`add_photos` — [사진 추가]·끌어 놓기와 같은 길). None(Ctrl+V) = 마우스가 있는 자리(사용자 결정 '마우스 위치'):
+        위 명함 칸 위면 명함 그림, 그 밖은 인물 사진."""
+        if zone is None:
+            from PyQt6.QtGui import QCursor
+            zone = "card" if self._zone_at(self.mapFromGlobal(QCursor.pos())) == "card" else "photo"
+        if not self._card or self.photo_busy or not self._zone_ok(zone):
             return False
         srcs = self._clip_photos()
         if not srcs:
             return False
+        if zone == "card":
+            return self.add_card_images(srcs)
         self.add_photos(srcs)
         return True
 

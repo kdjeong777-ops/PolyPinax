@@ -342,6 +342,33 @@ def save_person_photo(src, dst) -> None:
     os.replace(tmp, dst)
 
 
+def write_card_side(src, dst) -> None:
+    """명함 그림 한 면 → 정리본 JPG(§5.24.3 '명함 그림 넣기', 261122-22) — 명함 읽기 [적용]과 같은 `apply.write_side`
+    (JPG 는 바이트 그대로, 그 밖은 같은 화질·dpi). HEIC(.JPG 이름의 HEIC 도)·파일이 아닌 그림(클립보드 PNG 바이트)은 Pillow 로. 배경에서."""
+    from viewer.bizcard import apply as AP
+    from viewer import photo_io
+    dst = Path(dst)
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    if isinstance(src, (str, Path)) and not photo_io.is_heif(src):
+        if not AP.write_side(str(src), "", 0, dst):
+            raise OSError("write_side")
+        return
+    if isinstance(src, (str, Path)):
+        photo_io.heif_ready()
+    from PIL import Image, ImageOps
+    with Image.open(src) as im:
+        AP._save_jpeg(ImageOps.exif_transpose(im), dst)
+
+
+def card_side_path(out_dir, side: str, name: str, company: str, front: str = "") -> Path:
+    """새 면의 정리본 이름 — 앞면 `성명_회사명.jpg`(겹치면 ` (2)`), 뒷면 `<앞면 이름>_뒷면.jpg`(`apply.unique_path`)."""
+    from viewer.bizcard import apply as AP
+    out_dir = Path(out_dir)
+    if side == "front":
+        return AP.unique_path(out_dir, R.card_filename(name or "", company or ""), set())
+    return AP.unique_path(Path(front).parent if front else out_dir, Path(front).stem + AP.BACK_SUFFIX + ".jpg", set())
+
+
 # ── 고치기 ──
 def update_card(store, card_id: int, fields: dict, commit: bool = True) -> None:
     """id 로 칸 고침(앞면 경로가 바뀌어도 새 행을 만들지 않는다). fields: 칸 → 값(phones·emails·urls 는 목록)."""

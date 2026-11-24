@@ -112,9 +112,9 @@ try:
     chk(en and mv, "A 큰 사진 칸 위 — 들어오기·움직이기 모두 받음(놓을 수 있음)", "enter=%s move=%s" % (en, mv))
     chk(shown() and hot(), "B 끄는 동안 사진창 위 점선 틀, 안에 올리면 바탕까지")
     if shown():
-        z, ps = zone(), dlg.photo_split
-        chk(z.geometry() == ps.geometry().translated(ps.parentWidget().mapTo(dlg, ps.pos()) - ps.pos()) or
-            z.geometry().size() == ps.size(), "B 틀 = 사진창 자리·크기", "%s %s" % (z.geometry(), ps.size()))
+        z, ps = zone(), dlg.photo_split.widget(1)          # 인물 사진 틀 = 아래 인물 사진 칸(261122-22 — 위 칸은 명함 그림 틀)
+        chk(z.geometry().topLeft() == ps.mapTo(dlg, ps.rect().topLeft()) and z.geometry().size() == ps.size(),
+            "B 틀 = 아래 인물 사진 칸 자리·크기", "%s %s" % (z.geometry(), ps.size()))
     ok = drop(dlg.photo_view, md)
     pump(lambda: not dlg.photo_busy and dlg.photos.count() == 1, timeout=10)
     chk(ok and dlg.photos.count() == 1 and (F / "인물" / "홍길동_가나다.jpg").exists(), "A 놓으면 인물 사진으로 들어감",

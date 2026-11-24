@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-24 15:04+0900\n"
+"POT-Creation-Date: 2026-11-24 15:24+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -8492,8 +8492,8 @@ msgid "고른 명함들의 체크한 칸을 '항목: 값' 글로 복사합니다
 msgstr "Copy the checked fields of the selected cards as 'Field: value' text"
 
 #: viewer/widgets/bizcard_find_dialog.py
-msgid "인물 사진을 여기에 끌어 놓으면 이 명함의 인물 사진으로 넣습니다"
-msgstr "Drop a portrait photo here to add it to this card"
+msgid "명함 그림을 여기에 끌어 놓거나 붙여넣으면(Ctrl+V·우클릭) 이 명함의 앞·뒷면으로 넣습니다 — 인물 사진은 아래 칸에"
+msgstr "Drop or paste (Ctrl+V or right-click) a card image here to add it as this card's front or back — person photos go in the pane below"
 
 #: viewer/widgets/bizcard_find_dialog.py
 msgid "명함 앞면 ↔ 뒷면"
@@ -8735,6 +8735,22 @@ msgstr "To New To-do"
 msgid "인물 사진"
 msgstr "Portrait Photo"
 
+#: viewer/widgets/bizcard_find_dialog.py viewer/widgets/bizcard_new_dialog.py
+msgid "명함 그림"
+msgstr "Card images"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "이 명함에는 앞·뒷면이 다 있습니다 — 어느 면을 바꿀까요? 옛 그림은 휴지통으로 보냅니다."
+msgstr "This card already has both a front and a back — which side should be replaced? The old image goes to the Recycle Bin."
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "앞면 바꾸기"
+msgstr "Replace Front"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "뒷면 바꾸기"
+msgstr "Replace Back"
+
 #: viewer/widgets/bizcard_find_dialog.py
 msgid "작업 제목"
 msgstr "Task title"
@@ -8926,6 +8942,14 @@ msgid "여기에 놓으면 인물 사진으로 넣습니다"
 msgstr "Drop here to add as a person photo"
 
 #: viewer/widgets/bizcard_find_dialog.py
+msgid "여기에 놓으면 명함 그림으로 넣습니다"
+msgstr "Drop here to add as the card image"
+
+#: viewer/widgets/bizcard_find_dialog.py
+msgid "명함 그림은 앞·뒷면 두 장까지 — 앞의 2장만 넣습니다."
+msgstr "A card holds two images (front and back) — only the first 2 are added."
+
+#: viewer/widgets/bizcard_find_dialog.py
 msgid "사진 이름을 다 바꾸지 못했습니다 — 다른 프로그램이 열고 있는지 확인하세요."
 msgstr "Could not rename all photos — check whether another program has them open."
 
@@ -9115,6 +9139,11 @@ msgstr "Closed"
 
 #: viewer/widgets/bizcard_find_dialog.py
 #, python-brace-format
+msgid "그림 {n}개를 넣지 못했습니다."
+msgstr "Could not add {n} images."
+
+#: viewer/widgets/bizcard_find_dialog.py
+#, python-brace-format
 msgid "같은 휴대폰·메일의 명함이 {n}장 있습니다 — 같은 사람일 수 있습니다. [중복 검토]를 열까요?"
 msgstr "{n} card(s) have the same mobile number or email — this may be the same person. Open [Review Duplicates]?"
 
@@ -9170,11 +9199,6 @@ msgstr "Remove the '#' before the names of the {n} selected people — you can r
 #, python-brace-format
 msgid "할 일 — {n}명"
 msgstr "To-do — {n} people"
-
-#: viewer/widgets/bizcard_find_dialog.py
-#, python-brace-format
-msgid "그림 {n}개를 넣지 못했습니다."
-msgstr "Could not add {n} images."
 
 #: viewer/widgets/bizcard_find_dialog.py
 #, python-brace-format
@@ -9798,10 +9822,6 @@ msgstr "Found {m} cards in {n} photos — checked photos are cropped into separa
 #, python-brace-format
 msgid "이미 한 장으로 들어간 명함 {k}장은 지웁니다(휴지통)."
 msgstr "{k} cards already added as a single card will be removed (to the Recycle Bin)."
-
-#: viewer/widgets/bizcard_new_dialog.py
-msgid "명함 그림"
-msgstr "Card images"
 
 #: viewer/widgets/bizcard_new_dialog.py viewer/widgets/sign_dialogs.py
 msgid "빼기"
@@ -19565,4 +19585,7 @@ msgstr "Getting Started"
 
 #~ msgid "명함 {n}장"
 #~ msgstr "{n} card images"
+
+#~ msgid "인물 사진을 여기에 끌어 놓으면 이 명함의 인물 사진으로 넣습니다"
+#~ msgstr "Drop a portrait photo here to add it to this card"
 

@@ -14,7 +14,30 @@ from pathlib import Path
 from viewer.bizcard import recognize as R
 
 PEOPLE_DIR = "인물"            # 인물 사진 폴더 — 정리 폴더 옆(D16 '폴더 통째' 와 같은 자리)
-_COLS = ("name", "company", "dept", "title", "memo", "address", "emails", "phones", "urls", "en")
+_COLS = ("name", "company", "dept", "title", "memo", "address", "emails", "phones", "urls", "en", "extra")   # extra = 구글 추가 칸(261122-25)
+# 구글 추가 칸(명함 SOT §5.24.1 '구글 추가 칸'·§5.29 '오가는 칸', 261122-25) — 갈래, 화면 이름, 이름표가 있는가, 한 줄만인가
+EXTRA_KINDS = (("birthday", "생일", False, True), ("nickname", "별명", False, True), ("event", "기념일", True, False),
+               ("relation", "관계", True, False), ("im", "메신저", True, False), ("address", "주소", False, False),
+               ("occupation", "직업", False, False), ("custom", "사용자 칸", True, False))
+EXTRA_LABEL = {k: lab for k, lab, _t, _o in EXTRA_KINDS}
+EXTRA_TYPED = {k for k, _l, t, _o in EXTRA_KINDS if t}
+EXTRA_ONE = {k for k, _l, _t, o in EXTRA_KINDS if o}
+EXTRA_ORDER = {k: i for i, (k, _l, _t, _o) in enumerate(EXTRA_KINDS)}
+
+
+def extra_clean(rows):
+    """추가 칸 줄 [[갈래, 이름표, 값]] — 모르는 갈래·빈 값은 빼고, 갈래 차례로(같은 갈래는 들어온 차례), 같은 줄은 한 번."""
+    out, seen = [], set()
+    for x in rows or []:
+        if not isinstance(x, (list, tuple)) or len(x) < 3:
+            continue
+        k, t, v = str(x[0]), str(x[1] or "").strip(), str(x[2] or "").strip()
+        if k not in EXTRA_ORDER or not v or (k, t, v) in seen:
+            continue
+        seen.add((k, t, v))
+        out.append([k, t, v])
+    out.sort(key=lambda r: EXTRA_ORDER[r[0]])
+    return out
 
 
 def _nk(p) -> str:
@@ -384,6 +407,8 @@ def update_card(store, card_id: int, fields: dict, commit: bool = True) -> None:
             v = json.dumps([list(x) if isinstance(x, tuple) else x for x in v], ensure_ascii=False)
         elif k == "en":
             v = json.dumps(v or {}, ensure_ascii=False)
+        elif k == "extra":                                 # 구글 추가 칸 — None 은 '받은 적 없음' 그대로(261122-25)
+            v = None if v is None else json.dumps(extra_clean(v), ensure_ascii=False)
         elif k in ("front", "back", "src_key"):
             from viewer.bizcard.vcard import CONTACT_PREFIX
             # 주소록 명함의 열쇠 `contact:…` 는 경로가 아니다 — 경로 열쇠로 바꾸면 [저장] 뒤 그림 없는 명함이 아니게 된다(§5.24.5)
@@ -700,7 +725,7 @@ def todo_hidden(store, today: str) -> list:
 
 
 # ── 수정일·메모 기록 (§5.24.1 '수정일'·§5.9 '메모 기록', 261120-25·-26·-27) ──
-EDIT_KEYS = ("name", "company", "dept", "title", "address", "phones", "emails", "urls")   # 수정일을 바꾸는 칸(메모 아님)
+EDIT_KEYS = ("name", "company", "dept", "title", "address", "phones", "emails", "urls", "extra")   # 수정일을 바꾸는 칸(메모 아님) · extra 261122-25
 MEMO_LOG_KEY = "memo_log"            # meta — 메모에 고친 날짜·칸 기록(처음 켬)
 MEMO_DATE_KEY = "memo_date"          # meta — 메모를 쓰기 시작하면 오늘 날짜(처음 켬)
 
@@ -1212,13 +1237,14 @@ def _insert_contact(store, p: dict, tags) -> int:
     now = time.time()
     cur = store.con.execute(
         "INSERT INTO cards(front, back, src_key, src_pdf, name, company, title, phones, emails, urls, address, en, "
-        "memo, tags, scanned, created, updated, dept) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        "memo, tags, scanned, created, updated, dept, extra) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         (front, "", "", "", p.get("name") or "", p.get("company") or "", p.get("title") or "",
          json.dumps([list(x) for x in p.get("phones") or []], ensure_ascii=False),
          json.dumps(list(p.get("emails") or []), ensure_ascii=False),
          json.dumps(list(p.get("urls") or []), ensure_ascii=False), p.get("address") or "", "{}",
          p.get("memo") or "", json.dumps(tags, ensure_ascii=False), time.strftime("%Y-%m-%d"), now, now,
-         p.get("dept") or ""))
+         p.get("dept") or "",
+         None if p.get("extra") is None else json.dumps(extra_clean(p.get("extra")), ensure_ascii=False)))   # 구글 추가 칸(261122-25)
     nid = cur.lastrowid
     row = card_by_id(store, nid)
     store.con.execute("INSERT INTO cards_fts(rowid, body) VALUES(?,?)", (nid, store._body(row)))

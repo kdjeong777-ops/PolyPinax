@@ -53,6 +53,12 @@ GOOGLE_WRITES = (NEW_GOOGLE, TO_GOOGLE, GONE_CARD, MERGED_GOOGLE, GOOGLE_EXTRA, 
                  PHOTO_GONE)   # 구글 쪽을 바꾸는 갈래 — 미리보기의 백업 권함(261122-18: 구글에만 있음 지우기도)
 
 
+def drive_on(store) -> bool:
+    """사진 링크(드라이브) 켬 — 명함 DB meta 가 없으면 켬(§5.29 '드라이브(선택)', 사용자 결정 261122-25 '사진 링크 기본 켬')."""
+    v = store.meta_get(OPT_DRIVE, None) if store is not None else None
+    return True if v is None else bool(v)
+
+
 def photo_gone_ids(store) -> set:
     return {int(x) for x in (store.meta_get(PHOTO_GONE_KEY, []) or [])}
 
@@ -241,7 +247,105 @@ def person_values(p: dict) -> dict:
             "emails": [e.get("value") for e in p.get("emailAddresses") or [] if e.get("value")],
             "address": ((p.get("addresses") or [{}])[0].get("formattedValue") or ""),
             "urls": [u.get("value") for u in p.get("urls") or [] if u.get("value")],
-            "memo": ((p.get("biographies") or [{}])[0].get("value") or "")}
+            "memo": ((p.get("biographies") or [{}])[0].get("value") or ""),
+            "extra": person_extra(p)}
+
+
+# ── 추가 칸(명함 SOT §5.24.1 '구글 추가 칸'·§5.29 '오가는 칸', 261122-25) ──
+_DATE = re.compile(r"^\s*(?:(\d{4})[-./]\s*)?(\d{1,2})[-./]\s*(\d{1,2})\.?\s*$")
+
+
+def date_str(d) -> str:
+    """구글 날짜 {year?, month, day} → `YYYY-MM-DD`(해가 없으면 `MM-DD`), 없으면 ''."""
+    if not isinstance(d, dict) or not d.get("month") or not d.get("day"):
+        return ""
+    if d.get("year"):
+        return "%04d-%02d-%02d" % (int(d["year"]), int(d["month"]), int(d["day"]))
+    return "%02d-%02d" % (int(d["month"]), int(d["day"]))
+
+
+def date_obj(v: str):
+    """`YYYY-MM-DD`·`MM-DD`(점·빗금도) → 구글 날짜, 날짜 꼴이 아니면 None."""
+    m = _DATE.match(str(v or ""))
+    if not m:
+        return None
+    mo, dy = int(m.group(2)), int(m.group(3))
+    if not (1 <= mo <= 12 and 1 <= dy <= 31):
+        return None
+    d = {"month": mo, "day": dy}
+    if m.group(1):
+        d["year"] = int(m.group(1))
+    return d
+
+
+def person_extra(p: dict) -> list:
+    """구글 사람 → 추가 칸 줄 [[갈래, 이름표, 값]](`people.extra_clean` 차례)."""
+    out = []
+    for b in (p.get("birthdays") or [])[:1]:
+        out.append(["birthday", "", date_str(b.get("date")) or b.get("text") or ""])
+    out += [["nickname", "", x.get("value") or ""] for x in p.get("nicknames") or []][:1]
+    out += [["event", x.get("type") or "", date_str(x.get("date"))] for x in p.get("events") or []]
+    out += [["relation", x.get("type") or "", x.get("person") or ""] for x in p.get("relations") or []]
+    out += [["im", x.get("protocol") or "", x.get("username") or ""] for x in p.get("imClients") or []]
+    out += [["address", x.get("type") or "", x.get("formattedValue") or ""] for x in (p.get("addresses") or [])[1:]]
+    out += [["occupation", "", x.get("value") or ""] for x in p.get("occupations") or []]
+    out += [["custom", x.get("key") or "", x.get("value") or ""] for x in p.get("userDefined") or []]
+    return P.extra_clean(out)
+
+
+def extra_person(extra) -> dict:
+    """추가 칸 줄 → 구글 칸들(둘째부터 주소는 `addresses_more`) — 구글이 받지 않는 꼴(날짜 아닌 기념일)은 뺀다."""
+    g = {"birthdays": [], "nicknames": [], "events": [], "relations": [], "imClients": [], "occupations": [], "userDefined": [],
+         "addresses_more": []}
+    for k, t, v in P.extra_clean(extra):
+        if k == "birthday" and not g["birthdays"]:
+            d = date_obj(v)
+            g["birthdays"].append({"date": d} if d else {"text": v})
+        elif k == "nickname" and not g["nicknames"]:
+            g["nicknames"].append({"value": v})
+        elif k == "event":
+            d = date_obj(v)
+            if d:
+                g["events"].append(dict({"date": d}, **({"type": t} if t else {})))
+        elif k == "relation":
+            g["relations"].append(dict({"person": v}, **({"type": t} if t else {})))
+        elif k == "im":
+            g["imClients"].append(dict({"username": v}, **({"protocol": t} if t else {})))
+        elif k == "address":
+            g["addresses_more"].append(dict({"formattedValue": v}, **({"type": t} if t else {})))
+        elif k == "occupation":
+            g["occupations"].append({"value": v})
+        elif k == "custom":
+            g["userDefined"].append({"key": t or "-", "value": v})
+    return g
+
+
+def extra_known(c) -> bool:
+    """추가 칸을 받은 적 있는 명함(NULL 이 아님) — 아니면 구글 추가 칸을 건드리지 않는다(§5.29 '추가 칸 처음')."""
+    return c is not None and c.get("extra") is not None
+
+
+def update_mask(c) -> str:
+    from viewer.bizcard.gsync_api import UPDATE_BASE, UPDATE_FIELDS
+    return UPDATE_FIELDS if extra_known(c) else UPDATE_BASE
+
+
+def _takes_fields(fn) -> bool:
+    """api 함수가 고칠 칸(fields)을 받는가 — 고칠 칸을 모르는 api(옛 가짜 api)는 늘 보낸 칸 그대로."""
+    import inspect
+    try:
+        return "fields" in inspect.signature(fn).parameters
+    except (TypeError, ValueError):
+        return False
+
+
+def _api_update(api, rn, person, c):
+    """연락처 고치기 — 추가 칸을 받은 적 없는 명함은 기본 칸만(구글 추가 칸을 지우지 않게)."""
+    mask = update_mask(c)
+    from viewer.bizcard.gsync_api import UPDATE_FIELDS
+    if mask == UPDATE_FIELDS or not _takes_fields(api.update):
+        return api.update(rn, person)
+    return api.update(rn, person, fields=mask)
 
 
 def card_person(c: dict, etag: str = "", kakao: bool = False) -> dict:
@@ -254,6 +358,12 @@ def card_person(c: dict, etag: str = "", kakao: bool = False) -> dict:
          "addresses": [{"formattedValue": c.get("address") or ""}] if c.get("address") else [],
          "urls": [{"value": u} for u in c.get("urls") or [] if u],
          "biographies": [{"value": c.get("memo") or "", "contentType": "TEXT_PLAIN"}] if c.get("memo") else []}
+    if extra_known(c):                                  # 추가 칸(261122-25) — 받은 적 없으면 싣지 않는다(고칠 칸에서도 빠짐)
+        g = extra_person(c.get("extra"))
+        more = g.pop("addresses_more")
+        if more:
+            p["addresses"] = (p["addresses"] or [{"formattedValue": ""}]) + more
+        p.update(g)
     if etag:
         p["etag"] = etag
     return p
@@ -270,7 +380,17 @@ def _norm(v: dict) -> dict:
             # 명함 기준으로 올린 뒤에도 늘 '다름' 이라 다시 싱크하면 '명함을 구글 값으로 고침' 이 나왔다 — 261122-8)
             "phones": sorted({(_rt_kind(k), _phone_key(n)) for k, n in v.get("phones") or [] if _phone_key(n)}),
             "emails": sorted({_nz(e) for e in v.get("emails") or [] if e}),
-            "urls": sorted({(u or "").strip() for u in v.get("urls") or [] if u})}
+            "urls": sorted({(u or "").strip() for u in v.get("urls") or [] if u}),
+            "extra": sorted({(k, t.strip().lower(), _nz(x)) for k, t, x in _extra_rt(v.get("extra"))})}
+
+
+def _extra_rt(extra) -> list:
+    """추가 칸을 구글에 올렸다 받은 꼴로(날짜 꼴 맞춤·쓸 수 없는 값 뺌) — 비교용."""
+    if not extra:
+        return []
+    g = extra_person(extra)
+    more = g.pop("addresses_more")
+    return person_extra(dict(g, addresses=[{}] + more))
 
 
 def lost_fields(card: dict, pv: dict, fields) -> list:
@@ -312,6 +432,8 @@ def _card_at_sync(store, cid: int, synced: float):
                 row[k] = json.loads(v or "[]")
             except (ValueError, TypeError):
                 row[k] = []
+    from viewer.bizcard.store import extra_load
+    row["extra"] = extra_load(row.get("extra"))
     return row
 
 
@@ -367,6 +489,9 @@ def show(v: dict, f: str) -> str:
     x = v.get(f)
     if f == "phones":
         x = ", ".join(n for _k, n in x or [] if n)
+    elif f == "extra":                                  # 추가 칸 — '생일: …' 줄을 ' / ' 로(261122-25)
+        from viewer.i18n import tr
+        x = " / ".join("%s%s: %s" % (tr(P.EXTRA_LABEL.get(k, k)), (" (%s)" % t) if t else "", val) for k, t, val in P.extra_clean(x))
     elif isinstance(x, (list, tuple)):
         x = ", ".join(str(i) for i in x if i)
     x = " / ".join(t.strip() for t in str(x or "").splitlines() if t.strip())
@@ -531,6 +656,8 @@ def plan(store, people: list, folder: str = "", photos: bool = False, drive: boo
                          "tags_add": [ch[k] for k in _keys(person_labels(p, gmap))]})
     for c, p, l in pairs:
         pv = person_values(p)
+        if not extra_known(c):                               # 추가 칸을 받은 적 없음 — 구글 값으로 보고 견준다(§5.29 '추가 칸 처음', 261122-25)
+            c = dict(c, extra=pv["extra"], _extra_new=bool(pv["extra"]))
         d = diff_fields(c, pv)
         pt, ct, syn = person_time(p), float(c.get("updated") or 0), float(l.get("synced") or 0)
         g_k = pv["kakao"]
@@ -570,7 +697,17 @@ def plan(store, people: list, folder: str = "", photos: bool = False, drive: boo
                 rows.append({"kind": GONE_VALUE, "card_id": c["id"], "rn": p["resourceName"], "name": c.get("name") or pv["name"],
                              "fields": lost, "etag": p.get("etag") or "", "kakao": c_k,
                              "changes": [(f, show(c, f), show(pv, f)) for f in lost]})
-        elif l.get("new"):                                   # 처음 짝 — 값이 같으면 짝만 적는다
+        if c.get("_extra_new"):                              # 구글 추가 칸을 처음 받아 적는다 — '명함 고침 — 추가 칸'(처음 체크)
+            r0 = next((r for r in rows if r["kind"] == TO_CARD and r["card_id"] == c["id"]), None)
+            ch0 = ("extra", show({}, "extra"), show(pv, "extra"))
+            if r0 is not None:
+                r0["fields"].append("extra")
+                r0["changes"].append(ch0)
+            else:
+                rows.append({"kind": TO_CARD, "card_id": c["id"], "rn": p["resourceName"], "name": c.get("name") or pv["name"],
+                             "fields": ["extra"], "etag": p.get("etag") or "", "link": bool(l.get("new")), "kakao": c_k,
+                             "changes": [ch0]})
+        if l.get("new") and not d and not c.get("_extra_new"):   # 처음 짝 — 값이 같으면 짝만 적는다
             rows.append({"kind": "link", "card_id": c["id"], "rn": p["resourceName"], "name": c.get("name") or "",
                          "etag": p.get("etag") or "", "labels": [ch[k] for k in set(_keys(c.get("tags"))) & set(_keys(person_labels(p, gmap)))]})
         if ch:                                               # 고른 해시태그 ↔ 구글 라벨(§5.29 '라벨', 261120-61)
@@ -738,12 +875,18 @@ def _apply(store, api, rows: list, folder: str = "", drive_folder: str = DRIVE_F
     if ups and callable(getattr(api, "batch_update", None)):
         for j in range(0, len(ups), BATCH):
             chunk = ups[j:j + BATCH]
-            body = {}
+            body, masks = {}, {}
             for r in chunk:
                 c = P.card_by_id(store, r["card_id"])
                 body[r["rn"]] = card_person(c, r.get("etag") or "", kakao=bool(r.get("kakao")))
+                masks[r["rn"]] = update_mask(c)
+            got = {}
             try:
-                got = api.batch_update(body)
+                from viewer.bizcard.gsync_api import UPDATE_FIELDS
+                for mk in sorted(set(masks.values())):       # 추가 칸을 받은 적 없는 명함은 기본 칸만(§5.29 '추가 칸 처음')
+                    part = {rn: b for rn, b in body.items() if masks[rn] == mk}
+                    got.update(api.batch_update(part) if mk == UPDATE_FIELDS or not _takes_fields(api.batch_update)
+                               else api.batch_update(part, fields=mk))
             except Exception:
                 continue
             for r in chunk:
@@ -819,12 +962,12 @@ def _apply(store, api, rows: list, folder: str = "", drive_folder: str = DRIVE_F
                 _link_put(store, r["card_id"], r["rn"], p.get("etag") or "")
             elif k == TO_GOOGLE:
                 c = P.card_by_id(store, r["card_id"])
-                p = api.update(r["rn"], card_person(c, r.get("etag") or "", kakao=bool(r.get("kakao"))))
+                p = _api_update(api, r["rn"], card_person(c, r.get("etag") or "", kakao=bool(r.get("kakao"))), c)
                 _link_put(store, c["id"], r["rn"], p.get("etag") or "")
             elif k in (KAKAO_UP, KAKAO_FIX):
                 c = P.card_by_id(store, r["card_id"])
                 p = _fetch(api, r["rn"], by_rn)
-                p2 = api.update(r["rn"], card_person(c, p.get("etag") or "", kakao=bool(r.get("kakao"))))
+                p2 = _api_update(api, r["rn"], card_person(c, p.get("etag") or "", kakao=bool(r.get("kakao"))), c)
                 by_rn[r["rn"]] = p2
                 _kakao_keep(store, c["id"], bool(r.get("kakao")))
                 _link_put(store, c["id"], r["rn"], p2.get("etag") or "")
@@ -1064,7 +1207,7 @@ def run_media(store, api, folder: str = "", drive_folder: str = DRIVE_FOLDER_DEF
                 c2 = P.card_by_id(store, cid)
                 if not etag:
                     etag = (_fetch(api, rn, by_rn) or {}).get("etag") or ""
-                p2 = api.update(rn, card_person(c2, etag, kakao=cid in blocked_ids(store)))
+                p2 = _api_update(api, rn, card_person(c2, etag, kakao=cid in blocked_ids(store)), c2)
                 by_rn[rn] = p2
             except Exception as e:
                 why = _why(e)

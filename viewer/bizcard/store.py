@@ -22,6 +22,21 @@ SCHEMA_VER = 1
 _TEXT_COLS = ("name", "company", "dept", "title", "address", "memo", "scanned")
 
 
+def extra_load(v):
+    """`cards.extra` 열 값 → [[갈래, 이름표, 값]] (NULL·읽을 수 없음 = None — 구글 추가 칸을 받은 적 없음, 명함 SOT §5.29 '추가 칸 처음')."""
+    if v is None:
+        return None
+    if isinstance(v, list):
+        return [list(x) for x in v]
+    try:
+        got = json.loads(v)
+    except (ValueError, TypeError):
+        return None
+    if not isinstance(got, list):
+        return None
+    return [[str(x[0]), str(x[1]), str(x[2])] for x in got if isinstance(x, (list, tuple)) and len(x) >= 3]
+
+
 def db_path() -> Path:
     from viewer.settings_store import local_data_dir
     return local_data_dir() / DB_NAME
@@ -113,6 +128,8 @@ class BizcardStore:
         cols = {r[1] for r in c.execute("PRAGMA table_info(cards)")}
         if "dept" not in cols:                       # 261117-11: 부서 칸(옛 DB 는 열만 더한다)
             c.execute("ALTER TABLE cards ADD COLUMN dept TEXT")
+        if "extra" not in cols:                      # 261122-25: 구글 추가 칸(명함 SOT §5.24.1 '구글 추가 칸') — NULL = 받은 적 없음
+            c.execute("ALTER TABLE cards ADD COLUMN extra TEXT")
         c.execute("INSERT OR IGNORE INTO meta(k, v) VALUES('schema', ?)", (str(SCHEMA_VER),))
         c.commit()
         from viewer.bizcard import history                # 변경 기록 트리거(연결마다 TEMP — 명함 SOT §5.30, 261120-64)
@@ -143,7 +160,8 @@ class BizcardStore:
         en = d.get("en") or {}
         parts = [d.get("name"), d.get("company"), d.get("dept"), d.get("title"), d.get("memo"), d.get("address"),
                  " ".join(d.get("emails") or []), " ".join(n for _, n in (d.get("phones") or [])),
-                 " ".join(str(v) for v in en.values()), " ".join(d.get("tags") or [])]
+                 " ".join(str(v) for v in en.values()), " ".join(d.get("tags") or []),
+                 " ".join(str(x[-1]) for x in (d.get("extra") or []) if x)]   # 구글 추가 칸 값도 찾기에(261122-25)
         return " ".join(str(x) for x in parts if x)
 
     def card_by_src(self, src) -> Optional[dict]:
@@ -163,6 +181,8 @@ class BizcardStore:
             d[k] = json.loads(d.get(k) or "[]")
         d["en"] = json.loads(d.get("en") or "{}")
         d["phones"] = [tuple(x) for x in d["phones"]]
+        if "extra" in d:                              # 구글 추가 칸 [[갈래, 이름표, 값]] — None = 받은 적 없음(261122-25)
+            d["extra"] = extra_load(d["extra"])
         return d
 
     def upsert(self, d: dict) -> int:

@@ -13,7 +13,7 @@ import os
 from pathlib import Path
 
 from PyQt6.QtCore import (Qt, QTimer, QSize, QObject, QRectF, QPointF, QDate, pyqtSignal, QAbstractTableModel,
-    QModelIndex)
+    QModelIndex, QItemSelectionModel)
 from PyQt6.QtGui import QPixmap, QIcon, QImage, QImageReader, QPainter, QPainterPath, QColor, QFont, QKeySequence, QShortcut, QPalette, QAction
 from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QComboBox, QTableView,
     QAbstractItemView, QHeaderView, QSplitter, QWidget, QFormLayout, QPlainTextEdit, QPushButton,
@@ -56,12 +56,18 @@ IMG_FILTER = " ".join("*" + e for e in tuple(R.IMG_EXTS) + tuple(HEIF_EXTS))   #
 FIELDS = (("name", tr_noop("이름")), ("company", tr_noop("회사")), ("dept", tr_noop("부서")), ("title", tr_noop("직함")), ("cell", tr_noop("휴대폰")), ("work", tr_noop("전화")),
           ("fax", tr_noop("팩스")), ("email", tr_noop("메일")), ("address", tr_noop("주소")), ("url", tr_noop("누리집")))
 MEMO_LABEL = tr_noop("메모")
+# 구글 추가 칸 화면 이름(§5.24.1 '구글 추가 칸', 261122-25) — 갈래·차례는 `people.EXTRA_KINDS` 한 곳, 글은 번역
+EXTRA_NAMES = {"birthday": tr_noop("생일"), "nickname": tr_noop("별명"), "event": tr_noop("기념일"), "relation": tr_noop("관계"),
+               "im": tr_noop("메신저"), "address": tr_noop("주소"), "occupation": tr_noop("직업"), "custom": tr_noop("사용자 칸")}
+EXTRA_DATES = ("birthday", "event")
 PHONE_KEYS = ("cell", "work", "fax")
 PHOTO_HANDLE = 9                    # 사진창 구분선 손잡이 높이(가운데 1px 선, §5.24.3 '구분선')
 SWIPE_PX = 40                       # 사진 쓸어 넘기기 — 이만큼 넘게 좌우로 끌면 다음·이전(§5.24.3 '명함', 261120-50)
 PHOTO_MIN_SHOW = 300                # 사진창 한 칸이 이보다 낮으면 그림이 있는 칸을 크게(§5.24.3 '크기 비율', 261120-51)
 PHOTO_FAVOR = 0.68                  # 그때 그림이 있는 칸의 몫
 KEYS_BAK = ".keys_bak"            # 그림 없는 명함 열쇠 바로잡기 전 DB 백업 뒤붙이(261122-24)
+PHOTO_SAVE_DIR = "photo_save_dir"  # meta — '다른 이름으로 저장' 지난 폴더(§5.24.3, 261122-25)
+FLASH_MS = 4000                    # 아래 줄 잠깐 알림(사진 복사·저장)
 PHOTO_SPLIT_KEY = "photo_split"     # 사람이 끈 비율(위 칸 몫) — 명함 DB meta
 PRELOAD_MS = 1500                  # 창이 뜬 뒤 이만큼 쉬면 '해시태그 수정' 창 준비(모듈·전체 태그 목록 — §5.24.4 '빠르게')
 DROP_TINT, DROP_TINT_HOT = "0.04", "0.14"   # 놓을 자리 틀 바탕(강조색 투명도) — 창 위 / 그 자리 위(§5.24.3 '끌어 놓기')
@@ -98,9 +104,12 @@ def edited_fields(c, g: dict, memo: str, extras=None) -> dict:
         urls = ([g["url"]] if g.get("url") else []) + list(extras.get("urls") or [])
     name = g.get("name", "")
     name = R.clean_name_ko(name) if R._HANGUL.search(name) and not R._LATIN.search(name) else name
-    return {"name": name, "company": R.strip_corp(g.get("company", "")), "dept": g.get("dept", ""),
-            "title": g.get("title", ""), "address": g.get("address", ""), "phones": phones, "emails": emails,
-            "urls": urls, "memo": memo}
+    out = {"name": name, "company": R.strip_corp(g.get("company", "")), "dept": g.get("dept", ""),
+           "title": g.get("title", ""), "address": g.get("address", ""), "phones": phones, "emails": emails,
+           "urls": urls, "memo": memo}
+    if extras is not None and extras.get("gextra") is not None:   # 구글 추가 칸 줄(§5.24.1 '구글 추가 칸', 261122-25)
+        out["extra"] = P.extra_clean(extras["gextra"])
+    return out
 
 
 def _list_mail(c) -> str:
@@ -271,6 +280,36 @@ class _CardTable(QTableView):
             lambda cur, prev: self.currentCellChanged.emit(cur.row(), cur.column(), prev.row(), prev.column()))
         self.clicked.connect(lambda i: self.cellClicked.emit(i.row(), i.column()))
 
+    drop_ok = None             # (끌기 이벤트) → 받을까 — 인물 사진 썸네일을 줄에 놓기(§5.24.3 '다른 명함으로 복사', 261122-25)
+    drop_do = None             # (끌기 이벤트) → 놓음
+
+    def _drop_take(self, e) -> bool:
+        return self.drop_ok is not None and bool(self.drop_ok(e))
+
+    def dragEnterEvent(self, e):
+        if self._drop_take(e):
+            e.setDropAction(Qt.DropAction.CopyAction)
+            e.accept()
+        else:
+            super().dragEnterEvent(e)
+
+    def dragMoveEvent(self, e):
+        if self._drop_take(e):
+            e.setDropAction(Qt.DropAction.CopyAction)
+            e.accept()
+        elif e.source() is not None and e.source() is not self:
+            e.ignore()                                 # 지금 명함·사진 자리 없는 줄 위 — 놓을 수 없음
+        else:
+            super().dragMoveEvent(e)
+
+    def dropEvent(self, e):
+        if self._drop_take(e) and self.drop_do is not None:
+            e.setDropAction(Qt.DropAction.CopyAction)  # 끈 쪽(썸네일 줄)이 항목을 지우지 않게 — 복사
+            e.accept()
+            self.drop_do(e)
+            return
+        super().dropEvent(e)
+
     def set_cards(self, rows):
         hh = self.horizontalHeader()
         col = hh.sortIndicatorSection() if self.isSortingEnabled() else -1
@@ -308,6 +347,54 @@ class _CardTable(QTableView):
     def scrollToItem(self, it):
         if it is not None:
             self.scrollTo(self.model().index(it.row(), it.column()))
+
+
+class _CardPickDialog(QDialog):
+    """명함 하나 고르기(§5.24.3 '다른 명함으로 복사', 261122-25) — 찾기 칸(이름·회사·전화 숫자) + 목록, 두 번 누르거나 [확인]."""
+    SHOW_MAX = 500
+
+    def __init__(self, parent, cards, title):
+        super().__init__(parent)
+        self.setWindowTitle(title)
+        self._cards = list(cards)
+        v = QVBoxLayout(self)
+        self.ed = QLineEdit()
+        self.ed.setPlaceholderText(tr("이름·회사·전화로 찾기"))
+        self.ed.setClearButtonEnabled(True)
+        v.addWidget(self.ed)
+        self.lst = QListWidget()
+        v.addWidget(self.lst, 1)
+        bb = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        bb.accepted.connect(self.accept)
+        bb.rejected.connect(self.reject)
+        v.addWidget(bb)
+        self.ed.textChanged.connect(self._fill)
+        self.lst.itemDoubleClicked.connect(lambda _it: self.accept())
+        self.resize(420, 480)
+        self._fill()
+
+    def _fill(self):
+        import re
+        q = self.ed.text().strip().lower()
+        qd = re.sub(r"\D", "", q)
+        self.lst.clear()
+        for c in self._cards:
+            nums = " ".join(n for _k, n in c.get("phones") or [])
+            hay = " ".join((c.get("name") or "", c.get("company") or "")).lower()
+            if q and q not in hay and not (qd and len(qd) >= 3 and qd in re.sub(r"\D", "", nums)):
+                continue
+            first = next((n for k, n in c.get("phones") or [] if k == "cell"), "") or next((n for _k, n in c.get("phones") or []), "")
+            it = QListWidgetItem("  ".join(x for x in (c.get("name") or "", c.get("company") or "", PH.normalize(first)) if x))
+            it.setData(ROLE, c["id"])
+            self.lst.addItem(it)
+            if self.lst.count() >= self.SHOW_MAX:
+                break
+        if self.lst.count():
+            self.lst.setCurrentRow(0)
+
+    def picked(self):
+        it = self.lst.currentItem()
+        return it.data(ROLE) if it is not None else None
 
 
 class TodoDialog(QDialog):
@@ -575,6 +662,15 @@ class FavIconWorker(QObject):
 
 
 _KEEP = []
+
+
+def _photo_sig(p) -> tuple:
+    """인물 사진 한 장의 지문 — 경로·크기·고친 시각·파일 번호(이름을 바꿔도 따라가는 id, §5.24.1 '목록 표 얼굴', 261122-25)."""
+    try:
+        st = os.stat(p)
+        return (os.path.normcase(p), st.st_size, st.st_mtime_ns, st.st_ino)
+    except OSError:
+        return (os.path.normcase(p),)
 
 
 def _virtual_key(card) -> str:
@@ -1245,8 +1341,9 @@ class BizcardFindDialog(QDialog):
             tabs_row.addWidget(b)
         self._export_icons()
         fvl.addLayout(tabs_row)
-        self.fav = _OrderList(external=lambda _e: self.fav_add_selected(),
-                              accepts=lambda e: e.source() is self.table and self._fav_gid() != RECENT)
+        self.fav = _OrderList(external=self._fav_external,
+                              accepts=lambda e: (self._photo_drop_card(e, self.fav) is not None) if e.source() is self.photos
+                              else (e.source() is self.table and self._fav_gid() != RECENT))
         self.fav.setIconSize(QSize(FAV_ICON, FAV_ICON))
         self.fav.setGridSize(QSize(FAV_ICON + 22, FAV_ICON + 24))
         self.fav.setUniformItemSizes(True)
@@ -1269,6 +1366,9 @@ class BizcardFindDialog(QDialog):
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.setDragEnabled(True)
         self.table.setDragDropMode(QAbstractItemView.DragDropMode.DragOnly)
+        self.table.setAcceptDrops(True)                    # 인물 사진 썸네일을 줄에 놓기만 받는다(§5.24.3 '다른 명함으로 복사', 261122-25)
+        self.table.drop_ok = lambda e: self._photo_drop_card(e, self.table) is not None
+        self.table.drop_do = lambda e: self._photo_drop(e, self.table)
         self.table.verticalHeader().setVisible(False)
         self.table.verticalHeader().setDefaultSectionSize(LIST_ROW_H)   # 원형 얼굴이 보이게(§5.24.1 '목록 표 얼굴', 261120-76)
         self.table.setIconSize(QSize(LIST_ROW_H - 4, LIST_ROW_H - 4))
@@ -1312,6 +1412,20 @@ class BizcardFindDialog(QDialog):
         tf.setBold(True)
         self.detail_head.setFont(tf)
         cardv.addWidget(self.detail_head)
+        # 제목 띠 오른쪽 [+] — 칸 추가(구글 추가 칸, §5.24.1 '구글 추가 칸', 261122-25). 우클릭도 같은 메뉴
+        hl = QHBoxLayout(self.detail_head)
+        hl.setContentsMargins(0, 0, 4, 0)
+        hl.addStretch(1)
+        self.btn_add_field = QToolButton()
+        self.btn_add_field.setText("+")
+        self.btn_add_field.setAutoRaise(True)
+        self.btn_add_field.setToolTip(tr("칸 추가 — 생일·별명·기념일·관계·메신저·주소·직업·사용자 칸(구글 주소록과 함께 오갑니다)"))
+        self.btn_add_field.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self.btn_add_field.setMenu(self._extra_menu(QMenu(self.btn_add_field)))
+        hl.addWidget(self.btn_add_field)
+        self.detail_head.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.detail_head.customContextMenuRequested.connect(
+            lambda pos: self._extra_menu(QMenu(self)).exec(self.detail_head.mapToGlobal(pos)) if self._card else None)
         body = QWidget()
         body.setObjectName("bizDetailBody")
         body.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
@@ -1601,9 +1715,11 @@ class BizcardFindDialog(QDialog):
             QMessageBox.information(self, tr("구글 주소록과 싱크"),
                                     tr("먼저 명함 환경설정(톱니)의 '구글 주소록' 에서 구글 계정을 연결하세요."))
             return None
-        drive = bool(st.meta_get(G.OPT_DRIVE, False)) and A.granted_drive()
+        want = G.drive_on(st)                                # 사진 링크 기본 켬(§5.29 '드라이브(선택)', 261122-25)
+        drive = want and A.granted_drive()
         dlg = GSyncDialog(self, db=self._db, folder=self._bizcard_folder(), photos=bool(st.meta_get(G.OPT_PHOTOS, False)),
-                          drive=drive, drive_folder=str(st.meta_get(G.OPT_FOLDER, "") or G.DRIVE_FOLDER_DEFAULT))
+                          drive=drive, drive_folder=str(st.meta_get(G.OPT_FOLDER, "") or G.DRIVE_FOLDER_DEFAULT),
+                          drive_hint=want and not drive)
         self.gsync_dlg = dlg                                 # 검사가 찾는다
         if not exec_:
             dlg.finished.connect(lambda _r: self._after_gsync(dlg))
@@ -2277,7 +2393,8 @@ class BizcardFindDialog(QDialog):
             c = self._card
             pf = self._photo_front()
             if c:                                          # 사진이 바뀌었으면 목록 얼굴을 다시(§5.24.1 '목록 표 얼굴', 261120-76)
-                sig = tuple(P.person_photos(pf)) if pf else ()
+                # 지문 = 경로·크기·고친 시각·파일 번호 — 끌어 차례를 바꾸면 이름은 그대로 내용만 바뀐다(261122-25 — 종전 경로만 견줌)
+                sig = tuple(_photo_sig(p) for p in P.person_photos(pf)) if pf else ()
                 sigs = self.__dict__.setdefault("_photo_sigs", {})
                 if c["id"] in sigs and sigs[c["id"]] != sig:
                     self._face_forget(c["id"])
@@ -2458,6 +2575,7 @@ class BizcardFindDialog(QDialog):
         img = on and P.has_image(self._card)                 # 명함 그림 파일이 있어야(주소록 명함·파일 잃은 명함은 흐림 — 261122-11)
         ph = on and bool(self._photo_front())                 # 인물 사진은 그림 없는 명함도(명함 폴더가 있으면, §5.24.3)
         self.btn_copy.setEnabled(on)
+        self.btn_add_field.setEnabled(on)                    # 칸 추가(§5.24.1 '구글 추가 칸', 261122-25)
         self.act_open.setEnabled(img)
         self.btn_photo.setEnabled(ph and not self.photo_busy)
         self.photos.setEnabled(ph)
@@ -2506,20 +2624,65 @@ class BizcardFindDialog(QDialog):
                 add("phone", kind, kind, i + 2, PH.normalize(n))
         for i, u in enumerate((card.get("urls") or [])[1:]):
             add("url", "", "url", i + 2, u)
+        for kind, t, v in card.get("extra") or []:     # 구글 추가 칸 — 값이 있는 것만(§5.24.1 '구글 추가 칸', 261122-25)
+            self._add_gextra_row(kind, t, v)
         self.fields_scroll.updateGeometry()            # 줄이 늘면 칸 영역도 내용 높이까지(남는 높이는 메모)
 
+    def _add_gextra_row(self, kind, t, v):
+        ed = QLineEdit(str(v or ""))
+        ed.textEdited.connect(lambda _t: self._set_dirty(True))
+        if kind in EXTRA_DATES:
+            ed.setPlaceholderText("YYYY-MM-DD")
+        name = tr(EXTRA_NAMES.get(kind, kind)) + ((" (%s)" % t) if t else "")
+        lab = QLabel(name)
+        lab.setContentsMargins(22, 0, 0, 0)            # 위 칸 이름과 줄을 맞춘다(체크 칸 자리만큼)
+        self.form_extra.addRow(lab, ed)
+        self.extra_eds.append(("gextra", (kind, t), ed))
+        return ed
+
+    def _extra_menu(self, m):
+        """'칸 추가' 메뉴 — 세부내용 제목 띠 [+]·우클릭(§5.24.1 '구글 추가 칸', 261122-25)."""
+        for kind, _lab, _t, _one in P.EXTRA_KINDS:          # 명함이 없으면 [+] 단추가 꺼진다(`_enable_card_buttons`)
+            _menu_act(m, tr(EXTRA_NAMES[kind]), lambda k=kind: self.add_extra_field(k))
+        return m
+
+    def add_extra_field(self, kind, label=None):
+        """추가 칸 한 줄을 더하고 그 칸에 커서 — 생일·별명은 하나만(있으면 그 줄로), 이름표 갈래는 이름표를 먼저 묻는다."""
+        if not self._card or kind not in EXTRA_NAMES:
+            return None
+        if kind in P.EXTRA_ONE:
+            for g, kt, ed in self.extra_eds:
+                if g == "gextra" and kt[0] == kind:
+                    ed.setFocus()
+                    return ed
+        if kind in P.EXTRA_TYPED and label is None:
+            label, ok = QInputDialog.getText(self, tr("칸 추가"), tr("이름표 — 예: 배우자·카카오톡·결혼기념일·집 (비워도 됩니다)"))
+            if not ok:
+                return None
+        ed = self._add_gextra_row(kind, (label or "").strip() if kind in P.EXTRA_TYPED else "", "")
+        self.fields_scroll.updateGeometry()
+        ed.setFocus()
+        from PyQt6 import sip
+        # 그 사이 명함이 바뀌어 줄이 지워졌을 수 있다(`_fill_extra_rows` 의 removeRow) — 지워진 칸은 건드리지 않는다
+        QTimer.singleShot(0, lambda: None if sip.isdeleted(ed) else self.fields_scroll.ensureWidgetVisible(ed))
+        return ed
+
     def _extra_values(self) -> dict:
-        out = {"emails": [], "phones": [], "urls": []}
+        out = {"emails": [], "phones": [], "urls": [], "gextra": []}
         for group, kind, ed in self.extra_eds:
             t = ed.text().strip()
             if not t:
                 continue                               # 비운 줄 = 그 값을 지움
-            if group == "email":
+            if group == "gextra":
+                out["gextra"].append([kind[0], kind[1], t])
+            elif group == "email":
                 out["emails"].append(t)
             elif group == "url":
                 out["urls"].append(t)
             else:
                 out["phones"].append((kind, PH.normalize(t)))
+        if not out["gextra"] and self._card is not None and self._card.get("extra") is None:
+            out["gextra"] = None                       # 받은 적 없고 더한 것도 없음 — 그대로 '받은 적 없음'(§5.29 '추가 칸 처음')
         return out
 
     def store_card_edit(self, c, new):
@@ -2541,7 +2704,7 @@ class BizcardFindDialog(QDialog):
                 P.edited_init(st)
                 fields["edited"] = _today()
                 if P.memo_opt(st, P.MEMO_LOG_KEY):
-                    labels = dict({k: tr(lb) for k, lb in FIELDS})
+                    labels = dict({k: tr(lb) for k, lb in FIELDS}, extra=tr("추가 칸"))
                     fields["memo"] = P.memo_with_log(fields.get("memo") or "", _today(), [labels.get(k, k) for k in keys],
                                                      tr("수정"))
             P.update_card(st, c["id"], fields)
@@ -3392,7 +3555,9 @@ class BizcardFindDialog(QDialog):
 
     def _fav_current(self, cur, _prev):
         """키보드로 옮김 — 빠르게 넘겨도 멈춘 뒤 마지막 사람만 보인다(메인을 세우지 않게, FAV_KEY_MS)."""
-        if cur is not None and not getattr(self, "_fav_filling", False):
+        # 고른 칸만 — Qt 는 포커스가 돌아올 때 지금 칸이 없으면 첫 칸을 고르지 않고 '지금 칸' 으로만 잡는다(다시 채운 뒤 첫 사람으로
+        # 넘어가던 결함, §5.24.2 '다시 채울 때', 261122-25)
+        if cur is not None and cur.isSelected() and not getattr(self, "_fav_filling", False):
             self._fav_key_id = cur.data(ROLE)
             self._fav_key_timer.start()
 
@@ -3454,6 +3619,7 @@ class BizcardFindDialog(QDialog):
         jobs = []
         bold = QFont(self.fav.font())                  # 이름은 굵게 — 사람 칸 글꼴에 굵기만(§5.24.2 '즐겨찾기 줄', 사용자 지시 261120)
         bold.setBold(True)
+        shown = self._card["id"] if self._card else None
         for c in self._tab_members(gid):
             it = QListWidgetItem(QIcon(_rounded(None, c.get("name") or "")), c.get("name") or "")
             it.setFont(bold)
@@ -3461,6 +3627,8 @@ class BizcardFindDialog(QDialog):
             it.setToolTip(self._fav_tip(c))
             it.setTextAlignment(Qt.AlignmentFlag.AlignHCenter)
             self.fav.addItem(it)
+            if c["id"] == shown:                           # 보던 사람을 '지금 칸' 으로만 — 선택은 바꾸지 않음(§5.24.2 '다시 채울 때', 261122-25)
+                self.fav.setCurrentItem(it, QItemSelectionModel.SelectionFlag.NoUpdate)
             pf = self._photo_front(c)
             photos = P.person_photos(pf) if pf else []
             if photos:
@@ -3748,15 +3916,18 @@ class BizcardFindDialog(QDialog):
         끌기를 받지 않거나(사진 모드) 받고도 걸러 붙지 않았다(탐색기))."""
         return bool(p) and os.path.splitext(p)[1].lower() in tuple(R.IMG_EXTS) + tuple(HEIF_EXTS)
 
-    def add_photos(self, files):
-        pf = self._photo_front()
-        if not self._card or self.photo_busy or not pf:
+    def add_photos(self, files, card=None):
+        """인물 사진 넣기 — card 가 있으면 그 명함에(다른 명함으로 복사, §5.24.3 '다른 명함으로 복사', 261122-25), 없으면 지금 명함."""
+        target = card if card is not None else self._card
+        pf = self._photo_front(target) if target else ""
+        if not target or self.photo_busy or not pf:
             return
         from viewer.workers import run_in_thread
         self.photo_busy = True
         self.btn_photo.setEnabled(False)
         w = PhotoWorker(pf, files)
-        card_id = self._card["id"]
+        card_id = target["id"]
+        other = card is not None and not (self._card and self._card["id"] == card_id)
 
         def _done(made, bad):
             self.photo_busy = False
@@ -3765,8 +3936,12 @@ class BizcardFindDialog(QDialog):
             if self._card and self._card["id"] == card_id:
                 self._keep_id = card_id                    # '사진 없음' 구분에서 빠져도 다음 목록 갱신까지 보던 명함을(261122-23)
                 self._fill_photos(select=made[-1] if made else "")
+            else:
+                self._face_forget(card_id)                 # 다른 명함 — 그 명함의 목록 얼굴을 다시(§5.24.1 '목록 표 얼굴', 261122-25)
             if card_id in self.fav_ids():
                 self._fav_fill()
+            if other and made:
+                self._flash(tr("'{name}' 에 사진 {n}장을 복사했습니다").format(name=target.get("name") or "", n=len(made)))
             if bad:
                 QMessageBox.warning(self, tr("인물 사진"), tr("그림 {n}개를 넣지 못했습니다.").format(n=bad))
         w.done.connect(_done)
@@ -3936,8 +4111,145 @@ class BizcardFindDialog(QDialog):
             _menu_act(m, tr("지우기"), lambda: self.delete_photos())
         act = _menu_act(m, tr("붙여넣기"), lambda: self.paste_photos(zone))
         act.setEnabled(self._zone_ok(zone) and not self.photo_busy and self._clip_photos() is not None)
+        # 다른 명함으로 복사·다른 이름으로 저장(§5.24.3, 261122-25) — 인물 사진은 고른 썸네일(없으면 큰 화면), 명함 칸은 보이는 면
+        picks = self._picked_photos(w)
+        if zone == "photo":
+            a = _menu_act(m, tr("다른 명함으로 복사"), lambda: self.copy_photos_to_card(picks))
+            a.setEnabled(bool(picks) and not self.photo_busy)
+        a = _menu_act(m, tr("다른 이름으로 저장"), lambda: self.save_photos_as(picks))
+        a.setEnabled(bool(picks))
         self._photo_menu_obj = m                       # 검사용
         m.exec(w.mapToGlobal(pos))
+
+    def _picked_photos(self, w=None) -> list:
+        """우클릭·끌기의 대상 그림 — 위 명함 칸이면 보이는 면, 썸네일 줄이면 고른 썸네일(없으면 큰 화면), 큰 화면이면 그 사진."""
+        if w is self.pv:
+            return [self.shown] if self.shown and os.path.exists(self.shown) else []
+        if w is self.photos or w is None:
+            sel = [it.data(ROLE) for it in self.photos.selectedItems() if it.data(ROLE)]
+            if sel:
+                return [p for p in sel if os.path.exists(p)]
+        p = getattr(self, "photo_shown", "")
+        return [p] if p and os.path.exists(p) else []
+
+    def _copy_target_ok(self, card) -> bool:
+        """사진을 받을 수 있는 다른 명함 — 지금 명함이 아니고 사진 자리(§5.24.3 '그림 없는 명함')가 있음."""
+        return bool(card) and not (self._card and card.get("id") == self._card["id"]) and bool(self._photo_front(card))
+
+    def _photo_drop_card(self, e, w):
+        """인물 사진 썸네일을 목록 줄·즐겨찾기 칸에 끌 때 — 받을 명함(아니면 None)."""
+        if e.source() is not self.photos or self.photo_busy:
+            return None
+        pos = e.position().toPoint()
+        if w is self.table:
+            i = self.table.indexAt(pos)
+            card = self._card_at(i.row()) if i.isValid() else None
+        else:
+            it = self.fav.itemAt(pos)
+            card = P.card_by_id(self._store(), it.data(ROLE)) if it is not None else None
+        return card if self._copy_target_ok(card) else None
+
+    def _photo_drop(self, e, w) -> bool:
+        card = self._photo_drop_card(e, w)
+        if card is None:
+            return False
+        return self.copy_photos_to_card(self._picked_photos(self.photos), card["id"])
+
+    def _fav_external(self, e):
+        """즐겨찾기 칸에 바깥에서 놓음 — 인물 사진 썸네일이면 그 사람에게 복사, 표의 줄이면 지금 탭에 넣기."""
+        if e.source() is self.photos:
+            e.setDropAction(Qt.DropAction.CopyAction)      # 썸네일 줄이 항목을 지우지 않게 — 복사
+            e.accept()
+            self._photo_drop(e, self.fav)
+            return
+        self.fav_add_selected()
+
+    def copy_photos_to_card(self, paths, card_id=None) -> bool:
+        """인물 사진을 다른 명함으로 복사(§5.24.3 '다른 명함으로 복사', 261122-25) — card_id 가 없으면 명함 고르기 창."""
+        paths = [p for p in paths or [] if p and os.path.exists(p)]
+        if not paths or self.photo_busy:
+            return False
+        if card_id is None:
+            st = self._store()
+            cands = [c for c in (st._row(r) for r in st.con.execute("SELECT * FROM cards ORDER BY name"))
+                     if self._copy_target_ok(c)]
+            dlg = _CardPickDialog(self, cands, tr("다른 명함으로 복사"))
+            self.pick_dlg = dlg                            # 검사가 찾는다
+            if not dlg.exec() or dlg.picked() is None:
+                return False
+            card_id = dlg.picked()
+        card = P.card_by_id(self._store(), card_id)
+        if not self._copy_target_ok(card):
+            return False
+        self.add_photos(paths, card=card)
+        return True
+
+    def save_photos_as(self, paths) -> bool:
+        """다른 이름으로 저장(§5.24.3, 261122-25) — 한 장은 저장 창, 여러 장은 폴더 고르기, 바이트 그대로 복사(배경)."""
+        from PyQt6.QtWidgets import QFileDialog
+        from PyQt6.QtCore import QStandardPaths
+        paths = [p for p in paths or [] if p and os.path.exists(p)]
+        if not paths:
+            return False
+        st = self._store()
+        start = str(st.meta_get(PHOTO_SAVE_DIR, "") or "")
+        if not start or not os.path.isdir(start):
+            start = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.PicturesLocation) or os.path.expanduser("~")
+        if len(paths) == 1:
+            src = paths[0]
+            ext = os.path.splitext(src)[1]
+            dst, _f = QFileDialog.getSaveFileName(self, tr("다른 이름으로 저장"), os.path.join(start, os.path.basename(src)),
+                                                  "%s (*%s)" % (ext[1:].upper() or "*", ext or ""))
+            if not dst:
+                return False
+            if ext and not dst.lower().endswith(ext.lower()):
+                dst += ext                                 # 꼴은 원본 그대로
+            jobs, folder = [(src, dst)], os.path.dirname(dst)
+        else:
+            folder = QFileDialog.getExistingDirectory(self, tr("저장할 폴더"), start)
+            if not folder:
+                return False
+            jobs = [(p, None) for p in paths]
+        st.meta_set(PHOTO_SAVE_DIR, folder)
+
+        def work(_progress):
+            import shutil
+            from viewer.bizcard.apply import unique_path
+            n, taken = 0, set()
+            for src, dst in jobs:
+                if dst is None:                            # 여러 장 — 원래 이름, 겹치면 ' (2)'
+                    dst = str(unique_path(Path(folder), os.path.basename(src), taken))
+                shutil.copyfile(src, dst)
+                n += 1
+            return n
+
+        def done(n, err):
+            if err:
+                QMessageBox.warning(self, tr("다른 이름으로 저장"), tr("저장하지 못했습니다 — 폴더에 쓸 수 있는지 확인하세요.") + "\n" + err)
+                return
+            self.saved_photos = n                          # 검사용
+            self._flash(tr("사진 {n}장을 저장했습니다").format(n=n))
+        self._bg(work, done)
+        return True
+
+    def _bg(self, fn, done):
+        """파일 일 하나를 배경에서(`_ArchiveWorker` — 응답성 SOT §4) — done(결과, 오류 갈래)."""
+        from viewer.workers import run_in_thread
+        w = _ArchiveWorker(fn)
+        w.done.connect(done)
+        keep = getattr(self._mw, "_thread_keep", None)
+        run_in_thread(w, keep if isinstance(keep, list) else _KEEP)
+        self._bg_worker = w
+
+    def _flash(self, text: str):
+        """아래 줄에 잠깐 알림(구글 사진 올리는 중이면 그 글을 가리지 않음)."""
+        self.flash_text = text                             # 검사용
+        if getattr(self, "media_busy", False):
+            return
+        self.lbl_media.setText(text)
+        self.lbl_media.setVisible(True)
+        QTimer.singleShot(FLASH_MS, lambda t=text: (self.lbl_media.setVisible(False)
+                                                    if not self.media_busy and self.lbl_media.text() == t else None))
 
     def _clip_photos(self):
         """클립보드에서 받을 인물 사진 — 그림 파일 목록(HEIC 포함, 끌어 놓기와 같은 거름)이 먼저, 없으면 그림 자체(사본).

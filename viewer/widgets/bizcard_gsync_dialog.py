@@ -29,7 +29,7 @@ KIND_LABELS = {G.NEW_CARD: tr_noop("구글에서 가져옴(새 명함)"), G.NEW_
                G.LABELS: tr_noop("라벨·해시태그 맞춤"), G.LABEL_GONE: tr_noop("고른 목록에서 뺀 구글 라벨 — 지울까요(연락처는 그대로)")}
 FIELD_LABELS = {"name": tr_noop("이름"), "company": tr_noop("회사"), "dept": tr_noop("부서"), "title": tr_noop("직함"),
                 "phones": tr_noop("전화"), "emails": tr_noop("메일"), "address": tr_noop("주소"), "urls": tr_noop("누리집"),
-                "memo": tr_noop("메모")}
+                "memo": tr_noop("메모"), "extra": tr_noop("추가 칸")}
 
 
 def _field(f: str) -> str:
@@ -178,7 +178,7 @@ class GSyncDialog(QDialog):
     """미리보기 창. 반영 뒤 result = gsync.apply 결과(지울 명함 id 는 부르는 쪽이 휴지통 길로)."""
 
     def __init__(self, parent=None, db=None, folder: str = "", photos: bool = False, drive: bool = False,
-                 drive_folder: str = G.DRIVE_FOLDER_DEFAULT, start: bool = True):
+                 drive_folder: str = G.DRIVE_FOLDER_DEFAULT, start: bool = True, drive_hint: bool = False):
         super().__init__(parent)
         self._db, self._folder, self._dfolder = db, folder or "", drive_folder or G.DRIVE_FOLDER_DEFAULT
         self._opts = (photos, drive)
@@ -192,6 +192,12 @@ class GSyncDialog(QDialog):
                                           "만들지 않습니다. 명함에서 지운 사람·구글에만 있는 연락처는 '구글에서 지울까요' 로 처음부터 체크됩니다"))
         self.chk_card_first.toggled.connect(self._toggle_card_first)
         v.addWidget(self.chk_card_first)
+        # 사진 링크(드라이브)는 켜졌는데 드라이브 권한 없이 연결한 계정(§5.29 '드라이브(선택)', 261122-25)
+        self.lbl_drive = QLabel(tr("사진 링크(드라이브)를 쓰려면 명함 환경설정의 '구글 주소록' 에서 [연결 끊기] 뒤 다시 연결하세요 — "
+                                   "그때까지 사진 링크는 건너뜁니다."))
+        self.lbl_drive.setWordWrap(True)
+        self.lbl_drive.setVisible(bool(drive_hint))
+        v.addWidget(self.lbl_drive)
         self.lbl = QLabel(tr("구글 주소록을 받는 중…"))
         self.lbl.setWordWrap(True)
         v.addWidget(self.lbl)

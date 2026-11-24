@@ -18,8 +18,11 @@ HTTP_TIMEOUT = 30
 RETRY_WAITS = (1, 2, 4)
 RATE_WAITS = (5, 10, 20, 40, 60)                 # 요청 한도(429) — Retry-After 가 없을 때 쉬는 초(끝 값을 되풀이, 261120-71)
 RATE_TRIES = 12                                  # 429 를 이만큼 연달아 받으면 그때 실패(약 10분 — 배경 일꾼 안에서만 기다린다)
-PERSON_FIELDS = "names,organizations,phoneNumbers,emailAddresses,addresses,urls,biographies,photos,memberships,metadata"
-UPDATE_FIELDS = "names,organizations,phoneNumbers,emailAddresses,addresses,urls,biographies"
+# 추가 칸(명함 SOT §5.29 '오가는 칸', 261122-25) — 생일·별명·기념일·관계·메신저·직업·사용자 칸(둘째부터 주소는 addresses 에)
+EXTRA_FIELDS = "birthdays,nicknames,events,relations,imClients,occupations,userDefined"
+PERSON_FIELDS = "names,organizations,phoneNumbers,emailAddresses,addresses,urls,biographies,photos,memberships,metadata," + EXTRA_FIELDS
+UPDATE_BASE = "names,organizations,phoneNumbers,emailAddresses,addresses,urls,biographies"   # 추가 칸을 받은 적 없는 명함(§5.29 '추가 칸 처음')
+UPDATE_FIELDS = UPDATE_BASE + "," + EXTRA_FIELDS
 FOLDER_MIME = "application/vnd.google-apps.folder"
 
 
@@ -110,14 +113,15 @@ class Api:
         d = self._json("POST", PEOPLE_BASE + "/v1/people:batchCreateContacts", body)
         return [x.get("person") or {} for x in d.get("createdPeople") or []]
 
-    def batch_update(self, persons: dict) -> dict:
-        """연락처 여럿 고치기 한 요청으로 {resourceName: 사람(etag 포함)} → {resourceName: 고친 사람}(최대 200, 261120-71)."""
-        body = {"contacts": persons, "updateMask": UPDATE_FIELDS, "readMask": PERSON_FIELDS}
+    def batch_update(self, persons: dict, fields: str = UPDATE_FIELDS) -> dict:
+        """연락처 여럿 고치기 한 요청으로 {resourceName: 사람(etag 포함)} → {resourceName: 고친 사람}(최대 200, 261120-71).
+        fields = 고칠 칸(추가 칸을 받은 적 없는 명함은 `UPDATE_BASE` — 구글 추가 칸을 지우지 않게, 261122-25)."""
+        body = {"contacts": persons, "updateMask": fields, "readMask": PERSON_FIELDS}
         d = self._json("POST", PEOPLE_BASE + "/v1/people:batchUpdateContacts", body)
         return {rn: (x.get("person") or {}) for rn, x in (d.get("updateResult") or {}).items()}
 
-    def update(self, resource: str, person: dict) -> dict:
-        q = urllib.parse.urlencode({"updatePersonFields": UPDATE_FIELDS, "personFields": PERSON_FIELDS})
+    def update(self, resource: str, person: dict, fields: str = UPDATE_FIELDS) -> dict:
+        q = urllib.parse.urlencode({"updatePersonFields": fields, "personFields": PERSON_FIELDS})
         return self._json("PATCH", PEOPLE_BASE + "/v1/%s:updateContact?%s" % (resource, q), person)
 
     def delete(self, resource: str) -> None:

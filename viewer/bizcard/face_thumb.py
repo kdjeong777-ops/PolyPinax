@@ -45,7 +45,9 @@ def source(card, folder) -> tuple:
 
 def _key(path, from_card) -> str:
     st = os.stat(path)
-    raw = "%s|%d|%d|%d|%d" % (os.path.normcase(os.path.abspath(path)), st.st_size, st.st_mtime_ns, int(bool(from_card)), VERSION)
+    # 파일 번호(st_ino)도 — 사진 차례를 바꾸면 이름은 그대로 내용만 바뀐다(§5.24.1 '목록 표 얼굴', 261122-25)
+    raw = "%s|%d|%d|%d|%d|%d" % (os.path.normcase(os.path.abspath(path)), st.st_size, st.st_mtime_ns, st.st_ino,
+                                 int(bool(from_card)), VERSION)
     return hashlib.sha1(raw.encode("utf-8")).hexdigest()
 
 

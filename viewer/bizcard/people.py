@@ -331,7 +331,8 @@ def save_person_photo(src, dst) -> None:
     HEIC(아이폰 — .JPG 이름의 HEIC 도)는 사진 모드와 같은 해독기(`photo_io`, pi-heif)로 읽어 JPG 로(원본은 그대로, 261122-16)."""
     from PIL import Image, ImageOps
     from viewer import photo_io
-    photo_io._prep(src)                           # HEIC 면 해독기를 처음 한 번 등록(확장자·파일 머리로)
+    if photo_io.is_heif(src):                     # HEIC 면 해독기를 처음 한 번 등록(확장자·파일 머리로 — 공개 함수, 261122-18)
+        photo_io.heif_ready()
     dst = Path(dst)
     dst.parent.mkdir(parents=True, exist_ok=True)
     with Image.open(src) as im:

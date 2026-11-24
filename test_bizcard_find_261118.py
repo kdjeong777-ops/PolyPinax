@@ -1386,7 +1386,7 @@ try:
         and datas.index("photo") > seps[2]
         and got2["photo"] and got2["photo"] == (want_ph & got2["all"]) and got2["photo"] | got2["nophoto"] == got2["all"]
         and not (got2["photo"] & got2["nophoto"]),
-        "I29 구분 콤보 '사진 있음·없음'(인물 사진) — 언어/명함/사진 묶음 사이 구분선 셋",
+        "I29 구분 콤보 '사진 있음·없음'(인물 사진) — 언어/명함/사진/#/카톡 묶음 사이 구분선 다섯",
         "%s %d %d %d" % (seps, len(got2["photo"]), len(want_ph), len(got2["all"])))
     cbk2.setCurrentIndex(0)
     pump(timeout=0.1)

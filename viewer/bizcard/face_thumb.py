@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
 """명함 얼굴 썸네일 (명함 SOT §5.24.2 '즐겨찾기 줄'·§5.24.1 '목록 표 얼굴', 261120-76) — Qt 없음, 배경 일꾼이 부른다.
 
-① 인물 사진 — 얼굴이 있으면 그 얼굴만(윈도우 내장 얼굴 찾기, 완전 오프라인), 없으면 중요 부분(테두리가 많은 곳) 정사각
+① 인물 사진 — 얼굴이 있으면 그 얼굴만(윈도우 내장 얼굴 찾기 — 공용 `viewer/win_face.py`, 완전 오프라인), 없으면 중요 부분(테두리가 많은 곳) 정사각
 ② 인물 사진이 없으면 명함 앞면 가운데 정사각(종전 그대로)
 결과는 로컬 데이터 폴더 `bizcard_faces/` 에 SIZE px JPG 로 남긴다 — 열쇠 = 사진 경로·크기·고친 시각·판.
+얼굴 찾기 자체는 공용 `viewer.win_face`(261122-18) — 사진 인물 태그도 그것을 쓴다. 이 모듈의 `faces()` 는 명함 썸네일용
+감싸기(그 그림 일시 오류는 [] → 중요 부분, 명함 쪽 오류 횟수 `_errors`·끔 `_no_detector` 는 명함만의 것).
 """
 from __future__ import annotations
 
@@ -13,11 +15,9 @@ from pathlib import Path
 
 SIZE = 96                     # 캐시 그림 한 변(목록 풍선 FACE_TIP 과 같게)
 VERSION = 1                   # 자르는 법을 바꾸면 올린다(옛 캐시는 쓰지 않음)
-DETECT_MAX = 1024             # 얼굴 찾기에 넣는 그림 긴 변(빠르게)
 HEAD_ROOM = 0.35              # 얼굴 상자 위로 더하는 여백(상자 높이 비율)
 FACE_PAD = 1.7                # 얼굴 상자 → 정사각 한 변(얼굴 상자 긴 변의 배수)
-_detector = None
-_no_detector = False          # 이 PC 엔 얼굴 찾기가 없음(가져오기 실패·지원 안 함) — 이 실행 내내 끔
+_no_detector = False          # 명함 썸네일에서 얼굴 찾기를 끔(쓸 수 없는 PC·일시 오류가 연달아) — 이 실행 내내
 _errors = 0                   # 그림 한 장의 일시 오류 — 연달아 ERR_MAX 번이면 끔(261120-78 — 한 번에 끄지 않음)
 ERR_MAX = 5
 
@@ -59,47 +59,23 @@ def cached(path, from_card=False) -> str:
 
 
 def faces(img) -> list:
-    """윈도우 얼굴 찾기 — [(x, y, w, h)](그림 좌표). 못 쓰면 []."""
-    global _detector, _no_detector, _errors
+    """얼굴 상자 [(x, y, w, h)] — 없거나 못 쓰면 [](명함 썸네일은 중요 부분으로 대신한다). 공용 `win_face.detect` 를 감싼다:
+    쓸 수 없는 PC 면 끄고, 그 그림만의 일시 오류는 명함 쪽 횟수로 세어 연달아 ERR_MAX 번이면 끈다(261120-78 — 한 번에 끄지 않음)."""
+    global _no_detector, _errors
     if _no_detector:
         return []
-    try:
-        import asyncio
-        from winrt.windows.media.faceanalysis import FaceDetector
-        from winrt.windows.graphics.imaging import SoftwareBitmap, BitmapPixelFormat
-        from winrt.windows.storage.streams import Buffer
-        if not FaceDetector.is_supported:
-            _no_detector = True
-            return []
-    except Exception:                                     # 이 PC 엔 없음 — 이 실행 내내 끔
+    from viewer import win_face
+    if not win_face.available():
         _no_detector = True
         return []
-    try:
-        g = img.convert("L")
-        scale = 1.0
-        if max(g.size) > DETECT_MAX:
-            scale = DETECT_MAX / float(max(g.size))
-            g = g.resize((max(1, int(g.width * scale)), max(1, int(g.height * scale))))
-        raw = g.tobytes()
-        buf = Buffer(len(raw))
-        buf.length = len(raw)
-        memoryview(buf)[:] = raw
-        bmp = SoftwareBitmap.create_copy_from_buffer(buf, BitmapPixelFormat.GRAY8, g.width, g.height)
-
-        async def _go():
-            global _detector
-            if _detector is None:
-                _detector = await FaceDetector.create_async()
-            return await _detector.detect_faces_async(bmp)
-        res = asyncio.run(_go())                         # 배경 스레드(돌고 있는 이벤트 루프 없음)
-        _errors = 0
-        return [(f.face_box.x / scale, f.face_box.y / scale, f.face_box.width / scale, f.face_box.height / scale) for f in res]
-    except Exception:                                     # 그 그림만의 일시 오류 — 이번 그림은 중요 부분으로, 연달아 많으면 끔
+    got = win_face.detect(img)
+    if got is None:
         _errors += 1
         if _errors >= ERR_MAX:
             _no_detector = True
         return []
-
+    _errors = 0
+    return got
 
 def face_box(img, boxes) -> tuple:
     """가장 큰 얼굴 → 정사각(머리 위 여백 조금) (l, t, r, b), 그림 안으로."""

@@ -49,7 +49,8 @@ OPT_KAKAO_NEW = "gsync_kakao_new"               # meta — 구글에 새로 보�
 KAKAO_MARK = "#"
 DEFAULT_ON = {k: k not in (GONE_GOOGLE, GONE_CARD, LABEL_GONE, GONE_VALUE, PHOTO_GONE) for k in KINDS}
 UNLINK_IF_KEPT = (GONE_GOOGLE, GONE_CARD, MERGED_GOOGLE, GOOGLE_EXTRA)   # 체크하지 않으면(남김) 짝만 풀림(§5.29 '지운 것', 261120-62)    # 지워짐은 기본 '남김'(§5.29 '지운 것'), 합쳐져 남음은 켬(사용자 결정 261121)
-GOOGLE_WRITES = (NEW_GOOGLE, TO_GOOGLE, GONE_CARD, MERGED_GOOGLE, KAKAO_UP, KAKAO_FIX, PHOTO_UP, DRIVE_UP, LABELS, LABEL_GONE, PHOTO_GONE)
+GOOGLE_WRITES = (NEW_GOOGLE, TO_GOOGLE, GONE_CARD, MERGED_GOOGLE, GOOGLE_EXTRA, KAKAO_UP, KAKAO_FIX, PHOTO_UP, DRIVE_UP, LABELS, LABEL_GONE,
+                 PHOTO_GONE)   # 구글 쪽을 바꾸는 갈래 — 미리보기의 백업 권함(261122-18: 구글에만 있음 지우기도)
 
 
 def photo_gone_ids(store) -> set:
@@ -71,7 +72,7 @@ def row_default(r: dict) -> bool:
 
 _G2C = {"mobile": "cell", "workFax": "fax", "homeFax": "fax", "otherFax": "fax"}
 _C2G = {"cell": "mobile", "fax": "workFax", "work": "work"}
-GOOGLE_ONLY_KEY = "gsync_google_only"            # meta — '지워짐' 을 남긴 구글 연락처(구글에만 둠) — 다시 '가져옴' 으로 내지 않음(261122-8)
+GOOGLE_ONLY_KEY = "gsync_google_only"            # meta — '명함에서 지워짐'·'합쳐져 남음'·'구글에만 있음(명함 기준)' 을 남긴 구글 연락처(구글에만 둠) — 다시 '가져옴' 으로 내지 않음, [연결 끊기] 때 지움(261122-8·-11·-17)
 
 
 def _rt_kind(k) -> str:

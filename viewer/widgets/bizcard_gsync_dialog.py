@@ -188,7 +188,8 @@ class GSyncDialog(QDialog):
         v = QVBoxLayout(self)
         self._card_first = False
         self.chk_card_first = QCheckBox(tr("명함 기준으로 올리기"))   # §5.29 '명함 기준으로 올리기'(261120-59)
-        self.chk_card_first.setToolTip(tr("명함 값이 이깁니다 — 구글에서 지워진 사람은 새 연락처로 다시 만들고, 구글 → 명함으로 고치거나 가져오는 줄은 만들지 않습니다"))
+        self.chk_card_first.setToolTip(tr("명함 값이 이깁니다 — 구글에서 지워진 사람은 새 연락처로 다시 만들고, 구글 → 명함으로 고치거나 가져오는 줄은 "
+                                          "만들지 않습니다. 명함에서 지운 사람·구글에만 있는 연락처는 '구글에서 지울까요' 로 처음부터 체크됩니다"))
         self.chk_card_first.toggled.connect(self._toggle_card_first)
         v.addWidget(self.chk_card_first)
         self.lbl = QLabel(tr("구글 주소록을 받는 중…"))
@@ -282,7 +283,10 @@ class GSyncDialog(QDialog):
                 top.addChild(it)
             self.tree.addTopLevelItem(top)
         total = sum(cnt.values())
-        msg = (tr("바뀔 것 {n}건 — 줄을 골라 [적용] 을 누르면 바뀝니다(지워진 것은 처음에 '남김').").format(n=total)
+        first = getattr(self, "_card_first", False)             # 명함 기준이면 지워짐·구글에만 있음이 처음부터 체크(261122-18 문구)
+        msg = ((tr("바뀔 것 {n}건 — 줄을 골라 [적용] 을 누르면 바뀝니다(명함 기준 — 명함에서 지운 사람·구글에만 있는 연락처는 처음부터 체크, "
+                   "구글에서 지웁니다).") if first else
+                tr("바뀔 것 {n}건 — 줄을 골라 [적용] 을 누르면 바뀝니다(지워진 것은 처음에 '남김').")).format(n=total)
                if total else tr("구글 주소록과 명함이 같습니다 — 바꿀 것이 없습니다."))
         if any(r["kind"] in G.GOOGLE_WRITES for r in rows):
             msg += "\n" + tr("구글 주소록이 바뀝니다 — [적용] 전에 contacts.google.com → 내보내기로 백업해 두기를 권합니다.")

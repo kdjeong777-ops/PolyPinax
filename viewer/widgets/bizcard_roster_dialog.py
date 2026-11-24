@@ -22,8 +22,8 @@ from viewer.bizcard import vcard as V
 
 ROLE = Qt.ItemDataRole.UserRole
 THUMB = 96
-VIEWS = (("all", tr_noop("전체")), ("multi", tr_noop("010 둘 이상")), ("many", tr_noop("명함 3장 이상")), ("vcf", tr_noop("vcf 비교")))
-MANY_WHY = tr_noop("명함 {n}장")               # '명함 3장 이상' 이유 칸 — 그 명단에 붙은 실제 그림 수(§5.32, 261122-14)
+VIEWS = (("all", tr_noop("전체")), ("multi", tr_noop("010 둘 이상")), ("many", tr_noop("명함 사진 2장 이상")), ("vcf", tr_noop("vcf 비교")))
+MANY_WHY = tr_noop("명함 사진 {n}장")          # '명함 사진 2장 이상' 이유 칸 — 인물 폴더의 명함 모양 그림 수(§5.32, 261122-18)
 KIND_LABEL = {RS.MERGED: tr_noop("잘못 합쳐짐?"), RS.RENAMED: tr_noop("이름 바뀜?"), RS.NEW: tr_noop("새 사람"),
               RS.SAME_NAME: tr_noop("같은 이름·번호 다름")}
 _KEEP = []
@@ -90,7 +90,7 @@ class _RosterWorker(QObject):
             else:
                 if mode == "multi":
                     cards = RS.multi_mobile(cards)
-                elif mode == "many":                      # 한 명단에 실제 그림 3장 이상(261122-14)
+                elif mode == "many":                      # 인물 폴더에 명함 모양 그림 2장 이상(261122-18)
                     many = RS.many_cards(cards, folder)
                     out["why"] = {c["id"]: n for c, n in many}
                     cards = [c for c, _n in many]
@@ -910,8 +910,9 @@ class RosterDialog(QDialog):
         # 같은 사람이 두 번 생기지 않게(261122-7) — 이 줄에서 이미 [추가] 했거나, 그 이름이고 그 010 번호를 모두 가진 명단이 이미 있으면
         st = self.fd._store()
         self._prune_added()
-        # 명단 전체는 한 번만 읽는다(종전 세 번 — 261122-11), 새 명단 id 는 가장 큰 id 로
-        if str(g["gi"]) in self.added or RS.person_resolved(g, RS.all_cards(st)):
+        # 이미 있는지는 배경 일꾼이 지난번에 판정한 대표 줄 해결(`person_resolved` → g["auto"])로 — 메인에서 명단 전체를 읽지 않는다
+        # (261122-18, 종전 261122-11 은 한 번 읽음). 새 명단 id 는 가장 큰 id 로
+        if str(g["gi"]) in self.added or g.get("auto"):
             QMessageBox.information(self, tr("명단 관리"), tr("이미 추가한 사람입니다 — 다시 추가하지 않습니다."))
             return 0
         top = st.con.execute("SELECT IFNULL(MAX(id), 0) FROM cards").fetchone()[0]

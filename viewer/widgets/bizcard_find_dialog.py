@@ -50,7 +50,8 @@ FAV_COLORS = {False: ("#cfe2f6", "#4a6f96"), True: ("#2b3a4b", "#9cc0e6")}   # �
 KINDS_FAIL_KEY = "phone_kinds_fail"             # 번호 종류 바로잡기 실패 수 — 이만큼 쌓이면 더는 저절로 하지 않음(§5.11, 261120-68)
 KINDS_FAIL_MAX = 3
 FACE_PRUNE_KEY = "faces_pruned"                 # meta — 얼굴 캐시를 정리한 때(하루 한 번, 261120-78)
-IMG_FILTER = " ".join("*" + e for e in R.IMG_EXTS + (".heic", ".heif"))   # 인물 사진은 HEIC 도(JPG 로 넣음, 261122-16)
+from viewer.photo_io import HEIF_EXTS                    # HEIC·HEIF 확장자 표(사진 SOT D5 — 한 곳)
+IMG_FILTER = " ".join("*" + e for e in tuple(R.IMG_EXTS) + tuple(HEIF_EXTS))   # 인물 사진은 HEIC 도(JPG 로 넣음, 261122-16) — 확장자 표 한 곳(사진 SOT D5)
 # 칸(키, 화면 이름) — 전화는 종류마다 첫 번호만 고친다(나머지는 그대로 둔다)
 FIELDS = (("name", tr_noop("이름")), ("company", tr_noop("회사")), ("dept", tr_noop("부서")), ("title", tr_noop("직함")), ("cell", tr_noop("휴대폰")), ("work", tr_noop("전화")),
           ("fax", tr_noop("팩스")), ("email", tr_noop("메일")), ("address", tr_noop("주소")), ("url", tr_noop("누리집")))
@@ -3620,7 +3621,6 @@ class BizcardFindDialog(QDialog):
     def _is_img(p) -> bool:
         """인물 사진으로 받을 그림 — HEIC·HEIF 도(사진 모드 책갈피창·탐색기에서 끌어 놓기, 261122-16 — 종전엔 확장자 목록에 없어
         끌기를 받지 않거나(사진 모드) 받고도 걸러 붙지 않았다(탐색기))."""
-        from viewer.photo_io import HEIF_EXTS
         return bool(p) and os.path.splitext(p)[1].lower() in tuple(R.IMG_EXTS) + tuple(HEIF_EXTS)
 
     def add_photos(self, files):

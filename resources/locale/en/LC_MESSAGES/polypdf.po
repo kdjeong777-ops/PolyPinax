@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-24 11:01+0900\n"
+"POT-Creation-Date: 2026-11-24 12:42+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -9347,9 +9347,10 @@ msgstr "Free up Google Drive space, then open Find Business Card again — the r
 msgid "명함 기준으로 올리기"
 msgstr "Upload with cards as the source"
 
+# | 않습니다"
 #: viewer/widgets/bizcard_gsync_dialog.py
-msgid "명함 값이 이깁니다 — 구글에서 지워진 사람은 새 연락처로 다시 만들고, 구글 → 명함으로 고치거나 가져오는 줄은 만들지 않습니다"
-msgstr "Card values win — people deleted in Google are created again as new contacts, and no rows are made to update or import cards from Google"
+msgid "명함 값이 이깁니다 — 구글에서 지워진 사람은 새 연락처로 다시 만들고, 구글 → 명함으로 고치거나 가져오는 줄은 만들지 않습니다. 명함에서 지운 사람·구글에만 있는 연락처는 '구글에서 지울까요' 로 처음부터 체크됩니다"
+msgstr "Card values win — people deleted in Google are created again as new contacts, and no rows are made that fix or import from Google into cards. People deleted from cards and contacts that exist only in Google are checked from the start under 'delete from Google?'"
 
 #: viewer/widgets/bizcard_gsync_dialog.py
 msgid "구글 주소록을 받는 중…"
@@ -9376,11 +9377,6 @@ msgstr "(no name)"
 
 #: viewer/widgets/bizcard_gsync_dialog.py
 #, python-brace-format
-msgid "바뀔 것 {n}건 — 줄을 골라 [적용] 을 누르면 바뀝니다(지워진 것은 처음에 '남김')."
-msgstr "{n} changes — choose rows and press [Apply] (deletions start as 'keep')."
-
-#: viewer/widgets/bizcard_gsync_dialog.py
-#, python-brace-format
 msgid "남은 {n}건은 다음에 명함찾기를 열 때 이어서 올립니다."
 msgstr "The remaining {n} will continue the next time Find Business Card opens."
 
@@ -9400,6 +9396,16 @@ msgstr "with the new contact"
 #: viewer/widgets/bizcard_gsync_dialog.py
 msgid "지난번 못 올림"
 msgstr "failed last time"
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+#, python-brace-format
+msgid "바뀔 것 {n}건 — 줄을 골라 [적용] 을 누르면 바뀝니다(명함 기준 — 명함에서 지운 사람·구글에만 있는 연락처는 처음부터 체크, 구글에서 지웁니다)."
+msgstr "{n} changes — select rows and press [Apply] (cards first — people deleted from cards and contacts only in Google are checked from the start and will be deleted from Google)."
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+#, python-brace-format
+msgid "바뀔 것 {n}건 — 줄을 골라 [적용] 을 누르면 바뀝니다(지워진 것은 처음에 '남김')."
+msgstr "{n} changes — choose rows and press [Apply] (deletions start as 'keep')."
 
 #: viewer/widgets/bizcard_gsync_dialog.py
 msgid "# 붙임"
@@ -9849,8 +9855,8 @@ msgstr "Could not add {n} portrait photo(s)."
 
 #: viewer/widgets/bizcard_roster_dialog.py
 #, python-brace-format
-msgid "명함 {n}장"
-msgstr "{n} card images"
+msgid "명함 사진 {n}장"
+msgstr "{n} card-like photos"
 
 #: viewer/widgets/bizcard_roster_dialog.py
 msgid "잘못 합쳐짐?"
@@ -9873,8 +9879,8 @@ msgid "010 둘 이상"
 msgstr "Two or more 010"
 
 #: viewer/widgets/bizcard_roster_dialog.py
-msgid "명함 3장 이상"
-msgstr "3 or more cards"
+msgid "명함 사진 2장 이상"
+msgstr "2 or more card-like photos"
 
 #: viewer/widgets/bizcard_roster_dialog.py
 msgid "vcf 비교"
@@ -19555,4 +19561,7 @@ msgstr "Getting Started"
 
 #~ msgid "나누지 못했습니다({err})."
 #~ msgstr "Couldn't split ({err})."
+
+#~ msgid "명함 {n}장"
+#~ msgstr "{n} card images"
 

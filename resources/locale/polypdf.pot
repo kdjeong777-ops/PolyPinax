@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-11-24 11:01+0900\n"
+"POT-Creation-Date: 2026-11-24 12:42+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -9088,7 +9088,7 @@ msgid "명함 기준으로 올리기"
 msgstr ""
 
 #: viewer/widgets/bizcard_gsync_dialog.py
-msgid "명함 값이 이깁니다 — 구글에서 지워진 사람은 새 연락처로 다시 만들고, 구글 → 명함으로 고치거나 가져오는 줄은 만들지 않습니다"
+msgid "명함 값이 이깁니다 — 구글에서 지워진 사람은 새 연락처로 다시 만들고, 구글 → 명함으로 고치거나 가져오는 줄은 만들지 않습니다. 명함에서 지운 사람·구글에만 있는 연락처는 '구글에서 지울까요' 로 처음부터 체크됩니다"
 msgstr ""
 
 #: viewer/widgets/bizcard_gsync_dialog.py
@@ -9116,11 +9116,6 @@ msgstr ""
 
 #: viewer/widgets/bizcard_gsync_dialog.py
 #, python-brace-format
-msgid "바뀔 것 {n}건 — 줄을 골라 [적용] 을 누르면 바뀝니다(지워진 것은 처음에 '남김')."
-msgstr ""
-
-#: viewer/widgets/bizcard_gsync_dialog.py
-#, python-brace-format
 msgid "남은 {n}건은 다음에 명함찾기를 열 때 이어서 올립니다."
 msgstr ""
 
@@ -9139,6 +9134,16 @@ msgstr ""
 
 #: viewer/widgets/bizcard_gsync_dialog.py
 msgid "지난번 못 올림"
+msgstr ""
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+#, python-brace-format
+msgid "바뀔 것 {n}건 — 줄을 골라 [적용] 을 누르면 바뀝니다(명함 기준 — 명함에서 지운 사람·구글에만 있는 연락처는 처음부터 체크, 구글에서 지웁니다)."
+msgstr ""
+
+#: viewer/widgets/bizcard_gsync_dialog.py
+#, python-brace-format
+msgid "바뀔 것 {n}건 — 줄을 골라 [적용] 을 누르면 바뀝니다(지워진 것은 처음에 '남김')."
 msgstr ""
 
 #: viewer/widgets/bizcard_gsync_dialog.py
@@ -9587,7 +9592,7 @@ msgstr ""
 
 #: viewer/widgets/bizcard_roster_dialog.py
 #, python-brace-format
-msgid "명함 {n}장"
+msgid "명함 사진 {n}장"
 msgstr ""
 
 #: viewer/widgets/bizcard_roster_dialog.py
@@ -9611,7 +9616,7 @@ msgid "010 둘 이상"
 msgstr ""
 
 #: viewer/widgets/bizcard_roster_dialog.py
-msgid "명함 3장 이상"
+msgid "명함 사진 2장 이상"
 msgstr ""
 
 #: viewer/widgets/bizcard_roster_dialog.py

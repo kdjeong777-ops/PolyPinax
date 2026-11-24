@@ -22,45 +22,52 @@ def multi_mobile(cards) -> list:
     return [c for c in cards if len(P.mobiles_010(c)) >= 2]
 
 
-MANY_MIN = 3                 # '명함 3장 이상'(§5.32, 261122-14)
+MANY_MIN = 2                 # '명함 사진 2장 이상'(§5.32, 261122-18 — 종전 261122-14 '명함 3장 이상')
+CARD_RATIO = 1.3             # 명함 모양 — 가로가 세로의 이 배 이상인 넓은 그림(얼굴 사진은 세로·정사각)
 
 
 def card_images(cards, folder: str = "") -> dict:
-    """명단 하나에 붙은 실제 그림 수 {id: 장 수} — 명단 관리 오른쪽 그림 줄과 같은 것: 정리본 앞면·뒷면(파일이 있는 것) +
-    인물 폴더의 `<정리본 이름>.jpg`·` (n)` 들(`people.person_photos` 꼴). 폴더마다 한 번만 읽는다(명함마다 파일을 찾지 않게)."""
+    """명단마다 인물 폴더에 든 **명함 모양 그림** 수 {id: 장 수} — 인물 폴더의 `<정리본 이름>.jpg`·` (n)` 가운데 보이는 방향으로
+    가로/세로 ≥ CARD_RATIO 인 것(잘못 들어간 명함 그림 — 얼굴 사진은 세지 않음), 정리본 앞·뒷면은 세지 않는다(사용자 결정 261122-18).
+    폴더마다 한 번만 읽는다(이름 목록과 그 소문자 집합을 폴더당 한 번). 배경에서 부른다(그림 머리만 읽음 — `photo_io.oriented_size`)."""
     import os
     import re
     from pathlib import Path
-    from viewer.bizcard.vcard import is_contact
     from viewer.bizcard.recognize import IMG_EXTS
+    from viewer import photo_io
+    exts = tuple(IMG_EXTS) + tuple(photo_io.HEIF_EXTS)
     lists = {}
 
     def names(d):
         d = os.path.normcase(os.path.abspath(str(d)))
         if d not in lists:
             try:
-                lists[d] = [n for n in os.listdir(d)]
+                lists[d] = [n for n in os.listdir(d) if os.path.splitext(n)[1].lower() in exts]
             except OSError:
                 lists[d] = []
-        return lists[d]
+        return d, lists[d]
+
+    def wide(path):
+        try:
+            w, h = photo_io.oriented_size(path)
+            return h > 0 and w / float(h) >= CARD_RATIO
+        except Exception:
+            return False
     out = {}
     for c in cards:
         n = 0
-        if not is_contact(c):
-            for f in (c.get("front"), c.get("back")):
-                if f and os.path.normcase(os.path.basename(str(f))) in {os.path.normcase(x) for x in names(os.path.dirname(os.path.abspath(str(f))))}:
-                    n += 1
         pf = P.photo_front(c, folder)
         if pf:
+            d, ns = names(P.people_dir(pf))
             pat = re.compile(r"^%s( \(\d+\))?$" % re.escape(Path(pf).stem), re.I)
-            n += sum(1 for x in names(P.people_dir(pf)) if os.path.splitext(x)[1].lower() in IMG_EXTS and pat.match(os.path.splitext(x)[0]))
+            n = sum(1 for x in ns if pat.match(os.path.splitext(x)[0]) and wide(os.path.join(d, x)))
         out[c["id"]] = n
     return out
 
 
 def many_cards(cards, folder: str = "", least: int = MANY_MIN) -> list:
-    """한 명단에 실제 그림(앞·뒷면 + 인물 사진)이 least 장 이상 붙은 것만(§5.32 '명함 3장 이상', 261122-14 — 앞·뒤로 최대 2장인데
-    잘못 붙은 것을 찾으려고. 종전 261122-5 는 이름·010 이 같은 명단 수를 셌다 — 뜻이 달랐다). 반환 [(명단, 장 수)] — 많은 차례, 같으면 이름."""
+    """인물 폴더에 명함 모양 그림이 least 장 이상 든 명단만(§5.32 '명함 사진 2장 이상', 261122-18 — 앞·뒤로 최대 2장인 명함 그림이
+    인물 사진 자리에 잘못 들어간 것을 찾으려고). 반환 [(명단, 장 수)] — 많은 차례, 같으면 이름."""
     cnt = card_images(cards, folder)
     hits = [(c, cnt.get(c["id"], 0)) for c in cards if cnt.get(c["id"], 0) >= least]
     return sorted(hits, key=lambda x: (-x[1], str(x[0].get("name") or ""), x[0]["id"]))

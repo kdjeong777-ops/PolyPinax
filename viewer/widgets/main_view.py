@@ -1593,8 +1593,8 @@ class _PdfGraphicsView(QGraphicsView):
             ownr.finish_image_crop(k != Qt.Key.Key_Escape)
             event.accept()
             return
-        if k == Qt.Key.Key_Escape and ownr is not None and getattr(ownr, "_draw_kind", None) == "stamp":
-            ownr._toggle_stamp()
+        if k == Qt.Key.Key_Escape and ownr is not None and getattr(ownr, "_draw_kind", None) in ("stamp", "check"):
+            ownr._toggle_stamp() if ownr._draw_kind == "stamp" else ownr._toggle_check()
             event.accept()
             return
         # 261116-19(마스터 §4.6.3): 개체 선택에서 두 번 눌러 들어간 도형 편집 — Esc = 개체 선택으로
@@ -1844,6 +1844,7 @@ class MainView(QWidget):
     signRegionSelected = pyqtSignal(object)      # 261010-21(보안 SOT §3.3): 서명 자리(scene QRectF)
     stampRegionSelected = pyqtSignal(object)     # 261101-3(마스터 §4.6.11): 등록할 PDF 영역(scene QRectF)
     imageMenuRequested = pyqtSignal(str)         # 261101-3: 이미지 ▾ — "file"·"clip"·"region"·"manage"
+    formCheckRequested = pyqtSignal(object, bool)  # 261128-13(편집 꾸밈 SOT §4.6.14): 체크 도구로 서식 체크박스 — (열쇠, 켬)
     drawSettingsRequested = pyqtSignal(str)      # 261116-8(마스터 §4.6.10): 글쓰기·도형 ▾ 끝 '입력 설정' — "text"·"line"(그 탭으로)
     signPanelRequested = pyqtSignal()            # 261010-21(보안 SOT §5): 검증 띠의 [서명 패널]
     signEditRequested = pyqtSignal()             # 261012-1(보안 SOT §3.10): 검증 띠의 [서명 편집]
@@ -4040,6 +4041,7 @@ class MainView(QWidget):
             if b is not None:
                 b.setIcon(_ti(name, dark=dark, size=16))
         self._update_image_button()            # 261101-3: 이미지 단추(테마 단색)
+        self._update_check_button()            # 261128-13(편집 꾸밈 SOT §4.6.14): 체크 단추
         self._update_draw_buttons()            # 261111-11(커밋 이름 261111-9 보완): 켜진 손바닥은 주황 바탕용 어두운 그림
 
     def set_rotations(self, rotations):
@@ -4112,7 +4114,19 @@ class MainView(QWidget):
         self._image_menu.aboutToShow.connect(self._rebuild_image_menu)
         self._image_btn.setMenu(self._image_menu)
         hb.addWidget(self._image_btn)
-        hb.addWidget(self.btn_sign)                  # 261128-12: 전자서명 = 이미지 넣기 바로 오른쪽(무엇을 더하는 단추끼리)
+        # 261128-13(편집 꾸밈 SOT §4.6.14, 사용자 지시 '꾸미기에 체크 버튼 … 서명버튼 좌측'): 체크 — 클릭=체크 도구 켜기/끄기,
+        #   ▾=모양(✓ ● ✕ ○)·크기. 양식 칸을 누르면 칸에 맞추고, 서식 체크박스면 그 필드를 켠다
+        self._check_btn = _DblTool()
+        self._check_btn.setFixedSize(self.IMAGE_BTN_W, H)
+        self._check_btn.setToolTip(tr("체크 — 클릭: 누른 칸(□)에 체크 표시(칸이 없으면 기본 크기)·서식 체크박스는 그 필드를 켬, ▾: 모양·크기"))
+        self._check_btn.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
+        self._check_btn.singleClick.connect(self._toggle_check)
+        self._check_menu = _QMenu(self._check_btn)
+        self._check_menu.aboutToShow.connect(self._rebuild_check_menu)
+        self._check_btn.setMenu(self._check_menu)
+        hb.addWidget(self._check_btn)
+        self._update_check_button()
+        hb.addWidget(self.btn_sign)                  # 261128-12: 전자서명 = 이미지 넣기 오른쪽(무엇을 더하는 단추끼리) — 사이에 체크
         # 260611-16: 개체선택 버튼(선 종류 버튼 오른쪽) — 눌러서 이미지 선택/이동/수정
         # 260908-4(사용자 요청): 글리프 `⤢` → 그림 아이콘(점선 상자 + 화살표).
         #   무엇을 하는 단추인지 글자보다 그림이 빨리 읽힌다(디자인 SOT §2).
@@ -4366,6 +4380,7 @@ class MainView(QWidget):
         self._update_shape_button()
         self._update_text_button()
         self._update_image_button()
+        self._update_check_button()
 
     def _apply_tool(self):
         if self._crop_edit is not None:          # 261116-24(§4.6.11 '크롭'): 다른 도구를 고르면 틀을 먼저 적용
@@ -4391,6 +4406,8 @@ class MainView(QWidget):
             tool = ("select", None)
         elif k == "stamp":
             tool = ("stamp", self._stamp_id)
+        elif k == "check":
+            tool = ("check", self._check_kind)       # 261128-13(§4.6.14)
         elif k == "pan":
             tool = ("pan", None)                 # 261107-36(입력 SOT §4.1)
         elif k == "text":
@@ -7010,6 +7027,137 @@ class MainView(QWidget):
             return None
         return pr.width() / z, pr.height() / z
 
+    # ===== 261128-13(편집 꾸밈 SOT §4.6.14): 체크 — 양식 칸 맞춤 표시·서식 체크박스 =====
+    _check_kind = "v"
+    _check_mm = 4.0
+
+    def _update_check_button(self):
+        if not hasattr(self, "_check_btn"):
+            return
+        from viewer.widgets.icons import themed_icon
+        on = getattr(self, "_draw_kind", None) == "check"     # 만들 때는 도구 값이 아직 없다
+        self._check_btn.setIcon(themed_icon("check_box", dark=(False if on else None), size=18, pad_right=10, dpr=2.0))
+        self._check_btn.setIconSize(QSize(28, 18))
+        self._check_btn.setStyleSheet(self._dbl_css(on))
+
+    def _toggle_check(self):
+        """클릭 = 체크 도구 켜기/끄기(켜진 채 여러 칸을 잇달아 누른다 — 등록 이미지 '반복 찍기' 와 같다, Esc 로 끔)."""
+        self._commit_text_editor()
+        self._draw_kind = None if self._draw_kind == "check" else "check"
+        self._stroke_selected = -1
+        self._apply_tool()
+
+    def pick_check(self, kind=None, mm=None):
+        """▾ 에서 모양·크기를 고르면 그것으로 도구를 켠다(§4.6.10 과 같다)."""
+        from viewer import check_mark
+        if kind in check_mark.KINDS:
+            self._check_kind = kind
+        if mm:
+            self._check_mm = float(mm)
+        self._commit_text_editor()
+        self._draw_kind = "check"
+        self._stroke_selected = -1
+        self._apply_tool()
+
+    def _rebuild_check_menu(self):
+        from viewer import check_mark
+        m = self._check_menu
+        m.clear()
+        from viewer.widgets.icons import fg_color
+        ink = QColor(fg_color())
+        for k in check_mark.KINDS:
+            pm = QPixmap()
+            pm.loadFromData(check_mark.render(k, 16, (ink.redF(), ink.greenF(), ink.blueF()))["png"], "PNG")
+            a = m.addAction(QIcon(pm), tr(check_mark.KIND_LABEL[k]))     # 그림 = 그 모양(디자인 SOT §4.8 — 글리프 금지)
+            a.setData(k)
+            a.setCheckable(True)
+            a.setChecked(k == self._check_kind)
+            a.triggered.connect(lambda _=False, kk=k: self.pick_check(kind=kk))
+        m.addSeparator()
+        for mm, name in zip(check_mark.SIZES_MM, (tr("작게"), tr("보통"), tr("크게"))):
+            a = m.addAction(tr("{name} ({mm} mm) — 칸이 없을 때").format(name=name, mm=f"{mm:g}"))
+            a.setCheckable(True)
+            a.setChecked(abs(mm - self._check_mm) < 1e-6)
+            a.triggered.connect(lambda _=False, v=mm: self.pick_check(mm=v))
+
+    def _check_event(self, t, ev, pr):
+        """체크 도구 — 누르면 그 자리에(넣은 그림 위면 None — 종전 사진 조작으로 옮기기·크기)."""
+        from PyQt6.QtCore import QEvent
+        if t == QEvent.Type.MouseButtonPress and ev.button() == Qt.MouseButton.LeftButton:
+            pos = ev.position().toPoint()
+            if self._img_hit(pos, pr)[0] >= 0:
+                return None
+            try:
+                self.activated.emit()
+            except Exception:
+                pass
+            W, H = max(1.0, pr.width()), max(1.0, pr.height())
+            self._check_press = True
+            self.view.setFocus()
+            self.place_check((pos.x() - pr.left()) / W, (pos.y() - pr.top()) / H)
+            return True
+        if getattr(self, "_check_press", False) and t in (QEvent.Type.MouseMove, QEvent.Type.MouseButtonRelease):
+            if t == QEvent.Type.MouseButtonRelease:
+                self._check_press = False
+            return True
+        return None
+
+    def _check_pdf_point(self, fx: float, fy: float):
+        """보이는 쪽 비율 → (fitz 쪽, PDF 쪽 좌표 점) — 저장 전 회전이 걸린 쪽은 (쪽, None)(칸·서식 찾기를 건너뛴다)."""
+        import fitz
+        cur = int(self._current_page)
+        page = self._doc.doc[cur]
+        if (getattr(self, "_rotations", {}) or {}).get(cur, 0) % 360:
+            return page, None
+        r = page.rect
+        return page, fitz.Point(r.x0 + fx * r.width, r.y0 + fy * r.height) * page.derotation_matrix
+
+    def place_check(self, fx: float, fy: float) -> bool:
+        """누른 자리(보이는 쪽 비율 fx, fy) — 서식 체크박스면 그 필드를 켜거나 끄고(`formCheckRequested`),
+        그린 칸(□)이면 칸 가운데에 칸의 `BOX_FIT`, 아니면 누른 자리 가운데에 `_check_mm` 크기로 체크 표시(사진 꾸밈)."""
+        import base64
+        import fitz
+        from viewer import check_mark, form_fill
+        if self._is_image or self._doc is None:
+            return False
+        sz = self.page_size_pt()
+        if sz is None:
+            return False
+        pw, ph = sz
+        try:
+            page, pt = self._check_pdf_point(fx, fy)
+        except Exception:
+            page, pt = None, None
+        cx, cy, size = fx * pw, fy * ph, self._check_mm * check_mark.PT_PER_MM
+        if page is not None and pt is not None:
+            hit = form_fill.toggle_at(page, pt.x, pt.y)
+            if hit is not None:
+                self.formCheckRequested.emit(hit[0], not hit[1])
+                return True
+            box = check_mark.find_box(page, pt.x, pt.y)
+            if box is not None:
+                rr = fitz.Rect(box) * page.rotation_matrix
+                rr.normalize()
+                cx, cy = rr.x0 + rr.width / 2.0 - page.rect.x0, rr.y0 + rr.height / 2.0 - page.rect.y0
+                size = min(rr.width, rr.height) * check_mark.BOX_FIT
+        col = QColor(self._active_pen().get("color", "#000000")) if self._pen_idx is not None else QColor("#000000")
+        c = check_mark.render(self._check_kind, size, (col.redF(), col.greenF(), col.blueF()))
+        pix = QPixmap()
+        pix.loadFromData(c["png"], "PNG")
+        self._img_objects.append({"pix": pix, "data": base64.b64encode(c["png"]).decode("ascii"),
+                                  "rect": check_mark.place_rect(cx, cy, size, pw, ph), "shape": "rect", "alpha": 100,
+                                  "rot": 0.0, "extra": {"check": self._check_kind,
+                                                        "pdf": base64.b64encode(c["pdf"]).decode("ascii")}})
+        self._img_selected = len(self._img_objects) - 1
+        self._save_page_images()
+        if self._draw_overlay is not None:
+            self._draw_overlay.update()
+        try:
+            self.activated.emit()
+        except Exception:
+            pass
+        return True
+
     def place_stamp(self, sid: str, fx: float, fy: float, box=None) -> bool:
         """누른 자리(쪽 비율 fx, fy)가 왼쪽 위인 **실제 크기**로, `box`(쪽 비율 [x, y, w, h])면 그 안에 비율대로."""
         from viewer import stamp_core, stamp_store
@@ -7144,6 +7292,10 @@ class MainView(QWidget):
                             return r
                     if self._draw_kind == "stamp":          # 261101-3(§4.6.11): 등록 이미지 넣기가 먼저
                         r = self._stamp_event(t, ev, pr)
+                        if r is not None:
+                            return r
+                    if self._draw_kind == "check":          # 261128-13(§4.6.14): 체크 표시·서식 체크박스
+                        r = self._check_event(t, ev, pr)
                         if r is not None:
                             return r
                     # 261116-9(사용자 지시 '개체선택 … 2번 클릭시 편집모드로'): 글상자·지시선은 글 고치기, 도형은 크기·회전 손잡이

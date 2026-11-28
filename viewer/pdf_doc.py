@@ -242,6 +242,18 @@ class PdfDocument:
             self._cache_tag += "|crop%d" % _pc.version(self.path)
         except Exception:
             pass
+        self.apply_form_pending()
+
+    def apply_form_pending(self) -> None:
+        """261128-13(편집 꾸밈 SOT §4.6.14): 저장 안 한 서식 체크박스 값을 연 문서(메모리)에 덧입히고 그림 캐시 꼬리표를 바꾼다
+        — 열 때와 체크 도구로 바꿀 때. 파일은 [저장] 때만(`form_fill.write_fields`)."""
+        try:
+            from viewer import form_fill as _ff
+            if _ff.has_pending(self.path):
+                _ff.apply_pending(self.doc, self.path)
+            self._cache_tag = self._cache_tag.split("|ff")[0] + "|ff%d" % _ff.version(self.path)
+        except Exception:
+            pass
 
     @property
     def needs_password(self) -> bool:

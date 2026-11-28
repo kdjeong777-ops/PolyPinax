@@ -1590,6 +1590,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             lambda d, i=idx: self._on_file_boundary(d, i))
         mv.cropRequested.connect(lambda i=idx: self._open_crop_dialog(view=self._mv[i]))   # 261010-7(§4.7.15)
         mv.signRequested.connect(lambda i=idx: (self._set_active_pane(i), self.action_sign_pdf()))      # 보안 SOT §3
+        mv.formCheckRequested.connect(lambda key, on, i=idx: self._on_form_check(self._mv[i], key, on))   # 261128-13(편집 꾸밈 SOT §4.6.14)
         mv.pageDeleteRequested.connect(lambda i=idx: (self._set_active_pane(i), self._delete_current_page()))   # 261017-1(입력 SOT §3)
         mv.signRegionSelected.connect(lambda r, i=idx: self._on_sign_region(r, view=self._mv[i]))  # 보안 SOT §3.3
         mv.signPanelRequested.connect(lambda i=idx: self._on_sign_panel(view=self._mv[i]))         # 보안 SOT §5
@@ -1614,6 +1615,32 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self.search_results = SearchResults()
         v.addWidget(self.search_results, 1)
         return wrap
+
+    def _on_form_check(self, mv, key, on: bool) -> None:
+        """261128-13(편집 꾸밈 SOT §4.6.14, 사용자 결정 '그 필드를 켜기'): 체크 도구로 누른 서식 체크박스·라디오 단추 —
+        보류에 넣고(`form_fill`) 연 문서에 덧입혀 다시 그린다. 파일은 편집 모드 [저장] 때(문서 정보 고침과 같은 길).
+        서명된 PDF 는 바꾸지 않는다 — 서식 값을 바꾸면 서명이 깨진다(보안 SOT §4)."""
+        from viewer import form_fill
+        doc = getattr(mv, "_doc", None)
+        path = getattr(doc, "path", None)
+        if doc is None or path is None:
+            return
+        try:
+            from viewer import sign_core
+            if sign_core.doc_is_signed(doc.doc):
+                self.status.showMessage(tr("서명된 PDF 라 서식 체크박스를 바꾸지 않습니다 — 서명이 깨집니다."), 6000)
+                return
+        except Exception:
+            pass
+        form_fill.set_pending(str(path), key, bool(on))
+        form_fill.apply_fields(doc.doc, {tuple(key): bool(on)})
+        doc.apply_form_pending()
+        try:
+            mv._render_current()
+        except Exception:
+            pass
+        self.status.showMessage((tr("서식 체크박스를 켰습니다 — [저장] 때 PDF 에 들어갑니다.") if on
+                                 else tr("서식 체크박스를 껐습니다 — [저장] 때 PDF 에 들어갑니다.")), 5000)
 
     def _build_right_panel(self) -> QWidget:
         """v1.6.2: 우측 패널 = 검색 영역(상) + 스크린샷 스트립(하) 세로 분할."""
@@ -2908,6 +2935,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             _bt.set_shown_file_getter(lambda b=_bt: self._mv[getattr(b, "_pane_idx", 0)].current_file())
         # 260611-9: 편집 취소 → 숨김/회전/선긋기/하이퍼링크도 스냅샷으로 되돌리기
         self.bookmark_tree.editCancelled.connect(self._on_edit_cancelled)
+        # 261128-13(편집 꾸밈 SOT §4.6.14): 편집 모드를 끌 때 버린 서식 체크박스 — 그 파일을 연 창은 다시 열어 파일 값으로
+        self.bookmark_tree._form_discard_fn = self._reload_if_current
         # v1.6.20 K5: 메인 페이지로 책갈피 추가
         # 261019-3(마스터 §4.7.21, 사용자 지시): 두 책갈피창 모두 — 만든 책갈피는 **그 창**에, 같은 파일이면 다른 창도 따라간다
         for _bt in (self.bookmark_tree, self.bookmark_tree_right):
@@ -3771,6 +3800,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 page_crop.relocate(old, new)
                 from viewer import doc_meta                  # 261107-31(§4.12): 저장 안 한 문서 정보 고침도
                 doc_meta.relocate(old, new)
+                from viewer import form_fill as _ffr        # 261128-13(편집 꾸밈 SOT §4.6.14): 저장 안 한 서식 체크박스도
+                _ffr.relocate(old, new)
             except Exception:
                 pass
         # 메인 뷰어가 옮겨진 파일을 보고 있었으면 새 경로로 재로드
@@ -5445,6 +5476,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
 
         from viewer import doc_meta as _dm
         meta_fields = _dm.pending(src)             # 261107-31(§4.12): 문서 정보 고침(보류)도 같은 임시 파일에
+        from viewer import form_fill as _ff
+        form_fields = _ff.pending(src)  # 261128-13(편집 꾸밈 SOT §4.6.14): 서식 체크박스도
 
         def _job(progress):
             try:
@@ -5454,6 +5487,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 raise MergeCancelled()
             if meta_fields:
                 _dm.write_info(built["path"], meta_fields, source=src)
+            if form_fields:
+                _ff.write_fields(built["path"], form_fields, source=src)
         # 261014-1(§4.7.5): 저장 뒤에도 **보던 쪽**에 남는다 — 새 파일에서 그 쪽은 썸네일 순서의 자리다.
         try:
             _nav = pt.current_nav_ids()
@@ -5490,6 +5525,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         _pcr.clear_pending(src)                    # 썼으니 덧입히기 끝(새 이름이면 원본은 그대로 남는다)
         if meta_fields:
             _dm.clear_pending(src)                 # 261107-31: 문서 정보 고침도 들어갔다
+        if form_fields:
+            _ff.clear_pending(src)                 # 261128-13: 서식 체크박스도 들어갔다
         if rots:                                   # 261011-2: 회전도 PDF 에 들어갔다 — 두 번 돌지 않게 비운다
             try:
                 st = self._ensure_page_meta_store()
@@ -5724,6 +5761,13 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             pass
         self.status.showMessage(tr("쪽 나누기 {n}쪽 → {m}쪽(미저장) — [저장] 을 누르면 PDF 에 들어갑니다(취소하면 되돌립니다).")
                                 .format(n=len(parts_by_page), m=n_parts), 8000)
+
+    def _reload_if_current(self, paths) -> None:
+        """261128-13(편집 꾸밈 SOT §4.6.14): 본문에 연 파일이 `paths` 가운데 있으면 다시 연다(버린 서식 체크박스 — 파일 값으로)."""
+        from viewer.pathutil import norm_key
+        cur = self.main_view.current_file() if self.main_view else None
+        if cur and norm_key(str(cur)) in {norm_key(str(p)) for p in paths}:
+            self._crop_reload(cur)
 
     def _crop_reload(self, path, page=None):
         """저장 전 크롭이 바뀐 뒤 본문·썸네일을 다시 연다 — `PdfDocument` 가 열 때 덧입힌다."""
@@ -12183,7 +12227,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         except Exception:
             bm_dirty = False
         from viewer import doc_meta as _dm               # 261107-31(§4.12): 저장 안 한 문서 정보 고침도 센다
-        info_dirty = _dm.has_pending()
+        from viewer import form_fill as _ff
+        info_dirty = _dm.has_pending() or _ff.has_pending()  # 261128-13(편집 꾸밈 SOT §4.6.14): 서식 체크박스도
         if not (meta_dirty or bm_dirty or info_dirty):
             return True
 
@@ -12219,6 +12264,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         # '저장 안 하고 종료' = 보류 중 변경을 커밋하지 않은 채 종료(자동 폐기)
         self._edit_dirty = False
         _dm.clear_pending()
+        _ff.clear_pending()
         return True
 
     # ===== 260618-11: 업데이트(GitHub Releases) =========================

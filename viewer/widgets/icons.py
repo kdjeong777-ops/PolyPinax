@@ -470,6 +470,14 @@ def _undo(p, c):
     p.drawPolyline(QPolygonF([QPointF(6.4, 3.4), QPointF(3.4, 6.4), QPointF(6.4, 9.4)]))
 
 
+def _check_box(p, c):
+    """꾸미기 체크(261128-13, 편집 꾸밈 SOT §4.6.14) — 둥근 네모 칸 + 칸 밖으로 뻗는 체크."""
+    _pen(p, c, 1.4)
+    p.drawRoundedRect(QRectF(1.6, 3.2, 10.6, 10.6), 1.6, 1.6)
+    _pen(p, c, 1.8)
+    p.drawPolyline(QPolygonF([QPointF(4.2, 8.4), QPointF(6.8, 11.0), QPointF(14.4, 2.2)]))
+
+
 def _scale(p, c):
     """법령(⚖) — 기둥 + 가로대 + 양쪽 접시."""
     _pen(p, c, 1.4)
@@ -531,6 +539,7 @@ _DRAW = {
     "volume_up": _volume_up, "mute": _mute, "eye": _eye, "two_page": _two_page, "present": _present,
     "book": _book, "pin": _pin, "check": _check, "undo": _undo, "redo": _redo,
     "scale": _scale, "building": _building, "link": _link,
+    "check_box": _check_box,                     # 261128-13(편집 꾸밈 SOT §4.6.14): 꾸미기 체크 단추
 }
 
 

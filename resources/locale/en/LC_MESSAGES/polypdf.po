@@ -19935,3 +19935,40 @@ msgstr "Made {n} bookmarks — save with [Save] in the bookmarks panel."
 #: viewer/widgets/translate_files_dialog.py
 msgid "여기에 PDF 를 끌어다 놓으세요 (번역 목록에 추가)"
 msgstr "Drag and drop PDFs here (adds to the translation list)"
+
+#: viewer/app.py
+msgid "서식 체크박스를 켰습니다 — [저장] 때 PDF 에 들어갑니다."
+msgstr "Form checkbox checked — it goes into the PDF when you press [Save]."
+
+#: viewer/app.py
+msgid "서식 체크박스를 껐습니다 — [저장] 때 PDF 에 들어갑니다."
+msgstr "Form checkbox cleared — it goes into the PDF when you press [Save]."
+
+#: viewer/app.py
+msgid "서명된 PDF 라 서식 체크박스를 바꾸지 않습니다 — 서명이 깨집니다."
+msgstr "This PDF is signed, so form checkboxes aren't changed — it would break the signature."
+
+#: viewer/check_mark.py
+msgid "체크"
+msgstr "Check"
+
+#: viewer/check_mark.py
+msgid "꽉 찬 원"
+msgstr "Filled circle"
+
+#: viewer/check_mark.py
+msgid "가위표"
+msgstr "Cross"
+
+#: viewer/check_mark.py
+msgid "동그라미"
+msgstr "Circle"
+
+#: viewer/widgets/main_view.py
+msgid "체크 — 클릭: 누른 칸(□)에 체크 표시(칸이 없으면 기본 크기)·서식 체크박스는 그 필드를 켬, ▾: 모양·크기"
+msgstr "Check — click: mark the box (□) you click (default size if there's no box); a form checkbox gets checked. ▾: shape and size"
+
+#: viewer/widgets/main_view.py
+#, python-brace-format
+msgid "{name} ({mm} mm) — 칸이 없을 때"
+msgstr "{name} ({mm} mm) — when there's no box"

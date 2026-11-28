@@ -854,14 +854,16 @@ class PageThumbs(QWidget):
             try:
                 if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
                     return False                       # Ctrl+휠은 기본(확대 등) 유지
-                dy = event.angleDelta().y()
+                from viewer.wheel_latch import wheel_dy   # 261128-11(입력 SOT §2.12 W6): pixelDelta 만 와도
+                dy = wheel_dy(event)
                 if dy != 0:
                     # 261103-7: Windows 터치패드는 작은 값(120 의 배수가 아님)을 수십 건 보낸다 — 종전에는 건마다 한 칸이라
                     #   한 번 쓸기에 썸네일이 수십 개 지나가고, 목록 끝에서는 건마다 파일 경계를 물었다. 값을 모아 120 마다 한 칸,
                     #   작은 값 흐름의 파일 경계는 흐름이 200ms 끊길 때까지 한 번. 보통 휠 한 칸(120)은 종전 그대로.
                     import time as _t
                     now = _t.perf_counter() * 1000.0
-                    if now - self._wheel_ms > 200 or (self._wheel_acc and (dy > 0) != (self._wheel_acc > 0)):
+                    from viewer.widgets.main_view import _PdfGraphicsView as _V   # 261128-11(§2.12): 본문과 같은 상수 — 숫자를 따로 들지 않는다
+                    if now - self._wheel_ms > _V.EDGE_IDLE_MS or (self._wheel_acc and (dy > 0) != (self._wheel_acc > 0)):
                         self._wheel_acc = 0
                         self._wheel_edge_done = False
                         self._wheel_smooth = False

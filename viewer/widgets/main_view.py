@@ -169,6 +169,9 @@ def focus_widgets_in_layout(layout) -> list:
     return out
 
 
+from viewer.wheel_latch import wheel_dy as _wheel_dy   # 261128-11(입력 SOT §2.12 W6): pixelDelta 만 와도
+
+
 def _perf_ms() -> float:
     """단조 시계(ms). 260910-5: 경계에 머문 시간을 재는 데만 쓴다.
 
@@ -1413,7 +1416,7 @@ class _PdfGraphicsView(QGraphicsView):
         if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
             # 261103-7(입력 SOT §2.3 규칙 7): 값에 비례한다 — 휠 한 칸(120)이 1.15 배. Windows 터치패드의 집기는
             #   Ctrl+작은 값 수십 건으로 오는데, 종전에는 건마다 1.15 배라 한 번 집기에 수십 배가 됐다. 세로 값이 없으면(가로) 무시.
-            dy = event.angleDelta().y()
+            dy = _wheel_dy(event)
             if dy:
                 self.zoomRequested.emit(1.15 ** (dy / 120.0))
             event.accept()
@@ -1453,7 +1456,7 @@ class _PdfGraphicsView(QGraphicsView):
             #   취급돼 쪽을 넘기지 않고 반대 방향은 버려졌다(`test_wheel_fling_stuck_261102`).
             self._fling = False
 
-        _dy = event.angleDelta().y()
+        _dy = _wheel_dy(event)
         if not self._fling and _dy:
             self._user_dir = +1 if _dy < 0 else -1   # 사람이 민 방향을 기억한다
         if self._fling:
@@ -1471,7 +1474,7 @@ class _PdfGraphicsView(QGraphicsView):
             return
 
         sb = self.verticalScrollBar()
-        delta = event.angleDelta().y()
+        delta = _wheel_dy(event)
         if not delta:
             super().wheelEvent(event)   # 가로 휠 등 — 쪽과 무관
             return

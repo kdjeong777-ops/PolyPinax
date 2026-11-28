@@ -19,6 +19,19 @@ LATCH_MS = 300      # 휠이 이만큼 멈추면 묶음을 푼다 — 관성 휠
 MAX_HOLD_MS = 800   # 다른 창의 휠을 처음 버린 뒤 이보다 오래는 막지 않는다 — 새 창에서 계속 굴리는 사람이 멈춰야만 풀리지 않게
 
 
+def wheel_dy(event) -> int:
+    """261128-11(입력 SOT §2.12 W6): 휠의 세로 값 — `angleDelta` 가 0 이고 `pixelDelta` 만 오면 그 값을 쓴다.
+    지금 Windows 는 늘 `angleDelta`(한 칸 120)를 주지만, Qt 판이 바뀌어 `pixelDelta` 만 오면 종전 코드는 '가로 휠' 로 보고
+    쪽을 넘기지 않았다(휠이 멈춘다). 값을 읽는 곳은 모두 이것으로."""
+    try:
+        dy = event.angleDelta().y()
+        if dy:
+            return int(dy)
+        return int(event.pixelDelta().y())
+    except Exception:
+        return 0
+
+
 def pane_of(w):
     """휠을 묶는 단위 — 가장 가까운 스크롤 영역(뷰포트면 그 주인), 없으면 그 창(최상위)."""
     cur = w

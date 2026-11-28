@@ -3801,7 +3801,7 @@ class BookmarkTree(QWidget):
         add_save_menu(
             menu,
             save={"cb": lambda f=target: self._op_save(file_path=f),
-                  "tip": tr("책갈피·쪽 편집·회전·크롭은 원본 PDF 에, 꾸밈(선·도형·글·사진)·하이퍼링크·태그는 다른 뷰어에서도 보이게 PDF 에 함께 넣습니다 — PolyPinax 에서 계속 고칠 수 있습니다(💾 와 같은 동작).")},
+                  "tip": tr("책갈피·쪽 편집·회전·크롭은 원본 PDF 에, 꾸밈(선·도형·글·사진)·하이퍼링크·태그는 다른 뷰어에서도 보이게 PDF 에 함께 넣습니다 — PolyPinax 에서 계속 고칠 수 있습니다([저장] 단추와 같은 동작).")},
             save_as={"text": self._kt(tr("다른 이름으로 저장"), "save_as"),     # 261107-20: F12 도 이 창의 지금 줄 파일(key_actions.save_as)
                      "cb": lambda f=target: self.saveAsFileRequested.emit(f),
                      "tip": tr("책갈피·꾸밈·쪽 편집을 새 파일로 — 폴더와 이름을 고릅니다(기본 <원본>_edited.pdf).")},

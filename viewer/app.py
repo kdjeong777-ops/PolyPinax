@@ -1980,7 +1980,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         a_save_as.triggered.connect(self._action_save_as)
         # 261011-2(§4.7.16): '저장(PolyPDF용)' → '저장' — 다른 뷰어에서도 보이게 PDF 에 사본을 넣는다
         a_save = self._sc_act_save = QAction(tr("저장"), self)      # 261021-5: Ctrl+S(입력 SOT §3.2)
-        a_save.setToolTip(tr("책갈피·쪽 편집·회전·크롭은 원본 PDF 에, 꾸밈(선·도형·글·사진)·하이퍼링크·태그는 다른 뷰어에서도 보이게 PDF 에 함께 넣습니다 — PolyPinax 에서 계속 고칠 수 있습니다(💾 와 같은 동작)."))
+        a_save.setToolTip(tr("책갈피·쪽 편집·회전·크롭은 원본 PDF 에, 꾸밈(선·도형·글·사진)·하이퍼링크·태그는 다른 뷰어에서도 보이게 PDF 에 함께 넣습니다 — PolyPinax 에서 계속 고칠 수 있습니다([저장] 단추와 같은 동작)."))
         a_save.triggered.connect(lambda: self.action_save())       # 261024-5: 포커스 책갈피창(Ctrl+R 과 같게)
         m_file.addAction(a_save)
         m_file.addAction(a_save_as)                 # 261031-13: 차례는 책갈피창 우클릭 저장 그룹과 같게(저장 · 다른 이름)

@@ -393,8 +393,9 @@ def _nz(s) -> str:
 def _norm(v: dict) -> dict:
     return {"name": _nz(bare_name(v.get("name"))), "company": _nz(v.get("company")), "dept": _nz(v.get("dept")),
             "title": _nz(v.get("title")), "address": _nz(v.get("address")), "memo": (v.get("memo") or "").strip(),
-            # 구글이 돌려주는 꼴과 같게 — 번호는 적을 꼴 숫자, 종류는 올렸다 받은 꼴(종전: 명함의 `+82 10…`·종류 없는 번호가
-            # 명함 기준으로 올린 뒤에도 늘 '다름' 이라 다시 싱크하면 '명함을 구글 값으로 고침' 이 나왔다 — 261122-8)
+            # 구글이 돌려주는 꼴과 같게 — 번호는 비교 숫자(`_phone_key` — 한국 번호면 국내 꼴 숫자, 구글엔 `+82 …` 로 올림 261128-18),
+            # 종류는 올렸다 받은 꼴(종전: 명함의 `+82 10…`·종류 없는 번호가 명함 기준으로 올린 뒤에도 늘 '다름' 이라
+            # 다시 싱크하면 '명함을 구글 값으로 고침' 이 나왔다 — 261122-8)
             "phones": sorted({(_rt_kind(k), _phone_key(n)) for k, n in v.get("phones") or [] if _phone_key(n)}),
             "emails": sorted({_nz(e) for e in v.get("emails") or [] if e}),
             "urls": sorted({(u or "").strip() for u in v.get("urls") or [] if u}),

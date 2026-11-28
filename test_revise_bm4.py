@@ -39,9 +39,9 @@ check("편집 조작 컨테이너 존재", hasattr(bt, "edit_ops"))
 check("비편집시 편집 조작(보기 전환 포함) 숨김", bt.edit_ops.isHidden())
 # 휴지통 아이콘 색상(이모지 변형선택자 포함)
 from PyQt6.QtWidgets import QPushButton as _QPB   # 261011-4: btn_edit 은 _SlimButton(QPushButton 의 하위)
-trash = [b for b in bt.findChildren(_QPB) if "🗑" in b.text()]
-check("휴지통 아이콘 컬러 이모지(🗑️)", any("️" in b.text() for b in trash),
-      f"texts={[b.text() for b in trash]}")
+# 261128-24: 261128-10 부터 이모지 🗑️ 대신 그린 라인 그림 `trash`(디자인 SOT §4.8 ①) — 글자에 이모지가 없고 그림이 있다
+check("휴지통 단추 = 그린 그림(이모지 없음)", not bt.btn_delete.icon().isNull() and "🗑" not in bt.btn_delete.text(),
+      f"text={bt.btn_delete.text()!r}")
 
 # 가짜 단일 PDF 트리 구성
 import fitz

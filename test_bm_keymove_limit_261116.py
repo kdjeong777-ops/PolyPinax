@@ -70,7 +70,9 @@ try:
     P = files["P"]
     notes = []
     bt.noticeRequested.connect(lambda t, ms: notes.append(t))
-    btns = {b.text(): b for b in bt._arrow_group.findChildren(QAbstractButton)}
+    # 261128-24: 261128-10 부터 단추 글은 비고 그림이 파란 꺾쇠(디자인 SOT §4.8 ②) — 그림 이름으로 찾는다
+    _SYM = {"chevron_left": "◀", "chevron_right": "▶", "chevron_up": "▲", "chevron_down": "▼"}
+    btns = {_SYM[chev]: b for b, chev in bt._arrow_btns}
 
     def find(title, node=P):
         for i in range(node.childCount()):

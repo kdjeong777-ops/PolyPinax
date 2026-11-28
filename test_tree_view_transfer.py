@@ -295,8 +295,11 @@ order = [r1.itemAt(i).widget() for i in range(r1.count())]
 chk(order[0] is bt.btn_edit_single and order[1] is bt._arrow_group,
     "⑨ 책갈피 조작 줄 = [책갈피명 수정][◀▶▲▼ 묶음](261011-4)", f"{[getattr(w, 'text', lambda: type(w).__name__)() for w in order]}")
 from PyQt6.QtWidgets import QPushButton as _QPB
-chk([b.text() for b in bt._arrow_group.findChildren(_QPB)] == ["◀", "▶", "▲", "▼"],
-    "⑨ 화살표 묶음 = ◀ ▶ ▲ ▼ (261010-9 — 줄이 갈라지지 않게 한 묶음)")
+# 261128-24: 261128-10 부터 글 대신 파란 꺾쇠 그림(디자인 SOT §4.8 ②) — 묶음 안 차례를 그림 이름으로
+_grp = bt._arrow_group.findChildren(_QPB)
+chk([c for _b, c in bt._arrow_btns] == ["chevron_left", "chevron_right", "chevron_up", "chevron_down"]
+    and [b for b, _c in bt._arrow_btns] == _grp and all(not b.icon().isNull() for b in _grp),
+    "⑨ 화살표 묶음 = ◀ ▶ ▲ ▼ 꺾쇠 (261010-9 — 줄이 갈라지지 않게 한 묶음)")
 
 # 우클릭 메뉴 라벨(편집모드): 파일엔 '책갈피 편집' 없음 / 책갈피엔 '책갈피 수정...'
 captured = {}

@@ -253,6 +253,9 @@ class TextPanel(QWidget):
         self.btn_word.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         self.btn_word.setIconSize(QSize(BTN_ICON_PX, BTN_ICON_PX))
         bind_theme_refresh(self.btn_word, lambda: self.btn_word.setIcon(file_kind_icon("DOCX", size=BTN_ICON_PX)))
+        # 261128-24: 그림을 넣은 QToolButton 은 옆 글자 단추보다 3px 높아 줄 높이가 늘고 옆 단추·체크가 위로 쏠렸다 —
+        #   옆 [PDF 에 반영] 과 같은 높이로(텍스트 창 SOT §2, 디자인 SOT §2.8.4)
+        self.btn_word.setFixedHeight(self.btn_apply.sizeHint().height())
         m = QMenu(self.btn_word)
         for key, label in (("page", tr("현재 쪽")), ("range", tr("쪽 범위…")), ("all", tr("문서 전체"))):
             a = m.addAction(label)

@@ -39,7 +39,10 @@ check("a 아래로", names() == ["b", "a", "c"], f"{names()}")
 btns = [b.text() for b in d.findChildren(QPushButton)]
 check("'스크린샷 리스트 추가' 버튼 존재", "스크린샷 리스트 추가" in btns, f"{btns}")
 check("'스크린샷 추가'(구명칭) 없음", "스크린샷 추가" not in btns)
-check("▲▼ 이동 버튼 존재", "▲" in btns and "▼" in btns)
+# 261128-24: 261128-10 부터 ▲▼ 글 대신 파란 꺾쇠 그림(디자인 SOT §4.8 ②) — 툴팁으로 찾는다
+tips = {b.toolTip(): b for b in d.findChildren(QPushButton)}
+check("▲▼ 이동 버튼 존재(그림)", all(t in tips and not tips[t].icon().isNull() and not tips[t].text()
+                                   for t in ("선택 항목 위로 이동", "선택 항목 아래로 이동")), f"{list(tips)}")
 check("삭제 버튼 존재", "삭제" in btns)
 
 print("\n=== " + ("ALL PASS" if ok else "FAILURE") + " ===")

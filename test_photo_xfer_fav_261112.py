@@ -61,8 +61,15 @@ def sub_of(menu, title):
     return None
 
 
+def _lab(x):
+    """261128-24: 261128-10 부터 즐겨찾기 줄은 글 앞 ⭐ 대신 그린 별 그림(디자인 SOT §4.8) — 그림이 있으면 '⭐ ' 로 적어 비교한다."""
+    if x.isSeparator():
+        return "─"
+    return ("⭐ " if not x.icon().isNull() else "") + x.text()
+
+
 def labels(m):
-    return [("─" if x.isSeparator() else x.text()) for x in (m.actions() if m else [])]
+    return [_lab(x) for x in (m.actions() if m else [])]
 
 
 tmp = Path(tempfile.mkdtemp(prefix="polypdf_xfer_fav_"))
@@ -112,7 +119,7 @@ try:
         "A PDF 폴더로 복사 ▸ — ⭐ 즐겨찾기 → 최근(중복 한 번) → ─ → 새 폴더 만들기", str(lab[:8]))
 
     # B
-    act = next((x for x in (sub.actions() if sub else []) if x.text() == "⭐ 즐겨 폴더"), None)
+    act = next((x for x in (sub.actions() if sub else []) if _lab(x) == "⭐ 즐겨 폴더"), None)
     if act is not None:
         act.trigger()
         pump(lambda: (fav / "가.pdf").exists(), timeout=10)
@@ -141,7 +148,7 @@ try:
     bt.tree.setCurrentItem(node(b_pdf))
     bt._on_tree_context_menu(bt.tree.visualItemRect(node(b_pdf)).center())
     sub = sub_of(seen["menu"], "폴더로 복사")
-    act = next((x for x in (sub.actions() if sub else []) if x.text() == "⭐ 없는 폴더"), None)
+    act = next((x for x in (sub.actions() if sub else []) if _lab(x) == "⭐ 없는 폴더"), None)
     warns.clear()
     if act is not None:
         act.trigger()

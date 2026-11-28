@@ -81,14 +81,23 @@ chk(bt.btn_cancel.isHidden(), "비편집 시 취소 숨김")
 bt.set_edit_mode(True)
 chk(not bt.btn_cancel.isHidden(), "편집모드 시 취소 보임")
 
-# 5) 편집 아이콘 파랑↔빨강 스왑
-chk(bt._ico_edit_blue.cacheKey() != bt._ico_edit_red.cacheKey(), "파랑/빨강 아이콘 서로 다름")
+# 5) 편집 아이콘 파랑↔빨강 스왑 — 261128-24: 261128-10 부터 PNG 가 아니라 그린 연필(accent 파랑 / stop 빨강, 디자인 SOT §4.8)
+def _hue(ic):
+    img = ic.pixmap(32, 32).toImage()
+    r = g = b = n = 0
+    for y in range(img.height()):
+        for x in range(img.width()):
+            c = img.pixelColor(x, y)
+            if c.alpha() > 128:
+                r += c.red(); g += c.green(); b += c.blue(); n += 1
+    return (r / n, g / n, b / n) if n else (0, 0, 0)
 bt.set_edit_mode(True)
-red_key = bt.btn_edit.icon().cacheKey()
+red = _hue(bt.btn_edit.icon())
 bt.set_edit_mode(False)
-blue_key = bt.btn_edit.icon().cacheKey()
-chk(red_key == bt._ico_edit_red.cacheKey(), "편집 선택 시 빨강 아이콘")
-chk(blue_key == bt._ico_edit_blue.cacheKey(), "편집 해제 시 파랑 아이콘")
+blue = _hue(bt.btn_edit.icon())
+chk(red != blue, "파랑/빨강 아이콘 서로 다름", f"{red} {blue}")
+chk(red[0] > red[2] + 40, "편집 선택 시 빨강 아이콘", str(red))
+chk(blue[2] > blue[0] + 40, "편집 해제 시 파랑 아이콘", str(blue))
 
 # 6) 취소 동작: reload_fn 호출 + dirty 해제 + editCancelled emit (확인창=Yes)
 from PyQt6.QtWidgets import QMessageBox

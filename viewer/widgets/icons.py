@@ -1040,15 +1040,25 @@ def bizcard_icon(dark: bool | None = None, size: int = 16, *, dpr: float = 2.0) 
 
 
 def themed_icon(name: str, dark: bool | None = None, size: int = 16, *,
-                pad_right: int = 0, dpr: float = 1.0) -> QIcon:
+                pad_right: int = 0, dpr: float = 1.0, accent: bool = False) -> QIcon:
     """이름으로 테마색 단색 아이콘 생성. 없는 이름이면 빈 아이콘.
 
     pad_right: 오른쪽에 둘 빈 폭(px) — 가운데 정렬 버튼에서 그림을 왼쪽으로 비킬 때
-    (도형 버튼이 ▾ 풀다운 영역과 붙지 않게). dpr: 고해상도 렌더 배율."""
+    (도형 버튼이 ▾ 풀다운 영역과 붙지 않게). dpr: 고해상도 렌더 배율.
+    accent: 261128-6(디자인 SOT §4.3) — 회색 전경 대신 ▶·캡처 카메라와 같은 파랑(ACCENT["play"])."""
     fn = _DRAW.get(name)
     if fn is None:
         return QIcon()
-    c = QColor(fg_color(dark))
+    if accent:
+        if dark is None:
+            try:
+                from viewer import theme
+                dark = theme.is_dark()
+            except Exception:
+                dark = False
+        c = QColor(ACCENT["play"][bool(dark)])
+    else:
+        c = QColor(fg_color(dark))
     pm = QPixmap(int((size + pad_right) * dpr), int(size * dpr))
     pm.setDevicePixelRatio(dpr)
     pm.fill(Qt.GlobalColor.transparent)
@@ -1061,3 +1071,34 @@ def themed_icon(name: str, dark: bool | None = None, size: int = 16, *,
     finally:
         p.end()
     return QIcon(pm)
+
+
+def bind_theme_refresh(widget, fn) -> None:
+    """261128-6(디자인 SOT §4.3): fn() 을 지금 한 번, 그리고 widget 이 테마 바뀜(StyleChange·
+    PaletteChange — MainWindow.apply_theme 의 setStyle·setPalette)을 받을 때마다 부른다.
+    창을 만들 때 한 번만 칠한 아이콘·스타일이 테마를 바꾼 뒤 옛 색으로 남지 않게. fn 안의
+    setStyleSheet 가 다시 StyleChange 를 보내도 되풀이하지 않는다."""
+    from PyQt6.QtCore import QObject, QEvent
+
+    class _ThemeRefresh(QObject):
+        _KINDS = (QEvent.Type.StyleChange, QEvent.Type.PaletteChange)
+
+        def __init__(self, parent):
+            super().__init__(parent)
+            self._busy = False
+
+        def eventFilter(self, obj, ev):
+            if ev.type() in self._KINDS and not self._busy:
+                self._busy = True
+                try:
+                    fn()
+                except Exception:
+                    pass
+                finally:
+                    self._busy = False
+            return False
+
+    f = _ThemeRefresh(widget)
+    widget.installEventFilter(f)
+    widget._theme_refresh_filter = f
+    fn()

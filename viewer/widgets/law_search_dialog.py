@@ -263,6 +263,11 @@ class LawSearchPanel(QWidget):
         fb.addWidget(b_prev)
         fb.addWidget(b_next)
         fb.addWidget(b_fclose)
+        # 261128-6(디자인 SOT §4.3): 아이콘 단추는 파란 라인, 테마 바뀌면 다시 칠함
+        self._accent_btns = [(self.btn_fav, "star"), (self.btn_prev, "chevron_up"),
+                             (self.btn_next, "chevron_down"), (self.btn_globe, "globe"),
+                             (b_prev, "chevron_up"), (b_next, "chevron_down"),
+                             (b_fclose, "close")]
         self.find_bar.setVisible(False)
         v.addWidget(self.find_bar)
 
@@ -279,7 +284,8 @@ class LawSearchPanel(QWidget):
         # 검색박스 포커스 + 한글 입력 활성화
         self.ed.setAttribute(Qt.WidgetAttribute.WA_InputMethodEnabled, True)
 
-        self._apply_theme_styles()
+        from viewer.widgets.icons import bind_theme_refresh
+        bind_theme_refresh(self, self._refresh_theme)   # 261128-6: 종전엔 만들 때 한 번만 칠함
         self._apply_search_width()
 
     # ----- 레이아웃 -----
@@ -310,6 +316,12 @@ class LawSearchPanel(QWidget):
     def showEvent(self, event):
         super().showEvent(event)
         self.ed.setFocus()          # 검색박스에 포커스(바로 입력 가능)
+
+    def _refresh_theme(self):
+        """261128-6(디자인 SOT §4.3): 아이콘 단추 파란 라인 + 검색칸 테마 스타일."""
+        for b, name in self._accent_btns:
+            b.setIcon(themed_icon(name, accent=True))
+        self._apply_theme_styles()
 
     def _apply_theme_styles(self):
         """260616-13: 검색박스를 다크/화이트 모드에 맞는 색으로(항상 블랙 방지)."""

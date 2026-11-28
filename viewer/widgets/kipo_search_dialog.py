@@ -221,6 +221,11 @@ class KipoSearchPanel(QWidget):
         for b in self.findChildren(QPushButton):
             b.setAutoDefault(False); b.setDefault(False)
         self.ed.setAttribute(Qt.WidgetAttribute.WA_InputMethodEnabled, True)
+        # 261128-6(디자인 SOT §4.3): 아이콘 단추는 파란 라인, 테마 바뀌면 다시 칠함
+        from viewer.widgets.icons import bind_theme_refresh
+        _acc = [(self.btn_fav, "star"), (self.btn_globe, "globe"), (b_prev, "chevron_up"),
+                (b_next, "chevron_down"), (b_fclose, "close")]
+        bind_theme_refresh(self, lambda: [b.setIcon(themed_icon(n, accent=True)) for b, n in _acc])
 
     # ----- 레이아웃 -----
     def set_fullscreen(self, is_full: bool):

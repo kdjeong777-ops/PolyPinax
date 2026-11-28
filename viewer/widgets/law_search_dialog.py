@@ -460,6 +460,8 @@ class LawSearchPanel(QWidget):
             return
         self.tree.clear()
         self.viewer.clear()
+        self._cur_row = None             # 261128-2: 본문을 비웠으니 '띄운 법령' 도 없음
+        self._cur_item = None
         self.info.setText("검색 중…")
         self._sworker = _SearchWorker(self._oc, q, "all",
                                       self.cmb_kind.currentData())
@@ -516,6 +518,23 @@ class LawSearchPanel(QWidget):
         it = self.tree.currentItem()
         return it.data(0, self._ROW) if it is not None else None
 
+    @staticmethod
+    def _row_key(row):
+        """261128-2(법령·고시 SOT §4): 같은 법령인지 가리는 열쇠. 트리 data() 는 꺼낼 때마다
+        새 dict 라 `is` 비교는 늘 '다른 법령' — 그래서 조를 옮길 때마다 본문을 다시 불렀다."""
+        if not row:
+            return None
+        ids = row.get("ids") or {}
+        idk = tuple(sorted((k, str(v)) for k, v in ids.items() if v))
+        if idk:
+            return (row.get("target"), idk)
+        return (row.get("target"), row.get("link") or "", row.get("name") or "")
+
+    def _is_cur(self, row, item) -> bool:
+        """지금 띄운 법령(같은 트리 항목·같은 행 열쇠)인가 — 새 검색으로 트리가 바뀌면 다른 항목."""
+        return (self._cur_row is not None and item is self._cur_item
+                and self._row_key(row) == self._row_key(self._cur_row))
+
     def _on_select(self):
         it = self.tree.currentItem()
         if it is None:
@@ -525,9 +544,10 @@ class LawSearchPanel(QWidget):
         if anchor:
             # 260825-9: 이 조문이 속한 법령(부모 row)이 현재 표시 중인 법령과 다르면
             #   그 법령 본문을 먼저 로드한 뒤 해당 조로 스크롤(기존: 현재 본문에서만 스크롤).
+            # 261128-2: 같은 법령이면 다시 불러오지 않고 스크롤만(행 열쇠로 비교).
             parent = it.parent()
             prow = parent.data(0, self._ROW) if parent is not None else None
-            if prow is not None and prow is not self._cur_row:
+            if prow is not None and not self._is_cur(prow, parent):
                 self._pending_anchor = anchor
                 self._pending_label = it.text(0)
                 self._load_row(prow, parent)
@@ -535,7 +555,11 @@ class LawSearchPanel(QWidget):
             self._scroll_to_anchor(anchor)
             return
         row = it.data(0, self._ROW)
-        if not row or row is self._cur_row:
+        if not row:
+            return
+        if self._is_cur(row, it):
+            # 261128-2: 띄운 법령 이름으로 돌아오면 다시 불러오지 않고 맨 위로
+            self.viewer.verticalScrollBar().setValue(0)
             return
         self._pending_anchor = None
         self._load_row(row, it)
@@ -641,22 +665,45 @@ class LawSearchPanel(QWidget):
             + (f"<p><a href='{link}'>{link}</a></p>" if link else "")
             + diag + "</div>")
 
+    def _browser_url(self, it) -> str:
+        """261128-2(법령·고시 SOT §4): 🌐 로 열 주소. 조문 항목이면 부모 법령 잎의 행을 쓰고,
+        법령의 '제N조[의M]' 이면 법제처 한글주소로 그 조에 바로, 그 밖은 상세링크."""
+        if it is None:
+            return ""
+        anchor = it.data(0, self._ANCHOR)
+        row = it.data(0, self._ROW)
+        if anchor and row is None and it.parent() is not None:
+            row = it.parent().data(0, self._ROW)
+        if not row:
+            return ""
+        if anchor and (row.get("target") or "law") == "law" and row.get("name"):
+            m = re.match(r"\s*제\s*(\d+)\s*조(?:\s*의\s*(\d+))?", it.text(0))
+            if m:
+                jo = f"제{m.group(1)}조" + (f"의{m.group(2)}" if m.group(2) else "")
+                from urllib.parse import quote
+                return ("https://www.law.go.kr/" + quote("법령") + "/"
+                        + quote(row["name"].strip()) + "/" + quote(jo))
+        return row.get("link") or ""
+
     def _open_browser(self):
-        row = self._current_row()
-        link = (row or {}).get("link")
-        if link:
-            QDesktopServices.openUrl(QUrl(link))
+        url = self._browser_url(self.tree.currentItem())
+        if url:
+            QDesktopServices.openUrl(QUrl(url))
 
     # ----- 즐겨찾기 -----
     def _on_tree_menu(self, pos):
         it = self.tree.itemAt(pos)
-        if it is None or it.data(0, self._ROW) is None:
+        if it is None:
             return
+        is_law = it.data(0, self._ROW) is not None
+        if not is_law and it.data(0, self._ANCHOR) is None:
+            return                          # 그룹 머리
         self.tree.setCurrentItem(it)
         menu = QMenu(self)
-        a_fav = QAction("⭐ 즐겨찾기에 추가", self)
-        a_fav.triggered.connect(self._add_favorite_current)
-        menu.addAction(a_fav)
+        if is_law:                          # 261128-2: 조문은 '브라우저에서 열기' 만
+            a_fav = QAction("⭐ 즐겨찾기에 추가", self)
+            a_fav.triggered.connect(self._add_favorite_current)
+            menu.addAction(a_fav)
         a_web = QAction("브라우저에서 열기", self)
         a_web.triggered.connect(self._open_browser)
         menu.addAction(a_web)

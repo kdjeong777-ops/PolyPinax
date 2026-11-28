@@ -57,28 +57,28 @@ try:
     # B 실제 키 — 261128-14 부터 보기 탭은 Ctrl+숫자(종전 Ctrl+Shift+숫자)
     CTL = Qt.KeyboardModifier.ControlModifier
     tgt = mw.main_view.view if hasattr(mw.main_view, "view") else mw
-    QTest.keyClick(tgt, Qt.Key.Key_2, CS); QTest.qWait(150)
-    chk(mw.act_split.isChecked(), "B Ctrl+Shift+2 → 2단")
-    QTest.keyClick(tgt, Qt.Key.Key_2, CS); QTest.qWait(150)
-    chk(mw.act_split.isChecked(), "B Ctrl+Shift+2 를 또 눌러도 2단(바꾸기가 아니다)")
-    QTest.keyClick(tgt, Qt.Key.Key_1, CS); QTest.qWait(150)
+    QTest.keyClick(tgt, Qt.Key.Key_2, CTL); QTest.qWait(150)
+    chk(mw.act_split.isChecked(), "B Ctrl+2 → 2단")
+    QTest.keyClick(tgt, Qt.Key.Key_2, CTL); QTest.qWait(150)
+    chk(mw.act_split.isChecked(), "B Ctrl+2 를 또 눌러도 2단(바꾸기가 아니다)")
+    QTest.keyClick(tgt, Qt.Key.Key_1, CTL); QTest.qWait(150)
     chk(not mw.act_split.isChecked() and not mw.act_toggle_search.isChecked() and not mw.act_toggle_shot.isChecked(),
-        "B Ctrl+Shift+1 → 1단(오른쪽 창 숨김)")
-    QTest.keyClick(tgt, Qt.Key.Key_3, CS); QTest.qWait(100)
-    chk(mw.act_toggle_search.isChecked() and mw.search_tabs.currentWidget() is mw.text_panel, "B Ctrl+Shift+3 → 텍스트")
-    QTest.keyClick(tgt, Qt.Key.Key_5, CS); QTest.qWait(100)
-    chk(mw.search_tabs.currentWidget() is mw.search_area, "B Ctrl+Shift+5 → 검색")
-    QTest.keyClick(tgt, Qt.Key.Key_6, CS); QTest.qWait(100)
-    chk(mw.act_toggle_shot.isChecked() and not mw.act_toggle_search.isChecked(), "B Ctrl+Shift+6 → 스크린샷")
+        "B Ctrl+1 → 1단(오른쪽 창 숨김)")
+    QTest.keyClick(tgt, Qt.Key.Key_3, CTL); QTest.qWait(100)
+    chk(mw.act_toggle_search.isChecked() and mw.search_tabs.currentWidget() is mw.text_panel, "B Ctrl+3 → 텍스트")
+    QTest.keyClick(tgt, Qt.Key.Key_5, CTL); QTest.qWait(100)
+    chk(mw.search_tabs.currentWidget() is mw.search_area, "B Ctrl+5 → 검색")
+    QTest.keyClick(tgt, Qt.Key.Key_6, CTL); QTest.qWait(100)
+    chk(mw.act_toggle_shot.isChecked() and not mw.act_toggle_search.isChecked(), "B Ctrl+6 → 스크린샷")
     called = []
     orig = mw._action_law_search
     mw._view_acts["law"].triggered.disconnect()
     mw._view_acts["law"].triggered.connect(lambda *_: called.append("law"))
-    QTest.keyClick(tgt, Qt.Key.Key_7, CS); QTest.qWait(100)
-    chk(not called, "B 키가 없는(숨긴) 법령은 Ctrl+Shift+7 로 열리지 않는다", str(called))
+    QTest.keyClick(tgt, Qt.Key.Key_7, CTL); QTest.qWait(100)
+    chk(not called, "B 키가 없는(숨긴) 법령은 Ctrl+7 로 열리지 않는다", str(called))
     mw._prefs.update({"law_oc": "x"}); mw._gate_api_dependent_ui(mw._prefs)
-    QTest.keyClick(tgt, Qt.Key.Key_7, CS); QTest.qWait(100)
-    chk(called == ["law"], "B 키가 있으면 Ctrl+Shift+7 → 법령·고시", str(called))
+    QTest.keyClick(tgt, Qt.Key.Key_7, CTL); QTest.qWait(100)
+    chk(called == ["law"], "B 키가 있으면 Ctrl+7 → 법령·고시", str(called))
 
     # C
     va = mw._view_acts
@@ -140,13 +140,16 @@ try:
     sb.edit.setText("라마"); sb.btn_case.setChecked(False)      # 토글을 바꾸면 지금 글로 다시 찾는다(그것도 실행한 검색)
     QTest.keyClick(sb.edit, Qt.Key.Key_Return); QTest.qWait(200)
     rs = [a.text() for a in mw.menu_recent_searches.actions()]
-    chk(rs == ["🔍 라마", "🔍 가나다  Aa"], "F 실행한 검색어가 최근 검색어 맨 위에(토글 표시)", str(rs))
+    aa = not getattr(sb, "_case_hidden", False)    # 261128-9: 한국어 화면엔 Aa 가 없다(늘 끔)
+    # 261128-10(디자인 SOT §4.8): 종류는 글자 앞 🔍 대신 그림
+    chk(rs == ["라마", "가나다" + ("  Aa" if aa else "")] and all(not a.icon().isNull() for a in mw.menu_recent_searches.actions()),
+        "F 실행한 검색어가 최근 검색어 맨 위에(토글 표시)", str(rs))
     ran = []
     _orig_as = mw.action_search
     mw.action_search = lambda q: ran.append((q, sb.btn_case.isChecked()))
     mw.menu_recent_searches.actions()[1].trigger(); QTest.qWait(50)
     mw.action_search = _orig_as
-    chk(ran == [("가나다", True)] and sb.edit.text() == "가나다", "F 누르면 그 검색어·토글로 지금 폴더에서 다시 찾는다", str(ran))
+    chk(ran == [("가나다", aa)] and sb.edit.text() == "가나다", "F 누르면 그 검색어·토글로 지금 폴더에서 다시 찾는다", str(ran))
     chk("recent_searches" in __import__("viewer.settings_store", fromlist=["x"]).PERSONAL_TOP_KEYS,
         "F 최근 검색어는 개인 항목(배포 기본값에서 빠짐)")
     shutil.rmtree(_root, ignore_errors=True)

@@ -107,9 +107,9 @@ try:
     chk(bot._photo_on() and norm(mw._mv[0].current_file()) == norm(a_pdf), "A 아래 사진 목록·왼쪽 가.pdf 그대로")
 
     # B — 키로
-    QTest.keyClick(mw, Qt.Key.Key_1, Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier); pump()
-    chk(not mw._split_on, "B Ctrl+Shift+1 = 1단")
-    QTest.keyClick(mw, Qt.Key.Key_2, Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier)
+    QTest.keyClick(mw, Qt.Key.Key_1, Qt.KeyboardModifier.ControlModifier); pump()
+    chk(not mw._split_on, "B Ctrl+1 = 1단")
+    QTest.keyClick(mw, Qt.Key.Key_2, Qt.KeyboardModifier.ControlModifier)
     pump(lambda: norm(mw._mv[1].current_file()) == norm(ph[2]))
     chk(mw._split_on and mw._mix_on_now() and norm(mw._mv[1].current_file()) == norm(ph[2]),
         "B Ctrl+2 = 섞은 2단 p3", str(mw._mv[1].current_file()))

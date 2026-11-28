@@ -35,6 +35,7 @@ class SearchBar(QWidget):
     queryCleared = pyqtSignal()
     favoriteRequested = pyqtSignal()      # v1.6.1 F4
     modeChanged = pyqtSignal()            # 261014-18(검색창 SOT §4.1): Aa·.* 토글
+    scopeChanged = pyqtSignal()           # 261128-8(검색창 SOT §5.2): 검색 범위 지금 파일 ↔ 폴더
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -65,6 +66,32 @@ class SearchBar(QWidget):
             b.setFixedWidth(28)
             b.toggled.connect(lambda _=False: self.modeChanged.emit())
             layout.addWidget(b)
+        # 261128-9(검색창 SOT §4.1·§4.3): 한국어 화면엔 Aa 가 없다(대소문자 구분 늘 끔) · 풍선 끝에 [?] 안내 · [?] 도움말 창
+        from viewer.i18n import language, KO
+        self._case_hidden = language() == KO
+        if self._case_hidden:
+            self.btn_case.setChecked(False)
+            self.btn_case.hide()
+        _more = "\n" + tr("자세히는 오른쪽 [?] 단추를 누르세요")
+        for b in (self.btn_case, self.btn_regex):
+            b.setToolTip(b.toolTip() + _more)
+        self.btn_help = QToolButton()
+        self.btn_help.setText("?")
+        self.btn_help.setFixedWidth(28)
+        self.btn_help.setToolTip(tr("검색 도움말 — 연산자·정규식 쓰는 법"))
+        self.btn_help.clicked.connect(self._open_help)
+        layout.addWidget(self.btn_help)
+
+        # 261128-8(검색창 SOT §5.2, 사용자 결정 '아이콘 하나·누르면 바뀜'): 검색 범위 — 그림이 지금 범위(file/folder).
+        #   켤 때마다 '파일'(기억하지 않는다)
+        self._scope = "file"
+        self.btn_scope = QToolButton()
+        self.btn_scope.setFixedWidth(28)
+        self.btn_scope.clicked.connect(self._toggle_scope)
+        # 사용자 지시(같은 번호 덧붙임) '폴더/파일 버튼을 검색 바로 오른쪽에' — 검색칸 다음, Aa·.* 앞
+        layout.insertWidget(layout.indexOf(self.edit) + 1, self.btn_scope)
+        from viewer.widgets.icons import bind_theme_refresh
+        bind_theme_refresh(self.btn_scope, self._paint_scope)
 
         self.btn_prev = QPushButton("◀")
         self.btn_prev.setFixedWidth(28)
@@ -99,12 +126,43 @@ class SearchBar(QWidget):
         else:
             self.searchRequested.emit(text)
 
+    def _open_help(self) -> None:
+        from viewer.widgets.search_help import open_help
+        open_help(self.window())
+
+    def scope(self) -> str:
+        """261128-8(검색창 SOT §5.2): 검색 범위 — "file"(지금 보는 파일) 또는 "folder"(책갈피창 목록 전체)."""
+        return self._scope
+
+    def set_scope(self, scope: str) -> None:
+        scope = "folder" if scope == "folder" else "file"
+        if scope != self._scope:
+            self._scope = scope
+            self._paint_scope()
+            self.scopeChanged.emit()
+
+    def _toggle_scope(self) -> None:
+        self.set_scope("folder" if self._scope == "file" else "file")
+
+    def _paint_scope(self) -> None:
+        from viewer.widgets.icons import themed_icon
+        b = self.btn_scope
+        if self._scope == "file":
+            b.setIcon(themed_icon("file"))
+            b.setToolTip(tr("검색 범위: 지금 보는 파일 — 누르면 폴더 전체"))
+        else:
+            b.setIcon(themed_icon("folder"))
+            b.setToolTip(tr("검색 범위: 폴더(책갈피창의 파일 전체) — 누르면 지금 보는 파일"))
+
     def mode(self):
         """`(대소문자, 정규식)` 또는 None(둘 다 꺼짐 — 종전 검색)."""
         from viewer.search_match import mode_of
-        return mode_of(self.btn_case.isChecked(), self.btn_regex.isChecked())
+        case = self.btn_case.isChecked() and not self._case_hidden    # 261128-9: 한국어 화면은 늘 끔(기억된 값 무시)
+        return mode_of(case, self.btn_regex.isChecked())
 
     def set_mode(self, case: bool, regex: bool) -> None:
+        if self._case_hidden:
+            case = False                              # 261128-9(검색창 SOT §4.1): 한국어 화면 — 기억된 search_case·즐겨찾기 case 무시
         for b, v in ((self.btn_case, case), (self.btn_regex, regex)):
             b.blockSignals(True)
             b.setChecked(bool(v))
@@ -142,6 +200,7 @@ class SearchResults(QWidget):
     DATA_FILE = Qt.ItemDataRole.UserRole + 0
     DATA_PAGE = Qt.ItemDataRole.UserRole + 1
     DATA_QUERY = Qt.ItemDataRole.UserRole + 2
+    DATA_EMPTY = Qt.ItemDataRole.UserRole + 3     # 261128-8(검색창 SOT §5.2): '검색결과 없음' 을 단 지금 파일 줄(경로)
     # 261128-7(검색창 SOT §7): 키보드로 줄을 옮기면 키가 이만큼 멈춘 뒤 마지막 줄 하나만 본문이 따라간다
     KEY_FOLLOW_MS = 120
     _NAV_KEYS = (Qt.Key.Key_Up, Qt.Key.Key_Down, Qt.Key.Key_PageUp, Qt.Key.Key_PageDown,
@@ -151,6 +210,7 @@ class SearchResults(QWidget):
         super().__init__(parent)
         self._results: list = []
         self._query = ""
+        self._empty_file = None                # 261128-8: 결과가 없는 지금 파일 — 그 줄 아래 '검색결과 없음'
         self._order_map: dict = {}             # v1.4.0 P3
         self._order_map_norm: dict = {}        # 260827: 경로 정규화 키(대소문자/구분자 무시)
         self._build_ui()
@@ -227,9 +287,11 @@ class SearchResults(QWidget):
         self._order_map_norm = {self._norm_key(k): v for k, v in self._order_map.items()}
         self._render_results()
 
-    def set_results(self, query: str, results: list):
+    def set_results(self, query: str, results: list, empty_file=None):
+        """empty_file — 261128-8(검색창 SOT §5.2): 결과가 없는 지금 파일. 그 파일 줄과 아래 '검색결과 없음' 줄을 넣는다."""
         self._query = query
         self._results = results
+        self._empty_file = str(empty_file) if empty_file else None
         self._render_results()
 
     def current_query(self) -> str:
@@ -271,16 +333,28 @@ class SearchResults(QWidget):
 
     def _render_results(self):
         self.tree.clear()
-        if not self._results:
+        if not self._results and not self._empty_file:
             return
         from collections import defaultdict
         groups = defaultdict(list)
         for r in self._results:
             groups[r.file_path].append(r)
+        if self._empty_file and not any(self._norm_key(f) == self._norm_key(self._empty_file) for f in groups):
+            groups[self._empty_file] = []          # 261128-8: 결과 없는 지금 파일 — 다른 파일 줄과 같은 차례 규칙
 
         ordered = self._sorted_groups(groups)
 
         for file_path, page_results in ordered:
+            if not page_results:                   # 261128-8(검색창 SOT §5.2): 지금 파일 줄 + '검색결과 없음' — 누르거나 키로 가도 가지 않는다
+                top = QTreeWidgetItem([Path(file_path).stem, "", "0"])
+                top.setData(0, self.DATA_EMPTY, file_path)
+                top.setToolTip(0, file_path)
+                self.tree.addTopLevelItem(top)
+                none = QTreeWidgetItem([tr("검색결과 없음"), "", ""])
+                none.setForeground(0, self.palette().placeholderText())
+                top.addChild(none)
+                top.setExpanded(True)
+                continue
             total = sum(r.match_count for r in page_results)
             top = QTreeWidgetItem([Path(file_path).stem, "", f"{total}"])  # v1.6.0 S7: .pdf 제거
             top.setData(0, self.DATA_FILE, file_path)

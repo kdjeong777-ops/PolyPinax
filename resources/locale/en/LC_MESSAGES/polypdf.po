@@ -3302,6 +3302,11 @@ msgstr "about {m} min left"
 
 #: viewer/app.py
 #, python-brace-format
+msgid "연 파일이 없어 폴더 전체에서 찾습니다: {query!r}"
+msgstr "No file is open — searching the whole folder: {query!r}"
+
+#: viewer/app.py
+#, python-brace-format
 msgid "검색 오류: {e}"
 msgstr "Search error: {e}"
 
@@ -14246,6 +14251,18 @@ msgstr "Show file name at top (without .pdf)"
 msgid "하단에 페이지 번호 표시 (스크린샷 리스트 순번)"
 msgstr "Show page number at bottom (screenshot list order)"
 
+#: viewer/widgets/search_help.py
+msgid "검색 도움말"
+msgstr "Search help"
+
+#: viewer/widgets/search_help.py
+msgid "기호"
+msgstr "Symbol"
+
+#: viewer/widgets/search_help.py
+msgid "뜻"
+msgstr "Meaning"
+
 #: viewer/widgets/search_panel.py
 msgid "검색...  (Enter: 검색, Ctrl+F: 포커스)"
 msgstr "Search...  (Enter: search, Ctrl+F: focus)"
@@ -14258,6 +14275,14 @@ msgstr "Match case"
 #, python-brace-format
 msgid "정규식 — 예: \\d{4}-\\d{2} (날짜), 표\\s*\\d+ (표 번호)"
 msgstr "Regular expression — e.g. \\d{4}-\\d{2} (dates), Table\\s*\\d+ (table numbers)"
+
+#: viewer/widgets/search_panel.py
+msgid "자세히는 오른쪽 [?] 단추를 누르세요"
+msgstr "For details, press the [?] button on the right"
+
+#: viewer/widgets/search_panel.py
+msgid "검색 도움말 — 연산자·정규식 쓰는 법"
+msgstr "Search help — how to use operators and regular expressions"
 
 #: viewer/widgets/search_panel.py
 msgid "이전 매치 (Shift+F3)"
@@ -14280,6 +14305,14 @@ msgid "검색결과의 모든 매치 페이지를 일괄 스크린샷"
 msgstr "Take screenshots of every matching page in the results"
 
 #: viewer/widgets/search_panel.py
+msgid "검색 범위: 지금 보는 파일 — 누르면 폴더 전체"
+msgstr "Search scope: current file — click for the whole folder"
+
+#: viewer/widgets/search_panel.py
+msgid "검색 범위: 폴더(책갈피창의 파일 전체) — 누르면 지금 보는 파일"
+msgstr "Search scope: folder (all files in the bookmark pane) — click for the current file"
+
+#: viewer/widgets/search_panel.py
 msgid "검색 결과"
 msgstr "Search Results"
 
@@ -14299,6 +14332,10 @@ msgstr "Count"
 #, python-brace-format
 msgid "{label} 내용 검색...  (Ctrl+F)"
 msgstr "Search {label} content...  (Ctrl+F)"
+
+#: viewer/widgets/search_panel.py
+msgid "검색결과 없음"
+msgstr "No results"
 
 #: viewer/widgets/settings_dialog.py
 msgid "외부 연결"
@@ -16058,6 +16095,162 @@ msgstr "English meaning"
 #: viewer/widgets/study_panel.py
 msgid "예시"
 msgstr "Example"
+
+#: viewer/widgets/search_help.py
+msgid "2. 여러 낱말 — 연산자 (가장 많이 씀)"
+msgstr "2. Several words — operators (used most)"
+
+#: viewer/widgets/search_help.py
+msgid "먼저 계산하는 차례: - → | → 띄어쓰기. 예) 아스팔트 포장|도로 = 아스팔트 AND (포장 OR 도로)"
+msgstr "Order of evaluation: - → | → space. e.g. asphalt pavement|road = asphalt AND (pavement OR road)"
+
+#: viewer/widgets/search_help.py
+msgid "1. 보통 검색"
+msgstr "1. Ordinary search"
+
+#: viewer/widgets/search_help.py
+msgid "낱말을 그대로 치면 그 낱말이 든 쪽을 찾습니다. 빈칸·줄바꿈은 무시하고 대소문자는 가리지 않습니다."
+msgstr "Type a word as it is to find the pages that contain it. Spaces and line breaks are ignored, and upper/lower case does not matter."
+
+#: viewer/widgets/search_help.py
+msgid "낱말"
+msgstr "word"
+
+#: viewer/widgets/search_help.py
+msgid "그 낱말이 든 쪽"
+msgstr "Pages that contain the word"
+
+#: viewer/widgets/search_help.py
+msgid "아스팔트"
+msgstr "asphalt"
+
+#: viewer/widgets/search_help.py
+msgid "띄어쓰기"
+msgstr "space"
+
+#: viewer/widgets/search_help.py
+msgid "AND — 둘 다 든 쪽. & 는 AND 가 아니라 보통 글자입니다"
+msgstr "AND — pages with both. & is not AND; it is an ordinary character"
+
+#: viewer/widgets/search_help.py
+msgid "아스팔트 균열"
+msgstr "asphalt crack"
+
+#: viewer/widgets/search_help.py
+msgid "또는 — 어느 하나라도 든 쪽"
+msgstr "OR — pages with either"
+
+#: viewer/widgets/search_help.py
+msgid "다짐|포설"
+msgstr "compaction|paving"
+
+#: viewer/widgets/search_help.py
+msgid "빼기 — 이 낱말이 든 쪽은 뺍니다"
+msgstr "NOT — leaves out pages with this word"
+
+#: viewer/widgets/search_help.py
+msgid "포장 -콘크리트"
+msgstr "pavement -concrete"
+
+#: viewer/widgets/search_help.py
+msgid "구절 — 띄어쓰기까지 그대로 붙은 글"
+msgstr "Phrase — the exact text, spaces included"
+
+#: viewer/widgets/search_help.py
+msgid "\"품질 관리\""
+msgstr "\"quality control\""
+
+#: viewer/widgets/search_help.py
+msgid "묶기 — 먼저 계산합니다"
+msgstr "Grouping — evaluated first"
+
+#: viewer/widgets/search_help.py
+msgid "(다짐|포설) 온도"
+msgstr "(compaction|paving) temperature"
+
+#: viewer/widgets/search_help.py
+msgid "3. 정규식 — [.*] 단추를 켰을 때"
+msgstr "3. Regular expressions — when the [.*] button is on"
+
+#: viewer/widgets/search_help.py
+msgid "켜면 위 연산자를 읽지 않고 칸 전체를 정규식으로 봅니다. 빈칸도 무시하지 않으니 빈칸이 있을 수 있는 곳엔 \\s* 를 씁니다. 한 줄 안에서만 맞추고, 정규식이 틀리면 칸이 붉어집니다."
+msgstr "When on, the operators above are not read and the whole box is a regular expression. Spaces are not ignored, so use \\s* where a space may appear. Matches stay within one line, and an invalid expression turns the box red."
+
+#: viewer/widgets/search_help.py
+msgid "사이에 아무 글이나(없어도 됨)"
+msgstr "Any text in between (or none)"
+
+#: viewer/widgets/search_help.py
+msgid "검사.*기준"
+msgstr "test.*criteria"
+
+#: viewer/widgets/search_help.py
+msgid "아무 글자 하나"
+msgstr "Any one character"
+
+#: viewer/widgets/search_help.py
+msgid "제.장"
+msgstr "Chapter ."
+
+#: viewer/widgets/search_help.py
+msgid "숫자 하나"
+msgstr "One digit"
+
+#: viewer/widgets/search_help.py
+msgid "앞 것이 1번 이상"
+msgstr "The previous item once or more"
+
+#: viewer/widgets/search_help.py
+msgid "앞 것이 0번 이상"
+msgstr "The previous item zero or more times"
+
+#: viewer/widgets/search_help.py
+msgid "아스팔트\\s*포장"
+msgstr "asphalt\\s*pavement"
+
+#: viewer/widgets/search_help.py
+msgid "앞 것이 있어도 없어도"
+msgstr "The previous item is optional"
+
+#: viewer/widgets/search_help.py
+msgid "포장(공사)?"
+msgstr "pavement( work)?"
+
+#: viewer/widgets/search_help.py
+msgid "또는"
+msgstr "or"
+
+#: viewer/widgets/search_help.py
+msgid "그중 한 글자"
+msgstr "One of these characters"
+
+#: viewer/widgets/search_help.py
+msgid "제[1-3]장"
+msgstr "Chapter [1-3]"
+
+#: viewer/widgets/search_help.py
+msgid "빈칸 하나"
+msgstr "One space"
+
+#: viewer/widgets/search_help.py
+msgid "줄의 처음 / 끝"
+msgstr "Start / end of a line"
+
+#: viewer/widgets/search_help.py
+msgid "^제1장"
+msgstr "^Chapter 1"
+
+#: viewer/widgets/search_help.py
+msgid "특수 기호를 글자 그대로"
+msgstr "Takes a special symbol literally"
+
+#: viewer/widgets/search_help.py
+msgid "4. [Aa] — 대소문자 구분"
+msgstr "4. [Aa] — match case"
+
+#: viewer/widgets/search_help.py
+msgid "켜면 대소문자를 가립니다(ASTM 과 astm 이 다름)"
+msgstr "When on, upper and lower case differ (ASTM is not astm)"
 
 #: viewer/widgets/study_panel.py
 msgid "참고문헌"

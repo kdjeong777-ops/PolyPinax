@@ -2861,6 +2861,12 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         # v1.6.1 F4: 즐겨찾기 추가 시그널
         self.search_bar.favoriteRequested.connect(self._add_current_search_favorite)
         self.search_bar.modeChanged.connect(self._on_search_mode_changed)   # 261014-18(검색창 SOT §4.1)
+        self.search_bar.scopeChanged.connect(self._on_search_mode_changed)  # 261128-8(검색창 SOT §5.2): 범위를 바꿔도 다시 찾는다
+        try:                                                 # 261128-8(§5.2): 책갈피창 정렬을 바꾸면 결과 파일 차례도 따라간다
+            self.bookmark_tree._sort_combo.currentIndexChanged.connect(
+                lambda _i: QTimer.singleShot(0, self._search_follow_order))
+        except Exception:
+            pass
         self.bookmark_tree.favoriteRequested.connect(self._add_current_folder_favorite)
         self.bookmark_tree.addFileFavoriteRequested.connect(self._add_file_favorite)  # ⑫
         # v1.6.18: 책갈피 편집 저장 완료 → 새 _edited.pdf 자동 로드
@@ -8483,7 +8489,45 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         q = seed if seed is not None else self.search_bar.current_query()
         self._cf_overlay.open_for(self._content_panel, seed_query=q)
 
-    def action_search(self, query: str):
+    def _search_current_pdf(self):
+        """261128-8(검색창 SOT §5.2): 지금 본문(활성 창)에 연 PDF — 없으면(빈 창·그림·사진) None."""
+        mv = self.main_view
+        try:
+            f = mv.current_file() if mv is not None else None
+        except Exception:
+            f = None
+        if not f or getattr(mv, "_is_image", False) or not str(f).lower().endswith(".pdf"):
+            return None
+        return str(f)
+
+    def _search_follow_file(self, item) -> None:
+        """261128-8(§5.2, 사용자 결정): '파일' 범위에서 다른 PDF 를 열었다 — 검색어가 있으면 그 파일에서 다시 찾는다(본문은 옮기지 않는다)."""
+        try:
+            if self.search_bar.scope() != "file" or getattr(item, "origin", "") == "search":
+                return
+            if self._content_panel is not None or getattr(self, "_photo_mode", False):
+                return
+            q = self.search_results.current_query()
+            cur = self._search_current_pdf()
+            if not q or not cur:
+                return
+            last = getattr(self, "_search_scope_file", None)
+            if last and self._norm_path(last) == self._norm_path(cur):
+                return
+            self.action_search(q, follow=True)
+        except Exception:
+            pass
+
+    def _search_follow_order(self) -> None:
+        """261128-8(§5.2): 책갈피창 정렬이 바뀌었다 — 결과의 '책갈피 순' 파일 차례를 다시 맞춘다(다시 찾지 않는다)."""
+        try:
+            files = (self.bookmark_tree.ordered_pdf_files() or self.bookmark_tree.all_file_paths() or [])
+            self.search_results.set_bookmark_order({p: i for i, p in enumerate(files)})
+        except Exception:
+            pass
+
+    def action_search(self, query: str, follow: bool = False):
+        """follow — 261128-8(§5.2): '파일' 범위에서 다른 파일을 열어 다시 찾는 것 — 최근 검색어에 넣지 않고 본문을 옮기지 않는다."""
         _g = getattr(getattr(self, "search_bar", None), "ghost", None)
         if _g is not None:
             _g.mark_searched(query)                   # 261117-42(검색창 SOT §6.1): 검색 패널 칸 — 어느 길로 찾았든 이 글이 '찾은 글'
@@ -8521,7 +8565,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 self.main_view.set_query("")
                 self.status.showMessage(tr(NEG_ONLY_TEXT), 8000)
                 return
-        self._touch_recent_search(query, bool(mode and mode[0]), bool(mode and mode[1]))   # 261025-5 최근 검색어
+        if not follow:
+            self._touch_recent_search(query, bool(mode and mode[0]), bool(mode and mode[1]))   # 261025-5 최근 검색어
         for _mv in self._mv:
             _mv.set_search_mode(mode)
         self.status.showMessage(tr('검색 중: {query!r}').format(query=query))
@@ -8531,6 +8576,16 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             scope_paths = self.bookmark_tree.all_file_paths() or None
         except Exception:
             scope_paths = None
+        # 261128-8(검색창 SOT §5.2): 범위 '파일'(기본) — 지금 본문의 PDF 하나. 연 PDF 가 없으면 폴더로
+        self._search_scope_file = None
+        self._search_no_move = bool(follow)
+        if self.search_bar.scope() == "file":
+            cur = self._search_current_pdf()
+            if cur:
+                scope_paths = [cur]
+                self._search_scope_file = cur
+            else:
+                self.status.showMessage(tr('연 파일이 없어 폴더 전체에서 찾습니다: {query!r}').format(query=query))
         worker = SearchWorker(self._db_path, query, paths=scope_paths, mode=mode)
         worker.finished.connect(self._on_search_finished)
         worker.error.connect(lambda e: self.status.showMessage(tr('검색 오류: {e}').format(e=e)))
@@ -8548,7 +8603,11 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
 
     def _on_search_finished(self, query: str, results: list):
         # 260616-3: 검색 결과를 현재 책갈피 목록(파일)으로 한정.
-        if self._search_scope is not None:
+        sf = getattr(self, "_search_scope_file", None)
+        if sf:                                   # 261128-8(§5.2): '파일' 범위 — 그 파일 것만(책갈피창 목록 밖 파일이어도)
+            nsf = self._norm_path(sf)
+            results = [r for r in results if self._norm_path(r.file_path) == nsf]
+        elif self._search_scope is not None:
             scope = self._search_scope
             results = [r for r in results
                        if self._norm_path(r.file_path) in scope]
@@ -8560,8 +8619,16 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             self.search_results.set_bookmark_order({p: i for i, p in enumerate(files)})
         except Exception:
             pass
-        self.search_results.set_results(query, results)
+        # 261128-8(검색창 SOT §5.2): 지금 파일에 결과가 없으면 그 파일 줄 아래 '검색결과 없음' — 다른 파일로 옮기지 않는다
+        cur = self._search_current_pdf()
+        ncur = self._norm_path(cur) if cur else None
+        empty = cur if (cur and not any(self._norm_path(r.file_path) == ncur for r in results)) else None
+        self.search_results.set_results(query, results, empty_file=empty)
         self.status.showMessage(tr('검색 완료: {n}개 페이지').format(n=len(results)), 3000)
+        no_move = getattr(self, "_search_no_move", False)
+        self._search_no_move = False
+        if no_move or empty:
+            return                               # 파일을 열어 다시 찾음·지금 파일에 결과 없음 — 본문은 그대로
         # 260827: 현재 파일의 현재 페이지 기준 '앞(이전 페이지)에서 가장 가까운' 결과를 선택·이동
         self._auto_select_search_result(results)
 
@@ -8902,6 +8969,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                         and mv._current_page not in set(mv._nav_pages)):
                     mv.go_to_page(mv._current_page)
             self._apply_doc_permissions()              # 260618-1: 권한 기반 UI 활성/비활성
+            if path.suffix.lower() == ".pdf":
+                self._search_follow_file(item)         # 261128-8(검색창 SOT §5.2): '파일' 범위 — 새 파일에서 다시 찾기
             if quick:                                  # 261114-5: 서명 확인은 옮김이 멈춘 뒤(`_quick_rest_fire`) — 앞 파일 띠는 지운다
                 try:
                     _band = getattr(self.main_view, "sign_band", None)

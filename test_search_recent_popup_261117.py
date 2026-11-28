@@ -100,10 +100,14 @@ try:
     row = next((i for i in range(m.rowCount()) if m.index(i, 0).data() == "Crack  Aa"), -1)
     r = popup.visualRect(m.index(row, 0))
     QTest.mouseClick(popup.viewport(), Qt.MouseButton.LeftButton, pos=r.center()); QTest.qWait(200)
-    chk(calls == [("Crack", (True, False))], "D 고르면 그 검색어·Aa 로 한 번 찾는다", str(calls))
-    chk(mw.search_bar.edit.text() == "Crack" and mw.search_bar.mode()[0] and not mw.search_bar.mode()[1],
+    # 261128-9(검색창 SOT §4.1): 한국어 화면엔 Aa 가 없고 대소문자 구분은 늘 끔 — 남긴 case 는 되살리지 않는다
+    from viewer.i18n import language, KO
+    case_on = language() != KO
+    chk(calls == [("Crack", (case_on, False))], "D 고르면 그 검색어·토글(한국어 화면은 Aa 끔)로 한 번 찾는다", str(calls))
+    chk(mw.search_bar.edit.text() == "Crack" and bool(mw.search_bar.mode() and mw.search_bar.mode()[0]) == case_on
+        and not (mw.search_bar.mode() and mw.search_bar.mode()[1]),
         "D 검색 막대에 검색어·토글이 되살아난다", str(mw.search_bar.mode()))
-    chk(mw._recent_searches[0] == {"query": "Crack", "case": True, "regex": False}, "D 찾은 것이 맨 위로", str(mw._recent_searches[:1]))
+    chk(mw._recent_searches[0] == {"query": "Crack", "case": case_on, "regex": False}, "D 찾은 것이 맨 위로", str(mw._recent_searches[:1]))
 
     # E — ↓·Enter
     calls.clear()

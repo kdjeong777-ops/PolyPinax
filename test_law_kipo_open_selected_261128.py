@@ -59,13 +59,16 @@ click_row(0)
 opened.clear()
 QTest.mouseClick(p.btn_globe, Qt.MouseButton.LeftButton)
 u = opened[-1] if opened else ""
-chk("searchResult.do" in u and "queryText=1020150012345" in u and "tab=patent" in u,
-    "A2 고른 특허 → 출원번호 검색 화면", u)
+from urllib.parse import urlsplit, parse_qs
+q = parse_qs(urlsplit(u).query)
+chk("searchResult.do" in u and q.get("searchKind") == ["keywordSearch"] and q.get("searchRight") == ["kpat"]
+    and q.get("queryText") == ["AN=[1020150012345]"],
+    "A2 고른 특허 → 출원번호 검색식으로 바로 검색되는 화면(keywordSearch·kpat·AN=[…])", u)
 click_row(1)
 opened.clear()
 QTest.mouseClick(p.btn_globe, Qt.MouseButton.LeftButton)
 u = opened[-1] if opened else ""
-chk("queryText=1020190054321" in u, "A3 하이픈 든 출원번호는 숫자만", u)
+chk(parse_qs(urlsplit(u).query).get("queryText") == ["AN=[1020190054321]"], "A3 하이픈 든 출원번호는 숫자만", u)
 
 # ---- B. PDF 주소 ----
 got = []

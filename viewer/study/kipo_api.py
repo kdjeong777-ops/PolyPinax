@@ -284,12 +284,15 @@ def first_failure(dbg) -> str:
 
 
 def kipris_search_url(appno: str) -> str:
-    """261128-15: 고른 특허를 KIPRIS 웹에서 — 출원번호 검색 결과 화면(옛 kpat 상세 주소는 개편으로 없어짐)."""
+    """261128-15: 고른 특허를 KIPRIS 웹에서 — 출원번호 검색 결과 화면(옛 kpat 상세 주소는 개편으로 없어짐).
+    `searchKind=keywordSearch`(KIPRIS 의 검색식 연계 입구)여야 페이지가 검색을 바로 돌린다 —
+    `tab=patent&queryText=` 만 주면 상세검색 창만 뜨고 결과가 없다(2026-11-28 실측). 검색식은 `AN=[출원번호]`."""
     digits = "".join(ch for ch in str(appno or "") if ch.isdigit())
     if not digits:
         return ""
     return ("https://www.kipris.or.kr/khome/search/searchResult.do?"
-            + urllib.parse.urlencode({"tab": "patent", "queryText": digits}))
+            + urllib.parse.urlencode({"searchKind": "keywordSearch", "searchRight": "kpat",
+                                      "queryText": f"AN=[{digits}]"}))
 
 
 def download_fulltext_pdf_debug(key: str, appno: str, dest_dir: str,

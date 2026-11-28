@@ -107,7 +107,9 @@ def apply_default(st, api, rows):
 
 
 def changes(rows):
-    return [(r["kind"], r["card_id"], tuple(r.get("fields") or [])) for r in rows if r["kind"] in (G.TO_CARD, G.TO_GOOGLE, G.GONE_VALUE)]
+    # 국내 꼴 번호를 국제 꼴로 한 번 고쳐 올리는 줄(`phone_form`, 261128-18)은 이 검사가 보는 것이 아니라 뺀다
+    return [(r["kind"], r["card_id"], tuple(r.get("fields") or [])) for r in rows
+            if r["kind"] in (G.TO_CARD, G.TO_GOOGLE, G.GONE_VALUE) and not r.get("phone_form")]
 
 
 def ex(cid):

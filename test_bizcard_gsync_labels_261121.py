@@ -91,7 +91,8 @@ def labels_of(api, rn):
 
 
 def plan(st, api, **k):
-    return G.plan(st, api.list_people(), groups=api.list_groups(), **k)
+    # 국내 꼴 번호를 국제 꼴로 한 번 고쳐 올리는 줄(`phone_form`, 261128-18)은 이 검사가 보는 것이 아니라 뺀다
+    return [r for r in G.plan(st, api.list_people(), groups=api.list_groups(), **k) if not r.get("phone_form")]
 
 
 def run(st, api, rows):

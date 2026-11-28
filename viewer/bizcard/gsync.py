@@ -88,8 +88,24 @@ def _rt_kind(k) -> str:
 
 
 def _phone_key(n) -> str:
-    """비교용 번호 숫자 — 적을 꼴로 고친 뒤(`+82 10…` 과 `010…` 을 같게, 261122-8)."""
-    return PH.digits(PH.normalize(n or ""))
+    """비교용 번호 숫자 — 적을 꼴로 고친 뒤(`+82 10…` 과 `010…` 을 같게, 261122-8). 한국 번호는 기본 국가와 상관없이
+    국내 꼴 숫자(구글엔 `+82 …` 로 올리므로 — 261128-18)."""
+    v = PH.normalize(n or "")
+    d = PH.kr_digits(v)
+    return d if d is not None else PH.digits(v)
+
+
+def google_phone(n: str) -> str:
+    """구글에 올릴 번호 꼴 — 한국 번호는 국제 꼴 `+82 10-0000-0000`(아이폰이 `+8210…` 착신을 국가 번호 없는 `010…` 과
+    못 맞추는 일, 261128-18). 0 으로 시작하지 않는 대표번호·외국 번호·글이 섞인 번호는 그대로(§5.29 '오가는 칸')."""
+    t = (n or "").strip()
+    if not t or re.search(r"[^\d\s.\-()+·]", t):
+        return t
+    d = PH.kr_digits(t)
+    if d is None or not d.startswith("0"):
+        return t
+    dom = PH.format_kr(d)
+    return ("+82 " + dom[1:]) if dom else t
 
 
 def init(store) -> None:
@@ -354,7 +370,7 @@ def card_person(c: dict, etag: str = "", kakao: bool = False) -> dict:
     nm = bare_name(c.get("name") or "")
     p = {"names": [{"unstructuredName": (KAKAO_MARK + nm) if (kakao and nm) else nm}],
          "organizations": [{"name": c.get("company") or "", "department": c.get("dept") or "", "title": c.get("title") or ""}],
-         "phoneNumbers": [{"value": n, "type": _C2G.get(k, "work")} for k, n in c.get("phones") or [] if n],
+         "phoneNumbers": [{"value": google_phone(n), "type": _C2G.get(k, "work")} for k, n in c.get("phones") or [] if n],
          "emailAddresses": [{"value": e} for e in c.get("emails") or [] if e],
          "addresses": [{"formattedValue": c.get("address") or ""}] if c.get("address") else [],
          "urls": [{"value": u} for u in c.get("urls") or [] if u],
@@ -500,8 +516,12 @@ def show(v: dict, f: str) -> str:
 
 # ── 사진 ──
 def g_photo(p: dict) -> str:
-    """구글 연락처 사진 주소 — 기본 실루엣이면 ''."""
+    """구글 연락처 사진 주소 — 기본 실루엣이면 ''. 출처가 연락처인 사진만(출처 없는 옛 응답도) — 상대의 구글 프로필 사진(PROFILE)은
+    아이폰(CardDAV)에 연락처 사진으로 오지 않으므로 없는 것으로 본다(§5.29 '사진', 261128-18)."""
     for ph in p.get("photos") or []:
+        src = ((ph.get("metadata") or {}).get("source") or {}).get("type")
+        if src and src != "CONTACT":
+            continue
         if not ph.get(DEFAULT_PHOTO) and ph.get("url"):
             return ph["url"]
     return ""
@@ -707,6 +727,14 @@ def plan(store, people: list, folder: str = "", photos: bool = False, drive: boo
                 rows.append({"kind": TO_CARD, "card_id": c["id"], "rn": p["resourceName"], "name": c.get("name") or pv["name"],
                              "fields": ["extra"], "etag": p.get("etag") or "", "link": bool(l.get("new")), "kakao": c_k,
                              "changes": [ch0]})
+        if not d and not l.get("new") and not any(r["card_id"] == c["id"] and r["kind"] in (TO_CARD, TO_GOOGLE, GONE_VALUE) for r in rows):
+            # 값은 같은데 구글 번호가 국내 꼴 — 국제 꼴로 한 번 고쳐 올린다(§5.29 '오가는 칸', 261128-18)
+            graw = [(x.get("value") or "").strip() for x in p.get("phoneNumbers") or [] if x.get("value")]
+            if any(google_phone(v) != v for v in graw):
+                rows.append({"kind": TO_GOOGLE, "card_id": c["id"], "rn": p["resourceName"], "name": c.get("name") or pv["name"],
+                             "fields": ["phones"], "etag": p.get("etag") or "", "link": False, "kakao": c_k, "phone_form": True,
+                             "changes": [("phones", ", ".join(graw),
+                                          ", ".join(google_phone(n) for _k, n in c.get("phones") or [] if n))]})
         if l.get("new") and not d and not c.get("_extra_new"):   # 처음 짝 — 값이 같으면 짝만 적는다
             rows.append({"kind": "link", "card_id": c["id"], "rn": p["resourceName"], "name": c.get("name") or "",
                          "etag": p.get("etag") or "", "labels": [ch[k] for k in set(_keys(c.get("tags"))) & set(_keys(person_labels(p, gmap)))]})

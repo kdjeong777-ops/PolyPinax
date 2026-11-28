@@ -106,7 +106,7 @@ try:
     # ── C ──
     print("\n=== C. 구글에서 지운 값 ===")
     p = api.people[rn[a]]
-    p["phoneNumbers"] = [x for x in p["phoneNumbers"] if "02" not in x["value"][:2]]
+    p["phoneNumbers"] = [x for x in p["phoneNumbers"] if not x["value"].startswith(("02", "+82 2-"))]   # 구글엔 국제 꼴로 올라감(261128-18)
     p["organizations"] = [{"name": "", "title": "부장"}]
     p["metadata"] = {"sources": [{"type": "CONTACT", "updateTime": NOW()}]}
     rows = [r for r in G.plan(st, api.list_people()) if r["card_id"] == a]

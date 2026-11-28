@@ -249,8 +249,13 @@ try:
     chk(any(p["names"][0].get("unstructuredName") == "#명함만" for p in SV["people"].values()),
         "D 명함에만 있던 사람은 구글에 새 연락처(기본 친구추가 방지 — 이름 앞 '#')")
     chk(SV["auth_hdr"], "D 모든 요청에 Bearer 접근 토큰")
-    rows2 = G.plan(st, api.list_people(), str(FOLDER))
+    rows2 = [r for r in G.plan(st, api.list_people(), str(FOLDER)) if not r.get("phone_form")]   # 국제 꼴 고침 줄은 뺌(261128-18)
     chk(not rows2, "D 다시 계획하면 바꿀 것 없음", str([(r["kind"], r.get("fields")) for r in rows2]))
+    pf_rows = [r for r in G.plan(st, api.list_people(), str(FOLDER)) if r.get("phone_form")]   # 구글의 국내 꼴 번호 → 국제 꼴(261128-18)
+    G.apply(st, api, pf_rows, str(FOLDER), people=api.list_people())
+    chk(pf_rows and SV["people"]["people/g2"]["phoneNumbers"][0]["value"] == "+82 10-0000-0102"
+        and not G.plan(st, api.list_people(), str(FOLDER)), "D 국내 꼴 번호는 국제 꼴로 한 번 고쳐 올린 뒤 없음",
+        str([(r["kind"], r.get("changes")) for r in pf_rows]))
 
     # ── E ──
     print("=== E. 지운 것 ===")

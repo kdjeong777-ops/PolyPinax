@@ -29,12 +29,17 @@ GROUP_RADIUS = 6
 # 261025-5(디자인 SOT §2.9.3, 사용자 결정): 탭 줄은 밝게·리본(세부 줄)은 한 단계 진한 회색 — 드롭다운(▾)은 진하게, 일반 단추는 옅게.
 #   다크는 같은 단계를 반대로(리본 줄이 탭 줄보다 조금 밝다). 값은 이 표 하나 — 원본(§2.1 '리본 색').
 TAB_ROW_BG = {False: "#f5f5f5", True: "#2e2e31"}
-ROW_BG = {False: "#e4e4e4", True: "#38383c"}
+ROW_BG = {False: "#e4e4e4", True: "#2b2b2e"}   # 261128-4(사용자 결정 '띠를 진하게'): 다크 종전 #38383c — 그룹 바탕과 벌림
 ROW_BORDER = {False: "#c8c8c8", True: "#4a4a50"}       # 탭 줄과 리본 줄 사이 1px
 GROUP_BG = {False: "#d8d8d8", True: "#424247"}
 BTN = {False: ("#fafafa", "#b4b4b4", "#222"), True: ("#3e3e42", "#55555a", "#e8e8e8")}        # 바탕·테두리·글
 BTN_DROP = {False: ("#efefef", "#a0a0a0", "#222"), True: ("#5a5a60", "#707078", "#f0f0f0")}
 BTN_OFF_FG = {False: "#a8a8a8", True: "#6a6a70"}   # 꺼진 단추 글(261104-2 — 종전엔 글 색이 고정이라 꺼져도 켜진 것과 같아 보였다)
+# 261128-1(디자인 SOT §2.9.7 ★, 사용자 결정 '회색조 아이콘'): 분류명(바깥 왼쪽 표시) 그림은 색을 빼고 이 회색 단계로 —
+#   (어두운 끝, 밝은 끝). 원래 그림의 밝기를 이 사이에 펴서 모양·안쪽 선은 남기고 색만 없앤다. 누르는 단추가 아니라는 뜻.
+MARK_GRAY = {False: ("#5c5c62", "#b4b4b8"), True: ("#8c8c92", "#dcdce0")}
+# 261128-4(디자인 SOT §2.9.3 색 표·§2.9.7 ★, 사용자 지시 '분류명을 알 수 있게 약간 흐리게'): 글자 분류명 — 단추 글보다 약간 흐리게
+MARK_FG = {False: "#6a6a70", True: "#a4a4aa"}
 REBUILD_MS = 10             # 메뉴 항목이 바뀐 뒤 세부 줄을 다시 만들기까지(잇단 바뀜은 한 번으로 모인다)
 # 261104-15(디자인 SOT §2.9.3, 사용자 결정 '늘 창 가운데'): 탭 줄 오른쪽 칸 검색창 폭 — 창이 좁으면 SEARCH_W 에서
 #   SEARCH_MIN_W 까지 줄어 탭 묶음이 가운데에 남는다. 양쪽 칸의 최소 폭도 SEARCH_MIN_W(그보다 좁은 창은 Qt 가 막는다).
@@ -119,6 +124,25 @@ class _TipFilter(QObject):
         return False
 
 
+def gray_pixmap(pm, dark: bool):
+    """색 그림 → 무채색(디자인 SOT §2.9.7 ★ 261128-1): 밝기만 남겨 `MARK_GRAY[dark]` 의 두 끝 사이로 편다. 투명도는 그대로."""
+    from PyQt6.QtGui import QImage, QPixmap
+    img = pm.toImage().convertToFormat(QImage.Format.Format_ARGB32)
+    lo, hi = (QColor(c).red() for c in MARK_GRAY[bool(dark)])
+    for y in range(img.height()):
+        for x in range(img.width()):
+            c = QColor.fromRgba(img.pixel(x, y))
+            a = c.alpha()
+            if a == 0:
+                continue
+            lum = (299 * c.red() + 587 * c.green() + 114 * c.blue()) / 255000.0
+            g = int(round(lo + (hi - lo) * lum))
+            img.setPixel(x, y, QColor(g, g, g, a).rgba())
+    out = QPixmap.fromImage(img)
+    out.setDevicePixelRatio(pm.devicePixelRatio())
+    return out
+
+
 def _make_icon_mark():
     from PyQt6.QtWidgets import QWidgetAction
 
@@ -142,14 +166,20 @@ def _make_icon_mark():
             return lab
 
         def _paint(self, lab) -> None:
+            par = lab.parentWidget()
+            dark = getattr(par, "dark", None)
+            if dark is None:
+                from viewer import theme as _theme
+                dark = _theme.is_dark()
             if self._icon_fn is None:
                 lab.setText(self._text)
                 lab.setContentsMargins(4, 0, 2, 0)
+                lab.setStyleSheet("QLabel{color:%s;}" % MARK_FG[bool(dark)])     # 261128-4: 약간 흐리게
                 return
             ic = self._icon_fn()
-            px = lab.parentWidget().iconSize() if hasattr(lab.parentWidget(), "iconSize") else None
+            px = par.iconSize() if hasattr(par, "iconSize") else None
             n = px.width() if px is not None and px.width() > 0 else 13
-            lab.setPixmap(ic.pixmap(n, n))
+            lab.setPixmap(gray_pixmap(ic.pixmap(n, n), bool(dark)))
 
         def refresh(self) -> None:
             for w in self.createdWidgets():
@@ -434,7 +464,19 @@ class Ribbon(QWidget):
         return self._peek
 
     def contextMenuEvent(self, ev):
-        """261025-5(§2.9.6): 탭 줄·리본 바탕 우클릭 — '리본 메뉴 보이기'·'모음 메뉴 관리...'."""
+        """261025-5(§2.9.6): 탭 줄·리본 바탕 우클릭 — '리본 메뉴 보이기'·'모음 메뉴 관리...'.
+        261128-3(§2.9.5): 단추의 액션에 `ribbon_context`(메뉴를 만드는 함수)가 있으면 그 단추 위에서는 그 메뉴."""
+        w = self.childAt(ev.pos())
+        while w is not None and w is not self and not isinstance(w, QToolButton):
+            w = w.parentWidget()
+        a = w.defaultAction() if isinstance(w, QToolButton) else None
+        own = getattr(a, "ribbon_context", None) if a is not None else None
+        if callable(own):
+            m = own()
+            if m is not None:
+                m.exec(ev.globalPos())
+            ev.accept()
+            return
         fn = self.context_menu_provider
         if fn is None:
             return super().contextMenuEvent(ev)
@@ -537,6 +579,9 @@ class Ribbon(QWidget):
             r.dark = d
             r.setStyleSheet(f"QToolBar{{background:{ROW_BG[d]};border:none;border-top:1px solid {ROW_BORDER[d]};}}"
                             + css + "QToolBar::separator{width:12px;background:transparent;}")
+            for a in r.actions():               # 261128-4: 분류명(글 MARK_FG·그림 MARK_GRAY)도 이 테마로 다시
+                if a.property("ribbonMark") and hasattr(a, "refresh"):
+                    a.refresh()
             r.update()
 
 

@@ -11611,9 +11611,53 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 where = (f.get("file") if kind == "file" else None) or f.get("folder") or ""
                 a.setToolTip(f.get("name", "?") + "\n" + str(where))
                 a.triggered.connect(lambda _c=False, ff=f: self._open_favorite(ff))
+                a.ribbon_context = (lambda ff=f, k=kind: self._fav_button_menu(ff, k))   # 261128-3: 오른쪽 누름
                 m.insertAction(before, a)
                 self._fav_btn_acts.append(a)
         self._set_fav_icons()
+
+    def _fav_button_menu(self, fav: dict, kind: str):
+        """261128-3(디자인 SOT §2.9.5, 사용자 지시·결정): 즐겨찾기 탭 폴더·파일 단추 오른쪽 누름 —
+        `단추 이름`·`이름 변경`·`삭제`·`항목 관리`. 묻는 창·글은 `항목 관리` 창과 같다(새 문구 없음).
+        누른 단추는 목록을 다시 넣을 때 지워지므로 고친 뒤 다시 넣기·저장은 메뉴가 닫힌 뒤(`_fav_edit_done`)."""
+        m = QMenu(self)
+        m.addAction(tr("단추 이름")).triggered.connect(lambda: self._fav_edit(fav, "short"))
+        m.addAction(tr("이름 변경")).triggered.connect(lambda: self._fav_edit(fav, "name"))
+        m.addAction(tr("삭제")).triggered.connect(lambda: self._fav_edit(fav, "delete"))
+        m.addSeparator()
+        m.addAction(tr("항목 관리")).triggered.connect(lambda: QTimer.singleShot(0, lambda: self._open_favorites_manager(kind)))
+        return m
+
+    def _fav_edit(self, fav: dict, what: str) -> None:
+        from PyQt6.QtWidgets import QInputDialog
+        from viewer.widgets.favorites_dialog import short_label
+        if not any(f is fav for f in self._favorites):              # 그 사이 목록이 바뀌었다
+            return
+        if what == "short":
+            new, ok = QInputDialog.getText(self, tr("단추 이름"), tr("즐겨찾기 탭 단추에 보일 이름 (비우면 자동):"),
+                                           text=str(fav.get("short") or ""))
+            if not ok:
+                return
+            if new.strip():
+                fav["short"] = new.strip()
+            else:
+                fav.pop("short", None)
+        elif what == "name":
+            new, ok = QInputDialog.getText(self, tr("이름 변경"), tr("새 이름:"), text=fav.get("name", ""))
+            if not (ok and new.strip()):
+                return
+            fav["name"] = new.strip()
+        elif what == "delete":
+            ret = QMessageBox.question(self, tr("삭제"), tr("'{text}' 을(를) 삭제할까요?").format(text=short_label(fav)),
+                                       QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+            if ret != QMessageBox.StandardButton.Yes:
+                return
+            self._favorites = [f for f in self._favorites if f is not fav]
+        QTimer.singleShot(0, self._fav_edit_done)
+
+    def _fav_edit_done(self) -> None:
+        self._refresh_favorites_menu()
+        self._save_settings_now()
 
     def _set_fav_icons(self) -> None:
         """261031-12(디자인 SOT §2.9.5·§4.5, 사용자 결정 '시안 C'): 즐겨찾기 탭 종류 아이콘 — 테마가 바뀌면 다시 그린다.

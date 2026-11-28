@@ -200,7 +200,7 @@ class StudyPanel(QWidget):
         self.btn_add.setFixedSize(_QSize(26, 26))
         self.btn_add.setStyleSheet("QPushButton{padding:0px;font-size:15px;font-weight:bold;}")
         hdr.addWidget(self.btn_add)
-        self.btn_edit = QPushButton("✎")
+        self.btn_edit = QPushButton()              # 그림 = 라인 연필(아래 261128-10)
         self.btn_edit.setToolTip(tr("선택 단어/용어 편집(한글뜻·영어뜻·예시·참고문헌, 삭제)"))
         self.btn_edit.clicked.connect(self._edit_current)
         hdr.addWidget(self.btn_edit)
@@ -221,17 +221,18 @@ class StudyPanel(QWidget):
         hdr.addWidget(self.btn_mp3)
         # 260611-66: 동작 버튼을 메인 툴바 버튼과 동일 크기(높이 26·아이콘 24)로 통일
         try:
-            from PyQt6.QtGui import QIcon
             from PyQt6.QtCore import QSize
-            from viewer.resources_path import resource_path
-            from viewer.widgets.icons import color_icon, BTN_ICON_PX     # 디자인 SOT §4.6: 위아래 여백을 둔 크기
-            for b, ic in ((self.btn_edit, "icon_edit.png"),
-                          (self.btn_word, "icon_word.png")):
+            from viewer.widgets.icons import color_icon, themed_icon, file_kind_icon, bind_theme_refresh, BTN_ICON_PX   # 디자인 SOT §4.6: 위아래 여백을 둔 크기
+            for b in (self.btn_edit, self.btn_word):
                 b.setText("")
-                b.setIcon(QIcon(resource_path(ic)))
                 b.setIconSize(QSize(BTN_ICON_PX, BTN_ICON_PX))
                 b.setFixedSize(QSize(26, 26))          # 메인 툴바 높이(26)와 동일 + 정사각형
                 b.setStyleSheet("QPushButton{padding:0px;}")
+            # 261128-10(디자인 SOT §4.8 ①·④, 사용자 결정 '안 A 형식 색 배지'): 편집 = 라인 연필, Word = 워드 형식 배지
+            #   (종전 icon_edit.png·MS 로고 icon_word.png) — 테마가 바뀌면 다시 칠한다
+            bind_theme_refresh(self.btn_word, lambda: (
+                self.btn_edit.setIcon(themed_icon("pencil", size=BTN_ICON_PX, dpr=2.0)),
+                self.btn_word.setIcon(file_kind_icon("DOCX", size=BTN_ICON_PX))))
             # 261031-18(디자인 SOT §4.5, 사용자 지시): mp3 음표는 ▶ 와 같은 색 그림 — 테마가 바뀌면 메인 창이 다시 그린다
             self.btn_mp3.setText("")
             self.btn_mp3.setIcon(color_icon("mp3", size=BTN_ICON_PX))
@@ -362,14 +363,17 @@ class StudyPanel(QWidget):
         self.sort_combo.addItems([SORT_ORDER, SORT_ALPHA, SORT_FREQ])
         self.sort_combo.currentIndexChanged.connect(self._render)
         flow.addWidget(self.sort_combo)
-        self.btn_mark = QToolButton(); self.btn_mark.setText("▲")
+        self.btn_mark = QToolButton()              # 261128-10(디자인 SOT §4.8 ②): ▲▼ 글리프 → 파란 꺾쇠 ∧ ∨
         self.btn_mark.setToolTip(tr("선택단어로 저장"))
         self.btn_mark.clicked.connect(self.markSelectedRequested.emit)
         flow.addWidget(self.btn_mark)
-        self.btn_del = QToolButton(); self.btn_del.setText("▼")
+        self.btn_del = QToolButton()
         self.btn_del.setToolTip(tr("리스트에서 삭제(모든 페이지)"))
         self.btn_del.clicked.connect(self.deleteWordRequested.emit)
         flow.addWidget(self.btn_del)
+        from viewer.widgets.icons import themed_icon as _ti, bind_theme_refresh as _btr
+        _btr(self.btn_mark, lambda: (self.btn_mark.setIcon(_ti("chevron_up", accent=True)),
+                                     self.btn_del.setIcon(_ti("chevron_down", accent=True))))
 
         root.addWidget(self._ctrl_widget)
 

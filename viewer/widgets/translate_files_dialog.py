@@ -182,7 +182,9 @@ class TranslateFilesDialog(QDialog):
         self.cmb_sort.setToolTip(tr("좌측 파일 목록 정렬 기준"))
         self.cmb_sort.setCurrentIndex(1)            # 초기 정렬 = 수정일순
         self.cmb_sort.currentIndexChanged.connect(lambda *_: self._populate_left())
-        self.btn_sort_dir = QPushButton("▼")
+        self.btn_sort_dir = QPushButton()          # 261128-10(디자인 SOT §4.8 ②): 정렬 방향 ∨/∧ 파란 꺾쇠(종전 ▼/▲)
+        from viewer.widgets.icons import themed_icon as _ti
+        self.btn_sort_dir.setIcon(_ti("chevron_down", accent=True, dpr=2.0))
         self.btn_sort_dir.setFixedWidth(28)
         self.btn_sort_dir.setToolTip(tr("오름/내림차순 전환"))
         self._sort_desc = True                      # 초기 = 내림차순
@@ -199,7 +201,8 @@ class TranslateFilesDialog(QDialog):
         # 가운데: → 버튼
         mid = QVBoxLayout()
         mid.addStretch(1)
-        btn_add = QPushButton("→")
+        from viewer.widgets.icons import themed_icon as _ti   # 261128-10(디자인 SOT §4.8 ②)
+        btn_add = QPushButton(_ti("chevron_right", accent=True, dpr=2.0), "")
         btn_add.setToolTip(tr("선택 파일을 오른쪽(번역 대상)으로"))
         btn_add.setFixedWidth(44)
         btn_add.clicked.connect(self._move_selected)
@@ -218,8 +221,9 @@ class TranslateFilesDialog(QDialog):
         rlist_row.addWidget(self.right, 1)
         rbtncol = QVBoxLayout()
         rbtncol.addStretch(1)
-        btn_up = QPushButton("▲"); btn_up.setFixedWidth(40)
-        btn_dn = QPushButton("▼"); btn_dn.setFixedWidth(40)
+        from viewer.widgets.icons import themed_icon as _ti   # 261128-10(디자인 SOT §4.8 ②): 글리프 → 파란 꺾쇠
+        btn_up = QPushButton(_ti("chevron_up", accent=True, dpr=2.0), ""); btn_up.setFixedWidth(40)
+        btn_dn = QPushButton(_ti("chevron_down", accent=True, dpr=2.0), ""); btn_dn.setFixedWidth(40)
         btn_up.clicked.connect(lambda: self._move_right(-1))
         btn_dn.clicked.connect(lambda: self._move_right(+1))
         rbtncol.addWidget(btn_up); rbtncol.addWidget(btn_dn)
@@ -259,7 +263,7 @@ class TranslateFilesDialog(QDialog):
         v.addWidget(self.log)
 
         # 드롭 오버레이
-        self._overlay = QLabel(tr("📄 여기에 PDF 를 끌어다 놓으세요 (번역 목록에 추가)"), self)
+        self._overlay = QLabel(tr("여기에 PDF 를 끌어다 놓으세요 (번역 목록에 추가)"), self)
         self._overlay.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._overlay.setStyleSheet(
             "QLabel{background:rgba(42,125,225,0.16);border:3px dashed #2a7de1;"
@@ -290,7 +294,8 @@ class TranslateFilesDialog(QDialog):
 
     def _toggle_sort_dir(self):
         self._sort_desc = not self._sort_desc
-        self.btn_sort_dir.setText("▼" if self._sort_desc else "▲")
+        from viewer.widgets.icons import themed_icon as _ti
+        self.btn_sort_dir.setIcon(_ti("chevron_down" if self._sort_desc else "chevron_up", accent=True, dpr=2.0))
         self._populate_left()
 
     # ── 목록 조작 ──────────────────────────────────────────────

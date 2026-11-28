@@ -41,9 +41,11 @@ class ContentFindOverlay(QWidget):
         self.count = QLabel("0/0")
         self.count.setStyleSheet("color:#666;min-width:44px;")
         self.count.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.btn_prev = QToolButton(); self.btn_prev.setText("∧"); self.btn_prev.setToolTip(tr("이전 (Shift+Enter)"))
-        self.btn_next = QToolButton(); self.btn_next.setText("∨"); self.btn_next.setToolTip(tr("다음 (Enter)"))
-        self.btn_close = QToolButton(); self.btn_close.setText("✕"); self.btn_close.setToolTip(tr("닫기 (Esc)"))
+        # 261128-10(디자인 SOT §4.8 ②): 글리프 ∧∨✕ → 법령 창 찾기 바와 같은 파란 꺾쇠·✕ 그림. 바탕이 늘 흰색이라 밝은 꼴(dark=False)
+        from viewer.widgets.icons import themed_icon
+        self.btn_prev = QToolButton(); self.btn_prev.setIcon(themed_icon("chevron_up", False, accent=True, dpr=2.0)); self.btn_prev.setToolTip(tr("이전 (Shift+Enter)"))
+        self.btn_next = QToolButton(); self.btn_next.setIcon(themed_icon("chevron_down", False, accent=True, dpr=2.0)); self.btn_next.setToolTip(tr("다음 (Enter)"))
+        self.btn_close = QToolButton(); self.btn_close.setIcon(themed_icon("close", False, accent=True, dpr=2.0)); self.btn_close.setToolTip(tr("닫기 (Esc)"))
         for w in (self.edit, self.count, self.btn_prev, self.btn_next, self.btn_close):
             bar.addWidget(w, 1 if w is self.edit else 0)
         v.addLayout(bar)

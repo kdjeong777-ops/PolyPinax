@@ -89,7 +89,6 @@ ALLOW = {
     #   tr_noop + 보여 줄 때 tr(이름)이라 여기 없다(사용자가 고친 이름은 번역이 없어 그대로 보인다)
     "viewer/widgets/nup_preset.py": {"(이름없음)"},
     "viewer/widgets/twoup_dialog.py": {"(이름없음)"},
-    "viewer/widgets/favorites_dialog.py": {"📁 폴더"},
     "viewer/widgets/pres_timer.py": {"준비"},
     "viewer/widgets/presentation.py": {"링크"},
     # 261101-3(마스터 §4.6.11): 도장에 **찍는** 날짜 형식 값(설정 키·문서 안의 글) — 화면 언어와 무관하게 한국 서식을 고를 수 있어야 한다.

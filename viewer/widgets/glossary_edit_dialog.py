@@ -68,9 +68,10 @@ class GlossaryEditDialog(QDialog):
         v.addWidget(self.info)
 
         row = QHBoxLayout()
-        self.btn_save = QPushButton(tr("✔ 사용자 사전에 저장"))
+        from viewer.widgets.icons import themed_icon   # 261128-10(디자인 SOT §4.8): ✔·↻ 글리프 → 라인 그림
+        self.btn_save = QPushButton(themed_icon("check", dpr=2.0), tr("사용자 사전에 저장"))
         self.btn_save.clicked.connect(self._save)
-        self.btn_retrans = QPushButton(tr("↻ 이 문서 재번역"))
+        self.btn_retrans = QPushButton(themed_icon("refresh", dpr=2.0), tr("이 문서 재번역"))
         self.btn_retrans.setEnabled(bool(self._source_path))
         self.btn_retrans.clicked.connect(self._retranslate)
         self.btn_close = QPushButton(tr("닫기"))

@@ -300,6 +300,10 @@ class MiniStrip(QWidget):
         from viewer.widgets.flow_layout import FlowLayout
         self.head_widget = QWidget(self)
         head = FlowLayout(self.head_widget, spacing=2, center=False)
+        # 261128-10(디자인 SOT §4.8 ①): 제목 앞 그림은 따로(`set_title_icon`, 종전 제목 글자 앞 이모지 🖼) — 없으면 숨김
+        self.title_icon = QLabel()
+        self.title_icon.setVisible(False)
+        head.addWidget(self.title_icon)
         self.title_label = QLabel(self._title)
         self.title_label.setStyleSheet("font-weight: bold; padding: 0px 4px;")
         head.addWidget(self.title_label)
@@ -312,11 +316,13 @@ class MiniStrip(QWidget):
         self.count_label.setStyleSheet("color: #888;")
         head.addWidget(self.count_label)
 
-        self.clear_btn = QPushButton("🗑")
+        self.clear_btn = QPushButton()                # 261128-10(디자인 SOT §4.8 ①): 라인 휴지통(종전 이모지 🗑)
         self.clear_btn.setFixedWidth(28)
         self.clear_btn.setToolTip(tr("전체 삭제"))
         self.clear_btn.clicked.connect(self._on_clear_all)
         head.addWidget(self.clear_btn)
+        from viewer.widgets.icons import themed_icon, bind_theme_refresh
+        bind_theme_refresh(self.clear_btn, lambda: self.clear_btn.setIcon(themed_icon("trash", dpr=2.0)))
         layout.addWidget(self.head_widget)
 
         self.list = _DragOutList(self)
@@ -601,6 +607,11 @@ class MiniStrip(QWidget):
     def clear(self):
         self.list.clear()
         self._update_count()
+
+    def set_title_icon(self, icon) -> None:
+        """261128-10(디자인 SOT §4.8): 제목 앞 그림 — 쓰는 쪽이 테마가 바뀔 때 다시 부른다."""
+        self.title_icon.setPixmap(icon.pixmap(16, 16))
+        self.title_icon.setVisible(not icon.isNull())
 
     def _on_clear_all(self):
         if self.list.count() == 0:

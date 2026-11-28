@@ -230,10 +230,13 @@ class TagApplyDialog(QDialog):
         f0.setBold(True)
         lbl_tag.setFont(f0)
         top.addWidget(lbl_tag)
-        self.btn_undo = QPushButton("↶")
-        self.btn_redo = QPushButton("↷")
+        from viewer.widgets.icons import themed_icon      # 261128-10(디자인 SOT §4.8): ↶↷ → 라인 그림
+        self.btn_undo = QPushButton(themed_icon("undo", dpr=2.0), "")
+        self.btn_redo = QPushButton(themed_icon("redo", dpr=2.0), "")
+        _h = QPushButton(tr("적용")).sizeHint().height()      # 그림만인 단추도 옆 글자 단추와 같은 높이(한 줄 위 끝 맞춤)
         for b, tip in ((self.btn_undo, tr("되돌리기 (Ctrl+Z)")), (self.btn_redo, tr("다시 실행 (Ctrl+Y)"))):
             b.setFixedWidth(28)
+            b.setFixedHeight(_h)
             b.setToolTip(tip)
             b.setAccessibleName(tip)
         self.btn_undo.clicked.connect(self.undo)
@@ -305,8 +308,8 @@ class TagApplyDialog(QDialog):
         lists.addWidget(ga, 1)
         mid = QVBoxLayout()
         mid.addStretch(1)
-        self.btn_to = QPushButton("→")
-        self.btn_from = QPushButton("←")
+        self.btn_to = QPushButton(themed_icon("chevron_right", accent=True, dpr=2.0), "")    # 261128-10(§4.8 ②): →← → 파란 꺾쇠
+        self.btn_from = QPushButton(themed_icon("chevron_left", accent=True, dpr=2.0), "")
         for b, tip in ((self.btn_to, tr("붙이기 — 고른 태그를 고른 파일 모두에")), (self.btn_from, tr("떼기 — 고른 태그를 고른 파일 모두에서(자동 태그는 거절)"))):
             b.setFixedWidth(32)
             b.setToolTip(tip)

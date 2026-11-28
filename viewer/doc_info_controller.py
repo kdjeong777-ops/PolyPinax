@@ -208,14 +208,14 @@ class DocInfoMixin:
                     b.setData(Qt.ItemDataRole.UserRole, f)
                     if v == "—" and f not in pend:
                         b.setText("")
-                    b.setToolTip(tr("두 번 눌러 고칩니다 — 편집 모드 💾 저장 때 PDF 에 들어갑니다."))
+                    b.setToolTip(tr("두 번 눌러 고칩니다 — 편집 모드 [저장] 때 PDF 에 들어갑니다."))
                 t.setItem(r, 0, a)
                 t.setItem(r, 1, b)
         finally:
             t.blockSignals(False)
         note = getattr(dlg, "_note", None)
         if note is not None:
-            note.setText(tr("저장 안 한 고침이 있습니다 — 편집 모드 💾 저장 때 PDF 에 들어갑니다.") if pend
+            note.setText(tr("저장 안 한 고침이 있습니다 — 편집 모드 [저장] 때 PDF 에 들어갑니다.") if pend
                          else tr("제목·작성자·주제·키워드는 두 번 눌러 고칠 수 있습니다."))
         dlg.setWindowTitle(tr("문서 정보") + " — " + Path(path).name)
 
@@ -243,7 +243,7 @@ class DocInfoMixin:
             if not bt.is_edit_mode():
                 ret = QMessageBox.question(
                     dlg, tr("문서 정보"),
-                    tr("PDF 의 문서 정보를 고치므로 편집모드로 바꾼 뒤 고칩니다.\n고친 값은 편집 모드 💾 저장 때 PDF 에 들어갑니다."),
+                    tr("PDF 의 문서 정보를 고치므로 편집모드로 바꾼 뒤 고칩니다.\n고친 값은 편집 모드 [저장] 때 PDF 에 들어갑니다."),
                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
                 if ret != QMessageBox.StandardButton.Yes:
                     QTimer.singleShot(0, lambda k=i: self._doc_info_dialog_refresh(k))   # 고친 칸을 되돌린다

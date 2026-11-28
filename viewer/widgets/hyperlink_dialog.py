@@ -98,7 +98,8 @@ class HyperlinkDialog(QDialog):
         # ⬇ 등록 버튼
         reg_row = QHBoxLayout()
         reg_row.addStretch(1)
-        self.btn_register = QPushButton(tr("⬇  등록"))
+        from viewer.widgets.icons import themed_icon as _ti   # 261128-10(디자인 SOT §4.8): 글리프 → 그림(파란 바탕이라 밝은 꺾쇠)
+        self.btn_register = QPushButton(_ti("chevron_down", True, dpr=2.0), tr("등록"))
         self.btn_register.setStyleSheet(
             "QPushButton{background:#1565c0;color:#fff;font-weight:bold;"
             "padding:6px 28px;border:none;border-radius:6px;}"
@@ -124,8 +125,8 @@ class HyperlinkDialog(QDialog):
 
         # 리스트 조작 — 260609-15(C2): 삭제를 이름변경 바로 오른쪽(닫기와 멀리)
         ops = QHBoxLayout()
-        b_up = QPushButton(tr("▲ 위")); b_up.clicked.connect(lambda: self._move(-1))
-        b_dn = QPushButton(tr("▼ 아래")); b_dn.clicked.connect(lambda: self._move(+1))
+        b_up = QPushButton(_ti("chevron_up", accent=True, dpr=2.0), tr("위")); b_up.clicked.connect(lambda: self._move(-1))
+        b_dn = QPushButton(_ti("chevron_down", accent=True, dpr=2.0), tr("아래")); b_dn.clicked.connect(lambda: self._move(+1))
         b_rn = QPushButton(tr("이름변경")); b_rn.clicked.connect(self._rename_selected)
         b_del = QPushButton(tr("삭제")); b_del.clicked.connect(self._delete_selected)
         ops.addWidget(b_up); ops.addWidget(b_dn); ops.addWidget(b_rn)
@@ -150,8 +151,8 @@ class HyperlinkDialog(QDialog):
             self.table.insertRow(r)
             it_name = QTableWidgetItem(ln.get("name", ""))
             it_name.setFlags(it_name.flags() | Qt.ItemFlag.ItemIsEditable)
-            tag = "📄 " if ln.get("kind") == "file" else "🔗 "
-            it_tgt = QTableWidgetItem(tag + str(ln.get("target", "")))
+            from viewer.widgets.icons import themed_icon as _ti   # 261128-10: 종류 그림(종전 글자 앞 📄·🔗)
+            it_tgt = QTableWidgetItem(_ti("file" if ln.get("kind") == "file" else "link", dpr=2.0), str(ln.get("target", "")))
             it_tgt.setFlags(it_tgt.flags() & ~Qt.ItemFlag.ItemIsEditable)
             self.table.setItem(r, 0, it_name)
             self.table.setItem(r, 1, it_tgt)

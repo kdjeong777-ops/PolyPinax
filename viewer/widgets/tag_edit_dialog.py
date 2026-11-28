@@ -78,7 +78,7 @@ class TagEditDialog(QDialog):
         # ── 자동 태그 칩 행(§8.3 구분 · §8.5 거절/승격) ────────────────────
         if self._auto:
             v.addWidget(QLabel(tr("자동 부여된 태그 — ✕ 지우면 다시 붙지 않고, "
-                               "📌 고정하면 수동 태그가 됩니다:")))
+                               "압정 단추로 고정하면 수동 태그가 됩니다:")))
             row = QWidget()
             h = QHBoxLayout(row)
             h.setContentsMargins(0, 0, 0, 0)
@@ -97,7 +97,8 @@ class TagEditDialog(QDialog):
                 chip.setStyleSheet(self._st["auto"])
                 sc = conf.get(t)
                 chip.setToolTip(tr('자동 부여{v} — 클릭하면 거절(다시 붙지 않음)').format(v=tr(' (신뢰도 {sc:.2f})').format(sc=sc) if sc else ''))
-                pin = QPushButton("📌")
+                from viewer.widgets.icons import themed_icon   # 261128-10(디자인 SOT §4.8): 그린 압정(종전 이모지 📌)
+                pin = QPushButton(themed_icon("pin", dpr=2.0), "")
                 pin.setCheckable(True)
                 pin.setStyleSheet(self._st["pin"])
                 pin.setToolTip(tr('#{t} 를 수동 태그로 고정 — 이후 재계산이 건드리지 않음').format(t=t))

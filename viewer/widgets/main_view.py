@@ -4031,7 +4031,8 @@ class MainView(QWidget):
         창을 만든 **뒤에** 테마가 적용돼 다크 모드에서도 라이트 색(#444)이 남아 거의 안 보였다."""
         from viewer.widgets.icons import themed_icon as _ti
         for b, name in ((getattr(self, "btn_crop", None), "crop"), (getattr(self, "btn_sign", None), "sign"),
-                        (getattr(self, "_draw_pan_btn", None), "hand")):     # 261107-36(마스터 §4.6.12)
+                        (getattr(self, "_draw_pan_btn", None), "hand"),      # 261107-36(마스터 §4.6.12)
+                        (getattr(self, "_undo_btn", None), "undo"), (getattr(self, "_redo_btn", None), "redo")):   # 261128-10
             if b is not None:
                 b.setIcon(_ti(name, dark=dark, size=16))
         self._update_image_button()            # 261101-3: 이미지 단추(테마 단색)
@@ -4136,12 +4137,14 @@ class MainView(QWidget):
         bclr.clicked.connect(self.clear_page_drawings)
         hb.addWidget(bclr)
         # 260611-80: 되돌리기 / 다시실행
-        self._undo_btn = QPushButton("↶"); self._undo_btn.setFixedSize(28, H)
+        # 261128-10(디자인 SOT §4.8 ①): 글리프 ↶↷ → 라인 그림(테마가 바뀌면 refresh_theme_icons)
+        from viewer.widgets.icons import themed_icon as _ti
+        self._undo_btn = QPushButton(_ti("undo", size=16), ""); self._undo_btn.setFixedSize(28, H)
         self._undo_btn.setToolTip(tr("되돌리기 (Ctrl+Z)"))
         self._undo_btn.clicked.connect(self.undo_strokes)
         self._undo_btn.setEnabled(False)
         hb.addWidget(self._undo_btn)
-        self._redo_btn = QPushButton("↷"); self._redo_btn.setFixedSize(28, H)
+        self._redo_btn = QPushButton(_ti("redo", size=16), ""); self._redo_btn.setFixedSize(28, H)
         self._redo_btn.setToolTip(tr("다시실행 (Ctrl+Y)"))
         self._redo_btn.clicked.connect(self.redo_strokes)
         self._redo_btn.setEnabled(False)

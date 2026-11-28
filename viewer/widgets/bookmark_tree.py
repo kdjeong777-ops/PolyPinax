@@ -817,7 +817,7 @@ class BookmarkTree(QWidget):
         sort_row.addWidget(self._sort_combo)
         # 260611-61: 새로고침(↻) — 외부에서 파일 추가 시 트리 갱신. 261011-4: 정렬 오른쪽(사용자 결정)
         #   261012-3(사용자 지시): 편집 모드에서도 보인다 — 저장 안 한 수정이 있으면 먼저 묻는다(refresh)
-        self.btn_refresh = QPushButton("↻")
+        self.btn_refresh = QPushButton()             # 261128-10(디자인 SOT §4.8 ①): 그린 ↻ — 그림은 _paint_icons
         self.btn_refresh.setFixedWidth(30)
         self.btn_refresh.setToolTip(tr("책갈피 새로고침 (외부에서 파일이 추가/변경된 경우)"))
         self.btn_refresh.clicked.connect(self.refresh)
@@ -825,7 +825,7 @@ class BookmarkTree(QWidget):
         layout.addWidget(self._sort_row_w)
 
         # ── 보기 줄: [📄 파일 / 📁 폴더] [트리 / 단일] — 정렬·파일/폴더·트리/단일은 모두 보기 종류 ──
-        self.btn_mode = QPushButton(tr("📁 폴더"))
+        self.btn_mode = QPushButton(tr("폴더"))       # 261128-10: 그림(파일·폴더 라인)은 _update_mode_button
         self.btn_mode.setToolTip(tr("파일 모드 ↔ 폴더 모드 전환\n"
                                  "· 파일 모드: 현재 파일만 표시\n"
                                  "· 폴더 모드: 그 폴더의 PDF 전체 표시"))
@@ -850,11 +850,8 @@ class BookmarkTree(QWidget):
         self.btn_edit = _SlimButton(tr(" 편집"), None)
         self.btn_edit.setCheckable(True)
         self.btn_edit.setToolTip(tr("책갈피 편집 모드"))
-        # 260611-9: 편집 아이콘 — 비선택=파란 연필, 선택(편집 중)=붉은 연필
-        self._ico_edit_blue = QIcon(resource_path("icon_edit_blue.png") or
-                                    resource_path("icon_edit.png") or "")
-        self._ico_edit_red = QIcon(resource_path("icon_edit_red.png") or
-                                   resource_path("icon_edit.png") or "")
+        # 260611-9: 편집 아이콘 — 비선택=파란 연필, 선택(편집 중)=붉은 연필. 261128-10(디자인 SOT §4.8): 그린 라인 연필
+        #   (파랑 = accent, 빨강 = tone "stop") — 종전 icon_edit_blue/red.png, 테마가 바뀌면 _paint_icons 가 다시
         self.btn_edit.setIconSize(QSize(BTN_ICON_PX, BTN_ICON_PX))
         self._update_edit_icon()
         self.btn_edit.toggled.connect(self.set_edit_mode)
@@ -862,22 +859,14 @@ class BookmarkTree(QWidget):
         edit_row = _Flow(self._edit_row_w, spacing=3, center=False, justify=True)
         edit_row.addWidget(self.btn_edit)
         # 260611-9: 편집 ↔ 저장 사이에 '취소'(저장 전 수정 되돌리기). 편집모드에서만 표시.
-        self.btn_cancel = _SlimButton(tr(" 취소"), None)
-        _cp = resource_path("icon_cancel.png")
-        if _cp:
-            self.btn_cancel.setIcon(QIcon(_cp)); self.btn_cancel.setIconSize(QSize(BTN_ICON_PX, BTN_ICON_PX))
-        else:
-            self.btn_cancel.setText(tr("✖ 취소"))
+        self.btn_cancel = _SlimButton(tr(" 취소"), None)   # 그림 = 라인 ✕(261128-10, 종전 icon_cancel.png)
+        self.btn_cancel.setIconSize(QSize(BTN_ICON_PX, BTN_ICON_PX))
         self.btn_cancel.setToolTip(tr("편집 후 저장 전의 수정 사항을 모두 취소(되돌리기)"))
         self.btn_cancel.clicked.connect(self._op_cancel)
         self.btn_cancel.setVisible(False)
         edit_row.addWidget(self.btn_cancel)
-        self.btn_save = _SlimButton(tr(" 저장"), None)
-        _sp = resource_path("icon_save.png")
-        if _sp:
-            self.btn_save.setIcon(QIcon(_sp)); self.btn_save.setIconSize(QSize(BTN_ICON_PX, BTN_ICON_PX))
-        else:
-            self.btn_save.setText(tr("💾 저장"))
+        self.btn_save = _SlimButton(tr(" 저장"), None)     # 그림 = 파일 탭과 같은 파란 플로피(261128-10 §4.8 ③, 종전 이모지 💾)
+        self.btn_save.setIconSize(QSize(BTN_ICON_PX, BTN_ICON_PX))
         self.btn_save.setToolTip(tr("저장 — 책갈피·쪽 편집·회전·크롭은 원본 PDF 에, 꾸밈·하이퍼링크·태그는 다른 뷰어에서도 보이게 PDF 에 함께 넣습니다. 굽거나 크롭 바깥을 지우려면 '평탄화 사본'."))
         self.btn_save.clicked.connect(lambda: self._op_save())   # 261031-3: clicked(checked) 가 file_path 자리로 들어가지 않게(디자인 SOT §2.9)
         self.btn_save.setVisible(False)
@@ -892,19 +881,16 @@ class BookmarkTree(QWidget):
         # ── 삭제 줄: [🗑️ 삭제] [📋 복사] — '⭐ 선택만' 은 Shift + 삭제로(마스터 §4.7.17, 261011-4) ──
         row2 = QWidget()
         r2 = _Flow(row2, spacing=3, center=False, justify=True)
-        self.btn_delete = self._mk_btn(tr("🗑️ 삭제"),
+        self.btn_delete = self._mk_btn(tr("삭제"),
                                        tr("선택 삭제 (책갈피=트리에서 제거 · 파일=휴지통)\nShift 를 누르고 누르면: 선택한 책갈피만 남기고 그 파일의 나머지 책갈피 삭제"),
                                        self._op_delete)
         r2.addWidget(self.btn_delete)
-        r2.addWidget(self._mk_btn(tr("📋 복사"), tr("선택 파일을 다른 폴더로 복사"), self._op_copy_to))
+        self.btn_copy_to = self._mk_btn(tr("복사"), tr("선택 파일을 다른 폴더로 복사"), self._op_copy_to)
+        r2.addWidget(self.btn_copy_to)               # 261128-10: 휴지통·복사 그림은 _paint_icons(종전 이모지 🗑️·📋)
 
         # ── 책갈피 조작 줄: [책갈피명 수정] [◀ ▶ ▲ ▼ 한 묶음] ──
-        self.btn_edit_single = _SlimButton("", 28)
-        _bep = resource_path("icon_bookmark_edit.png")
-        if _bep:
-            self.btn_edit_single.setIcon(QIcon(_bep)); self.btn_edit_single.setIconSize(QSize(BTN_ICON_PX, BTN_ICON_PX))
-        else:
-            self.btn_edit_single.setText("✎")
+        self.btn_edit_single = _SlimButton("", 28)       # 그림 = 라인 연필(261128-10, 종전 icon_bookmark_edit.png)
+        self.btn_edit_single.setIconSize(QSize(BTN_ICON_PX, BTN_ICON_PX))
         self.btn_edit_single.setToolTip(tr("책갈피명 수정 (단일 편집: 제목·페이지)"))
         self.btn_edit_single.clicked.connect(self._op_edit_single)
         row1 = QWidget()
@@ -916,15 +902,18 @@ class BookmarkTree(QWidget):
         self._arrow_group.setProperty("flow_weight", 4)
         _ag = QHBoxLayout(self._arrow_group)
         _ag.setContentsMargins(0, 0, 0, 0); _ag.setSpacing(2)
-        for txt, tip, slot in (("◀", tr("책갈피 내어쓰기 (상위로)"), self._op_outdent),
-                               ("▶", tr("책갈피 들여쓰기 (하위로)"), self._op_indent),
-                               ("▲", tr("책갈피 위로 이동 (같은 부모 안)"), self._op_move_up),
-                               ("▼", tr("책갈피 아래로 이동 (같은 부모 안)"), self._op_move_down)):
-            b = _SlimButton(txt, 24)                     # 줌 단추와 같은 24
+        #   261128-10(디자인 SOT §4.8 ②): 글리프 ◀▶▲▼ → 파란 꺾쇠 ‹ › ∧ ∨ (그림은 _paint_icons)
+        self._arrow_btns = []
+        for chev, tip, slot in (("chevron_left", tr("책갈피 내어쓰기 (상위로)"), self._op_outdent),
+                                ("chevron_right", tr("책갈피 들여쓰기 (하위로)"), self._op_indent),
+                                ("chevron_up", tr("책갈피 위로 이동 (같은 부모 안)"), self._op_move_up),
+                                ("chevron_down", tr("책갈피 아래로 이동 (같은 부모 안)"), self._op_move_down)):
+            b = _SlimButton("", 24)                      # 줌 단추와 같은 24
             b.setToolTip(tip); b.clicked.connect(slot)
-            b._hint_w = max(24, b.fontMetrics().horizontalAdvance(txt) + 12); b.setMinimumWidth(b._hint_w)
             _ag.addWidget(b)
+            self._arrow_btns.append((b, chev))
         r1.addWidget(self._arrow_group)
+        self._paint_icons()
 
         self._edit_ops_row2 = row2
         self.edit_ops.setVisible(False)
@@ -1034,6 +1023,8 @@ class BookmarkTree(QWidget):
             from PyQt6.QtCore import QEvent
             if ev.type() in (QEvent.Type.PaletteChange, QEvent.Type.StyleChange) and hasattr(self, "btn_view_mode_v"):
                 self._update_view_mode_icon()
+                if hasattr(self, "_arrow_btns"):
+                    self._paint_icons()                  # 261128-10: 머리 단추 그림도 그 테마로
         except Exception:
             pass
         super().changeEvent(ev)
@@ -1047,9 +1038,28 @@ class BookmarkTree(QWidget):
             pass
 
     def _update_edit_icon(self):
-        """260611-9: 편집 비선택=파란 연필 / 선택(편집 중)=붉은 연필."""
-        self.btn_edit.setIcon(self._ico_edit_red if self.btn_edit.isChecked()
-                              else self._ico_edit_blue)
+        """260611-9: 편집 비선택=파란 연필 / 선택(편집 중)=붉은 연필. 261128-10(디자인 SOT §4.8): 그린 라인 연필."""
+        from viewer.widgets.icons import themed_icon, BTN_ICON_PX
+        on = self.btn_edit.isChecked()
+        self.btn_edit.setIcon(themed_icon("pencil", size=BTN_ICON_PX, dpr=2.0, accent=not on, tone="stop" if on else None))
+
+    def _paint_icons(self):
+        """261128-10(디자인 SOT §4.8): 머리 단추 그림 — 만들 때와 테마가 바뀔 때(changeEvent). 종전 이모지·글리프·PNG."""
+        try:
+            from viewer.widgets.icons import themed_icon, color_icon, BTN_ICON_PX
+        except Exception:
+            return
+        ti = lambda n, **k: themed_icon(n, size=BTN_ICON_PX, dpr=2.0, **k)
+        self.btn_refresh.setIcon(ti("refresh"))
+        self._update_mode_button()
+        self._update_edit_icon()
+        self.btn_cancel.setIcon(ti("close"))
+        self.btn_save.setIcon(color_icon("save", size=BTN_ICON_PX))
+        self.btn_delete.setIcon(ti("trash"))
+        self.btn_copy_to.setIcon(ti("copy"))
+        self.btn_edit_single.setIcon(ti("pencil"))
+        for b, chev in getattr(self, "_arrow_btns", ()):
+            b.setIcon(ti(chev, accent=True))
 
     def _op_cancel(self):
         """260611-9: 편집 후 저장 전의 모든 수정 사항 취소(되돌리기). 편집모드는 유지."""
@@ -1672,10 +1682,13 @@ class BookmarkTree(QWidget):
         """모드 버튼 라벨을 현재 모드에 맞게 — 파일 모드면 '폴더 모드로', 폴더면 '파일 모드로'."""
         if not hasattr(self, "btn_mode"):
             return
+        from viewer.widgets.icons import themed_icon   # 261128-10(디자인 SOT §4.8 ①): 라인 파일·폴더 그림(종전 이모지 📄·📁)
         if self._is_file_mode():
-            self.btn_mode.setText(tr("📄 파일"))   # 현재=파일, 클릭 시 폴더로
+            self.btn_mode.setText(tr("파일"))   # 현재=파일, 클릭 시 폴더로
+            self.btn_mode.setIcon(themed_icon("file"))
         else:
-            self.btn_mode.setText(tr("📁 폴더"))   # 현재=폴더, 클릭 시 파일로
+            self.btn_mode.setText(tr("폴더"))   # 현재=폴더, 클릭 시 파일로
+            self.btn_mode.setIcon(themed_icon("folder"))
 
     def _current_selected_file(self):
         """트리에서 선택된 최상위 파일(없으면 앱 제공 현재 파일)."""

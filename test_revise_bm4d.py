@@ -34,15 +34,17 @@ check("단어장 편집 아이콘 적용(아이콘만)",
 # 동일 이미지인지: 같은 파일(icon_edit.png) 픽스맵 비교
 from PyQt6.QtGui import QIcon
 from PyQt6.QtCore import QSize
-ref = QIcon(resource_path("icon_edit.png"))
+# 261128-10(디자인 SOT §4.8): PNG 대신 그린 라인 연필 — 단어장 = 회색, 책갈피 = 파랑(비선택)·빨강(편집 중)
+from viewer.widgets.icons import themed_icon, BTN_ICON_PX
+ref = themed_icon("pencil", size=BTN_ICON_PX, dpr=2.0)
 def key(ic):
     return ic.pixmap(QSize(18, 18)).toImage()
 # 260628-2: '둘이 같은 이미지'는 v1.19.1(260606-6) 사양이고, 그 뒤 **260611-9** 가 책갈피 편집
 #   아이콘을 **상태별**로 바꿨다 — 비선택=파란 연필(icon_edit_blue), 편집 중=붉은 연필(icon_edit_red).
 #   따라서 현행 사양은 '단어장 편집 = icon_edit.png' + '책갈피 편집 = 파랑↔빨강 전환' 이다.
-check("단어장 편집 = icon_edit.png", key(sp_icon) == key(ref))
-_blue = QIcon(resource_path("icon_edit_blue.png") or "")
-_red = QIcon(resource_path("icon_edit_red.png") or "")
+check("단어장 편집 = 라인 연필", key(sp_icon) == key(ref))
+_blue = themed_icon("pencil", size=BTN_ICON_PX, dpr=2.0, accent=True)
+_red = themed_icon("pencil", size=BTN_ICON_PX, dpr=2.0, tone="stop")
 # ※ MainWindow 는 세션 복원 중 `_apply_doc_permissions` 에서 편집모드를 켤 수 있으므로
 #   (그러면 아이콘이 이미 붉은 연필이다) 캡처해 둔 참조 대신 **상태를 정해 놓고 그때의 아이콘**을 읽는다.
 mw.bookmark_tree.btn_edit.setChecked(False)

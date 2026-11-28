@@ -626,11 +626,12 @@ class RibbonCustomizePanel(QWidget):
 
         mid = QVBoxLayout()
         mid.addStretch(1)
-        self.btn_add = QPushButton(tr("추가 >"))
-        self.btn_remove = QPushButton(tr("< 제거"))
+        from viewer.widgets.icons import themed_icon as _ti   # 261128-10(디자인 SOT §4.8 ②): ▲▼·> < → 파란 꺾쇠 ∧ ∨ › ‹
+        self.btn_add = QPushButton(_ti("chevron_right", accent=True, dpr=2.0), tr("추가"))
+        self.btn_remove = QPushButton(_ti("chevron_left", accent=True, dpr=2.0), tr("제거"))
         self.btn_sep = QPushButton(tr("구분선"))
-        self.btn_up = QPushButton("▲")
-        self.btn_down = QPushButton("▼")
+        self.btn_up = QPushButton(_ti("chevron_up", accent=True, dpr=2.0), "")
+        self.btn_down = QPushButton(_ti("chevron_down", accent=True, dpr=2.0), "")
         self.btn_up.setToolTip(tr("위로"))
         self.btn_down.setToolTip(tr("아래로"))
         for b, fn in ((self.btn_add, self._add), (self.btn_remove, self._remove), (self.btn_sep, self._add_sep),

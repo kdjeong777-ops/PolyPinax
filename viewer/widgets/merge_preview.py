@@ -277,7 +277,8 @@ class MergePreviewWidget(QWidget):
         cmb.setMinimumContentsLength(6)
         form.addRow(label, cmb)
         row = QHBoxLayout(); row.setContentsMargins(0, 0, 0, 0)
-        b_up = QPushButton("▲"); b_dn = QPushButton("▼")
+        from viewer.widgets.icons import themed_icon          # 261128-10(디자인 SOT §4.8 ②): ▲▼ → 파란 꺾쇠 ∧ ∨
+        b_up = QPushButton(themed_icon("chevron_up", accent=True, dpr=2.0), ""); b_dn = QPushButton(themed_icon("chevron_down", accent=True, dpr=2.0), "")
         for b in (b_up, b_dn):
             b.setFixedWidth(28)
         b_up.setToolTip(tr("고른 스타일을 목록에서 위로")); b_dn.setToolTip(tr("고른 스타일을 목록에서 아래로"))
@@ -547,10 +548,15 @@ class FullscreenPreview(QWidget):
         navcss = ("QPushButton{background:rgba(255,255,255,0.20);color:#fff;border:none;"
                   "border-radius:8px;font-size:26px;}"
                   "QPushButton:hover{background:rgba(255,255,255,0.36);}")
-        self.b_prev = QPushButton("◀", self); self.b_prev.setStyleSheet(navcss)
+        # 261128-10(디자인 SOT §4.8 ②): ◀▶ → 파란 꺾쇠 ‹ ›(어두운 바탕이라 다크 꼴), ✕ 도 그림
+        from viewer.widgets.icons import themed_icon
+        from PyQt6.QtCore import QSize as _QS
+        self.b_prev = QPushButton(themed_icon("chevron_left", True, 28, accent=True, dpr=2.0), "", self); self.b_prev.setStyleSheet(navcss)
         self.b_prev.setFixedSize(48, 104); self.b_prev.clicked.connect(self._prev)
-        self.b_next = QPushButton("▶", self); self.b_next.setStyleSheet(navcss)
+        self.b_next = QPushButton(themed_icon("chevron_right", True, 28, accent=True, dpr=2.0), "", self); self.b_next.setStyleSheet(navcss)
         self.b_next.setFixedSize(48, 104); self.b_next.clicked.connect(self._next)
+        for b in (self.b_prev, self.b_next):
+            b.setIconSize(_QS(28, 28))
         self.cmb_guide = QComboBox(self)
         self.cmb_guide.addItem(tr("여백"), "margin"); self.cmb_guide.addItem(tr("크롭"), "crop")
         self.cmb_guide.addItem(tr("숨김"), "none")
@@ -563,8 +569,8 @@ class FullscreenPreview(QWidget):
         self.cmb_guide.currentIndexChanged.connect(
             lambda: self.canvas.set_show(self.cmb_guide.currentData()))
         self.lbl = QLabel("", self); self.lbl.setStyleSheet("color:#fff;font-size:15px;")
-        self.b_close = QPushButton("✕", self)
-        self.b_close.setStyleSheet(navcss + "QPushButton{font-size:20px;}")
+        self.b_close = QPushButton(themed_icon("close", True, dpr=2.0), "", self)
+        self.b_close.setStyleSheet(navcss)
         self.b_close.setFixedSize(40, 32)
         self.b_close.clicked.connect(self.close)
 

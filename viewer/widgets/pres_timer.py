@@ -618,7 +618,8 @@ class PresTimerDialog:
         cnt.setSuffix(tr("회")); cnt.setFixedWidth(64); cnt.setToolTip(tr("0=무제한"))
         test = QPushButton(tr("테스트"))
         test.clicked.connect(lambda _=False, c=cmb, v=vol: self._tone.play(c.currentData(), v.value()))
-        rm = QPushButton("✕")
+        from viewer.widgets.icons import themed_icon   # 261128-10(디자인 SOT §4.8): 줄 빼기 ✕ 그림
+        rm = QPushButton(themed_icon("close", dpr=2.0), "")
         item = (w_start, w_int, cmb, vol, cnt, test, rm)
         self.pre_box.addWidget(w_start, r, 0)
         self.pre_box.addWidget(w_int, r, 1)

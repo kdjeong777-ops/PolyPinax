@@ -100,7 +100,8 @@ class StudyEditDialog(QDialog):
         self._refresh_thumb()
         # 260615-9(P11): 인터넷 사전 조회(옵션 켜짐 + provider 있을 때)
         if self._online_provider is not None:
-            self.btn_online = QPushButton("🌐 인터넷 사전 조회 (뜻·예문 채우기)")
+            from viewer.widgets.icons import themed_icon   # 261128-10(디자인 SOT §4.8): 그린 지구본(종전 이모지 🌐)
+            self.btn_online = QPushButton(themed_icon("globe", dpr=2.0), "인터넷 사전 조회 (뜻·예문 채우기)")
             self.btn_online.clicked.connect(self._online_lookup)
             form.addRow("", self.btn_online)
         form.addRow(QLabel("<i>저장 위치: 사용자 단어장(기본 사전보다 우선 적용)</i>"))

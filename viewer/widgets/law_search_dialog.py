@@ -149,14 +149,14 @@ class LawSearchPanel(QWidget):
         title.setFont(tf)
         title_row.addWidget(title)
         # 260616-20: '법령/고시' 우측 즐겨찾기 풀다운(목록 + 관리)
-        self.btn_fav = QPushButton("⭐ 즐겨찾기")
+        self.btn_fav = QPushButton("즐겨찾기")
         self.btn_fav.setIcon(themed_icon("star"))
         self._fav_menu = QMenu(self)
         self._fav_menu.aboutToShow.connect(self._rebuild_fav_menu)
         self.btn_fav.setMenu(self._fav_menu)
         title_row.addWidget(self.btn_fav)
         title_row.addStretch(1)
-        self.btn_full = QPushButton("⛶ 전체화면")   # 전체화면/내부화면 토글
+        self.btn_full = QPushButton("전체화면")   # 전체화면/내부화면 토글
         self.btn_full.setToolTip("전체화면(별도 창) ↔ 내부화면(메인 오른쪽)")
         self.btn_full.clicked.connect(self.fullscreenToggled.emit)
         title_row.addWidget(self.btn_full)
@@ -268,6 +268,7 @@ class LawSearchPanel(QWidget):
                              (self.btn_next, "chevron_down"), (self.btn_globe, "globe"),
                              (b_prev, "chevron_up"), (b_next, "chevron_down"),
                              (b_fclose, "close")]
+        self.btn_full.setProperty("accentIcon", "fullscreen")                                   # 261128-10
         self.find_bar.setVisible(False)
         v.addWidget(self.find_bar)
 
@@ -291,7 +292,10 @@ class LawSearchPanel(QWidget):
     # ----- 레이아웃 -----
     def set_fullscreen(self, is_full: bool):
         """260616-19: 토글 버튼 라벨 갱신(전체화면/내부화면)."""
-        self.btn_full.setText("▣ 내부화면" if is_full else "⛶ 전체화면")
+        # 261128-10(디자인 SOT §4.8): 글자 앞 ▣·⛶ 대신 파란 라인 그림(내부화면 = 본화면 monitor, 전체화면 = 네 귀퉁이)
+        self.btn_full.setText("내부화면" if is_full else "전체화면")
+        self.btn_full.setProperty("accentIcon", "monitor" if is_full else "fullscreen")
+        self.btn_full.setIcon(themed_icon(self.btn_full.property("accentIcon"), accent=True))
         if getattr(self, "_find_sc", None) is not None:
             self._find_sc.setEnabled(bool(is_full))   # 260623: 패널 Ctrl+F 는 전체화면만
 
@@ -319,7 +323,7 @@ class LawSearchPanel(QWidget):
 
     def _refresh_theme(self):
         """261128-6(디자인 SOT §4.3): 아이콘 단추 파란 라인 + 검색칸 테마 스타일."""
-        for b, name in self._accent_btns:
+        for b, name in self._accent_btns + [(self.btn_full, self.btn_full.property("accentIcon"))]:
             b.setIcon(themed_icon(name, accent=True))
         self._apply_theme_styles()
 
@@ -713,7 +717,7 @@ class LawSearchPanel(QWidget):
         self.tree.setCurrentItem(it)
         menu = QMenu(self)
         if is_law:                          # 261128-2: 조문은 '브라우저에서 열기' 만
-            a_fav = QAction("⭐ 즐겨찾기에 추가", self)
+            a_fav = QAction(themed_icon("star", accent=True), "즐겨찾기에 추가", self)
             a_fav.triggered.connect(self._add_favorite_current)
             menu.addAction(a_fav)
         a_web = QAction("브라우저에서 열기", self)

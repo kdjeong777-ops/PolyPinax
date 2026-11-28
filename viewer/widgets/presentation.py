@@ -660,7 +660,11 @@ class PresentationWindow(QWidget):
         self._tb_navwrap = QWidget()
         nh = QHBoxLayout(self._tb_navwrap)
         nh.setContentsMargins(0, 0, 0, 0); nh.setSpacing(6)
-        self._tb_prev = QPushButton("❮"); self._tb_prev.setStyleSheet(nav_css)
+        # 261128-10(디자인 SOT §4.8): 띠 단추 글리프·이모지·PNG → 그린 아이콘. 띠는 늘 어두운 바탕이라 다크 꼴(dark=True)
+        from viewer.widgets.icons import themed_icon as _ti, color_icon as _ci
+        _NAV_PX = QSize(20, 20)
+        self._tb_prev = QPushButton(_ti("chevron_left", True, 20, accent=True, dpr=2.0), ""); self._tb_prev.setStyleSheet(nav_css)
+        self._tb_prev.setIconSize(_NAV_PX)
         self._tb_prev.clicked.connect(self._prev)
         self._tb_page = QComboBox()
         self._tb_page.setEditable(True)
@@ -684,7 +688,8 @@ class PresentationWindow(QWidget):
         self._combo_leave_timer.timeout.connect(self._tb_page.hidePopup)
         self._tb_page.view().installEventFilter(self)
         self._tb_page.view().viewport().installEventFilter(self)
-        self._tb_next = QPushButton("❯"); self._tb_next.setStyleSheet(nav_css)
+        self._tb_next = QPushButton(_ti("chevron_right", True, 20, accent=True, dpr=2.0), ""); self._tb_next.setStyleSheet(nav_css)
+        self._tb_next.setIconSize(_NAV_PX)
         self._tb_next.clicked.connect(self._next)
         nh.addWidget(self._tb_prev); nh.addWidget(self._tb_page, 1); nh.addWidget(self._tb_next)
         row1.addSpacing(8)                       # 좌측에서 약간 띄움
@@ -770,11 +775,7 @@ class PresentationWindow(QWidget):
         self._tb_timer = QPushButton()
         self._tb_timer.setCheckable(True)
         self._tb_timer.setToolTip(tr("발표시간 표시 (켜면 준비내용 → 다음 페이지에서 시간 시작)"))
-        _tic = resource_path("icon_pres_timer.png")
-        if _tic:
-            self._tb_timer.setIcon(QIcon(_tic)); self._tb_timer.setIconSize(QSize(24, 24))
-        else:
-            self._tb_timer.setText("⏱")
+        self._tb_timer.setIcon(_ti("timer", True, 20, dpr=2.0)); self._tb_timer.setIconSize(_NAV_PX)   # 종전 icon_pres_timer.png
         timer_css = (nav_css
                      + "QPushButton:checked{background:rgba(220,40,40,0.95);}"
                        "QPushButton:checked:hover{background:rgba(235,60,60,1.0);}")
@@ -783,7 +784,8 @@ class PresentationWindow(QWidget):
         self._tb_timer.toggled.connect(self._on_timer_toggle)
         row1.addWidget(self._tb_timer)
         # 260611-22: 시계 중지 버튼 — 시계 오른쪽. 누르면 멈춤(토글), 중지 중 0.5초 적색 블링크.
-        self._tb_timer_stop = QPushButton("⏸")
+        self._tb_timer_stop = QPushButton(_ti("pause", True, 20, dpr=2.0), "")
+        self._tb_timer_stop.setIconSize(_NAV_PX)
         self._tb_timer_stop.setCheckable(True)
         self._tb_timer_stop.setToolTip(tr("시계 중지/재개"))
         self._tb_timer_stop_css = nav_css
@@ -813,10 +815,12 @@ class PresentationWindow(QWidget):
             "QLabel{color:#ff8a8a;font-size:14px;font-weight:bold;padding:0 6px;}")
         self._tb_rectime.setVisible(False)
         row1.addWidget(self._tb_rectime)
-        self._tb_rec = QPushButton("●"); self._tb_rec.setStyleSheet(rec_css)
+        self._tb_rec = QPushButton(); self._tb_rec.setStyleSheet(rec_css)     # 그림(●/‖)은 set_recording_state
+        self._tb_rec.setIconSize(QSize(18, 18))
         self._tb_rec.setToolTip(tr("녹화 시작"))     # 상태에 따라 set_recording_state 가 갱신
         self._tb_rec.clicked.connect(self._on_rec_toggle_clicked)
-        self._tb_recstop = QPushButton("■"); self._tb_recstop.setStyleSheet(rec_css)
+        self._tb_recstop = QPushButton(_ci("stop", True, 18), ""); self._tb_recstop.setStyleSheet(rec_css)
+        self._tb_recstop.setIconSize(QSize(18, 18))
         self._tb_recstop.setToolTip(tr('녹화 중단 · 저장{rec_key_hint}').format(rec_key_hint=self._rec_key_hint(1)))
         self._tb_recstop.clicked.connect(self.recordStopRequested)
         for b in (self._tb_rec, self._tb_recstop):
@@ -838,7 +842,8 @@ class PresentationWindow(QWidget):
         row1.addStretch(1)
         # 260609-19(H4): 녹화 버튼 ↔ ✕ 사이 간격
         _gap2 = QWidget(); _gap2.setFixedWidth(18); row1.addWidget(_gap2)
-        self._tb_close = QPushButton("✕")
+        self._tb_close = QPushButton(_ti("close", True, 20, dpr=2.0), "")
+        self._tb_close.setIconSize(_NAV_PX)
         self._tb_close.setToolTip(tr("전체화면 보기 종료"))
         self._tb_close.setStyleSheet(nav_css)
         self._tb_close.clicked.connect(self.close)   # D2: 전체모드 종료
@@ -949,7 +954,8 @@ class PresentationWindow(QWidget):
                 self._tb_rectime.setVisible(False)
 
         if active:
-            self._tb_rec.setText("‖")
+            from viewer.widgets.icons import color_icon
+            self._tb_rec.setIcon(color_icon("rec_pause", True, 18)); self._tb_rec.setProperty("recState", "pause")
             self._tb_rec.setToolTip(tr('일시정지{rec_key_hint}').format(rec_key_hint=self._rec_key_hint(0)))
             self._tb_rec.setEnabled(True)
             self._tb_recstop.setEnabled(True)
@@ -959,7 +965,8 @@ class PresentationWindow(QWidget):
             if not self._rec_blink.isActive():
                 self._rec_blink.start()
         else:
-            self._tb_rec.setText("●")
+            from viewer.widgets.icons import color_icon
+            self._tb_rec.setIcon(color_icon("rec", True, 18)); self._tb_rec.setProperty("recState", "rec")
             self._tb_rec.setToolTip((tr("재개") if recording else tr("녹화 시작"))
                                     + self._rec_key_hint(0))
             self._tb_rec.setEnabled(True)
@@ -1228,7 +1235,9 @@ class PresentationWindow(QWidget):
         b.setVisible(other is not None)
         if other is None:
             return
-        b.setText(tr("🖥 본화면으로") if on_other else tr("🖥 화면2로"))
+        from viewer.widgets.icons import themed_icon
+        b.setText(tr("본화면으로") if on_other else tr("화면2로"))
+        b.setIcon(themed_icon("monitor", True, dpr=2.0))          # 261128-10(디자인 SOT §4.8): 종전 글자 앞 🖥
         if on_other:
             b.setToolTip(tr("발표 창을 뷰어가 있는 모니터로 되돌립니다 — {desc}").format(desc=self._screen_desc(self._home_screen())))
         else:

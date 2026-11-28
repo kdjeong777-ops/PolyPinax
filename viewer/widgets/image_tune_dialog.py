@@ -198,7 +198,9 @@ class ImageTuneDialog(QDialog):
         left = QVBoxLayout()
         nav = QHBoxLayout()
         self.btn_prev, self.btn_next = QToolButton(), QToolButton()
-        self.btn_prev.setText("❮"); self.btn_next.setText("❯")
+        from viewer.widgets.icons import bind_theme_refresh, themed_icon   # 261128-10(디자인 SOT §4.8 ②): 파란 꺾쇠 ‹ ›(종전 ❮❯)
+        bind_theme_refresh(self.btn_prev, lambda: (self.btn_prev.setIcon(themed_icon("chevron_left", accent=True, dpr=2.0)),
+                                                   self.btn_next.setIcon(themed_icon("chevron_right", accent=True, dpr=2.0))))
         self.btn_prev.clicked.connect(lambda: self._step(-1)); self.btn_next.clicked.connect(lambda: self._step(1))
         self.lb_name = QLabel()
         nav.addWidget(self.btn_prev); nav.addWidget(self.lb_name, 1); nav.addWidget(self.btn_next)

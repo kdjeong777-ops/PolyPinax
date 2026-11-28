@@ -11,7 +11,7 @@ C. 개별 단추: 폴더·파일 앞 5개, 글은 요약 이름(short, 없으면
 D. 목록을 만들 때 있는지 보지 않는다(없는 파일 항목도 켜짐) — 누르면 알린다(응답성 SOT §5)
 E. 기타: 한국어+키가 있는 구역만, 하나도 없으면 단추 숨김 · 항목 관리 창은 꺼진 종류의 탭이 없다
 F. 항목 관리 창: 탭 안 순서·단추 이름 고침 → 저장 순서·요약 이름 반영
-G. 파일 즐겨찾기 등록 창의 종류가 '📄 파일'(261008-12, 실제 _add_file_favorite)
+G. 파일 즐겨찾기 등록 창의 종류가 '파일'(261008-12, 261128-10 이모지 뺌, 실제 _add_file_favorite)
 """
 import os, sys, faulthandler, tempfile, shutil
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -91,14 +91,17 @@ try:
 
     # B 드롭다운
     items = lambda m: [a.text() for a in m.actions() if not a.isSeparator()]
-    chk(items(mw.menu_fav_folders) == ["📁 폴더1", "📁 옛폴더", "항목 관리"], "B 등록 폴더 목록(옛 항목은 폴더) + 항목 관리",
+    # 261128-10(디자인 SOT §4.8): 종류는 글자 앞 이모지가 아니라 그림 — 글자는 이름만, 항목마다 그림이 있다
+    chk(all(not a.icon().isNull() for m in (mw.menu_fav_folders, mw.menu_fav_files, mw.menu_fav_searches)
+            for a in m.actions() if not a.isSeparator() and a.text() != "항목 관리"), "B 등록 항목마다 종류 그림")
+    chk(items(mw.menu_fav_folders) == ["폴더1", "옛폴더", "항목 관리"], "B 등록 폴더 목록(옛 항목은 폴더) + 항목 관리",
         str(items(mw.menu_fav_folders)))
-    chk(items(mw.menu_fav_files) == ["📄 파일1", "📄 아주긴파일이름입니다정말로긴", "📄 없는파일", "항목 관리"],
+    chk(items(mw.menu_fav_files) == ["파일1", "아주긴파일이름입니다정말로긴", "없는파일", "항목 관리"],
         "B 등록 파일 목록은 등록 순서", str(items(mw.menu_fav_files)))
-    chk(items(mw.menu_fav_searches) == ["🔍 검색", "항목 관리"], "B 등록 검색어", str(items(mw.menu_fav_searches)))
+    chk(items(mw.menu_fav_searches) == ["검색", "항목 관리"], "B 등록 검색어", str(items(mw.menu_fav_searches)))
 
     # D 있는지 보지 않는다 — 없는 파일도 켜짐, 누르면 알린다
-    a_missing = [a for a in mw.menu_fav_files.actions() if a.text() == "📄 없는파일"][0]
+    a_missing = [a for a in mw.menu_fav_files.actions() if a.text() == "없는파일"][0]
     chk(a_missing.isEnabled(), "D 목록을 만들 때 있는지 보지 않는다(없는 파일 항목도 켜짐)")
     warned = []
     orig_warn = QMessageBox.warning
@@ -162,7 +165,7 @@ try:
     mw._gate_api_dependent_ui(mw._prefs); QTest.qWait(80)
     chk(mw.menu_fav_other.menuAction().isVisible(), "E 키가 있으면 기타가 보인다")
     ot = [a.text() for a in mw.menu_fav_other.actions() if not a.isSeparator() or a.text()]
-    chk(ot == ["법령·고시", "⚖ 도로법  (법률)", "항목 관리"], "E 꺼진 구역(건설기준·특허)은 뺀다", str(ot))
+    chk(ot == ["법령·고시", "도로법  (법률)", "항목 관리"], "E 꺼진 구역(건설기준·특허)은 뺀다", str(ot))   # 261128-10: 종류는 글자 앞 ⚖ 대신 그림
     seen_kinds = []
     from viewer.widgets import favorites_dialog as _fd
     orig_exec = _fd.FavoritesManagerDialog.exec
@@ -201,7 +204,7 @@ try:
         mw._add_file_favorite(str(f1))
     finally:
         AddFavoriteDialog.exec = orig_exec2
-    chk("종류: 📄 파일" in seen, "G 파일 즐겨찾기 등록 창이 '📄 파일' 로 보인다", str(seen))
+    chk("종류: 파일" in seen, "G 파일 즐겨찾기 등록 창이 '파일' 로 보인다(261128-10 이모지 뺌)", str(seen))
 except Exception:
     import traceback
     traceback.print_exc()

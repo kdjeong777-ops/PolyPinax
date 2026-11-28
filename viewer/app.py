@@ -1618,33 +1618,32 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
     def _build_right_panel(self) -> QWidget:
         """v1.6.2: 우측 패널 = 검색 영역(상) + 스크린샷 스트립(하) 세로 분할."""
         # M7: 스크린샷 패널 헤더에 저장 버튼 (화면캡쳐 버튼은 260606-8: 각 메인뷰 툴바로)
-        self.btn_save_pdf = QPushButton(tr("💾 PDF 저장"))
+        # 261128-10(디자인 SOT §4.8, 사용자 결정 '안 A 형식 색 배지'·'1~3단계 모두'): 머리 단추 그림 — PDF 저장 = PDF 형식 배지,
+        #   복사·가져오기·다듬기 = 라인 그림(종전 이모지 💾·📥·🖌·제목 🖼, 클립보드 PNG). 칠하기는 _paint_shot_icons(테마가 바뀌면 다시)
+        self.btn_save_pdf = QPushButton(tr("PDF 저장"))
         self._refresh_shot_pdf_tip()              # 261115-21: 지금 걸린 키(단축키 설정을 따른다)
         self.btn_save_pdf.clicked.connect(self.action_save_screenshot_pdf)
         # 260606-17: 클립보드로 복사(전체 스크린샷을 순서대로 클립보드 히스토리에)
         #   261008-1(스크린샷 SOT §8, 사용자 요청): '클립보드 저장' → '클립보드로 복사' — 파일로
         #   남는 것이 아니라 복사라서. 반대 방향 '클립보드 가져오기' 를 그 앞에 둔다.
         self.btn_clip = QPushButton(tr(" 클립보드로 복사"))
-        _cico = resource_path("icon_clipboard.png")
-        if _cico:
-            self.btn_clip.setIcon(QIcon(_cico))
-        else:
-            self.btn_clip.setText(tr("📋 클립보드로 복사"))
         self.btn_clip.setToolTip(tr("복사한 뒤 'Win+v'로 여러 목록을 붙여넣으세요"))
         self.btn_clip.clicked.connect(self._on_clipboard_save)
-        self.btn_clip_in = QPushButton(tr("📥 클립보드 가져오기"))
+        self.btn_clip_in = QPushButton(tr("클립보드 가져오기"))
         self.btn_clip_in.setToolTip(tr("클립보드의 그림(캡처·탐색기에서 복사한 그림 파일)을 스크린샷 목록에 넣습니다"))
         self.btn_clip_in.clicked.connect(self._on_clipboard_import)
         # 261112-16(스크린샷 SOT §4.1, 사용자 결정 '컷 우클릭 + 머리 단추 하나'): 고른 컷(없으면 지금 컷)을 다듬기 창으로
-        self.btn_shot_tune = QPushButton(tr("🖌 다듬기"))
+        self.btn_shot_tune = QPushButton(tr("다듬기"))
         self.btn_shot_tune.setToolTip(tr("고른 스크린샷의 바탕 지우기(투명)·흑백·색 바꾸기 등 — 새 사진 파일·클립보드로"))
         self.btn_shot_tune.clicked.connect(lambda: self._shot_tune(self._shot_targets()))
 
         self.shot_strip = MiniStrip(
-            tr("🖼 스크린샷"), max_items=int(self._prefs.get("screenshot_max", 30)),
+            tr("스크린샷"), max_items=int(self._prefs.get("screenshot_max", 30)),
             draggable=True,
             extra_widgets=[self.btn_clip_in, self.btn_clip, self.btn_shot_tune, self.btn_save_pdf],
         )
+        from viewer.widgets.icons import bind_theme_refresh
+        bind_theme_refresh(self.shot_strip, self._paint_shot_icons)
         self.shot_strip.menu_hook = self._shot_menu_extras
 
         self.search_area = self._build_search_area()
@@ -1656,9 +1655,13 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         # 260908-2(사용자 지시, 텍스트 창 SOT §2): 순서는 **텍스트 → 단어장 → 검색**
         from viewer.widgets.text_panel import TextPanel
         self.text_panel = TextPanel()
-        self.search_tabs.addTab(self.text_panel, tr("📄 텍스트"))
-        self.search_tabs.addTab(self.study_panel, tr("📖 단어장"))
-        self.search_tabs.addTab(self.search_area, tr("🔎 검색"))
+        self.search_tabs.addTab(self.text_panel, tr("텍스트"))
+        self.search_tabs.addTab(self.study_panel, tr("단어장"))
+        self.search_tabs.addTab(self.search_area, tr("검색"))
+        # 261128-10(디자인 SOT §4.8 ①): 탭 그림은 라인 파일·책·돋보기(종전 이모지 📄·📖·🔎) — 테마가 바뀌면 다시
+        from viewer.widgets.icons import bind_theme_refresh, themed_icon
+        bind_theme_refresh(self.search_tabs, lambda: [self.search_tabs.setTabIcon(i, themed_icon(n, dpr=2.0))
+                                                      for i, n in enumerate(("file", "book", "search"))])
 
         self.right_splitter = QSplitter(Qt.Orientation.Vertical)
         self.right_splitter.setHandleWidth(2)      # 260606-7: 분할 손잡이 폭 축소
@@ -1672,6 +1675,18 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self.right_splitter.setStretchFactor(1, 0)
         return self.right_splitter
 
+    def _paint_shot_icons(self) -> None:
+        """261128-10(디자인 SOT §4.8): 스크린샷 칸 머리 단추·제목 그림 — 만들 때와 테마가 바뀔 때."""
+        from viewer.widgets.icons import themed_icon, file_kind_icon, BTN_ICON_PX
+        from PyQt6.QtCore import QSize as _QS
+        for b, ico in ((self.btn_save_pdf, file_kind_icon("PDF", size=BTN_ICON_PX)),
+                       (self.btn_clip, themed_icon("copy", size=BTN_ICON_PX, dpr=2.0)),
+                       (self.btn_clip_in, themed_icon("clip_in", size=BTN_ICON_PX, dpr=2.0)),
+                       (self.btn_shot_tune, themed_icon("brush", size=BTN_ICON_PX, dpr=2.0))):
+            b.setIconSize(_QS(BTN_ICON_PX, BTN_ICON_PX))
+            b.setIcon(ico)
+        self.shot_strip.set_title_icon(themed_icon("image", size=BTN_ICON_PX, dpr=2.0))
+
     def _build_toolbar(self):
         """261024-1(사용자 지시, 디자인 SOT §2.9): 창 맨 위 = 메뉴 **탭**(`Ribbon`) — 탭 줄(오른쪽 끝 검색창) + 한 줄 세부 줄.
         탭과 세부 줄의 항목은 `_build_menus` 가 메뉴를 만든 뒤 붙인다. 종전 패널 툴바(260606-25)는 `모음` 탭이 됐다.
@@ -1682,12 +1697,12 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self.setMenuWidget(self._ribbon)
 
         # 내부 가시성 상태(설정 메뉴·_sync_right_layout 가 사용; 툴바엔 미노출)
-        self.act_toggle_search = QAction(tr("🔎 검색·단어"), self)
+        self.act_toggle_search = QAction(tr("검색·단어"), self)      # 261128-10: 글자 앞 이모지 뺌(디자인 SOT §4.8)
         self.act_toggle_search.setCheckable(True)
         self.act_toggle_search.setChecked(True)
         self.act_toggle_search.toggled.connect(
             lambda _=False: self._sync_right_layout())
-        self.act_toggle_shot = QAction(tr("🖼 스크린샷"), self)
+        self.act_toggle_shot = QAction(tr("스크린샷"), self)
         self.act_toggle_shot.setCheckable(True)
         self.act_toggle_shot.setChecked(True)
         self.act_toggle_shot.toggled.connect(
@@ -2029,12 +2044,12 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self.addAction(self._sc_act_option_menu)
 
         # 260606-8: 2분할 보기 상태 act (메뉴엔 표시 안 함 — 보기 메뉴/툴바로 제어, 상태 동기화용)
-        self.act_split = QAction(tr("🗗 2단 보기"), self)
+        self.act_split = QAction(tr("2단 보기"), self)        # 261128-10: 글자 앞 이모지 뺌(디자인 SOT §4.8)
         self.act_split.setCheckable(True)
         self.act_split.setChecked(False)
         self.act_split.toggled.connect(self._toggle_split)
         # 260609-4 (D): 발표 보기 (F5) — 메뉴엔 '보기'로, 단축키 유지 위해 창에 등록
-        self.act_present = QAction(tr("📽 발표 보기"), self)
+        self.act_present = QAction(tr("발표 보기"), self)
         self.act_present.setShortcut("F5")
         # 261107-26(입력 SOT §3.2.3 '창 키도 포커스 따라'): 책갈피창·사진 썸네일 줄에 포커스면 그 줄 — 우클릭 '발표보기' 와 같은 대상
         self.act_present.triggered.connect(lambda _=False: _key_actions.present(self))
@@ -5302,7 +5317,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         title = tr("원본으로 되돌리기")
         shown = [mv for mv in getattr(self, "_mv", []) if mv.current_file() and same_file(mv.current_file(), path)]
         if shown and self._on_instance_request("query", path).get("dirty"):
-            QMessageBox.information(self, title, tr("이 파일에 저장하지 않은 편집이 있습니다 — 먼저 💾 저장하거나 되돌린 뒤 다시 해 주세요."))
+            QMessageBox.information(self, title, tr("이 파일에 저장하지 않은 편집이 있습니다 — 먼저 [저장] 하거나 되돌린 뒤 다시 해 주세요."))
             return False
         if not self._photo_orig_lock():
             return False
@@ -11553,6 +11568,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self._refresh_recent_searches_menu()
 
     def _refresh_recent_searches_menu(self) -> None:
+        from viewer.widgets.icons import themed_icon   # 261128-10(디자인 SOT §4.8)
         rp = getattr(self, "_recent_popup", None)
         if rp is not None:                           # 261117-31: 탭 줄 검색창 펼침 목록도 같은 목록·같은 순서로
             rp.set_items(getattr(self, "_recent_searches", None) or [])
@@ -11568,7 +11584,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             return
         for r in items:
             marks = ("  Aa" if r.get("case") else "") + ("  .*" if r.get("regex") else "")
-            a = QAction("🔍 " + r.get("query", "") + marks, m)
+            a = QAction(themed_icon("search", dpr=2.0), r.get("query", "") + marks, m)   # 261128-10: 그린 돋보기(종전 🔍)
             a.triggered.connect(lambda _c=False, rr=r: self._open_recent_search(rr))
             m.addAction(a)
 
@@ -11605,7 +11621,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         """261025-1(디자인 SOT §2.9.5): 드롭다운 안과 개별 단추(폴더·파일 앞 `BUTTONS_MAX` 개)를 다시 넣는다.
         목록을 만들 때 대상이 있는지 **보지 않는다**(사용자 결정, 응답성 SOT §5) — 누를 때 `_open_favorite` 가 본다."""
         from PyQt6.QtGui import QAction
-        from viewer.widgets.favorites_dialog import (BUTTONS_MAX, KIND_PREFIX, OTHER_KINDS, fav_kind,
+        from viewer.widgets.favorites_dialog import (BUTTONS_MAX, OTHER_KINDS, fav_kind, fav_icon,
                                                      kind_title, other_label, short_label)
         if getattr(self, "menu_fav_folders", None) is None:
             return
@@ -11614,7 +11630,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         def _fill(menu, kind, items, label, opener):
             menu.clear()
             for f in items:
-                act = QAction(label(f), menu)
+                act = QAction(fav_icon(kind), label(f), menu)     # 261128-10(디자인 SOT §4.8): 종류 그림(종전 글자 앞 이모지)
                 act.triggered.connect(lambda _c=False, ff=f: opener(ff))
                 menu.addAction(act)
             if not items:
@@ -11628,7 +11644,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
 
         for menu, kind in ((self.menu_fav_folders, "folder"), (self.menu_fav_files, "file"),
                            (self.menu_fav_searches, "search")):
-            _fill(menu, kind, groups[kind], lambda f, k=kind: KIND_PREFIX[k] + f.get("name", "?"), self._open_favorite)
+            _fill(menu, kind, groups[kind], lambda f: f.get("name", "?"), self._open_favorite)
 
         # 기타 — 법령·고시 / 특허 / 건설기준, 꺼진 구역은 뺀다. 보일 구역이 없으면 단추도 숨긴다.
         mo = self.menu_fav_other
@@ -11642,7 +11658,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 continue
             mo.addSection(kind_title(k))
             for f in items:
-                act = QAction(other_label(k, f), mo)
+                act = QAction(fav_icon(k), other_label(k, f), mo)
                 act.triggered.connect(lambda _c=False, ff=f, o=openers[k]: o(ff))
                 mo.addAction(act)
             any_item = True
@@ -11778,6 +11794,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
     def _xfer_fill_quick(self, sub, run) -> bool:
         """'폴더로 복사 ▸'·'폴더로 이동 ▸' 맨 위 — ⭐ 지금 모드의 즐겨찾기 폴더(등록 차례) → 최근 폴더. 더한 것이 있으면 True.
         즐겨찾기는 만들 때 있는지 보지 않는다(즐겨찾기 메뉴와 같은 규칙) — 누를 때 `_fav_resolve`. `run(폴더)` 는 메뉴가 닫힌 뒤에 부른다."""
+        from viewer.widgets.icons import themed_icon   # 261128-10(디자인 SOT §4.8)
         from viewer.widgets.favorites_dialog import fav_kind
         seen, n = set(), 0
 
@@ -11787,7 +11804,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             if fav_kind(f) != "folder":
                 continue
             folder = str(f.get("folder") or "")
-            a = sub.addAction("⭐ " + str(f.get("name") or Path(folder).name or folder))
+            a = sub.addAction(themed_icon("star", dpr=2.0), str(f.get("name") or Path(folder).name or folder))   # 261128-10(종전 ⭐)
             a.setToolTip(folder)
             a.triggered.connect(later(lambda ff=f: self._xfer_fav_run(ff, run)))
             seen.add(os.path.normcase(folder))

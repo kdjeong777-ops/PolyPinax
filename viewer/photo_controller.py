@@ -1007,7 +1007,8 @@ class PhotoMixin:
             self._photo_anim_btn = b
             for sb in (mv.view.horizontalScrollBar(), mv.view.verticalScrollBar()):
                 sb.rangeChanged.connect(lambda _a, _b: self._photo_anim_stop())    # 확대가 바뀌면 멈춘다(첫 장으로)
-        b.setText("▶")
+        from viewer.widgets.icons import color_icon       # 261128-10(디자인 SOT §4.8 ③): 글리프 ▶/■ → 색 그림(재생 파랑·정지 빨강)
+        b.setIcon(color_icon("play", size=16)); b.setProperty("animState", "play")
         b.adjustSize()
         b.move(12, max(0, mv.view.height() - b.height() - 12))
         b.show()
@@ -1041,7 +1042,8 @@ class PhotoMixin:
         self._photo_anim_movie = movie
         b = self.__dict__.get("_photo_anim_btn")
         if b is not None:
-            b.setText("■")
+            from viewer.widgets.icons import color_icon
+            b.setIcon(color_icon("stop", size=16)); b.setProperty("animState", "stop")
             b.raise_()
 
     def _photo_anim_stop(self, hide: bool = False):
@@ -1057,7 +1059,8 @@ class PhotoMixin:
             if hide:
                 b.hide()
             else:
-                b.setText("▶")
+                from viewer.widgets.icons import color_icon
+                b.setIcon(color_icon("play", size=16)); b.setProperty("animState", "play")
 
     def _photo_resume_index(self):
         """사진 모드에서 걸지 않은 PDF 색인을 PDF 모드로 돌아와 그 폴더에 다시 건다(4.23). 바뀐 것만 다시 읽는다(색인 SOT 규칙 그대로)."""

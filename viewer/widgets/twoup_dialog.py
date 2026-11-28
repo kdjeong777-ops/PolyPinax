@@ -53,10 +53,11 @@ class TwoUpSettingsDialog(QDialog):
         b_save = QPushButton(tr("저장")); b_save.clicked.connect(self._save_preset)
         b_del = QPushButton(tr("삭제")); b_del.clicked.connect(self._delete_preset)
         # 261008-4(마스터 §11.10, 사용자 요청): 스타일 목록 순서 바꾸기 — 고른 스타일을 한 칸 위/아래로.
-        self.btn_preset_up = QPushButton("▲"); self.btn_preset_up.setFixedWidth(28)
+        from viewer.widgets.icons import themed_icon as _ti   # 261128-10(디자인 SOT §4.8 ②): 글리프 → 파란 꺾쇠
+        self.btn_preset_up = QPushButton(_ti("chevron_up", accent=True, dpr=2.0), ""); self.btn_preset_up.setFixedWidth(28)
         self.btn_preset_up.setToolTip(tr("고른 스타일을 목록에서 위로"))
         self.btn_preset_up.clicked.connect(lambda: self._move_preset(-1))
-        self.btn_preset_dn = QPushButton("▼"); self.btn_preset_dn.setFixedWidth(28)
+        self.btn_preset_dn = QPushButton(_ti("chevron_down", accent=True, dpr=2.0), ""); self.btn_preset_dn.setFixedWidth(28)
         self.btn_preset_dn.setToolTip(tr("고른 스타일을 목록에서 아래로"))
         self.btn_preset_dn.clicked.connect(lambda: self._move_preset(1))
         if not self._preset_api:

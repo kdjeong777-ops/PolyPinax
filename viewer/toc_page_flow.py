@@ -30,7 +30,7 @@ def run(mw, path) -> str | None:
     except Exception:
         dirty = False
     if dirty:
-        QMessageBox.information(mw, title, tr("이 파일에 저장하지 않은 편집이 있습니다 — 먼저 💾 저장하거나 되돌린 뒤 다시 해 주세요."))
+        QMessageBox.information(mw, title, tr("이 파일에 저장하지 않은 편집이 있습니다 — 먼저 [저장] 하거나 되돌린 뒤 다시 해 주세요."))
         return None
     got = {}
 

@@ -120,7 +120,8 @@ class EncryptDialog(QDialog):
     def _pw_row(self, edit: QLineEdit) -> QHBoxLayout:
         """암호 입력칸 + 문자보기(👁) 토글 버튼."""
         row = QHBoxLayout(); row.addWidget(edit, 1)
-        btn = QPushButton("👁"); btn.setCheckable(True); btn.setFixedWidth(34)
+        from viewer.widgets.icons import themed_icon   # 261128-10(디자인 SOT §4.8): 그린 눈(종전 이모지 👁)
+        btn = QPushButton(themed_icon("eye", dpr=2.0), ""); btn.setCheckable(True); btn.setFixedWidth(34)
         btn.setToolTip(tr("입력한 암호 보기/숨기기"))
 
         def _toggle(on, e=edit):

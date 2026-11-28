@@ -135,7 +135,11 @@ class JobsMixin:
             pass
         # 저장 안 한 OCR·단어장 단추(있을 때만 보인다)
         self.btn_pending = QToolButton()
-        self.btn_pending.setText(tr("💾 저장 안 한 OCR"))
+        self.btn_pending.setText(tr("저장 안 한 OCR"))
+        from viewer.widgets.icons import color_icon        # 261128-10(디자인 SOT §4.8 ③): 저장 = 파란 플로피(종전 이모지 💾)
+        self.btn_pending.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self.btn_pending.setIcon(color_icon("save", size=16))
+        self.btn_pending.setProperty("colorIcon", "save")
         self.btn_pending.setToolTip(tr("OCR·단어장 결과가 아직 저장되지 않았습니다 — 눌러서 저장하거나 버립니다"))
         self.btn_pending.setVisible(False)
         self.btn_pending.clicked.connect(self._pending_dialog)

@@ -208,10 +208,11 @@ class TranslatePocDialog(QDialog):
         self.gloss.setVisible(False)
         v.addWidget(self.gloss)
         grow = QHBoxLayout()
-        self.btn_gloss_save = QPushButton(tr("✔ 사용자 사전에 저장"))
+        from viewer.widgets.icons import themed_icon   # 261128-10(디자인 SOT §4.8): ✔·↻ 글리프 → 라인 그림
+        self.btn_gloss_save = QPushButton(themed_icon("check", dpr=2.0), tr("사용자 사전에 저장"))
         self.btn_gloss_save.setToolTip(tr("수정한 한글 뜻을 사용자 사전(User, 최우선)에 저장 — 모든 PDF·번역에 적용"))
         self.btn_gloss_save.clicked.connect(self._save_glossary_corrections)
-        self.btn_retrans = QPushButton(tr("↻ 이 문서 재번역"))
+        self.btn_retrans = QPushButton(themed_icon("refresh", dpr=2.0), tr("이 문서 재번역"))
         self.btn_retrans.setToolTip(tr("저장한 용어 교정으로 본문을 다시 번역(비용 발생)"))
         self.btn_retrans.clicked.connect(self._retranslate)
         grow.addWidget(self.btn_gloss_save)

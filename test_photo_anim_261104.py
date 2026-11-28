@@ -65,16 +65,16 @@ try:
     # A
     mw._on_bookmark_activated(str(tmp / "a 움직임.gif"), 0); pump(timeout=0.8)
     b = mw.__dict__.get("_photo_anim_btn")
-    chk(b is not None and b.isVisible() and b.text() == "▶", "A 움직이는 GIF — ▶ 가 보인다")
+    chk(b is not None and b.isVisible() and b.property("animState") == "play" and not b.icon().isNull(), "A 움직이는 GIF — ▶ 그림이 보인다")
     chk(mw.__dict__.get("_photo_anim_movie") is None, "A 저절로 재생하지 않는다")
 
     # B
     b.click(); pump(timeout=0.5)
     m = mw.__dict__.get("_photo_anim_movie")
     lab = mw.__dict__.get("_photo_anim_label")
-    chk(m is not None and m.state() == QMovie.MovieState.Running and lab.isVisible() and b.text() == "■", "B 누르면 재생")
+    chk(m is not None and m.state() == QMovie.MovieState.Running and lab.isVisible() and b.property("animState") == "stop", "B 누르면 재생")
     b.click(); pump()
-    chk(mw.__dict__.get("_photo_anim_movie") is None and not lab.isVisible() and b.text() == "▶", "B 다시 누르면 멈춘다")
+    chk(mw.__dict__.get("_photo_anim_movie") is None and not lab.isVisible() and b.property("animState") == "play", "B 다시 누르면 멈춘다")
 
     # C
     b.click(); pump(timeout=0.3)

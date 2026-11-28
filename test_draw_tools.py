@@ -220,12 +220,11 @@ try:
     mv._draw_kind = "line"; mv._apply_tool()
     chk(not mv._has_multi(), "② 다른 도구로 바꾸면 범위 선택이 풀린다")
     # ── ⑤ 도구 아이콘 (260908-4, 사용자 요청) ───────────────────────────
-    from viewer.resources_path import resource_path
-    from PyQt6.QtGui import QIcon
-    for fn in ("icon_select_box.png", "icon_eraser_thin.png",
-               "icon_eraser_thick.png", "icon_eraser_page.png"):
-        pth = resource_path(fn)
-        chk(bool(pth) and not QIcon(pth).isNull(), f"⑤ 아이콘이 있다: {fn}")
+    # 261128-10(디자인 SOT §4.8): 옛 PNG 는 지웠다 — 같은 그림을 icons.py 가 그린다(261116-10 부터 PNG 는 쓰지 않았다)
+    from viewer.widgets.icons import themed_icon as _tic, color_icon as _cic
+    for nm, ic in (("select_box", _tic("select_box")), ("eraser_thin", _cic("eraser_thin")),
+                   ("eraser_thick", _cic("eraser_thick")), ("eraser_page", _cic("eraser_page"))):
+        chk(not ic.isNull(), f"⑤ 아이콘이 있다: {nm}")
     chk(not mv._draw_select_btn.icon().isNull() and mv._draw_select_btn.text() == "",
         "⑤ 개체선택이 글리프가 아니라 그림이다")
     for i, b in enumerate(mv._draw_erase_btns):

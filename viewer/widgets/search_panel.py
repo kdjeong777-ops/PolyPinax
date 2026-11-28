@@ -93,13 +93,14 @@ class SearchBar(QWidget):
         from viewer.widgets.icons import bind_theme_refresh
         bind_theme_refresh(self.btn_scope, self._paint_scope)
 
-        self.btn_prev = QPushButton("◀")
+        # 261128-10(디자인 SOT §4.8 ②, 사용자 결정 '안 1 파란 가는 꺾쇠'): 법령 창 ∧∨ 와 같은 파란 꺾쇠 ‹ › — 종전 글리프 ◀▶
+        self.btn_prev = QPushButton()
         self.btn_prev.setFixedWidth(28)
         self.btn_prev.setToolTip(tr("이전 매치 (Shift+F3)"))
         self.btn_prev.clicked.connect(self.prevMatch.emit)
         layout.addWidget(self.btn_prev)
 
-        self.btn_next = QPushButton("▶")
+        self.btn_next = QPushButton()
         self.btn_next.setFixedWidth(28)
         self.btn_next.setToolTip(tr("다음 매치 (F3)"))
         self.btn_next.clicked.connect(self.nextMatch.emit)
@@ -110,11 +111,19 @@ class SearchBar(QWidget):
         layout.addWidget(self.match_label)
 
         # v1.6.1 F4: 즐겨찾기 추가 (검색바 오른쪽 끝)
-        self.btn_fav = QPushButton("⭐")
+        self.btn_fav = QPushButton()                 # 261128-10(디자인 SOT §4.8 ①): 그린 별 — 종전 이모지 ⭐
         self.btn_fav.setFixedWidth(28)
         self.btn_fav.setToolTip(tr("현재 검색어를 즐겨찾기에 추가"))
         self.btn_fav.clicked.connect(self.favoriteRequested.emit)
         layout.addWidget(self.btn_fav)
+        bind_theme_refresh(self.btn_prev, self._paint_nav)
+
+    def _paint_nav(self) -> None:
+        """261128-10(디자인 SOT §4.8): 이전·다음 파란 꺾쇠·즐겨찾기 별 — 테마가 바뀌면 다시."""
+        from viewer.widgets.icons import themed_icon
+        self.btn_prev.setIcon(themed_icon("chevron_left", accent=True))
+        self.btn_next.setIcon(themed_icon("chevron_right", accent=True))
+        self.btn_fav.setIcon(themed_icon("star"))
 
         # v1.5.0 M7: 검색바의 📷/💾 버튼은 스크린샷 패널로 이동.
         # 시그널 (screenshotRequested, screenshotPdfSaveRequested) 은 호환 보존.
@@ -240,13 +249,11 @@ class SearchResults(QWidget):
         self.sort_combo.currentIndexChanged.connect(lambda _: self._render_results())
         head.addWidget(self.sort_combo)
 
-        # v1.6.1 S3: excel.png + "저장"
+        # v1.6.1 S3: 엑셀 그림 + "저장". 261128-10(디자인 SOT §4.8 ④, 사용자 결정 '안 A 형식 색 배지'): 엑셀 형식 배지 — 종전 MS 로고 excel.png
+        from viewer.widgets.icons import file_kind_icon, bind_theme_refresh, BTN_ICON_PX
         self.btn_excel = QPushButton(tr(" 저장"))
-        _ico = resource_path("excel.png")
-        if _ico:
-            self.btn_excel.setIcon(QIcon(_ico))
-        else:
-            self.btn_excel.setText(tr("📊 저장"))
+        self.btn_excel.setIconSize(QSize(BTN_ICON_PX, BTN_ICON_PX))
+        bind_theme_refresh(self.btn_excel, lambda: self.btn_excel.setIcon(file_kind_icon("XLSX", size=BTN_ICON_PX)))
         self.btn_excel.setToolTip(tr("현재 결과를 엑셀(.xlsx)로 저장"))
         self.btn_excel.clicked.connect(self.exportRequested.emit)
         head.addWidget(self.btn_excel)

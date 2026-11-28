@@ -78,8 +78,9 @@ try:
     xs = [g(w).x() for w in (lbl[0] if lbl else dlg.btn_undo, dlg.btn_undo, dlg.btn_redo, dlg.btn_apply, dlg.btn_clear)]
     chk(bool(lbl) and xs == sorted(xs) and len(set(g(w).y() for w in (dlg.btn_undo, dlg.btn_apply, dlg.btn_clear))) == 1,
         "A 위 줄 차례 — '해시태그' · ↶ · ↷ · [적용] · [해제]", str(xs))
-    chk(dlg.btn_undo.text() == "↶" and dlg.btn_redo.text() == "↷" and "Ctrl+Z" in dlg.btn_undo.toolTip(),
-        "A 되돌리기·다시 실행은 꾸밈과 같은 그림 글자 단추(풍선에 단축키)", dlg.btn_undo.text() + dlg.btn_redo.text())
+    chk(not dlg.btn_undo.icon().isNull() and not dlg.btn_redo.icon().isNull() and dlg.btn_undo.text() == ""
+        and "Ctrl+Z" in dlg.btn_undo.toolTip(),
+        "A 되돌리기·다시 실행은 꾸밈과 같은 그림 단추(261128-10 라인 그림, 풍선에 단축키)", dlg.btn_undo.text() + dlg.btn_redo.text())
     gap = g(dlg.btn_apply).x() - (g(dlg.btn_redo).x() + dlg.btn_redo.width())
     chk(gap >= 16, "A [적용] 은 되돌리기 묶음에서 조금 떨어져", str(gap))
     chk(g(dlg.btn_apply).y() < g(dlg.lst_tags).y(), "A [적용]·[해제] 는 위 줄로 옮겼다(왼쪽 아래가 아니라)")

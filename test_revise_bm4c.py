@@ -23,10 +23,11 @@ QStandardPaths.setTestModeEnabled(True)
 QCoreApplication.setApplicationName("polypdf_revise_bm4c_%d" % os.getpid())
 
 # mp3 아이콘: 비율이 이전(가로 길쭉)보다 작아짐(세로 여백 포함) → 글자 작게
-ic = QIcon(resource_path("icon_mp3.png"))
-check("새 mp3 아이콘 로드", not ic.isNull())
-from PIL import Image
-w, h = Image.open(resource_path("icon_mp3.png")).size
+# 261128-10(디자인 SOT §4.8): icon_mp3.png 는 지웠다 — 261031-18 부터 색 그림 mp3(정사각 16 격자)
+from viewer.widgets.icons import color_icon as _cic
+ic = _cic("mp3")
+check("mp3 그림", not ic.isNull())
+w, h = ic.pixmap(32, 32).width(), ic.pixmap(32, 32).height()
 check("mp3 아이콘 비율 ≤ 2.2 (여백 포함·글자 축소)", (w / h) <= 2.2, f"{w}x{h} ratio={w/h:.2f}")
 
 from viewer.app import MainWindow

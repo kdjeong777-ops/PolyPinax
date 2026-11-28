@@ -222,7 +222,8 @@ class MergeFilesDialog(QDialog):
         # 가운데: → 버튼
         mid = QVBoxLayout()
         mid.addStretch(1)
-        btn_add = QPushButton("→")
+        from viewer.widgets.icons import themed_icon as _ti   # 261128-10(디자인 SOT §4.8 ②): 글리프 → 파란 꺾쇠
+        btn_add = QPushButton(_ti("chevron_right", accent=True, dpr=2.0), "")
         btn_add.setToolTip(tr("선택 파일을 오른쪽(병합 대상)으로"))
         btn_add.setFixedWidth(44)
         btn_add.clicked.connect(self._move_selected)
@@ -252,8 +253,8 @@ class MergeFilesDialog(QDialog):
         rlist_row.addWidget(self.right, 1)
         rbtncol = QVBoxLayout()
         rbtncol.addStretch(1)
-        btn_up = QPushButton("▲"); btn_up.setFixedWidth(40)
-        btn_dn = QPushButton("▼"); btn_dn.setFixedWidth(40)
+        btn_up = QPushButton(_ti("chevron_up", accent=True, dpr=2.0), ""); btn_up.setFixedWidth(40)
+        btn_dn = QPushButton(_ti("chevron_down", accent=True, dpr=2.0), ""); btn_dn.setFixedWidth(40)
         btn_up.setToolTip(tr("선택 항목 위로 이동"))
         btn_dn.setToolTip(tr("선택 항목 아래로 이동"))
         btn_up.clicked.connect(lambda: self._move_right(-1))
@@ -325,7 +326,7 @@ class MergeFilesDialog(QDialog):
 
         # 260606-21: 드롭 안내 오버레이(드래그 중 표시) — 창 어디에 놓아도 우측 등록
         self._drop_overlay = QLabel(
-            tr("📄  여기에 PDF 파일을 끌어다 놓으세요\n(오른쪽 병합 목록에 추가됩니다)"), self)
+            tr("여기에 PDF 파일을 끌어다 놓으세요\n(오른쪽 병합 목록에 추가됩니다)"), self)
         self._drop_overlay.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._drop_overlay.setStyleSheet(
             "QLabel{background:rgba(42,125,225,0.16);"

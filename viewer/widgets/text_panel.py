@@ -9,7 +9,7 @@
 """
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt, pyqtSignal, QTimer
+from PyQt6.QtCore import Qt, QSize, pyqtSignal, QTimer
 from viewer.i18n import tr                   # 261008: 화면 문구(다국어 SOT §6)
 from PyQt6.QtGui import QFont, QTextCharFormat, QColor, QTextCursor
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QComboBox,
@@ -238,7 +238,7 @@ class TextPanel(QWidget):
         bar3.addWidget(self.btn_ocr)
         bar3.addWidget(self.btn_hl)
         self.btn_bm = QPushButton(tr("책갈피로"))
-        self.btn_bm.setToolTip(tr("칠한 곳으로 책갈피를 만듭니다(저장은 책갈피창 💾)"))
+        self.btn_bm.setToolTip(tr("칠한 곳으로 책갈피를 만듭니다(저장은 책갈피창 [저장])"))
         self.btn_bm.clicked.connect(self._on_make_bookmarks)
         bar3.addWidget(self.btn_bm)
         self.btn_apply = QPushButton(tr("PDF 에 반영"))
@@ -248,6 +248,11 @@ class TextPanel(QWidget):
         self.btn_word = QToolButton()
         self.btn_word.setText(tr("Word 저장"))
         self.btn_word.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        # 261128-10(디자인 SOT §4.8 ④, 사용자 결정 '안 A 형식 색 배지'): 단어장 [Word] 와 같은 워드 형식 배지 + 글자
+        from viewer.widgets.icons import file_kind_icon, bind_theme_refresh, BTN_ICON_PX
+        self.btn_word.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self.btn_word.setIconSize(QSize(BTN_ICON_PX, BTN_ICON_PX))
+        bind_theme_refresh(self.btn_word, lambda: self.btn_word.setIcon(file_kind_icon("DOCX", size=BTN_ICON_PX)))
         m = QMenu(self.btn_word)
         for key, label in (("page", tr("현재 쪽")), ("range", tr("쪽 범위…")), ("all", tr("문서 전체"))):
             a = m.addAction(label)
@@ -758,4 +763,4 @@ class TextPanel(QWidget):
                           "level": 1 if p["style"] == "title" else 2})
         if items:
             self.bookmarkFromHighlight.emit(items)
-            self.info.setText(tr('책갈피 {n}개를 만들었습니다 — 책갈피창에서 💾 저장하세요.').format(n=len(items)))
+            self.info.setText(tr('책갈피 {n}개를 만들었습니다 — 책갈피창에서 [저장] 하세요.').format(n=len(items)))

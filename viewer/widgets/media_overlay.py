@@ -170,15 +170,19 @@ class MediaOverlay(QWidget):
         cbtn = ("QPushButton{background:#333;color:#fff;border:none;border-radius:5px;"
                 "min-width:38px;min-height:30px;font-size:15px;}"
                 "QPushButton:hover{background:#454545;}")
-        self._btn_restart = QPushButton("⏮"); self._btn_restart.setStyleSheet(cbtn)
+        # 261128-10(디자인 SOT §4.8): 조작 단추 이모지·글리프(⏮⏸▶🔊🔉🔇✕) → 그린 라인 아이콘, 막대가 늘 어두워 다크 꼴
+        from viewer.widgets.icons import themed_icon as _ti
+        from PyQt6.QtCore import QSize as _QS
+        self._ico = lambda n: _ti(n, True, 18, dpr=2.0)
+        self._btn_restart = QPushButton(self._ico("restart"), ""); self._btn_restart.setStyleSheet(cbtn)
         self._btn_restart.clicked.connect(self._restart)
-        self._btn_play = QPushButton("⏸"); self._btn_play.setStyleSheet(cbtn)
+        self._btn_play = QPushButton(self._ico("pause"), ""); self._btn_play.setStyleSheet(cbtn)
         self._btn_play.clicked.connect(self._toggle_play)
-        self._btn_mute = QPushButton("🔊"); self._btn_mute.setStyleSheet(cbtn)
+        self._btn_mute = QPushButton(self._ico("volume"), ""); self._btn_mute.setStyleSheet(cbtn)
         self._btn_mute.clicked.connect(self._toggle_mute)
-        self._btn_voldn = QPushButton("🔉−"); self._btn_voldn.setStyleSheet(cbtn)
+        self._btn_voldn = QPushButton(self._ico("volume_down"), ""); self._btn_voldn.setStyleSheet(cbtn)
         self._btn_voldn.clicked.connect(lambda: self._add_volume(-0.1))
-        self._btn_volup = QPushButton("🔊＋"); self._btn_volup.setStyleSheet(cbtn)
+        self._btn_volup = QPushButton(self._ico("volume_up"), ""); self._btn_volup.setStyleSheet(cbtn)
         self._btn_volup.clicked.connect(lambda: self._add_volume(0.1))
         self._slider = _SeekSlider(Qt.Orientation.Horizontal)
         self._slider.setStyleSheet(
@@ -190,12 +194,14 @@ class MediaOverlay(QWidget):
         self._slider.sliderMoved.connect(self._on_slider_moved)
         self._lbl_time = QLabel("0:00 / 0:00"); self._lbl_time.setStyleSheet("color:#eee;")
         for w in (self._btn_restart, self._btn_play, self._btn_mute, self._btn_voldn, self._btn_volup):
+            w.setIconSize(_QS(18, 18))
             bl.addWidget(w)
         bl.addWidget(self._slider, 1); bl.addWidget(self._lbl_time)
         self._bar.hide()
 
         # 닫기 ✕ (우상단, 항상 표시)
-        self._x = QPushButton("✕", self)
+        self._x = QPushButton(_ti("close", True, 22, dpr=2.0), "", self)
+        self._x.setIconSize(_QS(22, 22))
         self._x.setFixedSize(44, 44)
         self._x.setStyleSheet(
             "QPushButton{background:rgba(0,0,0,0.45);color:#fff;border:1px solid #888;"
@@ -280,7 +286,7 @@ class MediaOverlay(QWidget):
         self._player.errorOccurred.connect(self._on_err)
         self._player.setSource(QUrl.fromLocalFile(str(path)))
         self._player.play()
-        self._btn_play.setText("⏸"); self._update_mute_icon()
+        self._btn_play.setIcon(self._ico("pause")); self._update_mute_icon()
 
     def _teardown_player(self):
         if self._player is not None:
@@ -302,13 +308,13 @@ class MediaOverlay(QWidget):
             return
         from PyQt6.QtMultimedia import QMediaPlayer
         if self._player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
-            self._player.pause(); self._btn_play.setText("▶")
+            self._player.pause(); self._btn_play.setIcon(self._ico("play_line"))
         else:
-            self._player.play(); self._btn_play.setText("⏸")
+            self._player.play(); self._btn_play.setIcon(self._ico("pause"))
 
     def _restart(self):
         if self._player is not None:
-            self._player.setPosition(0); self._player.play(); self._btn_play.setText("⏸")
+            self._player.setPosition(0); self._player.play(); self._btn_play.setIcon(self._ico("pause"))
 
     def _toggle_mute(self):
         if self._audio is not None:
@@ -326,7 +332,7 @@ class MediaOverlay(QWidget):
         if self._audio is None:
             return
         muted = self._audio.isMuted() or self._audio.volume() <= 0.0
-        self._btn_mute.setText("🔇" if muted else "🔊")
+        self._btn_mute.setIcon(self._ico("mute" if muted else "volume"))
 
     def _on_slider_moved(self, v):
         if self._player is not None:

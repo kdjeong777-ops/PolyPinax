@@ -267,6 +267,245 @@ def _gear(p, c):
     p.drawPath(path.subtracted(hole))
 
 
+# --- 261128-10(디자인 SOT §4.8, 사용자 결정 '1~3단계 모두'): 이모지·글리프·옛 PNG 단추를 대신하는 라인 그림 -------------
+def _pen(p, c, w=1.5):
+    pen = QPen(c, w, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin)
+    p.setPen(pen)
+    p.setBrush(Qt.BrushStyle.NoBrush)
+
+
+def _pencil(p, c):
+    """연필(✎·편집) — 오른쪽 위에서 왼쪽 아래로 기운 몸통 + 뾰족한 끝 + 지우개 쪽 띠."""
+    _pen(p, c)
+    p.drawPolygon(QPolygonF([QPointF(11.2, 1.8), QPointF(14.2, 4.8), QPointF(5.2, 13.8),
+                             QPointF(1.8, 14.2), QPointF(2.2, 10.8)]))
+    p.drawLine(QPointF(9.4, 3.6), QPointF(12.4, 6.6))       # 지우개 쪽 띠
+    p.drawLine(QPointF(2.2, 10.8), QPointF(5.2, 13.8))      # 깎은 끝 경계
+
+
+def _trash(p, c):
+    """휴지통(🗑·삭제) — 뚜껑 줄 + 손잡이 + 아래로 좁아지는 통 + 세로 줄 둘."""
+    _pen(p, c)
+    p.drawLine(QPointF(2.0, 4.0), QPointF(14.0, 4.0))
+    p.drawPolyline(QPolygonF([QPointF(6.0, 4.0), QPointF(6.4, 2.0), QPointF(9.6, 2.0), QPointF(10.0, 4.0)]))
+    p.drawPolyline(QPolygonF([QPointF(3.6, 4.0), QPointF(4.6, 14.2), QPointF(11.4, 14.2), QPointF(12.4, 4.0)]))
+    p.drawLine(QPointF(6.6, 6.6), QPointF(6.8, 11.8))
+    p.drawLine(QPointF(9.4, 6.6), QPointF(9.2, 11.8))
+
+
+def _copy(p, c):
+    """복사(📋) — 겹친 종이 둘(뒤 종이는 앞 종이에 가린 두 변만)."""
+    _pen(p, c)
+    p.drawRoundedRect(QRectF(5.4, 5.4, 8.8, 9.6), 1.2, 1.2)
+    p.drawPolyline(QPolygonF([QPointF(3.2, 11.6), QPointF(1.8, 11.6), QPointF(1.8, 1.6),
+                              QPointF(10.4, 1.6), QPointF(10.4, 3.4)]))
+
+
+def _clip_in(p, c):
+    """클립보드 가져오기(📥) — 클립보드 판 + 위 집게 + 안쪽 아래 화살표."""
+    _pen(p, c)
+    p.drawRoundedRect(QRectF(2.6, 2.8, 10.8, 12.2), 1.2, 1.2)
+    p.drawRoundedRect(QRectF(5.6, 1.4, 4.8, 2.8), 0.8, 0.8)
+    p.drawLine(QPointF(8.0, 6.4), QPointF(8.0, 12.4))
+    p.drawPolyline(QPolygonF([QPointF(5.4, 9.8), QPointF(8.0, 12.4), QPointF(10.6, 9.8)]))
+
+
+def _brush(p, c):
+    """다듬기(🖌) — 기운 붓대 + 둥근 붓털."""
+    _pen(p, c)
+    p.drawLine(QPointF(14.2, 1.8), QPointF(7.6, 8.4))
+    p.drawLine(QPointF(12.6, 1.6), QPointF(14.4, 3.4))
+    path = QPainterPath(QPointF(7.4, 7.0))
+    path.cubicTo(QPointF(9.6, 8.4), QPointF(9.6, 9.0), QPointF(8.8, 10.6))
+    path.cubicTo(QPointF(7.6, 13.4), QPointF(4.4, 14.6), QPointF(1.6, 14.4))
+    path.cubicTo(QPointF(3.0, 12.8), QPointF(2.6, 10.4), QPointF(4.4, 8.4))
+    path.cubicTo(QPointF(5.4, 7.2), QPointF(6.4, 6.6), QPointF(7.4, 7.0))
+    p.drawPath(path)
+
+
+def _fullscreen(p, c):
+    """전체화면(⛶) — 네 귀퉁이 꺾쇠."""
+    _pen(p, c, 1.6)
+    for x, y, dx, dy in ((2, 2, 1, 1), (14, 2, -1, 1), (2, 14, 1, -1), (14, 14, -1, -1)):
+        p.drawPolyline(QPolygonF([QPointF(x, y + 4 * dy), QPointF(x, y), QPointF(x + 4 * dx, y)]))
+
+
+def _monitor(p, c):
+    """본화면(🖥) — 화면 + 받침."""
+    _pen(p, c)
+    p.drawRoundedRect(QRectF(1.6, 2.4, 12.8, 8.6), 1.0, 1.0)
+    p.drawLine(QPointF(8.0, 11.0), QPointF(8.0, 13.6))
+    p.drawLine(QPointF(4.8, 13.8), QPointF(11.2, 13.8))
+
+
+def _timer(p, c):
+    """시간(⏱) — 둥근 판 + 위 꼭지 + 바늘."""
+    _pen(p, c)
+    p.drawEllipse(QPointF(8.0, 9.0), 5.6, 5.6)
+    p.drawLine(QPointF(6.4, 1.6), QPointF(9.6, 1.6))
+    p.drawLine(QPointF(8.0, 1.6), QPointF(8.0, 3.4))
+    p.drawLine(QPointF(8.0, 9.0), QPointF(10.6, 6.4))
+    p.drawLine(QPointF(12.6, 3.6), QPointF(13.6, 4.6))
+
+
+def _pause(p, c):
+    """일시정지(⏸) — 세로 막대 둘."""
+    _pen(p, c, 2.2)
+    p.drawLine(QPointF(5.4, 3.0), QPointF(5.4, 13.0))
+    p.drawLine(QPointF(10.6, 3.0), QPointF(10.6, 13.0))
+
+
+def _play_line(p, c):
+    """재생(▶, 라인 계열 자리 — 영상 겹침) — 테두리 삼각형."""
+    _pen(p, c, 1.6)
+    p.drawPolygon(QPolygonF([QPointF(4.4, 2.6), QPointF(4.4, 13.4), QPointF(13.4, 8.0)]))
+
+
+def _restart(p, c):
+    """처음으로(⏮) — 세로 막대 + 왼쪽 삼각형."""
+    _pen(p, c, 1.6)
+    p.drawLine(QPointF(3.4, 3.0), QPointF(3.4, 13.0))
+    p.drawPolygon(QPolygonF([QPointF(13.0, 3.0), QPointF(13.0, 13.0), QPointF(5.6, 8.0)]))
+
+
+def _speaker(p, c):
+    _pen(p, c)
+    p.drawPolygon(QPolygonF([QPointF(1.8, 6.0), QPointF(4.4, 6.0), QPointF(7.8, 2.8),
+                             QPointF(7.8, 13.2), QPointF(4.4, 10.0), QPointF(1.8, 10.0)]))
+
+
+def _volume(p, c):
+    """소리(🔊) — 스피커 + 물결 둘."""
+    _speaker(p, c)
+    p.drawArc(QRectF(6.6, 5.0, 5.0, 6.0), -60 * 16, 120 * 16)
+    p.drawArc(QRectF(6.2, 2.6, 8.4, 10.8), -60 * 16, 120 * 16)
+
+
+def _volume_down(p, c):
+    """소리 작게(🔉−) — 스피커 + −."""
+    _speaker(p, c)
+    p.drawLine(QPointF(10.0, 8.0), QPointF(14.6, 8.0))
+
+
+def _volume_up(p, c):
+    """소리 크게(🔊＋) — 스피커 + ＋."""
+    _speaker(p, c)
+    p.drawLine(QPointF(10.0, 8.0), QPointF(14.6, 8.0))
+    p.drawLine(QPointF(12.3, 5.7), QPointF(12.3, 10.3))
+
+
+def _mute(p, c):
+    """소리 끔(🔇) — 스피커 + ×."""
+    _speaker(p, c)
+    p.drawLine(QPointF(10.2, 5.8), QPointF(14.4, 10.2))
+    p.drawLine(QPointF(14.4, 5.8), QPointF(10.2, 10.2))
+
+
+def _eye(p, c):
+    """보이기(👁) — 눈 윤곽 + 동공."""
+    _pen(p, c)
+    path = QPainterPath(QPointF(1.4, 8.0))
+    path.quadTo(QPointF(8.0, 0.6), QPointF(14.6, 8.0))
+    path.quadTo(QPointF(8.0, 15.4), QPointF(1.4, 8.0))
+    p.drawPath(path)
+    p.drawEllipse(QPointF(8.0, 8.0), 2.2, 2.2)
+
+
+def _two_page(p, c):
+    """2단 보기(🗗) — 나란한 쪽 둘."""
+    _pen(p, c)
+    p.drawRect(QRectF(1.6, 2.6, 5.8, 10.8))
+    p.drawRect(QRectF(8.6, 2.6, 5.8, 10.8))
+
+
+def _present(p, c):
+    """발표(📽) — 화면 + 세 다리 받침."""
+    _pen(p, c)
+    p.drawRect(QRectF(1.8, 2.0, 12.4, 7.8))
+    p.drawLine(QPointF(8.0, 9.8), QPointF(8.0, 14.2))
+    p.drawLine(QPointF(8.0, 11.0), QPointF(4.6, 14.4))
+    p.drawLine(QPointF(8.0, 11.0), QPointF(11.4, 14.4))
+
+
+def _book(p, c):
+    """단어장(📖) — 펼친 책(가운데 등 + 양쪽 면)."""
+    _pen(p, c)
+    p.drawPolygon(QPolygonF([QPointF(8.0, 4.2), QPointF(4.8, 2.8), QPointF(1.4, 3.4), QPointF(1.4, 13.0),
+                             QPointF(4.8, 12.4), QPointF(8.0, 13.8), QPointF(11.2, 12.4), QPointF(14.6, 13.0),
+                             QPointF(14.6, 3.4), QPointF(11.2, 2.8)]))
+    p.drawLine(QPointF(8.0, 4.2), QPointF(8.0, 13.8))
+
+
+def _pin(p, c):
+    """고정(📌) — 기운 압정(머리 + 몸 + 바늘)."""
+    _pen(p, c)
+    p.drawPolygon(QPolygonF([QPointF(9.4, 1.6), QPointF(14.4, 6.6), QPointF(12.6, 7.4),
+                             QPointF(9.8, 10.2), QPointF(10.0, 12.6), QPointF(3.4, 6.0),
+                             QPointF(5.8, 6.2), QPointF(8.6, 3.4)]))
+    p.drawLine(QPointF(6.6, 9.4), QPointF(1.8, 14.2))
+
+
+def _check(p, c):
+    """확인(✔) — 꺾인 체크."""
+    _pen(p, c, 1.8)
+    p.drawPolyline(QPolygonF([QPointF(2.6, 8.4), QPointF(6.2, 12.0), QPointF(13.6, 4.0)]))
+
+
+def _undo(p, c):
+    """되돌리기(↶) — 왼쪽 위로 도는 호 + 화살촉."""
+    _pen(p, c)
+    path = QPainterPath(QPointF(3.6, 6.4))
+    path.lineTo(QPointF(9.6, 6.4))
+    path.cubicTo(QPointF(15.0, 6.4), QPointF(15.0, 13.6), QPointF(9.6, 13.6))
+    path.lineTo(QPointF(6.4, 13.6))
+    p.drawPath(path)
+    p.drawPolyline(QPolygonF([QPointF(6.4, 3.4), QPointF(3.4, 6.4), QPointF(6.4, 9.4)]))
+
+
+def _scale(p, c):
+    """법령(⚖) — 기둥 + 가로대 + 양쪽 접시."""
+    _pen(p, c, 1.4)
+    p.drawLine(QPointF(8.0, 2.0), QPointF(8.0, 13.6))
+    p.drawLine(QPointF(5.0, 14.0), QPointF(11.0, 14.0))
+    p.drawLine(QPointF(2.6, 4.0), QPointF(13.4, 4.0))
+    for x in (3.6, 12.4):
+        p.drawLine(QPointF(x, 4.0), QPointF(x - 2.0, 8.6))
+        p.drawLine(QPointF(x, 4.0), QPointF(x + 2.0, 8.6))
+        p.drawArc(QRectF(x - 2.4, 6.6, 4.8, 4.0), 180 * 16, 180 * 16)
+
+
+def _building(p, c):
+    """건설기준(🏗) — 건물 윤곽 + 창 넷 + 문."""
+    _pen(p, c, 1.4)
+    p.drawRect(QRectF(3.0, 2.0, 10.0, 12.2))
+    for x in (5.4, 9.0):
+        for y in (4.4, 7.4):
+            p.drawRect(QRectF(x, y, 1.6, 1.4))
+    p.drawLine(QPointF(7.0, 14.2), QPointF(7.0, 11.0))
+    p.drawLine(QPointF(7.0, 11.0), QPointF(9.0, 11.0))
+    p.drawLine(QPointF(9.0, 11.0), QPointF(9.0, 14.2))
+
+
+def _link(p, c):
+    """하이퍼링크(🔗) — 비스듬히 엮인 고리 둘."""
+    _pen(p, c, 1.5)
+    p.save()
+    p.translate(8.0, 8.0)
+    p.rotate(-45)
+    p.drawRoundedRect(QRectF(-7.0, -2.4, 7.6, 4.8), 2.4, 2.4)
+    p.drawRoundedRect(QRectF(-0.6, -2.4, 7.6, 4.8), 2.4, 2.4)
+    p.restore()
+
+
+def _redo(p, c):
+    """다시 하기(↷) — 되돌리기의 좌우 거울."""
+    p.save()
+    p.translate(16.0, 0.0)
+    p.scale(-1.0, 1.0)
+    _undo(p, c)
+    p.restore()
+
+
 _DRAW = {
     "search": _search, "globe": _globe, "close": _close,
     "chevron_up": _chevron_up, "chevron_down": _chevron_down,
@@ -277,6 +516,13 @@ _DRAW = {
     "crop": _crop, "sign": _sign, "image": _image, "line_straight": _line_straight,
     "view_tree": _view_tree, "view_single": _view_single, "hand": _hand, "select_box": _select_box,
     "gear": _gear, "menu": _menu,
+    # 261128-10(디자인 SOT §4.8): 이모지·글리프·옛 PNG 대신
+    "pencil": _pencil, "trash": _trash, "copy": _copy, "clip_in": _clip_in, "brush": _brush,
+    "fullscreen": _fullscreen, "monitor": _monitor, "timer": _timer, "pause": _pause,
+    "play_line": _play_line, "restart": _restart, "volume": _volume, "volume_down": _volume_down,
+    "volume_up": _volume_up, "mute": _mute, "eye": _eye, "two_page": _two_page, "present": _present,
+    "book": _book, "pin": _pin, "check": _check, "undo": _undo, "redo": _redo,
+    "scale": _scale, "building": _building, "link": _link,
 }
 
 
@@ -631,7 +877,24 @@ def _highlighter(p, c, dark=False):
 #   도구 줄·단어장 머리줄의 26px 단추는 BTN_ICON_PX — 종전 22·24 는 단추를 꽉 채웠다. 16 은 검색결과·메뉴 탭 글자 단추의 아이콘과도 같다.
 ICON_MARGIN = 4          # 이보다 좁으면 답답 — 모든 그림 단추의 최소(검사 test_design_icon_margin)
 BTN_ICON_PX = 16
+def _rec(p, c):
+    """261128-10(디자인 SOT §4.8): 녹화(●) — 정지 ■ 와 같은 빨강 원."""
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(c)
+    p.drawEllipse(QPointF(8.0, 8.0), 5.4, 5.4)
+
+
+def _rec_pause(p, c):
+    """261128-10: 녹화 일시정지(‖) — 빨강 막대 둘."""
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(c)
+    p.drawRoundedRect(QRectF(3.6, 3.0, 3.2, 10.0), 0.8, 0.8)
+    p.drawRoundedRect(QRectF(9.2, 3.0, 3.2, 10.0), 0.8, 0.8)
+
+
+ACCENT["rec"] = ACCENT["rec_pause"] = ACCENT["stop"]
 _COLOR_DRAW = {"play": _play, "stop": _stop, "camera": _camera, "tri_right": _tri_right, "mp3": _mp3, "ocr": _ocr,
+               "rec": _rec, "rec_pause": _rec_pause,
                "highlighter": _highlighter,
                "fav_folder": _fav_folder, "fav_file": _fav_file, "fav_search": _fav_search,
                "open_folder": _open_folder, "open_file": _open_file,
@@ -773,8 +1036,16 @@ FILE_KIND_COLOR = {"PDF": {False: "#d93025", True: "#ef5350"}, "JPG": ACCENT["pl
                    "WEBP": {False: "#00838f", True: "#4dd0e1"},
                    "ZIP": {False: "#8d6e63", True: "#bcaaa4"},     # 261104-4(사진 보기 SOT 4.24): 사진이 든 zip
                    "XLSX": {False: "#1d6f42", True: "#4caf7d"},    # 261120-42(명함찾기 SOT §5.24.2 '할 일 내보내기' 단추) — EXT_KIND 에는 없다
-                   "DOCX": {False: "#2b579a", True: "#6e9be0"}}
-FILE_KIND_TEXT = {"XLSX": "X", "DOCX": "W"}     # 그리는 글자가 형식 이름과 다른 것 — 엑셀·워드는 한 글자
+                   "DOCX": {False: "#2b579a", True: "#6e9be0"},
+                   # 261128-10(디자인 SOT §4.8, 사용자 결정 '안 A 형식 색 배지'): 변환·내보내기 단추도 같은 배지 — PPT 는 PDF 빨강과 갈리는 주황,
+                   #   한글은 워드 파랑보다 밝은 하늘색(글자 H 로도 갈린다), 텍스트는 회색
+                   "PPTX": {False: "#c4501c", True: "#f08a55"},
+                   "HWPX": {False: "#1b8ec2", True: "#5bb8e6"},
+                   "TXT": FILE_GRAY}
+FILE_KIND_TEXT = {"XLSX": "X", "DOCX": "W", "PPTX": "P", "HWPX": "H", "TXT": "T"}   # 그리는 글자가 형식 이름과 다른 것 — 오피스·한글·텍스트는 한 글자
+# 261128-10(디자인 SOT §4.8): 내보내기·변환 결과 확장자 → 배지 형식(`EXT_KIND` 는 목록 줄용이라 문서 형식을 넣지 않는다)
+EXPORT_KIND = {".docx": "DOCX", ".xlsx": "XLSX", ".pptx": "PPTX", ".hwpx": "HWPX", ".txt": "TXT",
+               ".pdf": "PDF", ".jpg": "JPG", ".jpeg": "JPG", ".png": "PNG", ".webp": "WEBP"}
 EXT_KIND = {".pdf": "PDF", ".jpg": "JPG", ".jpeg": "JPG", ".png": "PNG", ".heic": "HEIC", ".heif": "HEIC",
             ".gif": "GIF", ".tif": "TIF", ".tiff": "TIF", ".bmp": "BMP", ".webp": "WEBP", ".zip": "ZIP"}   # 같은 형식의 다른 확장자는 한 아이콘
 FILE_KIND_LINE = {False: "#9aa3ad", True: "#6b737c"}     # 종이 테두리
@@ -852,7 +1123,8 @@ def _file_kind(p, kind: str, dark: bool):
 def file_kind_icon(path_or_kind, dark: bool | None = None, size: int = 16, *, dpr: float = 2.0) -> QIcon:
     """책갈피창 줄 앞 파일 종류 아이콘(사진 보기 SOT §4.8). 모르는 형식이면 빈 아이콘.
     형식·테마·크기마다 **한 번만** 그린다 — 수천 줄 목록에서 줄마다 그리지 않게(응답성 SOT §6)."""
-    kind = path_or_kind if path_or_kind in FILE_KIND_COLOR else file_kind(path_or_kind)
+    kind = path_or_kind if path_or_kind in FILE_KIND_COLOR else (file_kind(path_or_kind)
+                                                                  or EXPORT_KIND.get(str(path_or_kind).lower()))
     if kind is None:
         return QIcon()
     if dark is None:
@@ -1040,23 +1312,24 @@ def bizcard_icon(dark: bool | None = None, size: int = 16, *, dpr: float = 2.0) 
 
 
 def themed_icon(name: str, dark: bool | None = None, size: int = 16, *,
-                pad_right: int = 0, dpr: float = 1.0, accent: bool = False) -> QIcon:
+                pad_right: int = 0, dpr: float = 1.0, accent: bool = False, tone: str | None = None) -> QIcon:
     """이름으로 테마색 단색 아이콘 생성. 없는 이름이면 빈 아이콘.
 
     pad_right: 오른쪽에 둘 빈 폭(px) — 가운데 정렬 버튼에서 그림을 왼쪽으로 비킬 때
     (도형 버튼이 ▾ 풀다운 영역과 붙지 않게). dpr: 고해상도 렌더 배율.
-    accent: 261128-6(디자인 SOT §4.3) — 회색 전경 대신 ▶·캡처 카메라와 같은 파랑(ACCENT["play"])."""
+    accent: 261128-6(디자인 SOT §4.3) — 회색 전경 대신 ▶·캡처 카메라와 같은 파랑(ACCENT["play"]).
+    tone: 261128-10(디자인 SOT §4.8) — `ACCENT` 의 다른 색 이름(예: "stop" = 닫기·편집 중 빨강). accent 보다 앞선다."""
     fn = _DRAW.get(name)
     if fn is None:
         return QIcon()
-    if accent:
+    if accent or tone:
         if dark is None:
             try:
                 from viewer import theme
                 dark = theme.is_dark()
             except Exception:
                 dark = False
-        c = QColor(ACCENT["play"][bool(dark)])
+        c = QColor(ACCENT[tone or "play"][bool(dark)])
     else:
         c = QColor(fg_color(dark))
     pm = QPixmap(int((size + pad_right) * dpr), int(size * dpr))

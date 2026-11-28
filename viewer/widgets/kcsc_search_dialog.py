@@ -139,22 +139,22 @@ class KcscSearchPanel(QWidget):
         title.setFont(tf)
         title_row.addWidget(title)
         # 260621-62: 뒤로/앞으로(본문 코드 링크·항목 이동 히스토리)
-        self.btn_back = QPushButton("◀")
+        self.btn_back = QPushButton()          # 261128-10(디자인 SOT §4.8 ②): 파란 꺾쇠 ‹ ›(종전 ◀▶) — 아래 _acc 가 칠함
         self.btn_back.setFixedWidth(30); self.btn_back.setToolTip("뒤로 (이전 본 기준)")
         self.btn_back.clicked.connect(self._nav_back)
-        self.btn_fwd = QPushButton("▶")
+        self.btn_fwd = QPushButton()
         self.btn_fwd.setFixedWidth(30); self.btn_fwd.setToolTip("앞으로 (다음 본 기준)")
         self.btn_fwd.clicked.connect(self._nav_fwd)
         self.btn_back.setEnabled(False); self.btn_fwd.setEnabled(False)
         title_row.addWidget(self.btn_back); title_row.addWidget(self.btn_fwd)
-        self.btn_fav = QPushButton("⭐ 즐겨찾기")
+        self.btn_fav = QPushButton("즐겨찾기")
         self.btn_fav.setIcon(themed_icon("star"))
         self._fav_menu = QMenu(self)
         self._fav_menu.aboutToShow.connect(self._rebuild_fav_menu)
         self.btn_fav.setMenu(self._fav_menu)
         title_row.addWidget(self.btn_fav)
         title_row.addStretch(1)
-        self.btn_full = QPushButton("⛶ 전체화면")
+        self.btn_full = QPushButton("전체화면")
         self.btn_full.setToolTip("전체화면(별도 창) ↔ 내부화면(메인 오른쪽)")
         self.btn_full.clicked.connect(self.fullscreenToggled.emit)
         title_row.addWidget(self.btn_full)
@@ -258,14 +258,20 @@ class KcscSearchPanel(QWidget):
         # 261128-6(디자인 SOT §4.3): 아이콘 단추는 파란 라인, 테마 바뀌면 다시 칠함
         from viewer.widgets.icons import bind_theme_refresh
         _acc = [(self.btn_fav, "star"), (self.btn_globe, "globe"), (b_prev, "chevron_up"),
-                (b_next, "chevron_down"), (b_fclose, "close")]
-        bind_theme_refresh(self, lambda: [b.setIcon(themed_icon(n, accent=True)) for b, n in _acc])
+                (b_next, "chevron_down"), (b_fclose, "close"),
+                (self.btn_back, "chevron_left"), (self.btn_fwd, "chevron_right")]          # 261128-10
+        self.btn_full.setProperty("accentIcon", "fullscreen")
+        bind_theme_refresh(self, lambda: [b.setIcon(themed_icon(n, accent=True))
+                                          for b, n in _acc + [(self.btn_full, self.btn_full.property("accentIcon"))]])
 
     # ----- 레이아웃 -----
     def set_fullscreen(self, is_full: bool):
         """260621-63: 전체화면=2단(좌측 세로 상/하 책갈피 + 본문 좌/우), 내부=단일 split."""
         is_full = bool(is_full)
-        self.btn_full.setText("▣ 내부화면" if is_full else "⛶ 전체화면")
+        # 261128-10(디자인 SOT §4.8): 글자 앞 ▣·⛶ 대신 파란 라인 그림(내부화면 = 본화면 monitor, 전체화면 = 네 귀퉁이)
+        self.btn_full.setText("내부화면" if is_full else "전체화면")
+        self.btn_full.setProperty("accentIcon", "monitor" if is_full else "fullscreen")
+        self.btn_full.setIcon(themed_icon(self.btn_full.property("accentIcon"), accent=True))
         self._find_sc.setEnabled(is_full)      # 260623: 패널 Ctrl+F 는 전체화면에서만
         if is_full == self._is_full:
             return
@@ -579,7 +585,7 @@ class KcscSearchPanel(QWidget):
             return
         self.tree.setCurrentItem(it)
         menu = QMenu(self)
-        a_fav = QAction("⭐ 즐겨찾기에 추가", self)
+        a_fav = QAction(themed_icon("star", accent=True), "즐겨찾기에 추가", self)
         a_fav.triggered.connect(self._add_favorite_current)
         menu.addAction(a_fav)
         menu.exec(self.tree.viewport().mapToGlobal(pos))

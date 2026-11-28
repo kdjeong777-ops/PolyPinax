@@ -20,7 +20,7 @@ mw = MainWindow()
 
 # 메뉴명 단축
 # 260628-2: v1.28.2(260609-1)에서 '2분할 보기' → '2단 보기' 로 명칭 통일됨
-check("2단 메뉴명 '🗗 2단 보기'", mw.act_split.text() == "🗗 2단 보기", mw.act_split.text())
+check("2단 메뉴명 '2단 보기'(261128-10 글자 앞 이모지 뺌)", mw.act_split.text() == "2단 보기", mw.act_split.text())
 
 # 창별 읽기 컨트롤: 두 창 모두 읽기 버튼+메뉴 존재, 각 창 툴바에 들어감
 check("두 창 읽기 버튼 구성", len(mw._read_btns) == 2)

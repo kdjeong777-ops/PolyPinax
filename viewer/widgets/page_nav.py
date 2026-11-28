@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
-"""쪽 이동 묶음 하나 — `❮ [칸] / 전체 ❯` (261105-27, 사용자 지시 '모두 화면 아래 중앙에 페이지 이동이 있도록 … 전체 통일').
+"""쪽 이동 묶음 하나 — `‹ [칸] / 전체 ›` (261105-27, 사용자 지시 '모두 화면 아래 중앙에 페이지 이동이 있도록 … 전체 통일').
 
 규칙 원본은 화면 디자인 SOT §2.20 '쪽 이동은 화면 아래 가운데'. 본문(창 아래 상태 막대, `page_nav_bar.PageNavHost`)과
 모든 미리보기 창(인쇄·병합·다단·크롭·가림·발표 보기 설정·목차 검토)이 이 위젯 하나를 쓴다 — 모양·치수·동작이 같다.
 
-- `❮` `❯` 는 폭 `BTN_W`, 칸은 폭 `SPIN_W`(올림·내림 단추 없음, 가운데 글), 모두 높이 `NAV_H`.
+- `‹` `›`(파란 꺾쇠 그림, 261128-10) 는 폭 `BTN_W`, 칸은 폭 `SPIN_W`(올림·내림 단추 없음, 가운데 글), 모두 높이 `NAV_H`.
 - 칸에 쓰고 Enter(또는 칸을 떠나면) → `pageRequested(1부터)`. 단추 → `stepRequested(±1)`. 위젯은 쪽을 스스로 바꾸지 않는다 — 쓰는 쪽이 `set_state` 로 알려 준다.
 - `prefix`(예: 인쇄 다단 '시트 ')는 칸 앞에 작은 글로. `editable=False` 면 칸 대신 글(`set_text`) — 이동 단위가 쪽 하나가 아닌 곳(발표 보기 설정의 펼침).
 - `centered_row(nav, right=…)` 는 양쪽에 **같은 폭 칸**을 두어 옆에 다른 단추가 있어도 묶음이 정확히 가운데에 서게 한다.
@@ -32,13 +32,17 @@ class PageNav(QWidget):
         lay = QHBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(2)
-        self.btn_prev = QPushButton("❮")
-        self.btn_next = QPushButton("❯")
+        # 261128-10(디자인 SOT §4.8 ②, 사용자 결정 '안 1 파란 가는 꺾쇠'): 글리프 ❮❯ → 법령 창 ∧∨ 와 같은 파란 꺾쇠 ‹ ›
+        self.btn_prev = QPushButton()
+        self.btn_next = QPushButton()
         for b in (self.btn_prev, self.btn_next):
             b.setFixedSize(BTN_W, NAV_H)
             b.setAutoDefault(False)                 # 디자인 SOT §2.7 — 대화상자 Enter 로 눌리지 않게
             b.setDefault(False)
-            b.setStyleSheet("QPushButton{font-size:13px;font-weight:bold;padding:0;text-align:center;}")
+            b.setStyleSheet("QPushButton{padding:0;}")
+        from viewer.widgets.icons import bind_theme_refresh, themed_icon
+        bind_theme_refresh(self.btn_prev, lambda: (self.btn_prev.setIcon(themed_icon("chevron_left", accent=True, dpr=2.0)),
+                                                   self.btn_next.setIcon(themed_icon("chevron_right", accent=True, dpr=2.0))))
         self.lbl_prefix = QLabel(prefix)
         self.lbl_prefix.setFixedHeight(NAV_H)
         self.lbl_prefix.setVisible(bool(prefix))

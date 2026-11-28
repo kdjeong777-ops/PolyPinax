@@ -55,6 +55,7 @@ class ConvertDialog(QDialog):
         lay.addLayout(body)
 
         # ── 문서 쪽 ──
+        from viewer.widgets.icons import file_kind_icon   # 대화상자는 모달이라 열린 동안 테마가 바뀌지 않는다 — 만들 때 한 번
         self.fmt_group = QButtonGroup(self)
         self._fmt_btn = {}
         g_fmt = QGroupBox(tr("형식"))
@@ -64,6 +65,7 @@ class ConvertDialog(QDialog):
                 continue
             b = QRadioButton(tr(f.label))
             b.setObjectName("fmt_" + f.key)
+            b.setIcon(file_kind_icon(f.ext))          # 261128-10(디자인 SOT §4.8 ④): 형식 배지 — 단어장·텍스트 창 [Word] 와 같은 꼴
             self.fmt_group.addButton(b)
             help_html = convert.help_text(f.key)
             if help_html:                         # 261113-3(형식 변환 SOT §5): '?' 설명 — 지금은 'MS Word 모듈 적용' 만
@@ -100,6 +102,8 @@ class ConvertDialog(QDialog):
             for key, text in items:
                 rb = QRadioButton(text)
                 rb.setObjectName(prefix + str(key))
+                if prefix == "img_fmt_":                # 261128-10(§4.8 ④): 이미지 형식도 배지(JPG·PNG·WebP)
+                    rb.setIcon(file_kind_icon("." + str(key)))
                 grp.addButton(rb)
                 hl.addWidget(rb)
                 store[key] = rb

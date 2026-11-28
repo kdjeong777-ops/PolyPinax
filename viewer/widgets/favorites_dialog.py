@@ -26,10 +26,10 @@ from viewer.i18n import tr
 
 # 261008-12: 즐겨찾기 메뉴와 같은 그룹 순서 — 폴더 → 파일 → 검색어(kind 가 없거나 모르면 폴더).
 KIND_ORDER = ("folder", "file", "search")
-KIND_PREFIX = {"folder": "📁 ", "file": "📄 ", "search": "🔍 "}
+# 261128-10(디자인 SOT §4.8 ①): 종류 표시는 글자 앞 이모지가 아니라 라인 그림(`fav_icon`) — 메뉴·관리 창 목록이 같다
+KIND_ICON = {"folder": "folder", "file": "file", "search": "search", "law": "scale", "kipo": "file", "kcsc": "building"}
 # 261025-1(디자인 SOT §2.9.5): `기타` 의 종류 — 차례는 보기 탭(법령·고시 → 특허 → 건설기준)
 OTHER_KINDS = ("law", "kipo", "kcsc")
-OTHER_PREFIX = {"law": "⚖ ", "kipo": "📄 ", "kcsc": "🏗 "}
 SHORT_MAX = 12          # 개별 단추 요약 이름 — 이보다 길면 가운데를 줄인다
 BUTTONS_MAX = 3         # 등록 폴더·등록 파일 개별 단추 수(목록 앞에서부터) — 261031-12 사용자 지시(종전 5)
 
@@ -72,11 +72,17 @@ def short_label(f: dict) -> str:
     return s or middle_ellipsis(str(f.get("name", "?")))
 
 
+def fav_icon(kind: str):
+    """261128-10(디자인 SOT §4.8): 즐겨찾기 종류 그림 — 폴더·파일·돋보기·법령 저울·특허 문서·건설기준 건물."""
+    from viewer.widgets.icons import themed_icon
+    return themed_icon(KIND_ICON.get(kind, "folder"), dpr=2.0)
+
+
 def other_label(kind: str, f: dict) -> str:
-    """법령·고시 / 특허 / 건설기준 즐겨찾기 한 줄 — 종전 메뉴 구역과 같은 꼴."""
+    """법령·고시 / 특허 / 건설기준 즐겨찾기 한 줄 — 종전 메뉴 구역과 같은 꼴(종류 그림은 `fav_icon`)."""
     if kind == "kipo":
-        return OTHER_PREFIX[kind] + (f.get("name") or f.get("appNo") or f.get("regNo") or tr("특허"))
-    label = OTHER_PREFIX[kind] + f.get("name", "?")
+        return f.get("name") or f.get("appNo") or f.get("regNo") or tr("특허")
+    label = f.get("name", "?")
     extra = (f.get("kind_label") or f.get("category")) if kind == "law" else f.get("category")
     if extra:
         label += f"  ({extra})"
@@ -102,9 +108,10 @@ class _FavList(QWidget):
             self._append(copy.deepcopy(f))
         h.addWidget(self.list, 1)
         btns = QVBoxLayout()
-        b_up = QPushButton(tr("↑ 위로"))
+        from viewer.widgets.icons import themed_icon     # 261128-10(디자인 SOT §4.8 ②): ↑↓ 글리프 → 파란 꺾쇠 ∧ ∨ + 글자
+        b_up = QPushButton(themed_icon("chevron_up", accent=True), tr("위로"))
         b_up.clicked.connect(lambda: self._move(-1))
-        b_dn = QPushButton(tr("↓ 아래로"))
+        b_dn = QPushButton(themed_icon("chevron_down", accent=True), tr("아래로"))
         b_dn.clicked.connect(lambda: self._move(+1))
         b_rn = QPushButton(tr("이름 변경"))
         b_rn.clicked.connect(lambda: self._on_rename(self.list.currentItem()))
@@ -124,7 +131,7 @@ class _FavList(QWidget):
 
     def _text(self, f: dict) -> str:
         if self.kind in KIND_ORDER:
-            t = KIND_PREFIX[self.kind] + f.get("name", "?")
+            t = f.get("name", "?")
             if self.kind in ("folder", "file"):
                 t += "   [" + short_label(f) + "]"
             return t
@@ -140,7 +147,7 @@ class _FavList(QWidget):
         return f.get("name", "")
 
     def _append(self, f: dict):
-        it = QListWidgetItem(self._text(f))
+        it = QListWidgetItem(fav_icon(self.kind), self._text(f))
         it.setData(Qt.ItemDataRole.UserRole, f)
         it.setToolTip(self._tip(f))
         self.list.addItem(it)
@@ -247,7 +254,7 @@ class AddFavoriteDialog(QDialog):
         self.setMinimumWidth(420)
 
         layout = QVBoxLayout(self)
-        label = {"folder": tr("📁 폴더"), "file": tr("📄 파일"), "search": tr("🔍 검색")}.get(kind, "📁 폴더")
+        label = {"folder": tr("폴더"), "file": tr("파일"), "search": tr("검색")}.get(kind, tr("폴더"))   # 261128-10: 이모지 없이
         layout.addWidget(QLabel(tr('종류: {label}').format(label=label)))
         layout.addWidget(QLabel(tr("이름 (수정 가능):")))
         self.edit = QLineEdit(suggested_name)

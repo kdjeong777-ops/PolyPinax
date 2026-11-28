@@ -414,9 +414,10 @@ class StampManagerDialog(QDialog):
         left = QVBoxLayout()
         left.addWidget(self.lst, 1)
         mv_row = QHBoxLayout()
-        self.btn_up = QPushButton(tr("↑ 위로"))
+        from viewer.widgets.icons import themed_icon as _ti   # 261128-10(디자인 SOT §4.8 ②): 글리프 → 파란 꺾쇠
+        self.btn_up = QPushButton(_ti("chevron_up", accent=True, dpr=2.0), tr("위로"))
         self.btn_up.clicked.connect(lambda: self._move(-1))
-        self.btn_down = QPushButton(tr("↓ 아래로"))
+        self.btn_down = QPushButton(_ti("chevron_down", accent=True, dpr=2.0), tr("아래로"))
         self.btn_down.clicked.connect(lambda: self._move(+1))
         mv_row.addWidget(self.btn_up)
         mv_row.addWidget(self.btn_down)

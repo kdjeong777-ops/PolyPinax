@@ -21,10 +21,10 @@ from PyQt6.QtCore import QStandardPaths, QCoreApplication
 QStandardPaths.setTestModeEnabled(True)
 QCoreApplication.setApplicationName("polypdf_revise_bm4b_%d" % os.getpid())
 
-# 아이콘 파일 로드 확인
-for n in ("icon_edit.png", "icon_word.png", "icon_mp3.png"):
-    p = resource_path(n)
-    check(f"{n} 존재·로드", os.path.exists(p) and not QIcon(p).isNull(), p)
+# 261128-10(디자인 SOT §4.8): 아이콘 PNG(icon_edit·icon_word·icon_mp3)는 지웠다 — 그린 그림(연필·워드 배지·mp3)
+from viewer.widgets.icons import themed_icon, file_kind_icon, color_icon
+for n, ic in (("pencil", themed_icon("pencil")), ("DOCX", file_kind_icon("DOCX")), ("mp3", color_icon("mp3"))):
+    check(f"{n} 그림", not ic.isNull())
 
 from viewer.app import MainWindow
 mw = MainWindow()

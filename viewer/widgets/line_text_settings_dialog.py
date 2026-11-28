@@ -146,8 +146,9 @@ class LineTextSettingsDialog(QDialog):
         top.addWidget(self._lst, 1)
         col = QVBoxLayout()
         b_del = QPushButton(tr("삭제")); b_del.clicked.connect(self._style_delete)
-        b_up = QPushButton("▲"); b_up.clicked.connect(lambda: self._style_move(-1))
-        b_dn = QPushButton("▼"); b_dn.clicked.connect(lambda: self._style_move(1))
+        from viewer.widgets.icons import themed_icon as _ti   # 261128-10(디자인 SOT §4.8 ②): 글리프 → 파란 꺾쇠
+        b_up = QPushButton(_ti("chevron_up", accent=True, dpr=2.0), ""); b_up.clicked.connect(lambda: self._style_move(-1))
+        b_dn = QPushButton(_ti("chevron_down", accent=True, dpr=2.0), ""); b_dn.clicked.connect(lambda: self._style_move(1))
         for b in (b_del, b_up, b_dn):
             col.addWidget(b)
         col.addStretch(1)

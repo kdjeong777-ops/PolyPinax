@@ -116,14 +116,14 @@ class KipoSearchPanel(QWidget):
         tf = title.font(); tf.setBold(True); tf.setPointSize(max(11, tf.pointSize() + 2))
         title.setFont(tf)
         title_row.addWidget(title)
-        self.btn_fav = QPushButton("⭐ 즐겨찾기")
+        self.btn_fav = QPushButton("즐겨찾기")
         self.btn_fav.setIcon(themed_icon("star"))
         self._fav_menu = QMenu(self)
         self._fav_menu.aboutToShow.connect(self._rebuild_fav_menu)
         self.btn_fav.setMenu(self._fav_menu)
         title_row.addWidget(self.btn_fav)
         title_row.addStretch(1)
-        self.btn_full = QPushButton("⛶ 전체화면")
+        self.btn_full = QPushButton("전체화면")
         self.btn_full.setToolTip("전체화면(별도 창) ↔ 내부화면(메인 오른쪽)")
         self.btn_full.clicked.connect(self.fullscreenToggled.emit)
         title_row.addWidget(self.btn_full)
@@ -225,11 +225,16 @@ class KipoSearchPanel(QWidget):
         from viewer.widgets.icons import bind_theme_refresh
         _acc = [(self.btn_fav, "star"), (self.btn_globe, "globe"), (b_prev, "chevron_up"),
                 (b_next, "chevron_down"), (b_fclose, "close")]
-        bind_theme_refresh(self, lambda: [b.setIcon(themed_icon(n, accent=True)) for b, n in _acc])
+        self.btn_full.setProperty("accentIcon", "fullscreen")                                   # 261128-10
+        bind_theme_refresh(self, lambda: [b.setIcon(themed_icon(n, accent=True))
+                                          for b, n in _acc + [(self.btn_full, self.btn_full.property("accentIcon"))]])
 
     # ----- 레이아웃 -----
     def set_fullscreen(self, is_full: bool):
-        self.btn_full.setText("▣ 내부화면" if is_full else "⛶ 전체화면")
+        # 261128-10(디자인 SOT §4.8): 글자 앞 ▣·⛶ 대신 파란 라인 그림(내부화면 = 본화면 monitor, 전체화면 = 네 귀퉁이)
+        self.btn_full.setText("내부화면" if is_full else "전체화면")
+        self.btn_full.setProperty("accentIcon", "monitor" if is_full else "fullscreen")
+        self.btn_full.setIcon(themed_icon(self.btn_full.property("accentIcon"), accent=True))
         if getattr(self, "_find_sc", None) is not None:
             self._find_sc.setEnabled(bool(is_full))   # 260623: 패널 Ctrl+F 는 전체화면만
 
@@ -344,7 +349,7 @@ class KipoSearchPanel(QWidget):
             return
         self.tree.setCurrentItem(it)
         menu = QMenu(self)
-        a = QAction("⭐ 즐겨찾기에 추가", self)
+        a = QAction(themed_icon("star", accent=True), "즐겨찾기에 추가", self)
         a.triggered.connect(self._add_favorite_current)
         menu.addAction(a)
         menu.exec(self.tree.viewport().mapToGlobal(pos))

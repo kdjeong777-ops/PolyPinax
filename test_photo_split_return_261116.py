@@ -5,7 +5,7 @@
 (프로그램 종료하지 않고, 계속 사용시)'.
 실제 MainWindow 로(오프스크린, 실제 설정 폴더를 쓰지 않는다 — 검사 작성 SOT §14.7.2 의 3). 단추·키는 실제 것으로.
 A. PDF 모드 ▾ PIX 로 오른쪽 사진 p3 → 리본 `1단` → 리본 `2단` 본체 = 섞은 2단, 오른쪽 p3, 아래 사진 목록
-B. 같은 것을 `Ctrl+Shift+1` → `Ctrl+Shift+2` 로
+B. 같은 것을 `Ctrl+1` → `Ctrl+2` 로
 C. 종전 2단에서 오른쪽 나.pdf 3쪽 → `1단` → 사진 모드 갔다 오기 → `2단` = 오른쪽 나.pdf 3쪽
 D. 스크린샷 컷 둘 중 둘째를 오른쪽에 → `1단` → `2단` = 아래 컷 목록·둘째 컷
 E. 우클릭 '2단 보기'(`_on_split_view_requested`) 도 되살린다
@@ -112,7 +112,7 @@ try:
     QTest.keyClick(mw, Qt.Key.Key_2, Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier)
     pump(lambda: norm(mw._mv[1].current_file()) == norm(ph[2]))
     chk(mw._split_on and mw._mix_on_now() and norm(mw._mv[1].current_file()) == norm(ph[2]),
-        "B Ctrl+Shift+2 = 섞은 2단 p3", str(mw._mv[1].current_file()))
+        "B Ctrl+2 = 섞은 2단 p3", str(mw._mv[1].current_file()))
 
     # C — 종전 2단(PDF) 오른쪽 나.pdf 3쪽 → 1단 → 사진 모드 갔다 오기 → 2단
     kinds["split_kind_pdf"].trigger(); pump(lambda: not mw._mix_on_now())

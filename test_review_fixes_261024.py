@@ -67,10 +67,10 @@ chk(len(opened) == 1, "B 새 창을 못 띄우면(False, 0) 이 창에서 연다
 # C — 261025-1(입력 SOT §3.2.1, 사용자 결정): 보기 탭 키는 항목마다 하는 일이 하나 — 상태와 무관하게 늘 그 항목에
 va = mw._view_acts
 mw.act_split.setChecked(True); spin(0.3)
-chk(va["single"].text().endswith("\tCtrl+Shift+1") and va["split"].text().endswith("\tCtrl+Shift+2"),
+chk(va["single"].text().endswith("\tCtrl+1") and va["split"].text().endswith("\tCtrl+2"),
     "C1 2단이어도 1단·2단 항목에 각자 키", "%r / %r" % (va["single"].text(), va["split"].text()))
 mw.act_split.setChecked(False); spin(0.3)
-chk(va["single"].text().endswith("\tCtrl+Shift+1") and va["split"].text().endswith("\tCtrl+Shift+2"),
+chk(va["single"].text().endswith("\tCtrl+1") and va["split"].text().endswith("\tCtrl+2"),
     "C2 1단으로 돌아가도 같다", "%r / %r" % (va["single"].text(), va["split"].text()))
 
 # D — slow 는 한 번 켜지면 유지

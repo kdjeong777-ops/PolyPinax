@@ -132,11 +132,11 @@ try:
     # F — 261025-1(입력 SOT §3.2.1·디자인 SOT §2.9.2, 사용자 결정): 1단·2단 키는 항목마다 하나 — 상태와 무관하게 각자 항목에
     va = mw._view_acts
     mw._refresh_menu_key_hints()
-    off = va["single"].text().endswith("\tCtrl+Shift+1") and va["split"].text().endswith("\tCtrl+Shift+2")
+    off = va["single"].text().endswith("\tCtrl+1") and va["split"].text().endswith("\tCtrl+2")
     mw.act_split.setChecked(True); spin(0.5); mw._refresh_menu_key_hints()
-    on = va["single"].text().endswith("\tCtrl+Shift+1") and va["split"].text().endswith("\tCtrl+Shift+2")
+    on = va["single"].text().endswith("\tCtrl+1") and va["split"].text().endswith("\tCtrl+2")
     mw.act_split.setChecked(False); spin(0.5)
-    chk(off and on, "F 1단·2단 키는 늘 각자 항목에(Ctrl+Shift+1·2)", "%r / %r" % (va["single"].text(), va["split"].text()))
+    chk(off and on, "F 1단·2단 키는 늘 각자 항목에(Ctrl+1·2)", "%r / %r" % (va["single"].text(), va["split"].text()))
 finally:
     shutil.rmtree(root, ignore_errors=True)
 

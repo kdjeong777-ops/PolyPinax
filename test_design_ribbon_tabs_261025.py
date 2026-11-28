@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
-"""261025-1·-2(사용자 지시·결정): 보기 탭 차례·Ctrl+Shift+1~9(입력 SOT §3.2.1), 도구 '설치·설정', 설정창 '고급 설정'(디자인 SOT §2.14).
+"""261025-1·-2(사용자 지시·결정): 보기 탭 차례·Ctrl+1~9(입력 SOT §3.2.1), 도구 '설치·설정', 설정창 '고급 설정'(디자인 SOT §2.14).
 
 A. 보기 탭 세부 줄 차례: 1단·2단·텍스트·단어장·검색·스크린샷 | 법령·고시·특허·건설기준 | 발표보기, 이름 '법령·고시'
-B. 실제 키 입력: Ctrl+Shift+1 → 1단(2단 끔·오른쪽 창 숨김), Ctrl+Shift+2 → 2단 **으로만**(두 번 눌러도 2단),
-   Ctrl+Shift+3/5/6 → 텍스트·검색·스크린샷, 키가 없는 법령(Ctrl+Shift+7)은 아무 일도 하지 않는다 · 키가 있으면 연다
+B. 실제 키 입력: Ctrl+1 → 1단(2단 끔·오른쪽 창 숨김), Ctrl+2 → 2단 **으로만**(두 번 눌러도 2단),
+   Ctrl+3/5/6 → 텍스트·검색·스크린샷, 키가 없는 법령(Ctrl+7)은 아무 일도 하지 않는다 · 키가 있으면 연다
 C. 항목 오른쪽 칸에 각자 키(상태와 무관)
 D. 도구 탭: '설치·설정' ▾ 하나(종전 세 단추 없음)
 E. (261107-12) 외부 연결 쪽 — [적용] 이면 저장·게이팅, [취소] 는 적용 뒤 바꿈만 버림. 종전: '고급 설정...' 단추 — 눌러 [확인] 하면 곧바로 저장·게이팅, 환경설정 [취소] 해도 남는다
@@ -54,7 +54,8 @@ try:
     mw._prefs.update({"law_oc": "", "kcsc_key": "", "kipo_signkey": ""})
     mw._gate_api_dependent_ui(mw._prefs); QTest.qWait(50)
 
-    # B 실제 키
+    # B 실제 키 — 261128-14 부터 보기 탭은 Ctrl+숫자(종전 Ctrl+Shift+숫자)
+    CTL = Qt.KeyboardModifier.ControlModifier
     tgt = mw.main_view.view if hasattr(mw.main_view, "view") else mw
     QTest.keyClick(tgt, Qt.Key.Key_2, CS); QTest.qWait(150)
     chk(mw.act_split.isChecked(), "B Ctrl+Shift+2 → 2단")
@@ -82,9 +83,9 @@ try:
     # C
     va = mw._view_acts
     keys = {k: va[k].text().split("\t")[-1] if "\t" in va[k].text() else "" for k in va}
-    want = {"single": "Ctrl+Shift+1", "split": "Ctrl+Shift+2", "text": "Ctrl+Shift+3", "study": "Ctrl+Shift+4",
-            "search": "Ctrl+Shift+5", "shot": "Ctrl+Shift+6", "law": "Ctrl+Shift+7", "kipo": "Ctrl+Shift+8",
-            "kcsc": "Ctrl+Shift+9", "present": "F5"}
+    want = {"single": "Ctrl+1", "split": "Ctrl+2", "text": "Ctrl+3", "study": "Ctrl+4",
+            "search": "Ctrl+5", "shot": "Ctrl+6", "law": "Ctrl+7", "kipo": "Ctrl+8",
+            "kcsc": "Ctrl+9", "present": "F5"}
     chk(keys == want, "C 보기 항목 오른쪽 칸에 각자 키", str(keys))
 
     # D

@@ -122,15 +122,15 @@ try:
     chk(any(t.startswith("인쇄") and t.endswith("\tCtrl+P") for t in L)
         and any(t.startswith("삭제") and t.endswith("\tDel") for t in L)
         and any(t.startswith("발표보기") and t.endswith("\tF5") for t in L)
-        and any(t.startswith("2단 보기") and t.endswith("\tCtrl+Shift+2") for t in L),
-        "D1 본문 우클릭 — 인쇄 Ctrl+P · 삭제 Del · 발표 F5 · 2단 Ctrl+Shift+2 가 오른쪽 칸에", str(L))
+        and any(t.startswith("2단 보기") and t.endswith("\tCtrl+2") for t in L),
+        "D1 본문 우클릭 — 인쇄 Ctrl+P · 삭제 Del · 발표 F5 · 2단 Ctrl+2 가 오른쪽 칸에", str(L))
     chk(not any(t.startswith("붙여넣기") and "\t" in t for t in L), "D2 본문 '붙여넣기'(쪽)는 Ctrl+V 와 하는 일이 달라 키를 보이지 않는다")
     pt.list.clearSelection(); pt.list.item(0).setSelected(True)
     pt._on_list_menu(pt.list.visualItemRect(pt.list.item(0)).center()); spin(0.1)
     chk(any(t.startswith("복사") and t.endswith("\tCtrl+C") for t in seen[-1]), "D3 썸네일 '복사' Ctrl+C", str(seen[-1]))
     QMenu.exec = _orig_exec
     va = mw._view_acts
-    chk(va["split"].text().endswith("\tCtrl+Shift+2") and va["present"].text().endswith("\tF5"),
+    chk(va["split"].text().endswith("\tCtrl+2") and va["present"].text().endswith("\tF5"),
         "D4 보기 메뉴 2단·발표보기 오른쪽 칸", str((va["split"].text(), va["present"].text())))
     mw._prefs.setdefault("shortcuts", {})["present"] = "F6"; mw._apply_shortcuts(mw._prefs["shortcuts"])
     chk(va["present"].text().endswith("\tF6"), "D5 단축키 설정을 바꾸면 표시도 따라간다", va["present"].text())

@@ -2278,16 +2278,17 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             # 261115-8(입력 SOT §3.2.4·책갈피창·저장 SOT §4.7.3, 사용자 지시): 우클릭 항목과 같은 토글 — 다시 누르면 해제
             ("bm_expand_all",   (tr("책갈피 모두 펼치기"), "Ctrl+Shift+]", tr("책갈피창"))),
             ("bm_collapse_all", (tr("책갈피 모두 접기"), "Ctrl+Shift+[", tr("책갈피창"))),
-            # 261025-1(입력 SOT §3.2.1, 사용자 지시): 보기 탭 차례대로 Ctrl+Shift+1~9. toggle_split 은 이제 2단으로만(사용자 결정) — id 는 저장된 키 때문에 그대로
-            ("view_single",   (tr("1단 보기"), "Ctrl+Shift+1", tr("보기"))),
-            ("toggle_split",  (tr("2단 보기"), "Ctrl+Shift+2", tr("보기"))),
-            ("view_text",     (tr("텍스트"), "Ctrl+Shift+3", tr("보기"))),
-            ("view_study",    (tr("단어장"), "Ctrl+Shift+4", tr("보기"))),
-            ("view_search",   (tr("검색"), "Ctrl+Shift+5", tr("보기"))),
-            ("view_shot",     (tr("스크린샷"), "Ctrl+Shift+6", tr("보기"))),
-            ("view_law",      (tr("법령·고시"), "Ctrl+Shift+7", tr("보기"))),
-            ("view_kipo",     (tr("특허"), "Ctrl+Shift+8", tr("보기"))),
-            ("view_kcsc",     (tr("건설기준"), "Ctrl+Shift+9", tr("보기"))),
+            # 261025-1(입력 SOT §3.2.1, 사용자 지시): 보기 탭 차례대로 숫자 — 261128-14(사용자 지시 '보기를 더 많이 사용하므로') Ctrl+1~9(종전 Ctrl+Shift+1~9),
+            #   선 1~5 는 Ctrl+Shift+1~5(종전 Ctrl+1~5). 옛 기본값을 쓰던 사용자 설정은 settings_store v15 가 옮긴다. toggle_split 은 이제 2단으로만(사용자 결정) — id 는 저장된 키 때문에 그대로
+            ("view_single",   (tr("1단 보기"), "Ctrl+1", tr("보기"))),
+            ("toggle_split",  (tr("2단 보기"), "Ctrl+2", tr("보기"))),
+            ("view_text",     (tr("텍스트"), "Ctrl+3", tr("보기"))),
+            ("view_study",    (tr("단어장"), "Ctrl+4", tr("보기"))),
+            ("view_search",   (tr("검색"), "Ctrl+5", tr("보기"))),
+            ("view_shot",     (tr("스크린샷"), "Ctrl+6", tr("보기"))),
+            ("view_law",      (tr("법령·고시"), "Ctrl+7", tr("보기"))),
+            ("view_kipo",     (tr("특허"), "Ctrl+8", tr("보기"))),
+            ("view_kcsc",     (tr("건설기준"), "Ctrl+9", tr("보기"))),
             ("present",       (tr("발표보기"), "F5", tr("보기"))),
             ("zoom_in",       (tr("확대"), "Ctrl++", tr("보기"))),
             ("zoom_out",      (tr("축소"), "Ctrl+-", tr("보기"))),
@@ -2308,11 +2309,11 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             # 261021-5(사용자 결정): Ctrl+S 는 파일 저장 — 옛 설정 값은 settings_store v12 가 옮긴다
             ("save_shots_pdf", (tr("스크린샷 PDF 저장"), "Ctrl+Alt+S", tr("캡처·저장"))),
             ("clipboard_save", (tr("클립보드로 복사"), "Ctrl+Alt+C", tr("캡처·저장"))),   # 261107-4: Ctrl+Shift+C 는 경로 복사(설정 v13 이 옮긴다)
-            ("draw_pen_1",    (tr("선 1 선택"), "Ctrl+1", tr("선긋기(편집모드)"))),
-            ("draw_pen_2",    (tr("선 2 선택"), "Ctrl+2", tr("선긋기(편집모드)"))),
-            ("draw_pen_3",    (tr("선 3 선택"), "Ctrl+3", tr("선긋기(편집모드)"))),
-            ("draw_pen_4",    (tr("선 4 선택"), "Ctrl+4", tr("선긋기(편집모드)"))),
-            ("draw_pen_5",    (tr("선 5 선택"), "Ctrl+5", tr("선긋기(편집모드)"))),
+            ("draw_pen_1",    (tr("선 1 선택"), "Ctrl+Shift+1", tr("선긋기(편집모드)"))),
+            ("draw_pen_2",    (tr("선 2 선택"), "Ctrl+Shift+2", tr("선긋기(편집모드)"))),
+            ("draw_pen_3",    (tr("선 3 선택"), "Ctrl+Shift+3", tr("선긋기(편집모드)"))),
+            ("draw_pen_4",    (tr("선 4 선택"), "Ctrl+Shift+4", tr("선긋기(편집모드)"))),
+            ("draw_pen_5",    (tr("선 5 선택"), "Ctrl+Shift+5", tr("선긋기(편집모드)"))),
             ("draw_mode",     (tr("선 종류 전환(직선/하이라이트/자유)"), "Ctrl+`", tr("선긋기(편집모드)"))),
             ("draw_erase_thin",  (tr("지우개(얇게)"), "Ctrl+E", tr("선긋기(편집모드)"))),
             ("draw_erase_thick", (tr("지우개(두껍게)"), "Ctrl+Shift+E", tr("선긋기(편집모드)"))),
@@ -6850,7 +6851,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self._ctx_pdf_save(menu, cur, pages=[pidx], staged=staged)
         menu.group("view")
         if getattr(self, "_split_on", False):
-            add("single", tr("1단 보기"))      # 261025-1: Ctrl+Shift+1 은 보기 탭 `1단`(오른쪽 창도 숨김) — 하는 일이 달라 키를 보이지 않는다
+            add("single", tr("1단 보기"))      # 261025-1: Ctrl+1(261128-14 종전 Ctrl+Shift+1) 은 보기 탭 `1단`(오른쪽 창도 숨김) — 하는 일이 달라 키를 보이지 않는다
             add("other", tr("옆 창에 열기"))               # 옛 '1창으로 복사'·'2창으로 복사'
         else:
             add("dual", self._kt(tr("2단 보기"), "toggle_split"))

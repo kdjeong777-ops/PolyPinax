@@ -8,7 +8,7 @@ from typing import Any, Optional
 from PyQt6.QtCore import QStandardPaths
 
 
-CURRENT_SCHEMA = 14
+CURRENT_SCHEMA = 15
 
 # 260611-91: 배포용 기본값 프로파일 — '설정/스타일'만 담고 개인·머신 항목은 제외.
 #   설정 키(이 항목들만 기본값에 포함/초기화 대상):
@@ -398,6 +398,26 @@ def _migrate_v13_to_v14(d: dict) -> dict:
     return d
 
 
+# 261128-14(입력 SOT §3.2.1, 사용자 지시 '보기를 더 많이 사용하므로'): 보기 탭 Ctrl+Shift+1~9 → Ctrl+1~9, 선 1~5 Ctrl+1~5 → Ctrl+Shift+1~5
+SWAP_V15 = dict([(sid, ("Ctrl+Shift+%d" % i, "Ctrl+%d" % i)) for i, sid in enumerate(
+    ("view_single", "toggle_split", "view_text", "view_study", "view_search", "view_shot", "view_law", "view_kipo", "view_kcsc"), 1)]
+    + [("draw_pen_%d" % i, ("Ctrl+%d" % i, "Ctrl+Shift+%d" % i)) for i in range(1, 6)])
+
+
+def _migrate_v14_to_v15(d: dict) -> dict:
+    """261128-14: 보기 탭 키와 선 1~5 키를 맞바꾼다 — 단축키 창은 [확인] 때 모든 키를 저장하므로 값이 **정확히 옛 기본값**인
+    id 만 새 기본값으로. 새 키가 맞바꾸지 않는 다른 id 에 사용자가 둔 키와 같으면 그 id 는 그대로 둔다(사용자 키를 빼앗지 않는다). idempotent."""
+    sc = (d.get("preferences") or {}).get("shortcuts")
+    if isinstance(sc, dict):
+        move = {sid: new for sid, (old, new) in SWAP_V15.items() if _key_norm(sc.get(sid)) == _key_norm(old)}
+        kept = {_key_norm(v) for k, v in sc.items() if k not in move and v}
+        for sid, new in move.items():
+            if _key_norm(new) not in kept:
+                sc[sid] = new
+    d["schema_version"] = 15
+    return d
+
+
 def _migrate(d: dict) -> dict:
     v = d.get("schema_version", 1)
     if v < 2:
@@ -426,6 +446,8 @@ def _migrate(d: dict) -> dict:
         d = _migrate_v12_to_v13(d)
     if v < 14:
         d = _migrate_v13_to_v14(d)
+    if v < 15:
+        d = _migrate_v14_to_v15(d)
     return d
 
 

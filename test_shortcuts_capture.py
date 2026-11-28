@@ -40,9 +40,9 @@ chk("선긋기(편집모드)" in groups and "캡처·저장" in groups and "파�
 for need in ["draw_pen_1", "draw_pen_5", "draw_mode", "draw_erase_thin",
              "draw_erase_thick", "draw_clear", "present"]:
     chk(need in defs, f"단축키 항목 '{need}' 신설")
-chk(defs["draw_pen_1"][1] == "Ctrl+1" and defs["draw_pen_5"][1] == "Ctrl+5",
-    "펜 단축키 기본 Ctrl+1~5")
-chk(defs["toggle_split"][1] == "Ctrl+Shift+2", "2단보기 키 충돌회피(Ctrl+Shift+2)")
+chk(defs["draw_pen_1"][1] == "Ctrl+Shift+1" and defs["draw_pen_5"][1] == "Ctrl+Shift+5",
+    "펜 단축키 기본 Ctrl+Shift+1~5(261128-14 — 종전 Ctrl+1~5)")
+chk(defs["toggle_split"][1] == "Ctrl+2", "2단보기 Ctrl+2(261128-14 — 종전 Ctrl+Shift+2), 펜과 Shift 로 갈린다")
 
 # 3) 단축키 다이얼로그 그룹 렌더 + 캡처 전역 체크박스
 from viewer.widgets.shortcuts_dialog import ShortcutsDialog
@@ -52,7 +52,7 @@ chk(len(dlg._edits) == len(defs), "다이얼로그 항목 수 = 레지스트리 
 
 # 4) 공유 펜 단축키 → 발표에 전달되는 5키
 pk = mw._draw_pen_keys()
-chk(len(pk) == 5 and pk[0] == "Ctrl+1", "발표 전달용 펜 단축키 5개", str(pk))
+chk(len(pk) == 5 and pk[0] == "Ctrl+Shift+1", "발표 전달용 펜 단축키 5개", str(pk))
 
 # 5) 전역 캡처 토글 등록/해제 (예외 없이)
 mw._prefs["capture_global"] = True

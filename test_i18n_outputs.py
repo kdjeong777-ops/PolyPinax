@@ -127,9 +127,10 @@ try:
     chk(len(defs) >= 15, "F app.py 에서 기본 단축키 표를 읽었다", str(len(defs)))
     for code, html in (("ko", ko_html), ("en", en_html)):
         miss = [k for sid, k in defs
-                if k not in html and not (sid.startswith("draw_pen_") and "Ctrl+1" in html and "Ctrl+5" in html)]
+                if k not in html and not (sid.startswith("draw_pen_") and "Ctrl+Shift+1" in html and "Ctrl+Shift+5" in html)]
         chk(not miss, "F [%s] 도움말 단축키 표에 기본 단축키가 모두 있다" % code, str(miss))
-    chk("Ctrl+2</td>" not in ko_html and "Ctrl+2</td>" not in en_html, "F 2단 보기를 Ctrl+2 로 적지 않는다(Ctrl+2 는 선 2)")
+    chk("Ctrl+Shift+2</td>" not in ko_html and "Ctrl+Shift+2</td>" not in en_html,
+        "F 2단 보기를 옛 키 Ctrl+Shift+2 로 적지 않는다(261128-14 부터 2단은 Ctrl+2, Ctrl+Shift+2 는 선 2)")
     for stale in ("메뉴 → 설정 → 환경설정", "설정 → 단축키 설정", "파일 → 책갈피 자동 생성", "스크린샷 리스트 시작 시 복원"):
         chk(stale not in ko_html, "F ko 도움말에 낡은 경로·없어진 설정이 없다: %s" % stale)
     chk("Restore the screenshot list on startup" not in en_html, "F en 도움말에 없어진 설정이 없다")

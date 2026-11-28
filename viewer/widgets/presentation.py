@@ -43,7 +43,7 @@ DEFAULT_PENS = [
     {"name": tr_noop("사용자선 2"), "color": "#30a0ff", "width": 4, "alpha": 100},
     {"name": tr_noop("사용자선 3"), "color": "#ffd400", "width": 14, "alpha": 40},
 ]
-DEFAULT_PEN_KEYS = ["Ctrl+1", "Ctrl+2", "Ctrl+3"]
+DEFAULT_PEN_KEYS = ["Ctrl+Shift+1", "Ctrl+Shift+2", "Ctrl+Shift+3"]   # 261128-14(입력 SOT §3.2.1): 본문 선 1~5 와 같은 키(종전 Ctrl+1~3)
 DEFAULT_REC_KEYS = ["Ctrl+R", "Ctrl+Shift+R"]   # [녹화/정지 토글, 중단] — 260628(§9.0)
 # 260905(§6): 상단 호버 띠의 최소 높이. 내용이 크면 그만큼 늘어난다.
 #   종전 설정 presentation_topbar_h 는 실질 기능이 없어 삭제했다 — 되살리지 말 것.
@@ -394,6 +394,26 @@ _MENU_CSS = (
     "QMenu::item:selected{background:#1565c0;color:#ffffff;}"
     "QMenu::separator{height:1px;background:#555;margin:4px 8px;}"
 )
+
+
+def _pressed_names(e) -> list:
+    """261128-14(입력 SOT §3.2.1): 누른 키의 이름들(소문자, 첫째가 Qt 이름) — Windows 는 Shift+숫자를 `!`·`@` 로 보내
+    `Ctrl+Shift+1` 과 맞지 않는다. 가상 키가 숫자(0x30~0x39)면 그 숫자 이름도 더한다."""
+    from PyQt6.QtGui import QKeySequence
+    from PyQt6.QtCore import QKeyCombination
+    out = []
+    try:
+        out.append(QKeySequence(e.keyCombination()).toString().lower())
+    except Exception:
+        pass
+    try:
+        vk = int(e.nativeVirtualKey())
+        if 0x30 <= vk <= 0x39:
+            mods = e.modifiers() & ~Qt.KeyboardModifier.KeypadModifier
+            out.append(QKeySequence(QKeyCombination(mods, Qt.Key(vk))).toString().lower())
+    except Exception:
+        pass
+    return [n for n in dict.fromkeys(out) if n]
 
 
 class PresentationWindow(QWidget):
@@ -2050,17 +2070,15 @@ class PresentationWindow(QWidget):
     # --- 이벤트 ---
     def keyPressEvent(self, e):
         k = e.key()
-        # 260609-16(F3): 펜 단축키(Ctrl+1/2/3 등) — 숫자 입력보다 우선
+        # 260609-16(F3): 펜 단축키(Ctrl+Shift+1/2/3 등, 261128-14) — 숫자 입력보다 우선
         if e.modifiers() != Qt.KeyboardModifier.NoModifier:
             from PyQt6.QtGui import QKeySequence
-            try:
-                pressed = QKeySequence(e.keyCombination()).toString()
-            except Exception:
-                pressed = ""
+            names = _pressed_names(e)
+            pressed = next(iter(names), "")
             if pressed:
                 pl = pressed.lower()
                 for i, ks in enumerate(self._pen_keys[:len(self._pens)]):
-                    if ks and QKeySequence(ks).toString().lower() == pl:
+                    if ks and QKeySequence(ks).toString().lower() in names:
                         self._set_pen(i)
                         return
                 # 260609-17(F4) / 260628(§9.0): 녹화 **토글**·중단 단축키.

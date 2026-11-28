@@ -18162,3 +18162,19 @@ msgstr ""
 #, python-brace-format
 msgid "{name} ({mm} mm) — 칸이 없을 때"
 msgstr ""
+
+#: viewer/app.py
+msgid "지금 보는 파일을 새 창에 열어 두 창으로 비교합니다"
+msgstr ""
+
+#: viewer/app.py
+msgid "폴더 열기 — Shift+누름: 새 창에서"
+msgstr ""
+
+#: viewer/app.py
+msgid "파일 열기 — Shift+누름: 새 창에서"
+msgstr ""
+
+#: viewer/app.py
+msgid "저장하지 않은 편집은 새 창에 없습니다 — 새 창은 저장된 파일을 엽니다."
+msgstr ""

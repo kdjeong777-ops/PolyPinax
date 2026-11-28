@@ -19972,3 +19972,19 @@ msgstr "Check — click: mark the box (□) you click (default size if there's n
 #, python-brace-format
 msgid "{name} ({mm} mm) — 칸이 없을 때"
 msgstr "{name} ({mm} mm) — when there's no box"
+
+#: viewer/app.py
+msgid "지금 보는 파일을 새 창에 열어 두 창으로 비교합니다"
+msgstr "Open the current file in a new window to compare side by side"
+
+#: viewer/app.py
+msgid "폴더 열기 — Shift+누름: 새 창에서"
+msgstr "Open Folder — Shift+click: in a new window"
+
+#: viewer/app.py
+msgid "파일 열기 — Shift+누름: 새 창에서"
+msgstr "Open File — Shift+click: in a new window"
+
+#: viewer/app.py
+msgid "저장하지 않은 편집은 새 창에 없습니다 — 새 창은 저장된 파일을 엽니다."
+msgstr "Unsaved edits are not in the new window — it opens the saved file."

@@ -47,6 +47,7 @@ SEARCH_W = 220
 SEARCH_MIN_W = 120
 
 ICON_DROP_PAD = 14          # 261031-12 보완: 그림만 있는 ▾ 단추의 오른쪽 여백(▾ 자리)
+SPLIT_MENU_W = 14           # 261128-17(디자인 SOT §2.9.5): 분할 단추 ▾ 칸 폭 — 그만큼 오른쪽 여백을 더해 글이 본체 가운데
 SEP = "|"                   # 모음의 구분선
 COLLECTION = "collection"   # 모음 탭 키
 # 261031-17(디자인 SOT §2.9·§2.9.4, 사용자 결정 '표시를 항목으로'): 그룹 표시(바깥 왼쪽 그림·글자)도 모음 항목이다 —
@@ -235,6 +236,10 @@ class RibbonRow(QToolBar):
                     # 261116-13(디자인 SOT §2.9.5): `ribbonSplit` 이면 분할 단추 — 본체는 실행, ▾ 칸만 메뉴(지금은 보기 `2단`)
                     w.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup if a.property("ribbonSplit")
                                    else QToolButton.ToolButtonPopupMode.InstantPopup)
+                    if a.property("ribbonSplit"):
+                        # 261128-17(§2.9.5): 스타일시트 단추는 글을 ▾ 칸까지 포함한 폭 가운데에 놓는다 — ▾ 칸만큼 오른쪽 여백을 더해 본체 가운데로
+                        w.setStyleSheet("QToolButton{padding-right:%dpx;}QToolButton::menu-button{width:%dpx;}"
+                                        % (8 + SPLIT_MENU_W, SPLIT_MENU_W))
                 if a.property("ribbonIconOnly") and self.toolButtonStyle() != Qt.ToolButtonStyle.ToolButtonTextOnly:
                     # 261031-12 보완: 그림만(글자는 무리 바깥 표시·툴팁) — 글자만 줄(보기·도구 탭)에서는 글자 단추
                     w.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)

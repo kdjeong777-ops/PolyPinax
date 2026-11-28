@@ -2009,9 +2009,11 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         a_quit = self._sc_act_quit = QAction(tr("종료(&X)"), self)   # 261021-5: 파일 탭 단추·Ctrl+Q(입력 SOT §3.2) — 탭 단추 글에서는 니모닉을 뺀다(ribbon.short_text)
         a_quit.triggered.connect(self.close)
         m_file.addAction(a_quit)
-        for _cid, _a in (("file.new_window", a_new_win), ("file.open_folder", a_open),
-                         ("file.open_file", a_open_file),
-                         ("file.save_as", a_save_as), ("file.save", a_save), ("file.flatten", a_flat),
+        # 261128-16(책갈피창·저장 SOT §4.9.5, 디자인 SOT §2.9.7): 새 창은 지금 파일을 비교용으로, 폴더·파일 열기는 Shift 로 새 창
+        self._reg_cmd("file.new_window", a_new_win, tip=tr("지금 보는 파일을 새 창에 열어 두 창으로 비교합니다"))
+        self._reg_cmd("file.open_folder", a_open, tip=tr("폴더 열기 — Shift+누름: 새 창에서"))
+        self._reg_cmd("file.open_file", a_open_file, tip=tr("파일 열기 — Shift+누름: 새 창에서"))
+        for _cid, _a in (("file.save_as", a_save_as), ("file.save", a_save), ("file.flatten", a_flat),
                          ("file.print", a_print), ("file.recent", self.menu_recent.menuAction()),
                          ("file.recent_files", self.menu_recent_files.menuAction()), ("file.quit", a_quit)):
             self._reg_cmd(_cid, _a)
@@ -2515,14 +2517,87 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         return self.open_settings(page="shortcuts", parent=parent)
 
     # ===== 261021-5(입력 SOT §3.2, 사용자 지시·결정): 크롬식 창 단축키 =====================
-    def action_new_window(self):
-        """Ctrl+N — PolyPDF 를 하나 더 띄운다(인자 없이 — 시작 동작은 환경설정 '시작 시 동작' 대로)."""
-        import sys
-        from PyQt6.QtCore import QProcess
-        args = [] if getattr(sys, "frozen", False) else [os.path.abspath(sys.argv[0])]
-        res = QProcess.startDetached(sys.executable, args)
-        if not (res[0] if isinstance(res, tuple) else res):
+    def action_new_window(self, _checked=False):
+        """Ctrl+N — PolyPDF 를 하나 더 띄운다. 261128-16(책갈피창·저장 SOT §4.9.5, 사용자 지시·결정): 본문에 파일이 있으면
+        그 파일(2단이면 활성 창)·쪽·맞춤·폴더 목록을 새 창에, 사진 모드면 사진 모드 새 창. 비었으면 종전대로 인자 없이."""
+        from viewer import new_window
+        if not new_window.launch(self._nw_args_current()):
             QMessageBox.warning(self, tr("새 창"), tr("새 창을 열지 못했습니다."))
+            return
+        cur = self.main_view.current_file() if self.main_view else None
+        if cur and self._on_instance_request("query", str(cur)).get("dirty"):
+            self.status.showMessage(tr("저장하지 않은 편집은 새 창에 없습니다 — 새 창은 저장된 파일을 엽니다."), 6000)
+
+    def _nw_args_current(self) -> list:
+        """[새 창] 명령줄 — 지금 활성 창의 파일·쪽·맞춤과 그 창 책갈피창의 보기 기준 폴더(§4.9.4)."""
+        from viewer import new_window
+        mv = self.main_view
+        cur = mv.current_file() if mv else None
+        tree = (self.bookmark_tree_right if getattr(self, "_split_on", False) and self._active_pane == 1
+                else self.bookmark_tree)
+        try:
+            folder = tree.view_base()
+        except Exception:
+            folder = None
+        photo = bool(getattr(self, "_photo_mode", False))
+        if not cur:
+            return new_window.build_args(folder=folder, photo=True) if (photo and folder) else []
+        if not str(cur).lower().endswith(".pdf"):            # 사진(사진 모드·섞은 2단의 사진 칸) — 기본 사진 앱으로 연 것과 같은 길
+            return new_window.build_args(file=cur, photo=True)
+        fit = getattr(mv, "_fit_mode", None)
+        scale = getattr(mv, "_zoom", None) if fit == getattr(mv, "FIT_NONE", "none") else None
+        if folder and not Path(str(cur)).resolve().is_relative_to(Path(str(folder)).resolve()):
+            folder = None                                    # 목록 밖 파일(검색 결과 등) — 그 파일만
+        return new_window.build_args(file=cur, folder=folder, page=int(mv.current_page() or 0), fit=fit, scale=scale)
+
+    def _nw_shift(self) -> bool:
+        """폴더 열기·파일 열기를 Shift 와 함께 눌렀나 — 새 창으로(§4.9.5)."""
+        return bool(QApplication.keyboardModifiers() & Qt.KeyboardModifier.ShiftModifier)
+
+    def _nw_launch_or_here(self, args, here) -> None:
+        """Shift+열기 — 새 창으로 띄우고, 못 띄우면 이 창에서 연다(고른 것을 잃지 않게)."""
+        from viewer import new_window
+        if not new_window.launch(args):
+            here()
+
+    def _nw_open(self, opts, pdfs, photos) -> None:
+        """`--new-window` 로 뜬 창(main.py) — 폴더·파일·쪽·맞춤을 연다(§4.9.5)."""
+        folder = Path(opts["folder"]) if opts.get("folder") else None
+        if opts.get("photo"):
+            if photos:
+                self._photo_open_arg(photos[0])
+                return
+            if folder is not None:
+                if self._photo_enabled() and not self._photo_mode:
+                    self._photo_forced_pdf = False
+                    self._set_photo_mode(True, load_last=False)
+                self.open_folder(folder)
+            return
+        f = Path(pdfs[0]) if pdfs else None
+        page = int(opts.get("page") or 0)
+        then = lambda: self._nw_apply_view(opts)
+        if f is not None and folder is not None:
+            self.open_folder(folder)
+            self._load_main(HistoryItem(str(f), page, "", "bookmark"), then=then)
+        elif f is not None:
+            self.open_pdf(f, page=page, then=then)
+        elif folder is not None:
+            self.open_folder(folder)
+
+    def _nw_apply_view(self, opts) -> None:
+        """새 창은 1단 + 넘겨받은 맞춤(직접 배율이면 그 배율)."""
+        try:
+            self._vm_single()
+        except Exception:
+            pass
+        mv = self.main_view
+        fit = opts.get("fit")
+        if mv is None or not fit:
+            return
+        if fit == mv.FIT_NONE and opts.get("scale"):
+            mv._zoom_by(float(opts["scale"]) / max(0.01, float(mv._zoom or 1.0)))
+        elif fit != mv.FIT_NONE:
+            mv.set_fit_mode(fit)
 
     def _focused_bm_tree(self):
         """포커스가 있는 책갈피창(아래 창이 보이고 그 안에 포커스가 있으면 아래, 아니면 위) — 저장·새로고침이 함께 쓴다."""
@@ -3065,17 +3140,26 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
 
     def action_open_folder(self):
         last = self._dialog_start_dir()
+        shift = self._nw_shift()                     # 261128-16(§4.9.5): 누를 때의 Shift — 대화상자 뒤에는 손을 뗐을 수 있다
         folder = QFileDialog.getExistingDirectory(self, tr("PDF 폴더 선택"), last)
-        if folder:
+        if folder and shift:
+            from viewer import new_window
+            self._nw_launch_or_here(new_window.build_args(folder=folder, photo=bool(getattr(self, "_photo_mode", False))),
+                                    lambda: self.open_folder(Path(folder)))
+        elif folder:
             self.open_folder(Path(folder))
 
     def action_open_pdf(self):
         """v1.6.11 I1: 단일 PDF 파일 열기."""
         start = self._dialog_start_dir()
+        shift = self._nw_shift()                     # 261128-16(§4.9.5): Shift+파일 열기 → 새 창(PDF 모드)
         fn, _ = QFileDialog.getOpenFileName(self, tr("PDF 파일 열기"), start,
                                             "PDF (*.pdf);;" + tr("PolyPinax 전달 묶음") + " (*.polypdf.zip)")
         if fn and fn.lower().endswith(".polypdf.zip"):        # 261105-9(§4.7.23)
             self.open_share_bundle(Path(fn))
+        elif fn and shift:
+            from viewer import new_window
+            self._nw_launch_or_here(new_window.build_args(file=fn), lambda: self.open_pdf(Path(fn)))
         elif fn:
             self.open_pdf(Path(fn))
 

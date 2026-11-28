@@ -639,20 +639,10 @@ class PrintMixin:
             pass
 
     def _open_pdf_new_window(self, path):
-        """260825-5: 생성된 PDF 를 별도 새 창(파일 모드)으로 띄운다."""
-        import os, sys
-        from PyQt6.QtCore import QProcess
-        try:
-            if getattr(sys, "frozen", False):
-                res = QProcess.startDetached(sys.executable, [str(path)])
-            else:
-                res = QProcess.startDetached(
-                    sys.executable, [os.path.abspath(sys.argv[0]), str(path)])
-            # 261024-5(SOT 점검): PyQt6 는 (성공, pid) 를 돌려준다 — 튜플 자체는 늘 참이라 실패해도 대체 길에 닿지 않았다
-            if res[0] if isinstance(res, tuple) else res:
-                return
-        except Exception:
-            pass
+        """260825-5: 생성된 PDF 를 별도 새 창(파일 모드)으로 띄운다. 띄우기는 새 창 한 곳(`new_window.launch`, 261128-16)."""
+        from viewer import new_window
+        if new_window.launch([str(path)]):
+            return
         # 폴백: 현재 창에서 파일 모드로 열기
         try:
             self.open_pdf(Path(path))

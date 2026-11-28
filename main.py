@@ -612,10 +612,16 @@ def main():
     # 260915-3(마스터 §4.9, 사용자 지시): 탐색기에서 PDF 여러 개를 골라 열면 Windows 가 파일마다
     #   따로 실행한다 → 먼저 뜬 실행(대표)에게 파일을 넘기고 이 실행은 창 없이 끝난다.
     #   스플래시·무거운 준비 **전에** 해야 창이 번쩍이지 않는다.
-    pdf_args, photo_args = _startup_args(sys.argv[1:])
+    # 261128-16(책갈피창·저장 SOT §4.9.5): `--new-window` — 다른 창이 [새 창]·Shift+열기로 띄운 실행. 다른 창에 넘기지 않는다(아래 둘 건너뜀)
+    try:
+        from viewer import new_window as _nw
+        nw_opts, _argv = _nw.parse(sys.argv[1:])
+    except Exception:
+        nw_opts, _argv = None, sys.argv[1:]
+    pdf_args, photo_args = _startup_args(_argv)
     # 261112-10(사진 보기 SOT §4.45, 사용자 결정): 기본 사진 앱으로 두 번 누른 사진 — 사진 모드인 다른 창이 있으면 그 창에 넘기고 끝난다.
     #   창 찾기(설정 폴더의 instances)는 앱 이름이 있어야 해서 이름을 먼저 넣는다(아래에서 같은 값으로 다시 넣는다)
-    if photo_args:
+    if photo_args and nw_opts is None:
         try:
             app.setApplicationName(APP_ID + ("-" + _profile() if _profile() else ""))
             app.setOrganizationName("LocalTools")
@@ -625,7 +631,7 @@ def main():
         except Exception:
             pass
     gather = None
-    if pdf_args or photo_args:              # 사진 여러 장을 골라 열어도 한 창(마스터 §4.9 모으기 그대로)
+    if (pdf_args or photo_args) and nw_opts is None:   # 사진 여러 장을 골라 열어도 한 창(마스터 §4.9 모으기 그대로)
         try:
             from viewer.open_gather import OpenGather, hand_off
             gather = OpenGather()
@@ -681,7 +687,8 @@ def main():
     except Exception:
         pass
     from viewer.app import MainWindow
-    if pdf_args or printed:                  # 261104-20(사진 보기 SOT D1): 파일·인쇄로 뜬 창은 PDF 모드 — 창을 만들기 **전에**
+    nw_pdf = nw_opts is not None and not nw_opts.get("photo")   # 261128-16: PDF 모드 새 창(폴더만 넘겨도)
+    if pdf_args or printed or nw_pdf:        # 261104-20(사진 보기 SOT D1): 파일·인쇄로 뜬 창은 PDF 모드 — 창을 만들기 **전에**
         try:                                 #   알려야 사진 모드 복원(지난 사진 열기·사진 색인)을 하지 않는다
             from viewer import photo_controller as _pc
             _pc.START_PDF = True
@@ -707,9 +714,9 @@ def main():
     # 261009-14(응답성 SOT §4.2·§12): 인자로 받은 PDF 가 있으면 지난 세션을 복원하지 않는다. 복원이 인자 열기보다 먼저
     #   줄을 서서 '이미 연 것이 있으면 덮지 않는다' 가드가 작동하지 않았다 — 지난 폴더(다운로드)를 메인에서 훑느라
     #   4.4초 선 뒤에야 요청한 파일을 열었다(설치본 실측). 이벤트 루프가 돌기 전이라 복원보다 앞선다.
-    win._startup_has_args = bool(pdf_args or photo_args) or printed
+    win._startup_has_args = bool(pdf_args or photo_args or nw_opts) or printed
     win._vp_gather_pre = print_gather     # 261117-51: 미리 잡은 받기 통로 — `_vprinter_start` 가 그대로 쓴다
-    if pdf_args or printed:               # 사진 인자는 사진 모드로(261112-10, D1 의 예외) — `_photo_open_arg` 가 모드를 바꾼다
+    if pdf_args or printed or nw_pdf:     # 사진 인자는 사진 모드로(261112-10, D1 의 예외) — `_photo_open_arg` 가 모드를 바꾼다
         win._photo_force_pdf()           # 261104-2(사진 보기 SOT D1): 파일을 지정해 뜬 창은 PDF 모드로 시작
     win.show()
     # 261017(가상 프린터 SOT §4.4): 인쇄 받기 — 창이 뜬 뒤에(시작을 늦추지 않게). --printed 로 떴으면 곧바로
@@ -734,7 +741,10 @@ def main():
         _fade_out_splash(app, splash, win)
     # 260611-11: 인자로 받은 PDF 열기 — '연결 프로그램/기본 PDF 뷰어'로 더블클릭/Open with 지원.
     try:
-        if pdf_args:
+        if nw_opts is not None:              # 261128-16(§4.9.5): 새 창 — 폴더·파일·쪽·맞춤(모으기 없음)
+            from PyQt6.QtCore import QTimer
+            QTimer.singleShot(0, lambda: win._nw_open(nw_opts, pdf_args, photo_args))
+        elif pdf_args:
             from PyQt6.QtCore import QTimer
             state = {"opened": False}
 

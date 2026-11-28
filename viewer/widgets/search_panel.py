@@ -9,7 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Optional
 
-from PyQt6.QtCore import Qt, QSize, pyqtSignal
+from PyQt6.QtCore import Qt, QSize, QTimer, QEvent, pyqtSignal
 from PyQt6.QtGui import QIcon
 from viewer.resources_path import resource_path
 from viewer.i18n import tr, tr_noop          # 261008: 화면 문구(다국어 SOT §6)
@@ -142,6 +142,10 @@ class SearchResults(QWidget):
     DATA_FILE = Qt.ItemDataRole.UserRole + 0
     DATA_PAGE = Qt.ItemDataRole.UserRole + 1
     DATA_QUERY = Qt.ItemDataRole.UserRole + 2
+    # 261128-7(검색창 SOT §7): 키보드로 줄을 옮기면 키가 이만큼 멈춘 뒤 마지막 줄 하나만 본문이 따라간다
+    KEY_FOLLOW_MS = 120
+    _NAV_KEYS = (Qt.Key.Key_Up, Qt.Key.Key_Down, Qt.Key.Key_PageUp, Qt.Key.Key_PageDown,
+                 Qt.Key.Key_Home, Qt.Key.Key_End, Qt.Key.Key_Left, Qt.Key.Key_Right)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -207,6 +211,14 @@ class SearchResults(QWidget):
         self.tree.setColumnWidth(2, 40)
         self.tree.itemActivated.connect(self._on_activated)
         self.tree.itemClicked.connect(self._on_activated)
+        # 261128-7(검색창 SOT §7): 키보드로 현재 줄이 바뀌면 누른 것과 같은 길 — 키가 멈춘 뒤 마지막 줄만
+        self._kbd = False
+        self._follow_t = QTimer(self)
+        self._follow_t.setSingleShot(True)
+        self._follow_t.setInterval(self.KEY_FOLLOW_MS)
+        self._follow_t.timeout.connect(self._follow_current)
+        self.tree.installEventFilter(self)
+        self.tree.currentItemChanged.connect(self._on_current_changed)
         layout.addWidget(self.tree, 1)
 
     def set_bookmark_order(self, order_map: dict):
@@ -286,7 +298,26 @@ class SearchResults(QWidget):
                 top.addChild(child)
             top.setExpanded(True)
 
+    def eventFilter(self, obj, ev):
+        if obj is self.tree and ev.type() == QEvent.Type.KeyPress and ev.key() in self._NAV_KEYS:
+            self._kbd = True                     # 이 키가 바꾸는 현재 줄만 따라간다(누르기·새로 그리기·select_and_activate 는 아님)
+            QTimer.singleShot(0, self._kbd_off)
+        return super().eventFilter(obj, ev)
+
+    def _kbd_off(self):
+        self._kbd = False
+
+    def _on_current_changed(self, cur, _prev):
+        if self._kbd and cur is not None:
+            self._follow_t.start()               # 꾹 누르면 계속 미뤄진다 — 멈춘 뒤 마지막 줄 하나
+
+    def _follow_current(self):
+        item = self.tree.currentItem()
+        if item is not None:
+            self._on_activated(item)
+
     def _on_activated(self, item: QTreeWidgetItem, _column: int = 0):
+        self._follow_t.stop()                    # 261128-7: 눌러서 간 줄을 키 따라가기가 한 번 더 가지 않게
         file_path = item.data(0, self.DATA_FILE)
         if not file_path:
             return

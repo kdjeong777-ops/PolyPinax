@@ -1367,6 +1367,9 @@ class _PdfGraphicsView(QGraphicsView):
     FLIP_LOCK_MS = 120        # 넘긴(다 그린) 직후 이만큼 들어온 휠은 버린다
     FLIP_BOUNCE_MS = 250      # 넘긴 직후 이만큼은 반대 방향 휠을 버린다
     STALE_MS = 250            # 만들어진 뒤 이만큼 늦게 처리된 휠로는 넘기지 않는다
+    # 261128-7(입력 SOT §2.2 규칙 7): 두 시계가 통째로 벌어졌으면(절전에서 깨어남) 기준을 다시 잡는다
+    REBASE_TOL_MS = 30        # 앞 칸과 늦음이 이만큼 안으로 같으면 '통째로 밀림'
+    REBASE_GAP_MS = 50        # …그리고 앞 칸 처리 뒤 이만큼 넘게 지나서 왔으면(밀린 이벤트가 몰려 처리되는 것이 아님)
     # 261103-7(입력 SOT §2.2 규칙 8·10): 위상 없는 터치패드 — 실측(쓸기 88번)으로 정한 값
     SWIPE_BIN_MS = 16         # 속도를 재는 칸(이벤트 시각)
     SWIPE_RISE = 3.0          # 지금 칸 합이 앞 5칸 최대의 이 배 이상이면 '다시 솟음'
@@ -1388,11 +1391,21 @@ class _PdfGraphicsView(QGraphicsView):
             return 0.0                    # 합성 이벤트 — 시각이 없다
         off = now - ts
         base = self._ts_off
+        prev = self.__dict__.get("_ts_prev")             # (앞 칸의 차이, 앞 칸을 처리한 시각)
+        self._ts_prev = (off, now)
         # 처음이거나, 시계가 되감겼거나(32비트 되돌이·절전) 한참 만이면 기준을 새로 잡는다
         if base is None or off < base or off - base > 60000.0:
             self._ts_off = off
             return 0.0
-        return off - base
+        lag = off - base
+        if (lag > self.STALE_MS and prev is not None and abs(off - prev[0]) < self.REBASE_TOL_MS
+                and now - prev[1] > self.REBASE_GAP_MS):
+            # 261128-7(규칙 7): 앞 칸과 똑같이 늦고 몰려 오지도 않았다 — 늦게 처리된 게 아니라 두 시계가 벌어졌다
+            #   (사용자 노트북 실측: 절전을 거치며 처리 시계가 이벤트 시계보다 119초 앞섬 — 종전에는 이 뒤 모든 휠이
+            #   '늦음' 이라 쪽 맞춤에서 쪽이 영영 넘어가지 않았다). 기준을 다시 잡는다.
+            self._ts_off = off
+            return 0.0
+        return lag
 
     def wheelEvent(self, event: QWheelEvent):
         # v1.6.9 G2: 이미지 모드도 PDF 와 동일 — 페이지(스크린샷)내 스크롤하다

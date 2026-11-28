@@ -85,8 +85,8 @@ try:
     chk(pb is not None, "손바닥 단추가 있다")
     tb = mv._toolbar
     items = [tb.itemAt(i).widget() for i in range(tb.count())]
-    chk(pb in items and items.index(pb) == items.index(mv.btn_sign) + 1,
-        "손바닥 단추는 본문 툴바 전자서명 바로 오른쪽이다(261112-6 — 종전 꾸미기 줄 개체선택 오른쪽)")
+    chk(pb in items and items.index(pb) == items.index(mv.btn_crop) + 1,
+        "손바닥 단추는 본문 툴바 크롭 바로 오른쪽이다(261112-6 전자서명 오른쪽 → 261128-12 서명이 이미지 넣기 옆으로 옮겨 크롭 오른쪽)")
     chk(pb is not None and not pb.icon().isNull() and pb.text() == "", "손바닥 단추는 글자가 아니라 아이콘이다")
     chk(pb is not None and pb.isVisible() and not mv._draw_bar.isVisible(), "보기 모드(꾸미기 줄 없음)에서도 손바닥 단추가 보인다")
     if pb is not None:

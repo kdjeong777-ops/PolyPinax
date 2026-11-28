@@ -151,15 +151,23 @@ def _crop(p, c):
     p.drawLine(QPointF(3, 13), QPointF(13, 3))        # 대각선
 
 
+SIGN_PEN_W = 1.8                    # 서명 곡선 굵기 — 다른 라인 그림(1.3~1.6)보다 굵게, 손글씨 붓 느낌
+
+
 def _sign(p, c):
-    """261010-22(보안 SOT §3): 전자서명 — 아래 서명 줄 + 비스듬한 펜 + 줄 위 짧은 획."""
-    p.setPen(QPen(c, 1.6))
-    p.drawLine(QPointF(1.5, 14.5), QPointF(14.5, 14.5))   # 서명 줄
-    p.drawLine(QPointF(7, 10), QPointF(13.5, 3.5))        # 펜대
-    p.drawLine(QPointF(5.5, 11.5), QPointF(7, 10))        # 펜촉
-    p.drawLine(QPointF(9.5, 6.5), QPointF(11.5, 8.5))     # 펜 손잡이 경계
-    p.drawLine(QPointF(1.5, 12), QPointF(3.5, 10))        # 서명 획
-    p.drawLine(QPointF(3.5, 10), QPointF(4.5, 12))
+    """전자서명(보안 SOT §3) — 261128-12(사용자 지시 '서명 아이콘을 … 간단화된 아이콘으로', 다시 '이거와 같이 아이콘을 사인한
+    서명으로 만들어'): 펜 없이 **사인한 서명 곡선 하나** — 왼쪽 아래에서 높이 솟았다 내려와 작은 물결 둘, 오른쪽으로 길게 끝난다.
+    둥근 끝·굵은 단색(테마 따라감, 디자인 SOT §4.8 ①). 종전 261010-22 의 꺾인 선 셋은 무엇인지 알기 어려웠다."""
+    s = QPainterPath(QPointF(1.0, 10.4))
+    s.cubicTo(QPointF(2.6, 8.6), QPointF(4.4, 4.4), QPointF(5.6, 5.0))
+    s.cubicTo(QPointF(7.0, 5.8), QPointF(3.8, 12.2), QPointF(5.4, 12.0))
+    s.cubicTo(QPointF(6.8, 11.8), QPointF(7.6, 7.4), QPointF(8.8, 7.8))
+    s.cubicTo(QPointF(9.8, 8.2), QPointF(9.0, 10.8), QPointF(9.9, 10.6))
+    s.cubicTo(QPointF(10.8, 10.4), QPointF(11.0, 8.8), QPointF(12.0, 9.0))
+    s.cubicTo(QPointF(12.8, 9.2), QPointF(13.8, 9.2), QPointF(15.0, 8.4))
+    p.setPen(QPen(c, SIGN_PEN_W, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
+    p.setBrush(Qt.BrushStyle.NoBrush)
+    p.drawPath(s)
 
 
 def _image(p, c):

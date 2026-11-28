@@ -1999,7 +1999,7 @@ class MainView(QWidget):
         self.btn_crop.setIcon(_ti("crop", size=16))
         self.btn_crop.setToolTip(tr("쪽 크롭 — 가로긴·세로긴 쪽 스타일로 여백을 잘라 PDF 에 저장"))
         self.btn_crop.clicked.connect(self.cropRequested.emit)
-        # 261010-22(보안 SOT §3, 사용자 지시): 크롭 오른쪽 전자서명 단추 — 도구 메뉴 '서명...' 과 같은 일
+        # 261010-22(보안 SOT §3, 사용자 지시): 전자서명 단추 — 도구 메뉴 '서명...' 과 같은 일. 자리는 261128-12 부터 이미지 넣기 오른쪽
         self.btn_sign = QPushButton(); self.btn_sign.setFixedSize(28, H)
         self.btn_sign.setIcon(_ti("sign", size=16))
         self.btn_sign.setToolTip(tr("전자서명 — 서명 자리를 두고 확정하면 서명한 새 파일(원본은 그대로)"))
@@ -2016,7 +2016,8 @@ class MainView(QWidget):
         _sep = QWidget(); _sep.setFixedSize(12, H)
         bar.addWidget(_sep)
         bar.addWidget(self.btn_crop)
-        bar.addWidget(self.btn_sign)
+        # 261128-12(사용자 지시 '서명 아이콘을 이미지넣기 아이콘 오른쪽으로 이동해 (뭔가를 추가하므로 이게 맞는 듯)'):
+        #   전자서명 단추는 꾸미기 줄 '이미지 넣기' 바로 오른쪽(_build_draw_bar) — 종전 261010-22 크롭 오른쪽
         # 261012-11(사용자 지시): 크롭·서명 단추는 **편집 모드에서만** 보인다(set_draw_mode). 도구 메뉴·썸네일 메뉴·
         #   본문 우클릭 '여기에 서명…' 은 그대로.
         self.btn_crop.setVisible(False)
@@ -4111,6 +4112,7 @@ class MainView(QWidget):
         self._image_menu.aboutToShow.connect(self._rebuild_image_menu)
         self._image_btn.setMenu(self._image_menu)
         hb.addWidget(self._image_btn)
+        hb.addWidget(self.btn_sign)                  # 261128-12: 전자서명 = 이미지 넣기 바로 오른쪽(무엇을 더하는 단추끼리)
         # 260611-16: 개체선택 버튼(선 종류 버튼 오른쪽) — 눌러서 이미지 선택/이동/수정
         # 260908-4(사용자 요청): 글리프 `⤢` → 그림 아이콘(점선 상자 + 화살표).
         #   무엇을 하는 단추인지 글자보다 그림이 빨리 읽힌다(디자인 SOT §2).

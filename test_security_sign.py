@@ -305,8 +305,10 @@ try:
             return QDialog.DialogCode.Accepted
     sdlg.SignDialog = _FakeSignDialog
     tb = [mv._toolbar_widget.layout().itemAt(i).widget() for i in range(mv._toolbar_widget.layout().count())]
-    chk(mv.btn_crop in tb and tb.index(mv.btn_sign) == tb.index(mv.btn_crop) + 1 and not mv.btn_sign.icon().isNull(),
-        "D1b 본문 툴바 — 크롭 오른쪽에 전자서명 단추(아이콘)")
+    db = [mv._draw_bar.layout().itemAt(i).widget() for i in range(mv._draw_bar.layout().count())]
+    chk(mv.btn_sign not in tb and mv.btn_sign in db and db.index(mv.btn_sign) == db.index(mv._image_btn) + 1
+        and not mv.btn_sign.icon().isNull(),
+        "D1b 꾸미기 줄 — 이미지 넣기 바로 오른쪽에 전자서명 단추(아이콘, 261128-12 — 종전 크롭 오른쪽)")
     picked["text"] = "그림 없이"
     mv.btn_sign.click()                     # 실제 단추로 — 도구 메뉴 '서명...' 과 같은 길
     chk(getattr(mv.view, "_block_purpose", "") == "sign" and mv.view._block_armed, "D3 '서명' → 본문 끌기 무장(서명 자리)")

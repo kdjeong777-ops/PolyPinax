@@ -28,6 +28,10 @@ from PyQt6.QtWidgets import QApplication, QMessageBox
 from PyQt6.QtTest import QTest
 
 app = QApplication.instance() or QApplication(sys.argv[:1])
+# 261128-25: 한국어 화면은 Aa 를 숨기고 늘 끈다(검색창 SOT §4.1, 261128-9) — 이 검사는 Aa 를 쓰므로 영어 화면으로.
+os.environ.pop("POLYPDF_LANG", None)
+from viewer import i18n
+i18n.install(app, "en")
 import modal_guard
 modal_guard.install(label=lambda: "검색 대소문자·정규식", echo=False)   # 뜨는 모달은 닫는다(멈춤 → 실패로)
 fails = []
@@ -70,6 +74,9 @@ try:
     spin(20)
     mw._load_main(HistoryItem(str(root / "A.pdf"), 0, "", "bookmark")); wait_main_open(mw); spin(10)
     sb, mv = mw.search_bar, mw.main_view
+    # 261128-25: 범위 기본은 '지금 파일'(검색창 SOT §5.2, 261128-8) — 이 검사는 두 파일(A·B) 결과를 세므로 폴더 범위로.
+    sb.set_scope("folder")
+    chk(sb.scope() == "folder" and sb.btn_case.isVisibleTo(sb), "전제 — 폴더 범위·영어 화면(Aa 보임)")
 
     def search(q):
         mw._last_results = None

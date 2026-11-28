@@ -2024,7 +2024,7 @@ class MainView(QWidget):
         self.btn_crop.setVisible(False)
         self.btn_sign.setVisible(False)
         # 261112-6(사용자 지시 '손바닥 버튼을 전자서명 오른쪽으로 옮기고, 편집모드 뿐만 아니라 보기모드에서도 보이게',
-        #   디자인 SOT §2.10·입력 SOT §4.1): 손바닥 — 끌어서 화면 이동. 전자서명 바로 오른쪽, 두 모드 모두 보인다
+        #   디자인 SOT §2.10·입력 SOT §4.1): 손바닥 — 끌어서 화면 이동. 크롭 바로 오른쪽(261128-12 에 전자서명이 꾸미기 줄로 옮겨), 두 모드 모두 보인다
         #   (종전 261107-36 은 꾸미기 줄 개체선택 오른쪽이라 편집 모드에서만). 도구 값은 꾸미기 도구와 같은 `_draw_kind`.
         self._draw_pan_btn = QPushButton(); self._draw_pan_btn.setFixedSize(28, H)
         self._draw_pan_btn.setCheckable(True)
@@ -4139,7 +4139,7 @@ class MainView(QWidget):
         self._draw_select_btn.setIconSize(QSize(_LPX, _LPX))
         self._draw_select_btn.clicked.connect(self._on_draw_select)
         hb.addWidget(self._draw_select_btn)
-        # 손바닥 단추는 261112-6 부터 이 줄 밖 — 본문 툴바 전자서명 오른쪽(_build_ui, 디자인 SOT §2.10)
+        # 손바닥 단추는 261112-6 부터 이 줄 밖 — 본문 툴바 크롭 오른쪽(_build_ui, 디자인 SOT §2.10)
         # 260611-1: 지우개 2종(얇게/두껍게)·청소 — 첨부 아이콘 사용(없으면 글리프 폴백)
         self._draw_erase_btns = []
         _ico_sz = QSize(_LPX, _LPX)

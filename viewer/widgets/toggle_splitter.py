@@ -6,37 +6,11 @@
 from __future__ import annotations
 
 from PyQt6.QtWidgets import QSplitter, QSplitterHandle
-from PyQt6.QtGui import QPainter, QColor
-from PyQt6.QtCore import Qt
 
 
 class _ToggleHandle(QSplitterHandle):
-    def paintEvent(self, ev):
-        """260618-10: 손잡이 중앙에 잡기 좋은 그립 표식 — 더 진하고 길게.
-        260618-25: 중간 그립 길이를 종전의 50% 로 축소(요청)."""
-        super().paintEvent(ev)
-        try:
-            p = QPainter(self)
-            p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-            p.setPen(Qt.PenStyle.NoPen)
-            p.setBrush(QColor(110, 110, 110))     # 진한 회색(라이트/다크 모두 보임)
-            r = self.rect()
-            if self.orientation() == Qt.Orientation.Horizontal:
-                # 가로 스플리터 → 세로 손잡이: 중앙에 세로 그립(종전의 절반 길이)
-                gw = min(4, r.width())
-                gh = int(min(80, max(40, r.height() * 0.175)))
-                x = (r.width() - gw) / 2.0
-                y = (r.height() - gh) / 2.0
-                p.drawRoundedRect(int(x), int(y), gw, gh, 2, 2)
-            else:
-                gh = min(4, r.height())
-                gw = int(min(80, max(40, r.width() * 0.175)))
-                x = (r.width() - gw) / 2.0
-                y = (r.height() - gh) / 2.0
-                p.drawRoundedRect(int(x), int(y), gw, gh, 2, 2)
-            p.end()
-        except Exception:
-            pass
+    # 261128-5(디자인 SOT §2.4): 손잡이 표식(점 3개)은 앱 스타일 CE_Splitter 한 곳이 그린다 — 종전 가운데 회색 막대는
+    #   스크롤 손잡이와 같은 꼴이라 헷갈렸다. 여기서 따로 그리지 않는다(맨 QSplitter 와 같은 그림).
 
     def mouseDoubleClickEvent(self, ev):
         sp = self.splitter()

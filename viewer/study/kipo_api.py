@@ -256,12 +256,49 @@ def fetch_fulltext_pdf_url_debug(key: str, appno: str, timeout: float = 20.0):
         ["전문(공개/공고) PDF 를 찾지 못했습니다. 미공개·미등록이거나 전문 서비스 활용신청이 필요할 수 있습니다."]
 
 
+_KIPRIS_HTTPS_HOSTS = ("plus.kipris.or.kr",)
+
+
+def _https_kipris(url: str) -> str:
+    """261128-15(법령·고시 SOT §10.1): KIPRIS 가 주는 http://plus.kipris.or.kr 주소는 같은 호스트 https 로 올린다.
+    다른 호스트의 평문 http 는 그대로 두어 아래에서 거부되게 한다."""
+    try:
+        p = urllib.parse.urlsplit(url)
+    except Exception:
+        return url
+    if p.scheme.lower() == "http" and (p.hostname or "").lower() in _KIPRIS_HTTPS_HOSTS:
+        return urllib.parse.urlunsplit(("https",) + tuple(p)[1:])
+    return url
+
+
+def first_failure(dbg) -> str:
+    """261128-15: 진단 목록에서 사용자에게 보일 한 줄 — 첫 실패 사유(서버 응답) + 맺음말."""
+    dbg = [str(x) for x in (dbg or [])]
+    if not dbg:
+        return ""
+    bad = [x for x in dbg if ("실패" in x or "ERR" in x or "차단" in x or "비정상" in x)]
+    last = dbg[-1]
+    if bad and bad[0] != last:
+        return f"{bad[0]} — {last}"
+    return last
+
+
+def kipris_search_url(appno: str) -> str:
+    """261128-15: 고른 특허를 KIPRIS 웹에서 — 출원번호 검색 결과 화면(옛 kpat 상세 주소는 개편으로 없어짐)."""
+    digits = "".join(ch for ch in str(appno or "") if ch.isdigit())
+    if not digits:
+        return ""
+    return ("https://www.kipris.or.kr/khome/search/searchResult.do?"
+            + urllib.parse.urlencode({"tab": "patent", "queryText": digits}))
+
+
 def download_fulltext_pdf_debug(key: str, appno: str, dest_dir: str,
                                 name: str = "", timeout: float = 90.0):
     """(저장경로, [진단...]). 공개전문 PDF 를 dest_dir 에 내려받아 경로 반환."""
     pdf_url, dbg = fetch_fulltext_pdf_url_debug(key, appno, timeout=20.0)
     if not pdf_url:
         return "", dbg
+    pdf_url = _https_kipris(pdf_url)
     if not pdf_url.lower().startswith("https://"):   # 260628: 중간자 변조 방지 — 평문 HTTP PDF 거부
         return "", dbg + [f"보안: 비-HTTPS PDF URL 차단({pdf_url[:60]})"]
     safe = re.sub(r'[\\/:*?"<>|]+', "_", (name or appno)).strip()[:80] or appno

@@ -159,8 +159,8 @@ class KipoSearchPanel(QWidget):
         self.btn_globe = QPushButton()
         self.btn_globe.setIcon(themed_icon("globe"))
         self.btn_globe.setFixedWidth(36)
-        self.btn_globe.setToolTip("KIPRIS 웹사이트 열기")
-        self.btn_globe.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(_SITE)))
+        self.btn_globe.setToolTip("선택 특허를 KIPRIS 웹사이트에서 보기(고른 게 없으면 첫 화면)")
+        self.btn_globe.clicked.connect(self._open_site)
         top.addWidget(self.cmb_mode)
         top.addWidget(self.ed, 1)
         top.addWidget(self.btn_search)
@@ -253,7 +253,7 @@ class KipoSearchPanel(QWidget):
         if not q:
             self.info.setText("검색어를 입력하세요.")
             return
-        self.tree.clear(); self.viewer.clear()
+        self.tree.clear(); self._shown_item = None; self.viewer.clear()
         self.info.setText("검색 중…")
         w = _SearchWorker(self._key, self.cmb_mode.currentData(), q)
         self._workers.append(w)
@@ -262,7 +262,7 @@ class KipoSearchPanel(QWidget):
         w.start()
 
     def _on_results(self, items, total, dbg):
-        self.tree.clear()
+        self.tree.clear(); self._shown_item = None
         if not items:
             self.info.setText("검색 결과가 없습니다. " + (dbg[-1] if dbg else ""))
             return
@@ -276,7 +276,24 @@ class KipoSearchPanel(QWidget):
         it = self.tree.currentItem()
         return it.data(0, _ROLE_ROW) if it is not None else None
 
+    def _site_url(self) -> str:
+        """261128-15(법령·고시 SOT §10.1): 고른 특허 → 출원번호 검색 화면, 없으면 첫 화면."""
+        from viewer.study.kipo_api import kipris_search_url
+        row = self._current_row()
+        if isinstance(row, dict):
+            u = kipris_search_url(row.get("applicationNumber") or "")
+            if u:
+                return u
+        return _SITE
+
+    def _open_site(self):
+        QDesktopServices.openUrl(QUrl(self._site_url()))
+
     def _on_select(self):
+        it = self.tree.currentItem()
+        if it is not None and it is getattr(self, "_shown_item", None):
+            return                      # 261128-15: 같은 행 다시 누름 — 상세(원문 포함)를 다시 그리지 않는다
+        self._shown_item = it
         row = self._current_row()
         if isinstance(row, dict):
             self.viewer.setHtml(format_item(row))
@@ -333,14 +350,18 @@ class KipoSearchPanel(QWidget):
 
     def _on_pdf(self, path, dbg):
         if not path:
-            msg = dbg[-1] if dbg else "PDF 를 받지 못했습니다."
-            self.info.setText(msg)
+            from viewer.study.kipo_api import first_failure
+            self.info.setText(first_failure(dbg) or "PDF 를 받지 못했습니다.")   # 261128-15: 첫 실패 사유를 먼저
             return
         self.info.setText("PDF 저장·열기 완료")
         win = self._win
         if win is not None and hasattr(win, "open_pdf"):
             from pathlib import Path
             win.open_pdf(Path(path))
+            # 261128-15: 패널이 전체화면(별도 창)이면 메인 창을 앞으로 — 뒤에 열려 안 보이는 일 막기
+            host = self.window()
+            if host is not win and hasattr(win, "raise_"):
+                win.raise_(); win.activateWindow()
 
     # ----- 즐겨찾기 -----
     def _on_tree_menu(self, pos):
@@ -385,7 +406,7 @@ class KipoSearchPanel(QWidget):
         """즐겨찾기 클릭 — 좌측에 모든 즐겨찾기 표시 + 클릭 항목 선택→상세(저장된 항목)."""
         favs = list(getattr(self._win, "_kipo_favorites", []) or []) if self._win else []
         rows = [dict(f) for f in (favs or [fav])]
-        self.tree.clear()
+        self.tree.clear(); self._shown_item = None
         target = None
         fav_key = str(fav.get("appNo") or fav.get("regNo") or fav.get("name") or "")
         for r in rows:

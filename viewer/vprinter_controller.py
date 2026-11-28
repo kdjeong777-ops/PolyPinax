@@ -11,8 +11,6 @@ from __future__ import annotations
 
 import os
 import shutil
-import subprocess
-import sys
 import tempfile
 from pathlib import Path
 
@@ -330,11 +328,6 @@ class VPrinterMixin:
 
     @staticmethod
     def _vprinter_new_window(path: str):
-        if getattr(sys, "frozen", False):
-            cmd = [sys.executable, path]
-        else:
-            cmd = [sys.executable, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "main.py"), path]
-        try:
-            subprocess.Popen(cmd, close_fds=True)
-        except OSError:
-            pass
+        """받은 PDF 를 새 창에 — 새 창 한 곳(`new_window.launch`, `--new-window`)으로(책갈피창·저장 SOT §4.9.5, 261128-23)."""
+        from viewer import new_window
+        new_window.launch(new_window.build_args(file=str(path)))

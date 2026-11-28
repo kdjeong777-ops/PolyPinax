@@ -38,7 +38,7 @@ PHOTO_ICON = 72                     # 인물 사진 썸네일 줄(큰 화면은 
 DETAIL_BG = {                        # 세부내용 카드·목록 표 — 띠(머리말)·띠 글·테두리 / 본문 / 메모 / 고른 줄 — 회색 톤(디자인 SOT §2.5 '명함 세부 카드', 261120-4)
     "light": {"head": "#e4e4e4", "head_fg": "#1a1a1a", "border": "#c8c8c8", "body": "#f5f5f5", "memo": "#ffffff",
               "sel": "#d8d8d8", "sel_fg": "#1a1a1a"},
-    "dark": {"head": "#38383c", "head_fg": "#e6e6e6", "border": "#4a4a50", "body": "#2e2e31", "memo": "#1e1e20",
+    "dark": {"head": "#2b2b2e", "head_fg": "#e6e6e6", "border": "#4a4a50", "body": "#2e2e31", "memo": "#1e1e20",
              "sel": "#424247", "sel_fg": "#ffffff"},
 }
 DETAIL_W = 330                     # 처음 너비 — 세부 칸(§5.24 '처음 너비': 목록은 네 열 최소 폭, 나머지는 사진창)

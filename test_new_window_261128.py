@@ -13,6 +13,8 @@ F. 사진 모드 [새 창] → `--photo <사진>`, Shift+[폴더 열기] → `--
 G. `parse` 왕복·`--new-window` 없으면 그대로
 H. `_nw_open`(새 창 쪽) — 폴더 목록·그 파일·쪽·맞춤을 연다
 I. 띄우기 실패면 Shift+열기는 이 창에서 연다
+J·K. (261128-23) 생성한 PDF 새 창·가상 프린터 새 창도 같은 `launch` 로 `--new-window <파일>` — 종전 코드로 실패
+L. 지금 파일이 폴더 목록 밖이면 `--folder` 없이 그 파일만
 """
 import os, sys, faulthandler, tempfile, shutil
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -44,6 +46,7 @@ def chk(cond, msg, extra=""):
 launched = []
 _ok = {"v": True}
 QProcess.startDetached = staticmethod(lambda exe, args=None, *a, **k: (launched.append(list(args or [])), (_ok["v"], 1))[1])
+popened = []                                                        # K — 종전 가상 프린터 새 창은 Popen(그 모듈 안에서만 가로챔)
 _dlg = {"dir": "", "file": ""}
 QFileDialog.getExistingDirectory = staticmethod(lambda *a, **k: _dlg["dir"])
 QFileDialog.getOpenFileName = staticmethod(lambda *a, **k: (_dlg["file"], ""))
@@ -197,6 +200,31 @@ try:
         chk(bool(args) and "--photo" in args and opt(args, "--folder") == str(d3), "F 사진 모드 Shift+폴더 열기 → 사진 모드 새 창", args)
     else:
         chk(False, "F 사진 모드를 쓸 수 있어야 한다(기본 혼용)")
+
+    # J·K 다른 새 창 길도 --new-window(261128-23) — 종전: 생성한 PDF 는 표시 없이, 가상 프린터는 따로 Popen
+    del launched[:]
+    mw._open_pdf_new_window(str(f2))
+    chk(bool(launched) and new_window.FLAG in launched[-1] and launched[-1][-1] == str(f2),
+        "J 생성한 PDF 새 창 → --new-window <파일>", launched)
+    del launched[:]
+    import types, viewer.vprinter_controller as _vpc
+    _real_sp = getattr(_vpc, "subprocess", None)
+    _vpc.subprocess = types.SimpleNamespace(Popen=lambda cmd, *a, **k: popened.append(list(cmd)))
+    try:
+        mw._vprinter_new_window(str(f2))
+    finally:
+        if _real_sp is not None:
+            _vpc.subprocess = _real_sp
+    chk(bool(launched) and new_window.FLAG in launched[-1] and launched[-1][-1] == str(f2),
+        "K 가상 프린터 새 창 → 같은 launch·--new-window <파일>", (launched, popened))
+    chk(not popened, "K 따로 Popen 하지 않는다", popened)
+
+    # L 목록 밖 파일이면 폴더 없이 그 파일만(§4.9.5)
+    mw.open_pdf(f2); wait_until(lambda: Path(mw.main_view.current_file() or ".") == f2)
+    mw.bookmark_tree.view_base = lambda: str(d1)                    # 목록은 폴더1, 본문은 폴더2 파일(검색 결과로 연 꼴)
+    args = press(mw, mw._sc_act_new_window)
+    del mw.bookmark_tree.view_base
+    chk(bool(args) and args[-1] == str(f2) and opt(args, "--folder") is None, "L 목록 밖 파일 → 폴더 없이", args)
     mw.close()
 finally:
     shutil.rmtree(root, ignore_errors=True)

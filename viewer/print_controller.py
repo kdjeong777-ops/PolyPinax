@@ -639,9 +639,10 @@ class PrintMixin:
             pass
 
     def _open_pdf_new_window(self, path):
-        """260825-5: 생성된 PDF 를 별도 새 창(파일 모드)으로 띄운다. 띄우기는 새 창 한 곳(`new_window.launch`, 261128-16)."""
+        """260825-5: 생성된 PDF 를 별도 새 창(파일 모드)으로 띄운다. 띄우기는 새 창 한 곳 —
+        `--new-window` 를 붙여 다른 창의 모으기로 되돌아가지 않게(책갈피창·저장 SOT §4.9.5, 261128-16·-23)."""
         from viewer import new_window
-        if new_window.launch([str(path)]):
+        if new_window.launch(new_window.build_args(file=str(path))):
             return
         # 폴백: 현재 창에서 파일 모드로 열기
         try:

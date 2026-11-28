@@ -1,6 +1,6 @@
 """특허 검색 — KIPRIS Plus 특허실용신안 항목별검색(getAdvancedSearch) (260618-44).
 
-- 엔드포인트: http://plus.kipris.or.kr/kipo-api/kipi/patUtiModInfoSearchSevice/getAdvancedSearch
+- 엔드포인트: https://plus.kipris.or.kr/kipo-api/kipi/patUtiModInfoSearchSevice/getAdvancedSearch
 - 인증: ServiceKey (KIPRIS Plus 발급 키, 쿼리 파라미터)  ※ accessKey 아님(미등록 오류남)
 - 응답: XML <response><header>successYN/resultMsg</header><body><items><item>…</item></items><count>…</count></response>
 - 검색 항목(IN): word(자유)·inventionTitle(명칭)·astrtCont(초록/내용)·registerNumber(등록번호)·
